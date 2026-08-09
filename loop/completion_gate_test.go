@@ -2237,9 +2237,9 @@ func TestEveryCopyOfTheContractIsReducedToWhatTheTaskCanCall(t *testing.T) {
 	}
 }
 
-func TestARejectedCitationSaysWhichObservationsWouldHaveDone(t *testing.T) {
+func TestARejectedCitationNamesTheOnesThatWouldHaveDone(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run", Summary: "exitCode=0\nlisted the workspace"},
+		{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run", Summary: "listed the workspace"},
 		{ObservationID: "obs-002", Action: "continue", Tool: "terminal_run", Summary: "wrote avg_temp.txt"},
 	}
 
@@ -2249,12 +2249,12 @@ func TestARejectedCitationSaysWhichObservationsWouldHaveDone(t *testing.T) {
 		t.Fatal("citing an observation that does not exist has to fail")
 	}
 	message := errorValue.Error()
-	if !strings.Contains(message, "obs-009") {
-		t.Fatalf("an agent cannot correct a citation it is not told about, got %q", message)
-	}
-	for _, expected := range []string{"obs-001", "obs-002", "listed the workspace", "wrote avg_temp.txt"} {
+	for _, expected := range []string{"obs-009", "obs-001", "obs-002", "ledger"} {
 		if !strings.Contains(message, expected) {
-			t.Fatalf("the candidates have to say what each observation reported, or the agent picks one at random; %q missing from %q", expected, message)
+			t.Fatalf("an agent cannot correct a citation without the bad one, the good ones, and where to read what they did; %q missing from %q", expected, message)
 		}
+	}
+	if strings.Contains(message, "listed the workspace") {
+		t.Fatalf("repeating each summary here put a plan document into the message eight times over and cost 8x the prompt: %q", message)
 	}
 }

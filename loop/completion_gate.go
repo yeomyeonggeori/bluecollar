@@ -938,7 +938,7 @@ func validateCompletionEvidenceReferences(toolSet *toolcontract.ToolSet, observa
 		observation, isFound := findSuccessfulObservation(observations, reference)
 		if !isFound || !observationSatisfiesEvidenceCondition(toolSet, observation) {
 			return errors.New("completionEvidence cites " + citedReferenceDescription(reference) +
-				", which is not a successful observation of this task. Cite one of: " + strings.Join(citableEvidenceDescriptions(toolSet, observations), ", "))
+				", which is not a successful observation of this task. The observation ledger above says what each of these did; cite one of them: " + strings.Join(citableEvidenceDescriptions(toolSet, observations), ", "))
 		}
 	}
 	return nil
@@ -961,11 +961,7 @@ func citableEvidenceDescriptions(toolSet *toolcontract.ToolSet, observations []t
 		if observation.Failed() || !observationSatisfiesEvidenceCondition(toolSet, observation) {
 			continue
 		}
-		described := strings.TrimSpace(observation.ObservationID) + " from " + strings.TrimSpace(observation.Tool)
-		if reported := truncateText(compactWhitespace(observation.Summary), maxSummaryTextLength); reported != "" {
-			described += " (" + reported + ")"
-		}
-		descriptions = append(descriptions, described)
+		descriptions = append(descriptions, strings.TrimSpace(observation.ObservationID)+" from "+strings.TrimSpace(observation.Tool))
 	}
 	if len(descriptions) == 0 {
 		return []string{"no successful observation yet"}
