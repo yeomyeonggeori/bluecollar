@@ -1189,7 +1189,7 @@ func TestDirectActionSchemaPreservesToolRequiredFields(t *testing.T) {
 	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{
 		Name:        "calendar_add",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}`),
-	}}, false, nil, false, false)
+	}}, nil, false, nil, false, false)
 
 	continueVariant := actionSchemaVariant(t, schemaDocument, "continue")
 	properties := mapFromAny(continueVariant["properties"])
@@ -1206,7 +1206,7 @@ func TestActionSchemaOmitsToolsWithoutAnObjectInputSchema(t *testing.T) {
 		{Name: "invalid_schema", InputSchema: json.RawMessage(`{"type":`)},
 		{Name: "scalar_schema", InputSchema: json.RawMessage(`{"type":"string"}`)},
 		{Name: "valid_schema", InputSchema: json.RawMessage(`{"type":"object","properties":{}}`)},
-	}, false, nil, false, false)
+	}, nil, false, nil, false, false)
 
 	if strings.Contains(schemaDocument, "missing_schema") {
 		t.Fatalf("expected missing schema tool to be omitted, got %s", schemaDocument)
@@ -1226,7 +1226,7 @@ func TestActionSchemaPreservesRequiredFieldsOnArrayOfNestedObjects(t *testing.T)
 	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{
 		Name:        "calendar_add",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}},"required":["items"]}`),
-	}}, false, nil, false, false)
+	}}, nil, false, nil, false, false)
 
 	continueVariant := actionSchemaVariant(t, schemaDocument, "continue")
 	properties := mapFromAny(continueVariant["properties"])

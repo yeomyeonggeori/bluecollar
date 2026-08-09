@@ -6,7 +6,6 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -28,7 +27,7 @@ func TestActionSchemasRecursivelyCloseEveryObject(t *testing.T) {
 		}`),
 	}}
 	schemaDocuments := map[string]string{
-		"agent action":      buildActionSchemaFromToolDefinitions(toolDefinitions, true, nil, true),
+		"agent action":      buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, nil, true),
 		"finalizer":         finalizerActionSchema(),
 		"terminal no tools": terminalNoToolsActionSchema(),
 		"recovery decision": recoveryDecisionSchema(),
@@ -50,7 +49,7 @@ const eightToolActionSchemaByteCeiling = 19500
 func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 	toolDefinitions := eightToolCapabilityCatalogFixture(t)
 
-	schemaDocument := buildActionSchemaFromToolDefinitions(toolDefinitions, true, nil, false)
+	schemaDocument := buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, nil, false)
 
 	t.Logf("action schema byte length for an 8-tool catalog: %d", len(schemaDocument))
 	if len(schemaDocument) >= eightToolActionSchemaByteCeiling {
@@ -66,7 +65,7 @@ func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 }
 
 func legacyRootOneOfFinalizerSchema(hasFailureDebt bool) string {
-	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{finishActionSchema(hasFailureDebt), failActionSchema(hasFailureDebt)}})
+	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{finishActionSchema(hasFailureDebt, nil), failActionSchema(hasFailureDebt)}})
 }
 
 func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing.T) {
@@ -198,7 +197,7 @@ func TestAStrictActionSchemaRequiresEveryPropertyItDeclares(t *testing.T) {
 
 	for _, allowQualityCriteria := range []bool{false, true} {
 		for _, hasFailureDebt := range []bool{false, true} {
-			document := ActionSchemaForToolSet(toolSet, allowQualityCriteria, nil, hasFailureDebt, true, true)
+			document := actionSchemaForToolSet(toolSet, nil, allowQualityCriteria, nil, hasFailureDebt, true, true)
 			missing := propertiesMissingFromRequired(t, document)
 			if len(missing) > 0 {
 				t.Fatalf("a strict schema whose required list omits %v is rejected before the model ever sees it (quality=%v debt=%v)", missing, allowQualityCriteria, hasFailureDebt)
@@ -260,36 +259,25 @@ func asStrings(value any) []string {
 	return names
 }
 
-func TestTheActionSchemaDoesNotChangeAsObservationsArrive(t *testing.T) {
+func TestFinishCanOnlyCiteEvidenceThatExists(t *testing.T) {
 	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
 
-	beforeAnyWork := ActionSchemaForToolSet(toolSet, false, nil, false, true, true)
-	afterSeveralSteps := ActionSchemaForToolSet(toolSet, false, nil, false, true, true)
+	document := actionSchemaForToolSet(toolSet, []string{"obs-001", "obs-003"}, false, nil, false, true, true)
 
-	if beforeAnyWork != afterSeveralSteps {
-		t.Fatalf("tools are sent ahead of the messages, so a schema that grows with the run breaks the cached prefix on every single call:\n%s\n%s", beforeAnyWork, afterSeveralSteps)
+	var schema any
+	if errorValue := json.Unmarshal([]byte(document), &schema); errorValue != nil {
+		t.Fatal(errorValue)
 	}
-}
-
-func TestAnInventedCitationIsRefusedWithSomethingToDoAboutIt(t *testing.T) {
-	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: toolcontract.TerminalRunToolName, Summary: "listed the workspace"},
-	}
-
-	errorValue := validateCompletionEvidenceReferences(nil, observations, []completionEvidenceReference{{ObservationID: "obs-404"}})
-
-	if errorValue == nil {
-		t.Fatal("naming an observation the run never made has to be refused")
-	}
-	if !strings.Contains(errorValue.Error(), "obs-001") {
-		t.Fatalf("a refusal that does not name what it would accept is refused again next turn, and the run dies that way: %q", errorValue.Error())
+	allowed := completionEvidenceEnumInSchema(t, schema)
+	if len(allowed) != 2 || allowed[0] != "obs-001" || allowed[1] != "obs-003" {
+		t.Fatalf("a model that can name an observation the run never made will be refused every turn until the run dies, got %v", allowed)
 	}
 }
 
 func TestFinishCitesFreelyWhenThereIsNoEvidenceToName(t *testing.T) {
 	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
 
-	document := ActionSchemaForToolSet(toolSet, false, nil, false, true, true)
+	document := actionSchemaForToolSet(toolSet, nil, false, nil, false, true, true)
 
 	var schema any
 	if errorValue := json.Unmarshal([]byte(document), &schema); errorValue != nil {

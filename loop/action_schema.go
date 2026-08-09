@@ -9,17 +9,24 @@ import (
 )
 
 func (agentTurnRunner *AgentTurnRunner) buildActionSchema(toolRegistry *toolcontract.ToolSet, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool) string {
-	return ActionSchemaForToolSet(toolRegistry, allowQualityCriteria, blockedToolNames, hasFailureDebt)
+	if toolRegistry != nil {
+		return ActionSchemaForToolSet(toolRegistry, allowQualityCriteria, blockedToolNames, hasFailureDebt)
+	}
+	return buildActionSchemaFromToolDefinitions(nil, nil, allowQualityCriteria, blockedToolNames, hasFailureDebt)
 }
 
 func ActionSchemaForToolSet(toolSet *toolcontract.ToolSet, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
-	if toolSet == nil {
-		return buildActionSchemaFromToolDefinitions(nil, allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
-	}
-	return buildActionSchemaFromToolDefinitions(toolSet.ListToolDefinitions(), allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
+	return actionSchemaCitingEvidence(toolSet, nil, allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
 }
 
-func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+func actionSchemaCitingEvidence(toolSet *toolcontract.ToolSet, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+	if toolSet == nil {
+		return buildActionSchemaFromToolDefinitions(nil, citableEvidenceIDs, allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
+	}
+	return buildActionSchemaFromToolDefinitions(toolSet.ListToolDefinitions(), citableEvidenceIDs, allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
+}
+
+func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
 	allowFail := true
 	allowFinish := true
 	if len(terminalActionValues) > 0 {
@@ -30,7 +37,7 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	}
 	var variants []any
 	if allowFinish {
-		variants = append(variants, finishActionSchema(hasFailureDebt))
+		variants = append(variants, finishActionSchema(hasFailureDebt, citableEvidenceIDs))
 	}
 	if allowFail {
 		variants = append(variants, failActionSchema(hasFailureDebt))
@@ -67,7 +74,7 @@ func executionStateUpdateRefSchema() map[string]any {
 	return map[string]any{"$ref": "#/$defs/executionStateUpdate"}
 }
 
-func finishActionSchema(hasFailureDebt bool) map[string]any {
+func finishActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
 	failureResolutionValues := []string{"none", "recovered_with_success", "no_tool_fallback"}
 	if hasFailureDebt {
 		failureResolutionValues = []string{"recovered_with_success", "no_tool_fallback"}
@@ -81,7 +88,7 @@ func finishActionSchema(hasFailureDebt bool) map[string]any {
 		"goalStatus":            enumValuesStringSchema([]string{"satisfied"}),
 		"goalSatisfied":         booleanSchema(),
 		"hasRemainingWork":      booleanSchema(),
-		"completionEvidenceIDs": completionEvidenceIDArraySchema(),
+		"completionEvidenceIDs": completionEvidenceIDArraySchema(citableEvidenceIDs),
 		"qualityReview":         qualityReviewSchema(),
 		"remainingWork":         stringSchema(),
 		"executionStateUpdate":  executionStateSchema(),
@@ -336,6 +343,11 @@ func recoveryDecisionSchema() string {
 	}))
 }
 
-func completionEvidenceIDArraySchema() map[string]any {
-	return stringArraySchema(0)
+func completionEvidenceIDArraySchema(citableEvidenceIDs []string) map[string]any {
+	if len(citableEvidenceIDs) == 0 {
+		return stringArraySchema(0)
+	}
+	schema := stringArraySchema(0)
+	schema["items"] = enumValuesStringSchema(citableEvidenceIDs)
+	return schema
 }
