@@ -120,10 +120,10 @@ func toolResultContextText(observations []turnObservation) string {
 }
 
 func observationsShowingTheirImages(observations []turnObservation) []turnObservation {
-	if len(observations) == 0 {
-		return nil
+	if len(observations) <= maxProgressObservations {
+		return observations
 	}
-	return observations[len(observations)-1:]
+	return observations[len(observations)-maxProgressObservations:]
 }
 
 func toolResultImageContextMessage(observations []turnObservation) model.Message {
