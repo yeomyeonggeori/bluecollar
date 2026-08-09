@@ -31,6 +31,22 @@ request = {
         {"role": "user", "content": "Reply with the single word: ready"},
     ],
 }
+if os.environ.get("PROBE_WITH_TOOLS"):
+    request["tools"] = [{
+        "type": "function",
+        "function": {
+            "name": "terminal_run",
+            "description": "Run one shell command",
+            "parameters": {
+                "type": "object",
+                "properties": {"command": {"type": "string"}},
+                "required": ["command"],
+                "additionalProperties": False,
+            },
+        },
+    }]
+    request["tool_choice"] = "required"
+    request["parallel_tool_calls"] = True
 open(sys.argv[1], "w").write(json.dumps(request))
 PYTHON
 

@@ -334,7 +334,7 @@ rate.
 
 ## What has not worked
 
-Three changes were made, measured, and judged by the measurement rather than by
+Four changes were made, measured, and judged by the measurement rather than by
 the reasoning behind them.
 
 Restoring the contract's file requirement wherever a write tool existed took
@@ -365,6 +365,50 @@ offered, and a dataset whose work is genuinely independent is where it would
 show. This dataset is not that, and the pass rate moving from four to three
 across those runs belongs to `grid-pattern-transform`, which batched nothing
 and has been flaky for this model all along.
+
+Taking the observation-id enum out of the finish tool's schema was aimed at
+prompt caching, which reports zero cached tokens on every run. Tools sit ahead
+of the messages in a cached prefix and the enum grew with every observation, so
+the prefix could never survive a step. Removing it cached nothing and cost
+8 to 13 times the prompt: count-dataset-tokens went from 358k tokens to 2.83M,
+fix-git from 81k to 1.03M, the median run from 8 turns to 35.
+
+Two things went wrong together. Without the enum the model cites ids that do not
+exist, and the gate's refusal — improved in the same session to name the valid
+candidates — was repeating each one's summary, which for a plan_update is the
+whole plan document. Eight refusals carried it eight times.
+
+The test that was replaced had said so: TestFinishCanOnlyCiteEvidenceThatExists
+warned that a model naming an observation the run never made "will be refused
+every turn until the run dies". Replacing it was justified by the candidates
+list making one corrected turn enough, and the measurement disagreed. Reverted;
+the candidates list stayed and now points at the ledger instead of copying it.
+
+Prompt caching was chased and dropped. Every run reports zero cached tokens
+while the endpoint caches an identical prefix at 98 to 100% — with a tools
+array as well as without, so the tools are not what stops it. The prompt was
+split into a message that does not change and one that does, which left a
+prefix of 4,932 bytes, about 1,233 tokens, ahead of the turn clock. That clears
+the 1,024-token minimum, and it still cached nothing.
+
+The action schema is why. It is rebuilt from five pieces of per-step state, and
+each one changes it: a blocked tool takes it from 4,162 bytes to 2,859, fail
+being withheld to 3,157, finish being withheld to 2,319, quality criteria
+appearing to 5,266, failure debt opening to 4,736. finish and fail move almost
+every step. Tools sit in the cached prefix, so it breaks before the messages are
+reached — which is why removing the observation-id enum, one of those five,
+changed nothing.
+
+Making the schema hold still for a task means moving all five controls to
+runtime validation, and the enum attempt already showed what that costs. The
+prize is small anyway: 1,233 tokens against the 50k to 300k a task spends. It
+would only be worth it if the observation history were in the prefix too, and
+that means an append-only conversation instead of a prompt rebuilt each turn —
+a different design, not a caching fix.
+
+Without caching, re-sending images every turn is paid at full price. Anthropic's
+advice not to prune them assumes a cache that makes re-sending cheap, so it does
+not apply here.
 
 ## Open
 
