@@ -81,6 +81,8 @@ func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
 	turnContext, cancel := context.WithTimeout(context.Background(), options.timeout)
 	defer cancel()
 
+	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: languageModel.ContextWindowTokens(turnContext)})
+
 	runningShell := turnShellWithInterpreter(turnContext, options)
 	workspacePath := runningShell.resolvedWorkingDirectoryPath(turnContext)
 	request := agentcontract.AgentTurnRequest{

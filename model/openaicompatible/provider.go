@@ -298,3 +298,37 @@ func truncated(text string) string {
 	}
 	return strings.ToValidUTF8(text[:limit], "") + "…"
 }
+
+func (provider *Provider) ContextWindowTokens(ctx context.Context) int {
+	httpRequest, errorValue := http.NewRequestWithContext(ctx, http.MethodGet, provider.endpointURL+"/models", nil)
+	if errorValue != nil {
+		return 0
+	}
+	if provider.apiKey != "" {
+		httpRequest.Header.Set("Authorization", "Bearer "+provider.apiKey)
+	}
+	httpResponse, errorValue := provider.httpClient.Do(httpRequest)
+	if errorValue != nil {
+		return 0
+	}
+	defer httpResponse.Body.Close()
+	responseBody, errorValue := io.ReadAll(httpResponse.Body)
+	if errorValue != nil || httpResponse.StatusCode != http.StatusOK {
+		return 0
+	}
+	var catalogue struct {
+		Data []struct {
+			ID            string `json:"id"`
+			ContextLength int    `json:"context_length"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(responseBody, &catalogue) != nil {
+		return 0
+	}
+	for _, entry := range catalogue.Data {
+		if entry.ID == provider.modelName {
+			return entry.ContextLength
+		}
+	}
+	return 0
+}

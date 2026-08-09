@@ -10,6 +10,8 @@ const progressMessageLimit = 6000
 const toolResultContextLimit = 120000
 
 const unredactedOutputLimit = 20000
+
+const charactersPerToken = 4
 const maxProgressObservations = 12
 const maxInteractiveReferences = 20
 const maxSummaryTextLength = 500

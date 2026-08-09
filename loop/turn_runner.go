@@ -19,6 +19,7 @@ const maximumElapsedClosingDuration = time.Minute
 type AgentTurnRunner struct {
 	iterationCostObserver  *IterationCostObserver
 	modelInUse             string
+	promptTokensInUse      int64
 	taskRunService         taskstate.TaskRunStore
 	taskStepService        taskstate.TaskStepStore
 	taskArtifactService    taskstate.TaskArtifactStore
@@ -214,6 +215,7 @@ func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID stri
 	return func(record llmCallRecord) {
 		agentTurnRunner.appendEvent(taskRunID, "llm.call", marshalEventBody(record))
 		agentTurnRunner.noteModelInUse(record.Model)
+		agentTurnRunner.noteContextInUse(record.PromptTokens)
 	}
 }
 
@@ -229,6 +231,22 @@ func (agentTurnRunner *AgentTurnRunner) noteModelInUse(modelName string) {
 		return
 	}
 	agentTurnRunner.modelInUse = modelName
+}
+
+func (agentTurnRunner *AgentTurnRunner) noteContextInUse(promptTokens int64) {
+	if promptTokens <= 0 {
+		return
+	}
+	agentTurnRunner.promptTokensInUse = promptTokens
+}
+
+func (agentTurnRunner *AgentTurnRunner) toolResultLimit() int {
+	contextWindowTokens := agentTurnRunner.options.ContextWindowTokens
+	if contextWindowTokens <= 0 {
+		return agentTurnRunner.options.ToolResultMaxBytes
+	}
+	remainingCharacters := (int64(contextWindowTokens) - agentTurnRunner.promptTokensInUse) * charactersPerToken
+	return max(min(int(remainingCharacters), agentTurnRunner.options.ToolResultMaxBytes), maxSummaryTextLength)
 }
 
 func (agentTurnRunner *AgentTurnRunner) recordIterationCost(startedAt time.Time) {

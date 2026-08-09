@@ -96,10 +96,10 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	originalContent := content
 	isError := toolResult.Failed()
 	artifactID := ""
-	if len(content) > agentTurnRunner.options.ToolResultMaxBytes {
+	if resultLimit := agentTurnRunner.toolResultLimit(); len(content) > resultLimit {
 		taskArtifact := agentTurnRunner.taskArtifactService.AddTaskArtifactBody(taskRunID, "tool."+toolName+".result", content)
 		artifactID = taskArtifact.TaskArtifactID
-		content = withMiddleElided(content, agentTurnRunner.options.ToolResultMaxBytes)
+		content = withMiddleElided(content, resultLimit)
 	}
 	attachments := []toolcontract.FileAttachment{}
 	if !isError {
