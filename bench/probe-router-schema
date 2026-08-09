@@ -23,7 +23,7 @@ schema = json.load(open(sys.argv[1]))
 request = {
     "model": os.environ["PROBE_MODEL"],
     "usage": {"include": True},
-    "messages": [{"role": "user", "content": "회의록에서 결정사항, 담당자, 기한을 정리해줘."}],
+    "messages": [{"role": "user", "content": os.environ.get("PROBE_PREFIX", "") + "회의록에서 결정사항, 담당자, 기한을 정리해줘."}],
 }
 if os.environ.get("PROBE_RESPONSE_FORMAT"):
     request["response_format"] = {
