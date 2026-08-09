@@ -119,11 +119,11 @@ func toolResultContextText(observations []turnObservation) string {
 	return "Tool result context. This is the model-visible representation of tool outputs; use it for the next action instead of guessing from progress labels:\n" + body
 }
 
-func observationsWithinImageWindow(observations []turnObservation) []turnObservation {
-	if len(observations) <= maxProgressObservations {
-		return observations
+func observationsShowingTheirImages(observations []turnObservation) []turnObservation {
+	if len(observations) == 0 {
+		return nil
 	}
-	return observations[len(observations)-maxProgressObservations:]
+	return observations[len(observations)-1:]
 }
 
 func toolResultImageContextMessage(observations []turnObservation) model.Message {
@@ -131,7 +131,7 @@ func toolResultImageContextMessage(observations []turnObservation) model.Message
 		Role:    "user",
 		Content: "Tool result images for the next answer. Inspect these image parts directly; do not infer visual details from filenames or progress text.",
 	}
-	for _, observation := range observationsWithinImageWindow(observations) {
+	for _, observation := range observationsShowingTheirImages(observations) {
 		for index, attachment := range observation.Attachments {
 			if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(attachment.ContentType)), "image/") || strings.TrimSpace(attachment.ContentBase64) == "" {
 				continue

@@ -19,10 +19,10 @@ func observationCarryingAnImage(observationID string) turnObservation {
 	}
 }
 
-func TestAnImageStopsBeingResentOnceItLeavesTheWindow(t *testing.T) {
-	observations := []turnObservation{observationCarryingAnImage("obs-001")}
-	for index := 2; index <= maxProgressObservations+4; index++ {
-		observations = append(observations, turnObservation{ObservationID: "obs-filler", Action: "continue", Tool: toolcontract.TerminalRunToolName})
+func TestAnImageIsShownOnceAndNotPaidForAgain(t *testing.T) {
+	observations := []turnObservation{
+		observationCarryingAnImage("obs-001"),
+		{ObservationID: "obs-002", Action: "continue", Tool: toolcontract.TerminalRunToolName},
 	}
 
 	message := toolResultImageContextMessage(observations)
