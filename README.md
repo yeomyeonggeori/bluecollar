@@ -86,7 +86,9 @@ usage accounting bring their own; the reference is an [AI SDK](https://ai-sdk.de
 ## Running it
 
 `cmd/bluecollar` runs one turn against a local model and prints the ledger to stderr, which is the
-shortest way to see the loop work before embedding it.
+shortest way to see the loop work before embedding it. It brings a shell scoped to `--workspace`,
+so the same command is what an external benchmark drives; `--without-tools` takes the shell away
+again when you only want to watch the loop reason.
 
 ```bash
 ollama serve &
@@ -102,8 +104,8 @@ agent.action  {"action":"finish"…
 task.completed
 ```
 
-It has no tools. The loop reasons and answers, and every step is still a ledger entry — which is the
-point of reading it: the same events appear whether the turn calls fifty tools or none.
+Every step is a ledger entry, which is the point of reading it: the same events appear whether the
+turn calls fifty tools or none.
 
 ## What it promises
 
@@ -117,7 +119,8 @@ go test -run 'Checkpoint|Resume|Approval' -v .
 
 ## What is not here yet
 
-- Tools in the standalone runner. It reasons and answers; a host supplies the tool set.
+- A tool set worth the name in the standalone runner. `cmd/bluecollar` brings one shell, which is
+  enough to be put on a terminal benchmark and no more; anything richer belongs to a host.
   `cmd/bluecollar-acp` takes its tool set from the MCP servers the host names when it opens a
   session, so a host that publishes a catalog gives the loop everything it can do. The event
   ledger reaches that host on `session/update`: tool calls as the standard variants a generic
@@ -132,6 +135,34 @@ go test -run 'Checkpoint|Resume|Approval' -v .
   and the turn picks it up on its next step. The protocol has no construct for that: a second
   `session/prompt` cancels the first, and `session/cancel` is the only client-to-agent message
   during a turn. Until one is designed, a steer reaches only an in-process host.
+## Measuring the harness
+
+An agent is a model and a harness together, so a benchmark score alone does not
+say which half earned it. [`bench`](./bench) exists to attribute the difference:
+hold the model, the task and the verifier fixed, swap only the harness, and what
+moves is the harness.
+
+The numbers come out of the event ledger a turn already writes, so a measured
+run is the run that ran.
+
+| what it reports | why it is there |
+|---|---|
+| prompt tokens per turn | what a harness puts in front of the model is the thing a pass rate hides |
+| turns, tool calls, failed tool calls | how much work it took to get there |
+| approval holds | held calls are the point of an unattended harness, so they are counted apart from failures |
+| recovery attempts | whether it got itself out of trouble or thrashed |
+| cost per **passed** task | a harness that burns money failing is not the cheap one |
+| wall clock, model latency | how much of the wait was the model and how much was the loop |
+
+A verdict is never inferred here. `Runner` drives tasks through
+`agentcontract.Harness` and asks the benchmark's own verifier. A task nobody
+checked stays `unverified`, and a verifier that cannot decide counts against
+the harness.
+
+Because the port is the only thing `Runner` needs, any harness that implements
+`RunTurn` goes on the same row — including the ones this one is measured
+against, once an adapter speaks for them.
+
 ## Building and testing
 
 The module depends on one library and nothing outside its own directory. The ACP

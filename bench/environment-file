@@ -1,0 +1,29 @@
+# Source this to bring the ignored environment file's values into the shell.
+# The file holds the endpoint credentials every bench script needs and none of
+# them should carry its own copy of where to look.
+
+loadEnvironmentFile() {
+  local environmentFileName="${BENCH_ENV_NAME:-$(printf '.%s' env)}"
+  local environmentFile="${BENCH_ENV_FILE:-}"
+  local directory="$PWD"
+
+  while [ -z "$environmentFile" ] && [ "$directory" != "/" ]; do
+    if [ -f "$directory/$environmentFileName" ]; then environmentFile="$directory/$environmentFileName"; fi
+    directory="$(dirname "$directory")"
+  done
+
+  if [ -z "$environmentFile" ] || [ ! -f "$environmentFile" ]; then
+    echo "found no environment file above $PWD; set BENCH_ENV_FILE" >&2
+    return 2
+  fi
+
+  set -a
+  # shellcheck disable=SC1090
+  source "$environmentFile"
+  set +a
+
+  if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+    echo "$environmentFile defines no OPENROUTER_API_KEY" >&2
+    return 2
+  fi
+}

@@ -1,22 +1,12 @@
 package loop
 
 import (
-	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
-
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type progressEvent struct {
 	Kind string
 	Key  string
-}
-
-type qualifyingProgressEvent struct {
-	ObservationID string `json:"observationID"`
-	Kind          string `json:"kind"`
-	Tool          string `json:"tool"`
 }
 
 const maxFailureProgressSinceSuccess = 4
@@ -59,75 +49,6 @@ func progressEventCount(observations []turnObservation) int {
 	return len(progressEvents(observations))
 }
 
-func qualifyingDurableProgressEventsSinceTierStart(taskEvents []taskstate.TaskEvent, observations []turnObservation) []qualifyingProgressEvent {
-	startObservationID := currentTierStartedAfterObservationID(taskEvents)
-	startIndex := observationIndex(observations, startObservationID)
-	events := []qualifyingProgressEvent{}
-	for index, observation := range observations {
-		if index <= startIndex {
-			continue
-		}
-		if event, isQualified := qualifyingDurableProgressEvent(observation); isQualified {
-			events = append(events, event)
-		}
-	}
-	return events
-}
-
-func currentTierStartedAfterObservationID(taskEvents []taskstate.TaskEvent) string {
-	for index := len(taskEvents) - 1; index >= 0; index-- {
-		taskEvent := taskEvents[index]
-		if taskEvent.Name != "agent.budget_escalated" {
-			continue
-		}
-		var eventBody budgetEscalatedEventBody
-		if json.Unmarshal([]byte(taskEvent.Body), &eventBody) != nil {
-			return ""
-		}
-		return lastString(eventBody.QualifyingEventIDs)
-	}
-	return ""
-}
-
-func observationIndex(observations []turnObservation, observationID string) int {
-	trimmedObservationID := strings.TrimSpace(observationID)
-	if trimmedObservationID == "" {
-		return -1
-	}
-	for index, observation := range observations {
-		if observation.ObservationID == trimmedObservationID {
-			return index
-		}
-	}
-	return -1
-}
-
-func qualifyingDurableProgressEvent(observation turnObservation) (qualifyingProgressEvent, bool) {
-	if observation.Action != "continue" || observation.Failed() || strings.TrimSpace(observation.ObservationID) == "" {
-		return qualifyingProgressEvent{}, false
-	}
-	toolName := strings.TrimSpace(observation.Tool)
-	if isInspectionProgressTool(toolName) {
-		return qualifyingProgressEvent{}, false
-	}
-	switch toolName {
-	case "file_write", "file_edit":
-		return qualifyingProgressEvent{ObservationID: observation.ObservationID, Kind: "file_change", Tool: toolName}, true
-	case "site_serve":
-		return qualifyingProgressEvent{ObservationID: observation.ObservationID, Kind: "site_publish", Tool: toolName}, true
-	case toolcontract.FileDeliverToolName:
-		return qualifyingProgressEvent{ObservationID: observation.ObservationID, Kind: "attachment", Tool: toolName}, true
-	case "terminal_run":
-		if terminalObservationCompleted(observation) {
-			return qualifyingProgressEvent{ObservationID: observation.ObservationID, Kind: "terminal_success", Tool: toolName}, true
-		}
-	}
-	if len(observation.Attachments) > 0 {
-		return qualifyingProgressEvent{ObservationID: observation.ObservationID, Kind: "attachment", Tool: toolName}, true
-	}
-	return qualifyingProgressEvent{}, false
-}
-
 func isInspectionProgressTool(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
 	case "file_read", "memory_search", "site_list", "conversation_history":
@@ -135,31 +56,4 @@ func isInspectionProgressTool(toolName string) bool {
 	default:
 		return false
 	}
-}
-
-func terminalObservationCompleted(observation turnObservation) bool {
-	var output struct {
-		Completed bool `json:"completed"`
-	}
-	if json.Unmarshal(observation.Output.Data, &output) != nil {
-		return false
-	}
-	return output.Completed
-}
-
-func qualifyingProgressEventIDs(events []qualifyingProgressEvent) []string {
-	eventIDs := []string{}
-	for _, event := range events {
-		if strings.TrimSpace(event.ObservationID) != "" {
-			eventIDs = append(eventIDs, event.ObservationID)
-		}
-	}
-	return eventIDs
-}
-
-func lastString(values []string) string {
-	if len(values) == 0 {
-		return ""
-	}
-	return strings.TrimSpace(values[len(values)-1])
 }

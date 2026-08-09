@@ -69,7 +69,7 @@ func validateDescriptorToolInput(toolSet *toolcontract.ToolSet, toolName string,
 	return errorValue
 }
 
-func (agentTurnRunner *AgentTurnRunner) rejectRepeatedToolCall(taskRunID string, stepID string, state *agentTaskState, actionDocument turnActionDocument, successfulToolCalls map[string]turnObservation, canFinalizeDuplicateDeterministically bool, stopForNoProgress func(string) (AgentTurnResult, bool)) toolCallActionOutcome {
+func (agentTurnRunner *AgentTurnRunner) rejectRepeatedToolCall(taskRunID string, stepID string, state *agentTaskState, actionDocument turnActionDocument, successfulToolCalls map[string]turnObservation, stopForNoProgress func(string) (AgentTurnResult, bool)) toolCallActionOutcome {
 	if observation, isRepeatedRead := repeatedFileReadObservation(state.Observations, actionDocument, nextObservationIDForObservations(state.Observations)); isRepeatedRead {
 		state.Observations = append(state.Observations, observation)
 		agentTurnRunner.appendEvent(taskRunID, "agent.file_read_cache_hit", marshalEventBody(observation))
@@ -102,9 +102,22 @@ func (agentTurnRunner *AgentTurnRunner) rejectRepeatedToolCall(taskRunID string,
 		state.Observations = append(state.Observations, observation)
 		agentTurnRunner.appendEvent(taskRunID, "agent.duplicate_tool_call_rejected", marshalEventBody(observation))
 		agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusCompleted, "duplicate_tool_call "+actionDocument.ToolName, observation.ContentText())
-		if canFinalizeDuplicateDeterministically {
-			state.ShouldRestrictNextActionToTerminal = true
+		result, shouldStop := stopForNoProgress(stepID)
+		return noProgressToolCallActionOutcome(result, shouldStop)
+	}
+	if refusedFailure, wasRefused := previousNonRetryableToolFailure(state.Observations, actionDocument.ToolName); wasRefused {
+		observation := turnObservation{
+			ObservationID: nextObservationIDForObservations(state.Observations),
+			Action:        "policy",
+			Tool:          strings.TrimSpace(actionDocument.ToolName),
+			Output: toolcontract.ToolOutput{Content: strings.TrimSpace(actionDocument.ToolName) + " failed as " + refusedFailure.ObservationID +
+				" in a way no retry can change: " + refusedFailure.Failure.UserSafeSummary +
+				". Reach the goal another way, or stop and say this tool is unusable."},
+			Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: strings.TrimSpace(actionDocument.ToolName) + " already failed in a way no retry can change."},
 		}
+		state.Observations = append(state.Observations, observation)
+		agentTurnRunner.appendEvent(taskRunID, "agent.non_retryable_tool_refused", marshalEventBody(observation))
+		agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusCompleted, "non_retryable_tool_refused "+actionDocument.ToolName, observation.ContentText())
 		result, shouldStop := stopForNoProgress(stepID)
 		return noProgressToolCallActionOutcome(result, shouldStop)
 	}

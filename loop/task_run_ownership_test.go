@@ -15,7 +15,6 @@ func quickReplyKernel(t *testing.T) (*AgentKernel, *taskstate.TaskRunService) {
 		Classification:   IntakeClassificationQuickReply,
 		TaskShape:        TaskShapeImmediateReply,
 		TaskLevel:        TaskLevelXLow,
-		EstimatedMinutes: 1,
 		ResponseLanguage: "ko",
 		Reason:           "lightweight acknowledgement",
 	}})

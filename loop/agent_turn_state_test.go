@@ -113,8 +113,8 @@ func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *tes
 	if string(chatRequest.ToolChoice) != `"required"` {
 		t.Fatalf("expected required native tool choice, got %s", chatRequest.ToolChoice)
 	}
-	if chatRequest.ParallelToolCalls {
-		t.Fatal("expected parallel native tool calls to be disabled")
+	if !chatRequest.ParallelToolCalls {
+		t.Fatal("expected parallel native tool calls to be enabled")
 	}
 	if chatRequest.GenerationOptions != structuredRequest.GenerationOptions {
 		t.Fatalf("expected native chat generation options to reuse structured request options, got %+v and %+v", chatRequest.GenerationOptions, structuredRequest.GenerationOptions)
@@ -172,8 +172,11 @@ func TestDecideAgentActionNativeChatRejectsInvalidCallsWithoutStructuredFallback
 			if errorValue == nil {
 				t.Fatal("expected native action error")
 			}
-			if provider.chatCalls != 1 || provider.structuredCalls != 0 {
-				t.Fatalf("expected direct native failure without structured fallback, got chat=%d structured=%d", provider.chatCalls, provider.structuredCalls)
+			if provider.structuredCalls != 0 {
+				t.Fatalf("a native call the model got wrong is corrected on the native path, never by falling back to the structured one, got structured=%d", provider.structuredCalls)
+			}
+			if provider.chatCalls < 1 || provider.chatCalls > maximumAgentActionCorrectionCount+1 {
+				t.Fatalf("a malformed call is worth telling the model about and asking again, within the correction budget, got chat=%d", provider.chatCalls)
 			}
 		})
 	}
@@ -667,6 +670,47 @@ func TestDecideAgentActionNativeChatUsesFirstProviderOrderedCall(t *testing.T) {
 	if provider.chatCalls != 1 || provider.structuredCalls != 0 {
 		t.Fatalf("expected one native call without retry or structured fallback, got chat=%d structured=%d", provider.chatCalls, provider.structuredCalls)
 	}
+	if len(action.BatchedActions) != 0 {
+		t.Fatalf("expected a terminal call to end the batch, got %+v", action.BatchedActions)
+	}
+}
+
+func TestDecideAgentActionBatchesFollowingToolCalls(t *testing.T) {
+	provider := nativeAgentActionLanguageModel{chatResponse: model.ChatCompletionResponse{
+		FinishReason: "tool_calls",
+		Message: model.ChatCompletionMessage{
+			Role: "assistant",
+			ToolCalls: []model.ChatCompletionToolCall{
+				nativeAgentActionToolCall(toolcontract.TerminalRunToolName, `{"command":"pwd"}`),
+				nativeAgentActionToolCall(toolcontract.TerminalRunToolName, `{"command":"ls"}`),
+			},
+		},
+	}}
+
+	action, errorValue := DecideAgentAction(context.Background(), &provider, nativeAgentActionTestState())
+	if errorValue != nil {
+		t.Fatalf("expected native action: %v", errorValue)
+	}
+	if len(action.BatchedActions) != 1 || string(action.BatchedActions[0].ToolInput) != `{"command":"ls"}` {
+		t.Fatalf("expected the following call to be batched, got %+v", action.BatchedActions)
+	}
+}
+
+func TestBatchedActionsRunWithoutAModelCallUntilOneFails(t *testing.T) {
+	state := &agentTaskState{}
+	rememberBatchedActions(state, turnActionDocument{BatchedActions: []turnActionDocument{
+		{Action: "continue", ToolName: toolcontract.TerminalRunToolName},
+		{Action: "continue", ToolName: toolcontract.TerminalRunToolName},
+	}})
+
+	if _, isBatched := takeBatchedAction(state); !isBatched {
+		t.Fatal("expected the first batched action to run without a model call")
+	}
+	state.Observations = append(state.Observations, newFailureObservation("obs-1", "continue", toolcontract.TerminalRunToolName, "failed", toolcontract.FailurePermissionDenied, toolcontract.FailureCodes.AccessDenied, toolcontract.TerminalRunToolName))
+	rememberBatchedActions(state, turnActionDocument{})
+	if _, isBatched := takeBatchedAction(state); isBatched {
+		t.Fatal("expected a failed observation to drop the rest of the batch")
+	}
 }
 
 func TestDecideAgentActionKeepsImagePartsOnNativeChatPath(t *testing.T) {
@@ -1093,10 +1137,13 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 			t.Fatalf("expected finish schema to require %s, got %+v", fieldName, requiredFields)
 		}
 	}
-	if containsString(requiredFields, "executionStateUpdate") {
-		t.Fatalf("expected terminal execution state update to remain optional, got %+v", requiredFields)
+	if !containsString(requiredFields, "executionStateUpdate") {
+		t.Fatalf("strict structured output rejects a schema whose required list omits a declared property, got %+v", requiredFields)
 	}
 	finishProperties := mapFromAny(finishVariant["properties"])
+	if !containsString(stringSliceFromAny(mapFromAny(finishProperties["executionStateUpdate"])["type"]), "null") {
+		t.Fatal("a terminal action still need not carry an execution state update, which strict output expresses as nullable rather than absent")
+	}
 	qualityReviewItems := mapFromAny(mapFromAny(finishProperties["qualityReview"])["items"])
 	if qualityReviewItems["additionalProperties"] != false {
 		t.Fatalf("expected quality review items to reject undeclared fields, got %+v", qualityReviewItems)
@@ -1142,7 +1189,7 @@ func TestDirectActionSchemaPreservesToolRequiredFields(t *testing.T) {
 	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{
 		Name:        "calendar_add",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}`),
-	}}, false, nil, false, false)
+	}}, nil, false, nil, false, false)
 
 	continueVariant := actionSchemaVariant(t, schemaDocument, "continue")
 	properties := mapFromAny(continueVariant["properties"])
@@ -1159,7 +1206,7 @@ func TestActionSchemaOmitsToolsWithoutAnObjectInputSchema(t *testing.T) {
 		{Name: "invalid_schema", InputSchema: json.RawMessage(`{"type":`)},
 		{Name: "scalar_schema", InputSchema: json.RawMessage(`{"type":"string"}`)},
 		{Name: "valid_schema", InputSchema: json.RawMessage(`{"type":"object","properties":{}}`)},
-	}, false, nil, false, false)
+	}, nil, false, nil, false, false)
 
 	if strings.Contains(schemaDocument, "missing_schema") {
 		t.Fatalf("expected missing schema tool to be omitted, got %s", schemaDocument)
@@ -1179,7 +1226,7 @@ func TestActionSchemaPreservesRequiredFieldsOnArrayOfNestedObjects(t *testing.T)
 	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{
 		Name:        "calendar_add",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}},"required":["items"]}`),
-	}}, false, nil, false, false)
+	}}, nil, false, nil, false, false)
 
 	continueVariant := actionSchemaVariant(t, schemaDocument, "continue")
 	properties := mapFromAny(continueVariant["properties"])

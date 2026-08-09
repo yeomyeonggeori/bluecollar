@@ -1,0 +1,27 @@
+#!/bin/bash
+
+apt-get update
+apt-get install -y curl
+
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
+
+source "$HOME/.nvm/nvm.sh"
+
+nvm install 22
+
+npm i -g @earendil-works/pi-coding-agent@{{ version }}
+
+mkdir -p "$HOME/.pi/agent"
+cat > "$HOME/.pi/agent/models.json" <<JSON
+{
+  "providers": {
+    "local": {
+      "baseUrl": "${PI_BASE_URL:-http://host.docker.internal:8099/v1}",
+      "api": "openai-completions",
+      "apiKey": "${PI_API_KEY:-local}",
+      "compat": { "supportsDeveloperRole": false, "supportsReasoningEffort": false },
+      "models": [ { "id": "${PI_MODEL_ID:-gemma}" } ]
+    }
+  }
+}
+JSON

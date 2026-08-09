@@ -28,7 +28,7 @@ func (languageModel *scriptedLanguageModel) GenerateResponse(context.Context, st
 
 func (languageModel *scriptedLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
 	if request.StructuredOutputSchema.Name != "bluecollar_agent_turn_action" {
-		return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"xlow","estimatedMinutes":1,"responseLanguage":"en","reason":"test"}`}, nil
+		return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"xlow","responseLanguage":"en","reason":"test"}`}, nil
 	}
 	languageModel.actionPrompts = append(languageModel.actionPrompts, allMessageContent(request))
 	if languageModel.callCount >= len(languageModel.contents) {

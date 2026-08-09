@@ -137,6 +137,7 @@ type AgentTurnRequest struct {
 	WorkspaceGuidance            []string
 	AgentIdentity                AgentIdentity
 	ActivePaths                  []string
+	HostInstruction              string
 	InstructionPrompt            string
 	InstructionSources           []InstructionSource
 	SkillDecisions               []SkillSelectionDecision
@@ -158,7 +159,6 @@ type AgentTurnRequest struct {
 	AmbientDuty                  AmbientDutyContext
 	TaskShape                    TaskShape
 	TaskLevel                    TaskLevel
-	EstimatedMinutes             int
 	TurnStartedAt                time.Time
 	EffortStartedAt              time.Time
 	TurnAnchorClamped            bool

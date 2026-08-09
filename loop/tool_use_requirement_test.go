@@ -140,3 +140,17 @@ func TestEvidenceRequirementsSkipReadOnlyTools(t *testing.T) {
 		t.Fatalf("expected only the side-effect tool to hard-gate completion, got %+v", requirements)
 	}
 }
+
+func TestARequirementNamingAnUnavailableToolIsNotARequirement(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	requirements := []toolUseRequirement{
+		{ToolName: toolcontract.FileDeliverToolName, RequiresAttachment: true},
+		{ToolName: toolcontract.TerminalRunToolName},
+	}
+
+	callable := requirementsTheTaskCanCall(toolSet, requirements)
+
+	if len(callable) != 1 || callable[0].ToolName != toolcontract.TerminalRunToolName {
+		t.Fatalf("a requirement the palette cannot call can never be met, so keeping it only spends the run's turns: %+v", callable)
+	}
+}

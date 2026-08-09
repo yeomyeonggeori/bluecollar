@@ -178,7 +178,6 @@ func TestAgentKernelConsumeRouteSuppressesReply(t *testing.T) {
 		Classification:   IntakeClassificationQuickReply,
 		TaskShape:        TaskShapeImmediateReply,
 		TaskLevel:        TaskLevelXLow,
-		EstimatedMinutes: 1,
 		ResponseLanguage: "ko",
 		Reason:           "lightweight acknowledgement",
 	}})
@@ -208,7 +207,6 @@ func TestAgentKernelRejectsExecutableConsumeContradiction(t *testing.T) {
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeResearchTask,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		ResponseLanguage: "ko",
 		Reason:           "사용자가 명시적으로 업무 등록을 요청함",
 		InitialToolNames: []string{"task_add"},
@@ -247,7 +245,6 @@ func TestAgentKernelPausesNeedsConfirmationDisambiguation(t *testing.T) {
 		Classification:        IntakeClassificationNeedsConfirmation,
 		TaskShape:             TaskShapeApprovalGatedTask,
 		TaskLevel:             TaskLevelLow,
-		EstimatedMinutes:      1,
 		ResponseLanguage:      "ko",
 		Reason:                "multiple matching items",
 		ClarificationQuestion: "어느 보고서를 말하는 건가요?",
@@ -276,7 +273,6 @@ func TestAgentKernelBlocksUnsupportedIntake(t *testing.T) {
 		Classification:   IntakeClassificationUnsupported,
 		TaskShape:        TaskShapeImmediateReply,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		ResponseLanguage: "ko",
 		Reason:           "request is outside the available execution boundary",
 		UserFacingReply:  "이 요청은 현재 권한 범위 밖이라 진행할 수 없어요.",
@@ -301,7 +297,6 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeMaintenanceTask,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		InitialToolNames: []string{"site_unserve"},
 		ResponseLanguage: "ko",
 		Reason:           "approval reply classified with hallucinated evidence",
@@ -392,7 +387,6 @@ func TestSemanticRevisionStartsNewTaskRun(t *testing.T) {
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeMaintenanceTask,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		InitialToolNames: []string{"task_add"},
 		ResponseLanguage: "ko",
 	}})
@@ -463,7 +457,6 @@ func destructiveSiteDeleteDecision() TurnDecision {
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeApprovalGatedTask,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		InitialToolNames: []string{"site_unserve"},
 		ResponseLanguage: "ko",
 	}
@@ -480,7 +473,6 @@ func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *test
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeMaintenanceTask,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		InitialToolNames: []string{toolcontract.TerminalRunToolName},
 		ResponseLanguage: "ko",
 		Reason:           "side effect tool planned without a predicted evidence name",
@@ -557,7 +549,6 @@ func TestAgentKernelGeneratesIntakeNoticeWhenRouterReplyMissing(t *testing.T) {
 		Classification:   IntakeClassificationUnsupported,
 		TaskShape:        TaskShapeImmediateReply,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		ResponseLanguage: "ko",
 		Reason:           "request is outside the available execution boundary",
 	}})
@@ -579,7 +570,6 @@ func TestAgentKernelFallsBackToReasonWhenIntakeNoticeModelsFail(t *testing.T) {
 		Classification:   IntakeClassificationUnsupported,
 		TaskShape:        TaskShapeImmediateReply,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		ResponseLanguage: "ko",
 		Reason:           "request is outside the available execution boundary",
 	}})
@@ -601,7 +591,6 @@ func TestAgentKernelRunsBoundedTaskThroughTurnRunner(t *testing.T) {
 		Classification:   IntakeClassificationQuickReply,
 		TaskShape:        TaskShapeImmediateReply,
 		TaskLevel:        TaskLevelXLow,
-		EstimatedMinutes: 1,
 		ResponseLanguage: "ko",
 		Reason:           "direct answer",
 	}})
@@ -633,8 +622,7 @@ func TestSitePrototypeIntakePromotesToXHighLimits(t *testing.T) {
 		},
 	}
 	intakeDecision := promoteArtifactTaskLevel(request, IntakeDecision{
-		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
+		TaskLevel: TaskLevelLow,
 	})
 
 	turnOptions := agentKernel.turnOptionsForIntakeDecision(intakeDecision)
@@ -654,17 +642,6 @@ func TestSitePrototypeIntakePromotesToXHighLimits(t *testing.T) {
 	}
 }
 
-func TestHumanEstimateDoesNotShrinkTaskWorkDuration(t *testing.T) {
-	agentKernel, _ := newKernelTestServices()
-	shortEstimate := agentKernel.turnOptionsForIntakeDecision(IntakeDecision{TaskLevel: TaskLevelLow, EstimatedMinutes: 1})
-	longEstimate := agentKernel.turnOptionsForIntakeDecision(IntakeDecision{TaskLevel: TaskLevelLow, EstimatedMinutes: 30})
-	expectedSeconds := int(TaskLevelProfileForLevel(TaskLevelLow).Duration.Seconds())
-
-	if shortEstimate.MaxElapsedSecond != expectedSeconds || longEstimate.MaxElapsedSecond != expectedSeconds {
-		t.Fatalf("expected low work duration %d regardless of human estimate, got short=%d long=%d", expectedSeconds, shortEstimate.MaxElapsedSecond, longEstimate.MaxElapsedSecond)
-	}
-}
-
 func TestAgentKernelSkillDeadlinePersistsOneBlockedTask(t *testing.T) {
 	agentKernel, taskRunService := newKernelTestServices()
 	languageModel := &routerThenBlockingLanguageModel{decision: TurnDecision{
@@ -672,15 +649,14 @@ func TestAgentKernelSkillDeadlinePersistsOneBlockedTask(t *testing.T) {
 		Classification:     IntakeClassificationBoundedTask,
 		TaskShape:          TaskShapeMaintenanceTask,
 		TaskLevel:          TaskLevelXLow,
-		EstimatedMinutes:   1,
 		PriorTaskReference: PriorTaskReferenceNone,
 		Reason:             "업무 정리",
 	}}
 	agentKernel.UseIntakeLanguageModelProvider(languageModel)
 	agentKernel.UseLanguageModelProvider(languageModel)
 	request := kernelTestRequest("고객지원 업무를 정리해줘")
-	workDuration := workDurationWithinTotal(TaskLevelProfileForLevel(TaskLevelXLow).Duration)
-	request.TurnStartedAt = time.Now().Add(-workDuration + 100*time.Millisecond)
+	workDuration := workDurationWithinTotal(elapsedBudgetForProfile(TaskLevelProfileForLevel(TaskLevelXLow), agentKernel.iterationCostObserver.CostOfModelInUse()))
+	request.TurnStartedAt = time.Now().Add(-workDuration + time.Second)
 
 	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
 
@@ -894,7 +870,6 @@ func TestAgentKernelPreservesExactPrecomputedTaskLevel(t *testing.T) {
 		Classification:     IntakeClassificationQuickReply,
 		TaskShape:          TaskShapeImmediateReply,
 		TaskLevel:          TaskLevelLow,
-		EstimatedMinutes:   1,
 		PriorTaskReference: PriorTaskReferenceNone,
 		Reason:             "LLMD topology diagnostic",
 	}

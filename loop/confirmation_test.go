@@ -156,3 +156,11 @@ func TestMultipleChoiceReplySchemaUsesPortableArrayKeywords(t *testing.T) {
 		t.Fatalf("expected provider-portable choice schema, got %s", schema)
 	}
 }
+
+func TestTheExecutionPlanNeverAsksTheModelWhatTheRequestWas(t *testing.T) {
+	schema := executionPlanSchema()
+
+	if strings.Contains(schema, "originalInstruction") {
+		t.Fatal("the runtime has the request verbatim; a weak model asked to restate it answers with a different task and the run follows that instead")
+	}
+}

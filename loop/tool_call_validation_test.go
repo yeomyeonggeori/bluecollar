@@ -826,3 +826,50 @@ func TestAgentTurnRunnerRejectsRepeatedScheduleCreateWithoutExecutingAgain(t *te
 		t.Fatal("expected duplicate schedule rejection event")
 	}
 }
+
+func TestAToolThatCannotSucceedIsNotOfferedAgain(t *testing.T) {
+	observations := []turnObservation{{
+		ObservationID: "obs-001",
+		Tool:          toolcontract.FileWriteToolName,
+		Failure: &toolcontract.ToolFailure{
+			Kind:            toolcontract.FailureExternalService,
+			Stage:           "tool_result_contract",
+			UserSafeSummary: "tool result effects do not match its descriptor contract",
+			RetryPolicy:     toolcontract.RetryPolicyDoNotRetry,
+		},
+	}}
+
+	refused, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.FileWriteToolName)
+
+	if !wasRefused || refused.ObservationID != "obs-001" {
+		t.Fatal("a call the runtime already declared unrepeatable spent 106 turns being repeated, because nothing but the wording stopped it")
+	}
+}
+
+func TestAnOrdinaryToolFailureStaysAvailable(t *testing.T) {
+	observations := []turnObservation{{
+		ObservationID: "obs-001",
+		Tool:          toolcontract.FileWriteToolName,
+		Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound, UserSafeSummary: "no such directory"},
+	}}
+
+	if _, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.FileWriteToolName); wasRefused {
+		t.Fatal("most failures are answered by a different input, and refusing the tool after one of them would end the task at its first mistake")
+	}
+}
+
+func TestASecondReadOfTheSameFileIsAnsweredFromWhatWasAlreadyRead(t *testing.T) {
+	firstRead := turnObservation{
+		ObservationID: "obs-001",
+		Tool:          toolcontract.FileReadToolName,
+		Output: toolcontract.ToolOutput{Content: `{"path":"phone_number.py","content":"import re\n","startLine":1,"endLine":1,` +
+			`"totalLines":1,"totalLinesKnown":true,"sizeBytes":10,"isTruncated":false}`},
+	}
+	action := turnActionDocument{ToolName: toolcontract.FileReadToolName, ToolInput: json.RawMessage(`{"path":"phone_number.py"}`)}
+
+	_, isRepeated := repeatedFileReadObservation([]turnObservation{firstRead}, action, "obs-002")
+
+	if !isRepeated {
+		t.Fatal("one aider-polyglot task read the same unchanged file 204 times with no cache hit, because the read reported no range for this guard to compare")
+	}
+}

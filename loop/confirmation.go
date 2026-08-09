@@ -166,7 +166,8 @@ func confirmationPlanMessages(request AgentRequest, evidenceHints []string) []mo
 			"You create a structured execution plan before the agent performs risky or recurring work.",
 			"Classify side effects accurately. External sends include direct messages, email, and messages to people or channels on any connected messenger.",
 			"Set highFrequency true for repeats more frequent than hourly.",
-			"Set missingInformation for required target, end condition, count, or time details that are absent.",
+			"Set missingInformation only for a decision the requester alone can make: a preference, a choice between options they did not state, an end condition, or a count they did not give.",
+			"Anything the agent can look up with the tools it has is not missing information. Names, contacts, addresses, records, current dates, and app data are looked up, not asked for. Listing them here stops the task before it tries.",
 			"Do not invent schedule, startAt, endAt, or cadence. Leave them empty unless the latest request explicitly asks for scheduled, delayed, recurring, repeated, or future work.",
 			"Do not ask the user here. Only return the structured plan.",
 		}, "\n")},
@@ -238,7 +239,7 @@ func choiceReplySchema(request ChoiceReplyRequest) string {
 }
 
 func executionPlanSchema() string {
-	return `{"type":"object","properties":{"originalInstruction":{"type":"string"},"summary":{"type":"string"},"targets":{"type":"array","items":{"type":"string"}},"schedule":{"type":"string"},"startAt":{"type":"string"},"endAt":{"type":"string"},"cadence":{"type":"string"},"externalSend":{"type":"boolean"},"thirdPartyExternalSend":{"type":"boolean"},"repeated":{"type":"boolean"},"highFrequency":{"type":"boolean"},"destructive":{"type":"boolean"},"permissionChange":{"type":"boolean"},"publicDeploy":{"type":"boolean"},"paidAction":{"type":"boolean"},"missingInformation":{"type":"array","items":{"type":"string"}},"continuationInstruction":{"type":"string"}},"required":["originalInstruction","summary","targets","schedule","startAt","endAt","cadence","externalSend","thirdPartyExternalSend","repeated","highFrequency","destructive","permissionChange","publicDeploy","paidAction","missingInformation","continuationInstruction"],"additionalProperties":false}`
+	return `{"type":"object","properties":{"summary":{"type":"string"},"targets":{"type":"array","items":{"type":"string"}},"schedule":{"type":"string"},"startAt":{"type":"string"},"endAt":{"type":"string"},"cadence":{"type":"string"},"externalSend":{"type":"boolean"},"thirdPartyExternalSend":{"type":"boolean"},"repeated":{"type":"boolean"},"highFrequency":{"type":"boolean"},"destructive":{"type":"boolean"},"permissionChange":{"type":"boolean"},"publicDeploy":{"type":"boolean"},"paidAction":{"type":"boolean"},"missingInformation":{"type":"array","items":{"type":"string"}},"continuationInstruction":{"type":"string"}},"required":["summary","targets","schedule","startAt","endAt","cadence","externalSend","thirdPartyExternalSend","repeated","highFrequency","destructive","permissionChange","publicDeploy","paidAction","missingInformation","continuationInstruction"],"additionalProperties":false}`
 }
 
 func trimNonEmptyConfirmationStrings(values []string) []string {

@@ -19,7 +19,6 @@ type TurnOptions struct {
 	RecoveryAttemptLimit int
 	RecoveryBudget       RecoveryBudget
 	TaskLevel            TaskLevel
-	ToolResultMaxBytes   int
 	GenerationOptions    model.GenerationOptions
 }
 

@@ -414,6 +414,54 @@ func validateCompletionGateForRequestWithExpectedResults(request AgentTurnReques
 	return validateExpectedResultDelivery(request, observations, result.Attachments, actionDocument)
 }
 
+func contractReducedToCallableTools(toolSet *toolcontract.ToolSet, contract OutcomeContract) OutcomeContract {
+	contract.RequiredEvidenceTools = callableToolNames(toolSet, contract.RequiredEvidenceTools)
+	anyOfGroups := [][]string{}
+	for _, toolNames := range contract.RequiredEvidenceAnyOf {
+		if callable := callableToolNames(toolSet, toolNames); len(callable) > 0 {
+			anyOfGroups = append(anyOfGroups, callable)
+		}
+	}
+	contract.RequiredEvidenceAnyOf = anyOfGroups
+	if isToolCallable(toolSet, toolcontract.FileDeliverToolName) {
+		return contract
+	}
+	if contract.ArtifactRequirement == ArtifactRequirementRequired {
+		contract.ArtifactRequirement = ArtifactRequirementPreferred
+	}
+	contract.RequiredAttachmentSuffixes = nil
+	contract.ExpectedResults = expectedResultsWithFilesNoLongerRequired(contract.ExpectedResults)
+	return contract
+}
+
+func expectedResultsWithFilesNoLongerRequired(expectedResults []ExpectedResult) []ExpectedResult {
+	relaxed := make([]ExpectedResult, 0, len(expectedResults))
+	for _, expectedResult := range expectedResults {
+		if expectedResult.Type == ExpectedResultTypeFile {
+			expectedResult.Required = false
+		}
+		relaxed = append(relaxed, expectedResult)
+	}
+	return relaxed
+}
+
+func callableToolNames(toolSet *toolcontract.ToolSet, toolNames []string) []string {
+	callable := []string{}
+	for _, toolName := range toolNames {
+		if isToolCallable(toolSet, toolName) {
+			callable = append(callable, toolName)
+		}
+	}
+	return callable
+}
+
+func isToolCallable(toolSet *toolcontract.ToolSet, toolName string) bool {
+	if toolSet == nil {
+		return true
+	}
+	return toolSet.IsRegistered(strings.TrimSpace(toolName))
+}
+
 func validateOutcomeContractRequirements(contract OutcomeContract, observations []turnObservation, attachments []toolcontract.FileAttachment) completionGateResult {
 	contract = normalizeOutcomeContract(contract)
 	for _, toolName := range contract.RequiredEvidenceTools {
@@ -889,10 +937,36 @@ func validateCompletionEvidenceReferences(toolSet *toolcontract.ToolSet, observa
 	for _, reference := range references {
 		observation, isFound := findSuccessfulObservation(observations, reference)
 		if !isFound || !observationSatisfiesEvidenceCondition(toolSet, observation) {
-			return errors.New("completionEvidence references an unknown or failed observation")
+			return errors.New("completionEvidence cites " + citedReferenceDescription(reference) +
+				", which is not a successful observation of this task. The observation ledger above says what each of these did; cite one of them: " + strings.Join(citableEvidenceDescriptions(toolSet, observations), ", "))
 		}
 	}
 	return nil
+}
+
+func citedReferenceDescription(reference completionEvidenceReference) string {
+	described := strings.TrimSpace(reference.ObservationID)
+	if described == "" {
+		described = "an observation with no observationID"
+	}
+	if toolName := strings.TrimSpace(reference.ToolName); toolName != "" {
+		described += " from " + toolName
+	}
+	return described
+}
+
+func citableEvidenceDescriptions(toolSet *toolcontract.ToolSet, observations []turnObservation) []string {
+	descriptions := []string{}
+	for _, observation := range observations {
+		if observation.Failed() || !observationSatisfiesEvidenceCondition(toolSet, observation) {
+			continue
+		}
+		descriptions = append(descriptions, strings.TrimSpace(observation.ObservationID)+" from "+strings.TrimSpace(observation.Tool))
+	}
+	if len(descriptions) == 0 {
+		return []string{"no successful observation yet"}
+	}
+	return descriptions
 }
 
 func completionReferencesForRequirement(requirement toolUseRequirement, observations []turnObservation, references []completionEvidenceReference) []completionEvidenceReference {

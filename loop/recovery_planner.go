@@ -20,7 +20,7 @@ const (
 
 	retryPolicyAfterPrecondition = "after_precondition"
 	retryPolicyDifferentInput    = "different_input"
-	retryPolicyDoNotRetry        = "do_not_retry"
+	retryPolicyDoNotRetry        = toolcontract.RetryPolicyDoNotRetry
 )
 
 func buildRecoveryPacket(observation turnObservation) RecoveryPacket {

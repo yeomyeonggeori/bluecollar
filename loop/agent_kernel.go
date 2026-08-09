@@ -2,7 +2,6 @@ package loop
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
@@ -14,6 +13,7 @@ import (
 )
 
 type AgentKernel struct {
+	iterationCostObserver   *IterationCostObserver
 	taskRunService          taskstate.TaskRunStore
 	taskStepService         taskstate.TaskStepStore
 	taskArtifactService     taskstate.TaskArtifactStore
@@ -36,9 +36,10 @@ type AgentKernel struct {
 
 func NewAgentKernel(taskRunService taskstate.TaskRunStore, taskStepService taskstate.TaskStepStore) *AgentKernel {
 	return &AgentKernel{
-		taskRunService:      taskRunService,
-		taskStepService:     taskStepService,
-		taskArtifactService: taskstate.NewTaskArtifactService(),
+		iterationCostObserver: NewIterationCostObserver(),
+		taskRunService:        taskRunService,
+		taskStepService:       taskStepService,
+		taskArtifactService:   taskstate.NewTaskArtifactService(),
 	}
 }
 
@@ -240,7 +241,6 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		request, intakeDecision = applyPriorTaskOutcomeRecovery(request, intakeDecision)
 		intakeDecision.InitialToolNames = registeredToolNamesOnly(turnToolSet, intakeDecision.InitialToolNames)
 		intakeRequest.ActiveGoal = request.ActiveGoal
-		intakeDecision = agentKernel.restoreEscalatedTaskLevelForContinuation(intakeRequest, intakeDecision)
 	}
 	lifecycleMode := taskLifecycleModeForRequest(turnDecision, request)
 	if lifecycleMode == taskLifecycleSemanticRevision {
@@ -322,6 +322,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	hasExecutionPlan := confirmationPlan.HasExecutionPlan
 	outcomeContract := outcomeContractForRequest(request, intakeDecision, instructionBundle, executionPlan, hasExecutionPlan, requiredAttachmentSuffixes)
 	outcomeContract = dischargeResolvedInputContract(request, turnDecision, outcomeContract)
+	outcomeContract = contractReducedToCallableTools(request.ToolSet, outcomeContract)
 	if result, didExpire := agentKernel.completeIntakeIfElapsed(taskBudget, intakeRequest, intakeDecision, turnDecision.Route, routerCallLedger.Records); didExpire {
 		return result, nil
 	}
@@ -384,7 +385,6 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		AmbientDuty:                request.AmbientDuty,
 		TaskShape:                  intakeDecision.TaskShape,
 		TaskLevel:                  intakeDecision.TaskLevel,
-		EstimatedMinutes:           intakeDecision.EstimatedMinutes,
 		TurnStartedAt:              request.TurnStartedAt,
 		EffortStartedAt:            request.TurnStartedAt,
 		TurnAnchorClamped:          taskBudget.didClampAnchor,
@@ -400,7 +400,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		agentKernel.languageModel,
 		turnOptions,
 	)
-	agentTurnRunner.UseTaskLevelLanguageModelResolver(agentKernel.taskLanguageModelForLevel)
+	agentTurnRunner.UseIterationCostObserver(agentKernel.iterationCostObserver)
 	result, errorValue := agentTurnRunner.RunTurn(taskBudget.callerContext(), turnRequest)
 	result.TurnRoute = turnDecision.Route
 	result.ToolNames = toolNamesForEvent(turnRequest.ToolSet)
@@ -561,6 +561,7 @@ func (agentKernel *AgentKernel) planConfirmationGate(responseContext context.Con
 	if errorValue != nil {
 		return confirmationGatePlan{DegradedError: errorValue}, nil
 	}
+	executionPlan.OriginalInstruction = strings.TrimSpace(request.Prompt)
 	decision := EvaluateConfirmationPolicy(executionPlan)
 	return confirmationGatePlan{ExecutionPlan: executionPlan, Decision: decision, HasExecutionPlan: true}, nil
 }
@@ -833,8 +834,12 @@ func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(intakeDecision Inta
 	baseOptions.TaskLevel = taskLevelProfile.TaskLevel
 	baseOptions.MaxIterationCount = taskLevelProfile.MaxIterationCount
 	baseOptions.MaxToolCallCount = taskLevelProfile.MaxToolCallCount
-	baseOptions.MaxElapsedSecond = int(taskLevelProfile.Duration.Seconds())
+	baseOptions.MaxElapsedSecond = int(elapsedBudgetForProfile(taskLevelProfile, agentKernel.iterationCostObserver.CostOfModelInUse()).Seconds())
 	return baseOptions
+}
+
+func elapsedBudgetForProfile(taskLevelProfile TaskLevelProfile, throughput IterationCost) time.Duration {
+	return DurationForIterationCount(taskLevelProfile.MaxIterationCount, throughput, taskLevelProfile.CostCeiling)
 }
 
 func artifactTaskLevelFloor(request AgentRequest, intakeDecision IntakeDecision) TaskLevel {
@@ -906,19 +911,6 @@ func (agentKernel *AgentKernel) turnRouterLanguageModel() model.LanguageModelPro
 	return agentKernel.classificationLanguageModel()
 }
 
-func (agentKernel *AgentKernel) restoreEscalatedTaskLevelForContinuation(request AgentRequest, intakeDecision IntakeDecision) IntakeDecision {
-	taskRunID := strings.TrimSpace(request.ExistingTaskRunID)
-	if taskRunID == "" {
-		return intakeDecision
-	}
-	restoredTaskLevel := highestEscalatedTaskLevel(agentKernel.taskRunService.ListTaskEvent(taskRunID))
-	if restoredTaskLevel == "" {
-		return intakeDecision
-	}
-	intakeDecision.TaskLevel = LargerTaskLevel(intakeDecision.TaskLevel, restoredTaskLevel)
-	return intakeDecision
-}
-
 func restorePersistedToolSelection(request AgentRequest) AgentRequest {
 	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, request.ActiveGoal.SelectedToolNames...)
 	request.PinnedSkillNames = appendUniqueStrings(request.PinnedSkillNames, request.ActiveGoal.SelectedSkillNames...)
@@ -927,38 +919,6 @@ func restorePersistedToolSelection(request AgentRequest) AgentRequest {
 
 func requestHasSitePrototypeEvidence(request AgentRequest) bool {
 	return contractRequiresToolNamespace(request.ToolSet, request.ActiveGoal.OutcomeContract, "site")
-}
-
-type budgetEscalatedEventBody struct {
-	PreviousTaskLevel  TaskLevel `json:"previousTaskLevel,omitempty"`
-	NewTaskLevel       TaskLevel `json:"newTaskLevel"`
-	UsedIterationCount int       `json:"usedIterationCount,omitempty"`
-	UsedToolCallCount  int       `json:"usedToolCallCount,omitempty"`
-	QualifyingEventIDs []string  `json:"qualifyingEventIDs,omitempty"`
-}
-
-type modelEscalatedEventBody struct {
-	PreviousTaskLevel TaskLevel `json:"previousTaskLevel,omitempty"`
-	NewTaskLevel      TaskLevel `json:"newTaskLevel"`
-}
-
-func highestEscalatedTaskLevel(taskEvents []taskstate.TaskEvent) TaskLevel {
-	highestTaskLevel := TaskLevel("")
-	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != "agent.budget_escalated" {
-			continue
-		}
-		var eventBody budgetEscalatedEventBody
-		if errorValue := json.Unmarshal([]byte(taskEvent.Body), &eventBody); errorValue != nil {
-			continue
-		}
-		normalizedTaskLevel := NormalizeTaskLevel(string(eventBody.NewTaskLevel))
-		if normalizedTaskLevel == "" {
-			continue
-		}
-		highestTaskLevel = LargerTaskLevel(highestTaskLevel, normalizedTaskLevel)
-	}
-	return highestTaskLevel
 }
 
 func routedTurnDecision(request AgentRequest) (TurnDecision, error) {

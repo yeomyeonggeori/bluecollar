@@ -8,6 +8,8 @@ import (
 var _ agentcontract.Harness = (*AgentKernel)(nil)
 
 type (
+	IterationCostObserver                   = agentcontract.IterationCostObserver
+	IterationCost                           = agentcontract.IterationCost
 	AgentIdentity                           = agentcontract.AgentIdentity
 	ActiveGoal                              = agentcontract.ActiveGoal
 	ActiveGoalStatus                        = agentcontract.ActiveGoalStatus
@@ -272,6 +274,8 @@ type (
 
 var (
 	TaskLevelProfileForLevel          = agentcontract.TaskLevelProfileForLevel
+	NewIterationCostObserver          = agentcontract.NewIterationCostObserver
+	DurationForIterationCount         = agentcontract.DurationForIterationCount
 	nextTaskLevel                     = agentcontract.NextTaskLevel
 	taskLevelRequiresPlan             = agentcontract.TaskLevelRequiresPlan
 	taskLevelWantsSingleFinalReply    = agentcontract.TaskLevelWantsSingleFinalReply

@@ -17,14 +17,16 @@ import (
 const maximumElapsedClosingDuration = time.Minute
 
 type AgentTurnRunner struct {
-	taskRunService                 taskstate.TaskRunStore
-	taskStepService                taskstate.TaskStepStore
-	taskArtifactService            taskstate.TaskArtifactStore
-	languageModel                  model.LanguageModelProvider
-	languageModelTaskLevel         TaskLevel
-	recoveryLanguageModel          model.LanguageModelProvider
-	taskLevelLanguageModelResolver TaskLevelLanguageModelResolver
-	options                        TurnOptions
+	iterationCostObserver  *IterationCostObserver
+	modelInUse             string
+	promptTokensInUse      int64
+	taskRunService         taskstate.TaskRunStore
+	taskStepService        taskstate.TaskStepStore
+	taskArtifactService    taskstate.TaskArtifactStore
+	languageModel          model.LanguageModelProvider
+	languageModelTaskLevel TaskLevel
+	recoveryLanguageModel  model.LanguageModelProvider
+	options                TurnOptions
 }
 
 type TaskLevelLanguageModelResolver func(TaskLevel) model.LanguageModelProvider
@@ -49,6 +51,31 @@ type turnActionDocument struct {
 	RemainingWork         string                        `json:"remainingWork"`
 	UsedFailureFacts      failureReportFacts            `json:"usedFailureFacts"`
 	ExecutionStateUpdate  ExecutionState                `json:"executionStateUpdate"`
+	BatchedActions        []turnActionDocument          `json:"batchedActions,omitempty"`
+}
+
+func takeBatchedAction(state *agentTaskState) (turnActionDocument, bool) {
+	if len(state.PendingBatchedActions) == 0 {
+		return turnActionDocument{}, false
+	}
+	nextAction := state.PendingBatchedActions[0]
+	state.PendingBatchedActions = state.PendingBatchedActions[1:]
+	return nextAction, true
+}
+
+func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocument) {
+	if lastObservationFailed(state.Observations) {
+		state.PendingBatchedActions = nil
+		return
+	}
+	state.PendingBatchedActions = append(state.PendingBatchedActions, actionDocument.BatchedActions...)
+}
+
+func lastObservationFailed(observations []turnObservation) bool {
+	if len(observations) == 0 {
+		return false
+	}
+	return observations[len(observations)-1].Failed()
 }
 
 type turnObservation struct {
@@ -62,6 +89,7 @@ type turnObservation struct {
 	Failure              *toolcontract.ToolFailure     `json:"failure,omitempty"`
 	Summary              string                        `json:"summary,omitempty"`
 	ImageRefs            []ToolResultImageRef          `json:"imageRefs,omitempty"`
+	RepeatsObservationID string                        `json:"repeatsObservationID,omitempty"`
 	ToolInputKey         string                        `json:"toolInputKey,omitempty"`
 	AttemptFingerprint   string                        `json:"attemptFingerprint,omitempty"`
 	RecoveryAttemptKey   string                        `json:"recoveryAttemptKey,omitempty"`
@@ -172,6 +200,7 @@ func NewAgentTurnRunnerWithRecoveryModel(taskRunService taskstate.TaskRunStore, 
 	}
 	normalizedOptions := normalizeTurnOptions(options)
 	return &AgentTurnRunner{
+		iterationCostObserver:  NewIterationCostObserver(),
 		taskRunService:         taskRunService,
 		taskStepService:        taskStepService,
 		taskArtifactService:    taskArtifactService,
@@ -182,14 +211,55 @@ func NewAgentTurnRunnerWithRecoveryModel(taskRunService taskstate.TaskRunStore, 
 	}
 }
 
-func (agentTurnRunner *AgentTurnRunner) UseTaskLevelLanguageModelResolver(resolver TaskLevelLanguageModelResolver) {
-	agentTurnRunner.taskLevelLanguageModelResolver = resolver
-}
-
 func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID string) llmCallObserver {
 	return func(record llmCallRecord) {
 		agentTurnRunner.appendEvent(taskRunID, "llm.call", marshalEventBody(record))
+		agentTurnRunner.noteModelInUse(record.Model)
+		agentTurnRunner.noteContextInUse(record.PromptTokens)
 	}
+}
+
+func (agentTurnRunner *AgentTurnRunner) UseIterationCostObserver(observer *IterationCostObserver) {
+	if observer == nil {
+		return
+	}
+	agentTurnRunner.iterationCostObserver = observer
+}
+
+func (agentTurnRunner *AgentTurnRunner) noteModelInUse(modelName string) {
+	if strings.TrimSpace(modelName) == "" {
+		return
+	}
+	agentTurnRunner.modelInUse = modelName
+}
+
+func (agentTurnRunner *AgentTurnRunner) noteContextInUse(promptTokens int64) {
+	if promptTokens <= 0 {
+		return
+	}
+	agentTurnRunner.promptTokensInUse = promptTokens
+}
+
+func (agentTurnRunner *AgentTurnRunner) toolResultLimit() int {
+	conversationBudgetTokens := compactionTriggerTokenThreshold(agentTurnRunner.options.ContextWindowTokens)
+	shareOfOneObservation := conversationBudgetTokens * charactersPerToken / maxProgressObservations
+	if agentTurnRunner.options.ContextWindowTokens <= 0 {
+		return max(shareOfOneObservation, maxSummaryTextLength)
+	}
+	remainingCharacters := (int64(agentTurnRunner.options.ContextWindowTokens) - agentTurnRunner.promptTokensInUse) * charactersPerToken
+	return max(min(int(remainingCharacters), shareOfOneObservation), maxSummaryTextLength)
+}
+
+func (agentTurnRunner *AgentTurnRunner) recordIterationCost(startedAt time.Time) {
+	agentTurnRunner.iterationCostObserver.Record(agentTurnRunner.modelInUse, time.Since(startedAt))
+}
+
+func (agentTurnRunner *AgentTurnRunner) refreshElapsedBudget(taskLevel TaskLevel) {
+	measuredCost := agentTurnRunner.iterationCostObserver.CostOfModelInUse()
+	if measuredCost.CostPerIteration <= 0 {
+		return
+	}
+	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(TaskLevelProfileForLevel(taskLevel), measuredCost).Seconds())
 }
 
 func normalizeTurnOptions(options TurnOptions) TurnOptions {
@@ -209,9 +279,6 @@ func normalizeTurnOptions(options TurnOptions) TurnOptions {
 	if options.MaxElapsedSecond <= 0 {
 		options.MaxElapsedSecond = int(taskLevelProfile.Duration.Seconds())
 	}
-	if options.ToolResultMaxBytes <= 0 {
-		options.ToolResultMaxBytes = 32768
-	}
 	if recoveryBudgetIsUnset(options.RecoveryBudget) {
 		options.RecoveryBudget = defaultRecoveryBudget()
 	} else {
@@ -223,10 +290,18 @@ func normalizeTurnOptions(options TurnOptions) TurnOptions {
 	return options
 }
 
+func requestReducedToCallableTools(request AgentTurnRequest) AgentTurnRequest {
+	request.OutcomeContract = contractReducedToCallableTools(request.ToolSet, request.OutcomeContract)
+	request.ActiveGoal.OutcomeContract = contractReducedToCallableTools(request.ToolSet, request.ActiveGoal.OutcomeContract)
+	request.RequiredEvidenceTools = callableToolNames(request.ToolSet, request.RequiredEvidenceTools)
+	return request
+}
+
 func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request AgentTurnRequest) (AgentTurnResult, error) {
 	if agentTurnRunner.languageModel == nil {
 		return AgentTurnResult{}, errors.New("language model provider is not configured")
 	}
+	request = requestReducedToCallableTools(request)
 
 	turnContext := ctx
 	turnContext = model.ContextWithRequestContext(turnContext, model.RequestContext{
@@ -327,7 +402,13 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		result, isBlocked := agentTurnRunner.blockTurnForStall(workContext, taskRun.TaskRunID, stepID, request, reason, progressEvaluation, recoveryAllowance, state)
 		return result, isBlocked
 	}
+	iterationStartedAt := time.Now()
 	for iteration := 1; ; iteration++ {
+		if iteration > 1 {
+			agentTurnRunner.recordIterationCost(iterationStartedAt)
+			agentTurnRunner.refreshElapsedBudget(state.Request.TaskLevel)
+			iterationStartedAt = time.Now()
+		}
 		if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
 			return cancelledResult, nil
 		}
@@ -385,7 +466,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			"exposure": iterationRequest.ToolExposure,
 		}))
 		allowQualityCriteria := len(state.QualityCriteria) == 0 && outcomeContractNeedsQualityCriteria(iterationRequest.ToolSet, iterationRequest.OutcomeContract)
-		actionDocument, actionError := agentTurnRunner.nextAction(workContext, taskRun.TaskRunID, iterationRequest, toolUseRequirements, state.Observations, state.ExecutionState, state.ContextSummary, allowQualityCriteria)
+		actionDocument, isBatched := takeBatchedAction(&state)
+		var actionError error
+		if !isBatched {
+			actionDocument, actionError = agentTurnRunner.nextAction(workContext, taskRun.TaskRunID, iterationRequest, toolUseRequirements, state.Observations, state.ExecutionState, state.ContextSummary, allowQualityCriteria)
+		}
 		if actionError != nil {
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusFailed, "agent turn iteration", actionError.Error())
 			if errors.Is(actionError, context.Canceled) {
@@ -481,6 +566,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				}
 				return outcome.Result, nil
 			}
+			rememberBatchedActions(&state, actionDocument)
 			if outcome.WasHandled {
 				continue
 			}
@@ -569,17 +655,15 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 	if outcome := agentTurnRunner.rejectMalformedToolCall(taskRunID, stepID, request, state, actionDocument, stopForNoProgress); outcome.WasHandled {
 		return outcome
 	}
-	canFinalizeDuplicateDeterministically := false
 	if duplicateObservation, isDuplicate := repeatedSuccessfulCompletionCandidate(state, actionDocument, successfulToolCalls); isDuplicate {
 		finalizationRequirements, canFinalize := duplicateSuccessFinalizationRequirements(request.ToolSet, requirements, state.Observations, actionDocument)
-		canFinalizeDuplicateDeterministically = canFinalize
 		if canFinalize {
 			if result, isFinalized := agentTurnRunner.finalizeSatisfiedTurn(ctx, taskRunID, request, finalizationRequirements, state.Observations, state.QualityCriteria, state.ExecutionState, duplicateObservation.Tool); isFinalized {
 				return toolCallActionOutcome{Result: result, ShouldReturn: true, WasHandled: true}
 			}
 		}
 	}
-	if outcome := agentTurnRunner.rejectRepeatedToolCall(taskRunID, stepID, state, actionDocument, successfulToolCalls, canFinalizeDuplicateDeterministically, stopForNoProgress); outcome.WasHandled {
+	if outcome := agentTurnRunner.rejectRepeatedToolCall(taskRunID, stepID, state, actionDocument, successfulToolCalls, stopForNoProgress); outcome.WasHandled {
 		return outcome
 	}
 	recoveryStep, outcome := agentTurnRunner.prepareRecoveryAttempt(ctx, taskRunID, stepID, request, state, actionDocument, stopForNoProgress)
@@ -1573,18 +1657,8 @@ func (agentTurnRunner *AgentTurnRunner) finalizeEscalateOrStopForLimit(ctx conte
 	}
 	observations = finalization.Observations
 	attachments = finalization.Attachments
-	qualifyingEvents := qualifyingDurableProgressEventsSinceTierStart(agentTurnRunner.taskRunService.ListTaskEvent(taskRunID), observations)
-	if agentTurnRunner.options.TaskLevel == TaskLevelMax {
-		agentTurnRunner.appendLimitCheckpoint(taskRunID, qualifyingEvents)
-		result, errorValue := agentTurnRunner.stopForLimit(ctx, taskRunID, request, reason, observations, attachments, executionState, usedIterationCount, usedToolCallCount)
-		return result, false, errorValue
-	}
-	if len(qualifyingEvents) < 2 || agentTurnRunner.budgetEscalationCount(taskRunID) >= maxBudgetEscalationCount {
-		result, errorValue := agentTurnRunner.stopForLimit(ctx, taskRunID, request, reason, observations, attachments, executionState, usedIterationCount, usedToolCallCount)
-		return result, false, errorValue
-	}
-	agentTurnRunner.escalateBudgetTier(taskRunID, qualifyingEvents, usedIterationCount, usedToolCallCount)
-	return AgentTurnResult{}, true, nil
+	result, errorValue := agentTurnRunner.stopForLimit(ctx, taskRunID, request, reason, observations, attachments, executionState, usedIterationCount, usedToolCallCount)
+	return result, false, errorValue
 }
 
 func elapsedCompletionRequirements(requirements []toolUseRequirement, observations []turnObservation, completionIntentToolName string, toolSet *toolcontract.ToolSet) []toolUseRequirement {
@@ -1633,66 +1707,6 @@ func completionPromptObservations(requirements []toolUseRequirement, observation
 		matchingObservations = append(matchingObservations, observation)
 	}
 	return matchingObservations
-}
-
-const maxBudgetEscalationCount = 2
-
-func (agentTurnRunner *AgentTurnRunner) budgetEscalationCount(taskRunID string) int {
-	count := 0
-	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == "agent.budget_escalated" {
-			count++
-		}
-	}
-	return count
-}
-
-func (agentTurnRunner *AgentTurnRunner) escalateBudgetTier(taskRunID string, qualifyingEvents []qualifyingProgressEvent, usedIterationCount int, usedToolCallCount int) {
-	previousTaskLevel := TaskLevelProfileForLevel(agentTurnRunner.options.TaskLevel).TaskLevel
-	newTaskLevel, canEscalate := nextTaskLevel(previousTaskLevel)
-	if !canEscalate {
-		return
-	}
-	taskLevelProfile := TaskLevelProfileForLevel(newTaskLevel)
-	agentTurnRunner.options.TaskLevel = taskLevelProfile.TaskLevel
-	agentTurnRunner.options.MaxIterationCount = taskLevelProfile.MaxIterationCount
-	agentTurnRunner.options.MaxToolCallCount = taskLevelProfile.MaxToolCallCount
-	agentTurnRunner.options.MaxElapsedSecond = int(taskLevelProfile.Duration.Seconds())
-	agentTurnRunner.appendEvent(taskRunID, "agent.budget_escalated", marshalEventBody(budgetEscalatedEventBody{
-		PreviousTaskLevel:  previousTaskLevel,
-		NewTaskLevel:       taskLevelProfile.TaskLevel,
-		UsedIterationCount: usedIterationCount,
-		UsedToolCallCount:  usedToolCallCount,
-		QualifyingEventIDs: qualifyingProgressEventIDs(qualifyingEvents),
-	}))
-	agentTurnRunner.escalateLanguageModel(taskRunID, previousTaskLevel, taskLevelProfile.TaskLevel)
-}
-
-func (agentTurnRunner *AgentTurnRunner) escalateLanguageModel(taskRunID string, previousTaskLevel TaskLevel, newTaskLevel TaskLevel) {
-	if agentTurnRunner.taskLevelLanguageModelResolver == nil {
-		return
-	}
-	if newTaskLevel == agentTurnRunner.languageModelTaskLevel {
-		return
-	}
-	escalatedLanguageModel := agentTurnRunner.taskLevelLanguageModelResolver(newTaskLevel)
-	if escalatedLanguageModel == nil {
-		return
-	}
-	agentTurnRunner.languageModel = observeLanguageModel(escalatedLanguageModel, agentTurnRunner.llmCallObserverForTaskRun(taskRunID))
-	agentTurnRunner.languageModelTaskLevel = newTaskLevel
-	agentTurnRunner.appendEvent(taskRunID, "agent.model_escalated", marshalEventBody(modelEscalatedEventBody{
-		PreviousTaskLevel: previousTaskLevel,
-		NewTaskLevel:      newTaskLevel,
-	}))
-}
-
-func (agentTurnRunner *AgentTurnRunner) appendLimitCheckpoint(taskRunID string, qualifyingEvents []qualifyingProgressEvent) {
-	agentTurnRunner.appendEvent(taskRunID, "agent.limit_checkpoint", marshalEventBody(map[string]any{
-		"qualifyingProgressEvents": qualifyingEvents,
-		"qualifyingEventIDs":       qualifyingProgressEventIDs(qualifyingEvents),
-		"note":                     "work was preserved and this task run can be continued",
-	}))
 }
 
 func (agentTurnRunner *AgentTurnRunner) currentEffortElapsed(turnStartedAt time.Time) bool {
@@ -1774,8 +1788,11 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 		return AgentTurnResult{}, false
 	}
 	if !completionEvidenceIncludesSuccessfulTool(observations, actionDocument.CompletionEvidence, requiredToolName) {
-		agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_rejected", marshalEventBody(map[string]string{"reason": "finalizer omitted successful evidence for the repeated tool"}))
-		return AgentTurnResult{}, false
+		supplied, wasSupplied := agentTurnRunner.supplyOmittedCompletionEvidence(taskRunID, observations, requiredToolName)
+		if !wasSupplied {
+			return AgentTurnResult{}, false
+		}
+		actionDocument.CompletionEvidence = append(actionDocument.CompletionEvidence, supplied)
 	}
 	completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(finalizationContext, taskRunID, request, requirements, observations, nil, criteria, actionDocument)
 	if !completionGateResult.IsSatisfied {
@@ -1795,6 +1812,46 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 		agentTurnRunner.appendEvent(taskRunID, "agent.completion_persist_failed", marshalEventBody(map[string]string{"error": completionError.Error()}))
 	}
 	return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: completionGateResult.Attachments, RecoveryActions: recoveryActionsFromObservations(observations)}, true
+}
+
+const omittedEvidenceRejectionReason = "finalizer omitted successful evidence for the repeated tool"
+
+func (agentTurnRunner *AgentTurnRunner) supplyOmittedCompletionEvidence(taskRunID string, observations []turnObservation, requiredToolName string) (completionEvidenceReference, bool) {
+	citedObservation, canCite := latestSuccessfulObservationForTool(observations, requiredToolName)
+	if !canCite || !agentTurnRunner.hasAlreadyRejectedFinalizerForOmittedEvidence(taskRunID) {
+		agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_rejected", marshalEventBody(map[string]string{"reason": omittedEvidenceRejectionReason}))
+		return completionEvidenceReference{}, false
+	}
+	agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_evidence_supplied", marshalEventBody(map[string]string{
+		"toolName":      strings.TrimSpace(citedObservation.Tool),
+		"observationID": citedObservation.ObservationID,
+	}))
+	return completionEvidenceReference{ObservationID: citedObservation.ObservationID, ToolName: strings.TrimSpace(citedObservation.Tool)}, true
+}
+
+func (agentTurnRunner *AgentTurnRunner) hasAlreadyRejectedFinalizerForOmittedEvidence(taskRunID string) bool {
+	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
+		if taskEvent.Name != "agent.finalizer_rejected" {
+			continue
+		}
+		rejection := map[string]string{}
+		if json.Unmarshal([]byte(taskEvent.Body), &rejection) == nil && rejection["reason"] == omittedEvidenceRejectionReason {
+			return true
+		}
+	}
+	return false
+}
+
+func latestSuccessfulObservationForTool(observations []turnObservation, toolName string) (turnObservation, bool) {
+	trimmedToolName := strings.TrimSpace(toolName)
+	for index := len(observations) - 1; index >= 0; index-- {
+		observation := observations[index]
+		if observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, trimmedToolName) {
+			continue
+		}
+		return observation, true
+	}
+	return turnObservation{}, false
 }
 
 func completionEvidenceIncludesSuccessfulTool(observations []turnObservation, references []completionEvidenceReference, requiredToolName string) bool {

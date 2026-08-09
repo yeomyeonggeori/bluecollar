@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Ask the benchmark model for two independent tool calls in one response and
+# report how many it returned. The loop can batch calls only if the provider
+# emits more than one, and that is a property of the model and the request
+# mode, not of anything the harness can decide on its own.
+set -euo pipefail
+
+# shellcheck source=bench/environment-file
+source "$(dirname "$0")/environment-file"
+loadEnvironmentFile
+
+
+model="${BENCH_MODEL:-openai/gpt-5.6-luna}"
+toolChoice="${PROBE_TOOL_CHOICE:-required}"
+
+for parallelToolCalls in true false; do
+  responseBody="$(curl -sS https://openrouter.ai/api/v1/chat/completions \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d @- <<REQUEST
+{
+  "model": "$model",
+  "parallel_tool_calls": $parallelToolCalls,
+  "tool_choice": "$toolChoice",
+  "messages": [
+    {"role": "user", "content": "Read both /etc/hostname and /etc/os-release. They are independent; request them together."}
+  ],
+  "tools": [
+    {"type": "function", "function": {"name": "file_read", "description": "Read one file", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": false}}}
+  ]
+}
+REQUEST
+  )"
+  callCount="$(printf '%s' "$responseBody" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(len((d.get("choices") or [{}])[0].get("message",{}).get("tool_calls") or []) if d.get("choices") else "error: "+json.dumps(d)[:200])')"
+  echo "model=$model tool_choice=$toolChoice parallel_tool_calls=$parallelToolCalls -> tool calls returned: $callCount"
+done

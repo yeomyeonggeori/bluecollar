@@ -7,6 +7,7 @@ import (
 
 type planUpdateDocument struct {
 	Goal  string     `json:"goal,omitempty"`
+	Level TaskLevel  `json:"level,omitempty"`
 	Steps []PlanStep `json:"steps"`
 }
 
@@ -31,7 +32,8 @@ func (agentTurnRunner *AgentTurnRunner) applyPlanUpdateObservation(taskRunID str
 		state.ExecutionState.Goal = document.Goal
 	}
 	state.ExecutionState.Steps = document.Steps
-	agentTurnRunner.appendEvent(taskRunID, "agent.plan.updated", marshalEventBody(planUpdateDocument{Goal: state.ExecutionState.Goal, Steps: state.ExecutionState.Steps}))
+	agentTurnRunner.widenBudgetForPlannedLevel(taskRunID, state, document.Level)
+	agentTurnRunner.appendEvent(taskRunID, "agent.plan.updated", marshalEventBody(planUpdateDocument{Goal: state.ExecutionState.Goal, Level: document.Level, Steps: state.ExecutionState.Steps}))
 	agentTurnRunner.appendEvent(taskRunID, "agent.execution_state", marshalEventBody(normalizeExecutionState(state.ExecutionState)))
 }
 
@@ -68,4 +70,22 @@ func latestPlanUpdate(observations []turnObservation) (planUpdateDocument, bool)
 		}
 	}
 	return planUpdateDocument{}, false
+}
+
+func (agentTurnRunner *AgentTurnRunner) widenBudgetForPlannedLevel(taskRunID string, state *agentTaskState, plannedLevel TaskLevel) {
+	normalizedLevel := NormalizeTaskLevel(string(plannedLevel))
+	if normalizedLevel == "" || taskLevelRank(normalizedLevel) <= taskLevelRank(state.Request.TaskLevel) {
+		return
+	}
+	plannedProfile := TaskLevelProfileForLevel(normalizedLevel)
+	agentTurnRunner.options.MaxIterationCount = plannedProfile.MaxIterationCount
+	agentTurnRunner.options.MaxToolCallCount = plannedProfile.MaxToolCallCount
+	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(plannedProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	state.Request.TaskLevel = normalizedLevel
+	agentTurnRunner.appendEvent(taskRunID, "agent.plan.sized", marshalEventBody(map[string]any{
+		"level":             string(normalizedLevel),
+		"maxToolCallCount":  agentTurnRunner.options.MaxToolCallCount,
+		"maxIterationCount": agentTurnRunner.options.MaxIterationCount,
+		"maxElapsedSecond":  agentTurnRunner.options.MaxElapsedSecond,
+	}))
 }

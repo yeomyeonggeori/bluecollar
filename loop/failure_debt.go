@@ -169,6 +169,22 @@ func attemptFingerprint(toolInputKey string, errorCode string) string {
 	return normalizedToolInputKey + "\x00" + normalizedErrorCode
 }
 
+func previousNonRetryableToolFailure(observations []turnObservation, toolName string) (turnObservation, bool) {
+	trimmedToolName := strings.TrimSpace(toolName)
+	if trimmedToolName == "" {
+		return turnObservation{}, false
+	}
+	for _, observation := range observations {
+		if observation.Failure == nil || strings.TrimSpace(observation.Failure.RetryPolicy) != toolcontract.RetryPolicyDoNotRetry {
+			continue
+		}
+		if strings.TrimSpace(observation.Tool) == trimmedToolName {
+			return observation, true
+		}
+	}
+	return turnObservation{}, false
+}
+
 func previousFailedToolInput(observations []turnObservation, toolName string, toolInput json.RawMessage) (turnObservation, bool) {
 	expectedKey := canonicalToolCallKey(toolName, toolInput)
 	for index := len(observations) - 1; index >= 0; index-- {

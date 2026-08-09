@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""Say what a harness actually did on each task of a run.
+
+A pass rate says whether the tests went green. It does not say whether the
+agent worked for four turns or a hundred, which tools it reached for, why it
+stopped, or which single assertion out of thirty was the one that failed.
+That is the difference between a number and something you can act on, and
+every run already records it — this reads it back.
+
+Usage: explain-run <run output directory> [task name substring]
+"""
+
+import collections
+import glob
+import json
+import os
+import re
+import sys
+
+
+def harness_names(output_root):
+    names = [os.path.basename(path.rstrip("/")) for path in glob.glob(os.path.join(output_root, "*/"))]
+    return sorted(names)
+
+
+def latest_run_directory(harness_root):
+    directories = sorted(glob.glob(os.path.join(harness_root, "*/")), key=os.path.getmtime)
+    return directories[-1] if directories else None
+
+
+def ledger_lines(task_directory):
+    paths = glob.glob(os.path.join(task_directory, "**/bluecollar-ledger.txt"), recursive=True)
+    if not paths:
+        return []
+    return open(paths[0], errors="replace").read().splitlines()
+
+
+def tools_used(lines):
+    requested = (re.match(r"\s*tool\.(\w+)\.requested", line) for line in lines)
+    return collections.Counter(match.group(1) for match in requested if match)
+
+
+def turn_count(lines):
+    return sum(1 for line in lines if line.strip().startswith("agent.action"))
+
+
+def ending(lines):
+    reasons = [line for line in lines if line.startswith("reason:")]
+    if reasons:
+        return reasons[-1][len("reason:"):].strip()
+    statuses = [line for line in lines if line.startswith("status:")]
+    return statuses[-1][len("status:"):].strip() if statuses else "no ending recorded"
+
+
+def refusals(lines):
+    refused = collections.Counter()
+    for line in lines:
+        name = line.split()[0] if line.strip() else ""
+        if name.startswith("agent.") and name.endswith(("_rejected", "_refused", "_missing", "_required")):
+            refused[name] += 1
+    return refused
+
+
+def test_summary(result):
+    parsed = result.get("parser_results") or {}
+    if not parsed:
+        return "no tests ran", []
+    failed = [name for name, status in parsed.items() if status != "passed"]
+    passed = len(parsed) - len(failed)
+    return f"{passed}/{len(parsed)} assertions passed", failed
+
+
+def task_directory_for(run_directory, task_id):
+    matches = glob.glob(os.path.join(run_directory, task_id, "*/"))
+    return matches[0] if matches else None
+
+
+def explain(run_directory, task_filter):
+    report_path = os.path.join(run_directory, "results.json")
+    if not os.path.exists(report_path):
+        print(f"  {run_directory} has no results.json — the run did not finish")
+        return
+    for result in json.load(open(report_path))["results"]:
+        task_id = result["task_id"]
+        if task_filter and task_filter not in task_id:
+            continue
+        verdict = "solved" if result.get("is_resolved") else "not solved"
+        tests, failed = test_summary(result)
+        print(f"\n  {task_id}  [{verdict}] {tests}")
+        if failed:
+            print(f"      failed: {', '.join(failed[:6])}")
+        if result.get("failure_mode") not in (None, "unset", "none"):
+            print(f"      harness reported: {result['failure_mode']}")
+        task_directory = task_directory_for(run_directory, task_id)
+        if task_directory is None:
+            continue
+        lines = ledger_lines(task_directory)
+        if not lines:
+            print("      no ledger — this harness does not record what it did")
+            continue
+        print(f"      {turn_count(lines)} turns, tools {dict(tools_used(lines))}")
+        print(f"      ended: {ending(lines)[:150]}")
+        refused = refusals(lines)
+        if refused:
+            print(f"      the runtime refused it: {dict(refused)}")
+        print(f"      full ledger: {os.path.join(task_directory, 'agent-logs')}")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        raise SystemExit(2)
+    output_root = sys.argv[1]
+    task_filter = sys.argv[2] if len(sys.argv) > 2 else ""
+    for harness_name in harness_names(output_root):
+        run_directory = latest_run_directory(os.path.join(output_root, harness_name))
+        if run_directory is None:
+            continue
+        print(f"\n== {harness_name} == {run_directory}")
+        explain(run_directory, task_filter)
+
+
+main()

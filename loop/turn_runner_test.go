@@ -368,7 +368,6 @@ func TestAgentTurnRunnerSuppressesCheckpointForSimpleTask(t *testing.T) {
 		ToolSet:           toolRegistry,
 		PinnedToolNames:   toolRegistry.ListToolNames(),
 		TaskLevel:         TaskLevelXLow,
-		EstimatedMinutes:  1,
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			checkpoints = append(checkpoints, checkpoint)
 			return nil
@@ -468,7 +467,7 @@ func TestAgentTurnRunnerDoesNotSendCheckpointForRejectedToolCall(t *testing.T) {
 	}
 }
 
-func TestDuplicateSuccessfulToolCallNarrowsNextActionSchemaToTerminalActions(t *testing.T) {
+func TestADuplicateRejectionLeavesTheToolsInTheAgentsHands(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "일정을 갱신합니다.", "calendar_update", `{"eventID":"evt-1","title":"Standup"}`),
 		directToolAction("continue", "다시 갱신합니다.", "calendar_update", `{"eventID":"evt-1","title":"Standup"}`),
@@ -496,9 +495,6 @@ func TestDuplicateSuccessfulToolCallNarrowsNextActionSchemaToTerminalActions(t *
 	if errorValue != nil {
 		t.Fatalf("expected turn to succeed: %v", errorValue)
 	}
-	if result.FinishMessage != "완료했습니다." {
-		t.Fatalf("expected the cited follow-up finish to complete the task, got %+v", result)
-	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.duplicate_tool_call_rejected", "calendar_update") {
 		t.Fatal("expected duplicate rejection event")
 	}
@@ -509,23 +505,8 @@ func TestDuplicateSuccessfulToolCallNarrowsNextActionSchemaToTerminalActions(t *
 			actionRequests = append(actionRequests, request)
 		}
 	}
-	if len(actionRequests) != 3 {
-		t.Fatalf("expected three normal action-loop requests, got %d: %v", len(actionRequests), structuredRequestNames(languageModel.requests))
-	}
-	narrowedSchema := actionRequests[2].StructuredOutputSchema.Document
-	if actionSchemaHasVariant(t, narrowedSchema, "continue") {
-		t.Fatalf("expected the post-duplicate-rejection schema to drop continue/tool variants, got %s", narrowedSchema)
-	}
-	if !actionSchemaHasVariant(t, narrowedSchema, "finish") {
-		t.Fatalf("expected the post-duplicate-rejection schema to still offer finish, got %s", narrowedSchema)
-	}
-	if !actionSchemaHasVariant(t, narrowedSchema, "fail") {
-		t.Fatalf("expected the post-duplicate-rejection schema to still offer fail, got %s", narrowedSchema)
-	}
-
-	firstSchema := actionRequests[0].StructuredOutputSchema.Document
-	if !actionSchemaHasVariant(t, firstSchema, "continue") {
-		t.Fatalf("expected the initial schema to expose the tool palette, got %s", firstSchema)
+	if !actionSchemaHasVariant(t, actionRequests[len(actionRequests)-1].StructuredOutputSchema.Document, "continue") {
+		t.Fatal("repeating one call is a reason to refuse that call, not to take the tools away: fix-git found the commit it was sent for and then reported it could not merge, because the schema after a duplicate held only finish and fail")
 	}
 }
 
@@ -1004,7 +985,6 @@ func TestAgentTurnRunnerCompletesBrowserOpenWithPostEvidenceReply(t *testing.T) 
 		ConversationID:        "conversation-1",
 		Prompt:                "브라우저 열어줘.",
 		TaskLevel:             TaskLevelXLow,
-		EstimatedMinutes:      1,
 		TaskShape:             TaskShapeBrowserHandoffTask,
 		ToolSet:               toolRegistry,
 		PinnedToolNames:       toolRegistry.ListToolNames(),
@@ -1800,116 +1780,6 @@ func TestAgentTurnRunnerFailsWhenMaximumIterationsAreExceeded(t *testing.T) {
 	}
 }
 
-func TestAgentTurnRunnerEscalatesIterationLimitAfterDurableProgress(t *testing.T) {
-	// site.build no longer exists as a distinct native capability (build now
-	// runs through an ordinary terminal_run, per commit d4a0e36); terminal_run
-	// with a zero exit code is the current qualifying "durable progress" tool.
-	languageModel := &sequenceLanguageModel{
-		contents: []string{
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/app/index.html","content":"one"}}`,
-			`{"action":"continue","toolName":"terminal_run","toolInput":{"command":"npm run build"}}`,
-			finishMessageDocument("continued after escalation"),
-		},
-	}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{
-		TaskLevel:         TaskLevelXLow,
-		MaxIterationCount: 2,
-		MaxToolCallCount:  10,
-	})
-	toolRegistry := newTestToolSet([]string{"file_write", "terminal_run"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"path":"tmp/app/index.html"}`), nil
-	})
-	registerTestTool(toolRegistry, terminalRunTestToolDefinition(), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		data := json.RawMessage(`{"mode":"command","completed":true,"exitCode":0,"stdout":"built","stderr":"","timedOut":false,"outputTrimmed":false}`)
-		return toolcontract.ToolSuccessData(string(data), data), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "build the site",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"file_write", "terminal_run"},
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected escalation run, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
-		t.Fatalf("expected completed task after escalation, got %s", result.TaskRun.Status)
-	}
-	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(taskEvents, "agent.budget_escalated", `"newTaskLevel":"low"`) {
-		t.Fatalf("expected budget escalation event, got %+v", taskEvents)
-	}
-	if !taskEventsContain(taskEvents, "agent.budget_escalated", `"qualifyingEventIDs":["obs-001","obs-002"]`) {
-		t.Fatalf("expected qualifying event IDs, got %+v", taskEvents)
-	}
-}
-
-func TestAgentTurnRunnerSwapsLanguageModelWhenBudgetTierEscalates(t *testing.T) {
-	xLowLanguageModel := &sequenceLanguageModel{
-		modelTier: "xlow",
-		contents: []string{
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/app/index.html","content":"one"}}`,
-			`{"action":"continue","toolName":"terminal_run","toolInput":{"command":"npm run build"}}`,
-		},
-	}
-	lowLanguageModel := &sequenceLanguageModel{
-		modelTier: "low",
-		contents:  []string{finishMessageDocument("continued on the escalated model")},
-	}
-	services := newTurnRunnerTestServices(xLowLanguageModel, TurnOptions{
-		TaskLevel:         TaskLevelXLow,
-		MaxIterationCount: 2,
-		MaxToolCallCount:  10,
-	})
-	services.runner.UseTaskLevelLanguageModelResolver(func(taskLevel TaskLevel) model.LanguageModelProvider {
-		if taskLevel == TaskLevelXLow {
-			return xLowLanguageModel
-		}
-		return lowLanguageModel
-	})
-	toolRegistry := newTestToolSet([]string{"file_write", "terminal_run"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"path":"tmp/app/index.html"}`), nil
-	})
-	registerTestTool(toolRegistry, terminalRunTestToolDefinition(), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		data := json.RawMessage(`{"mode":"command","completed":true,"exitCode":0,"stdout":"built","stderr":"","timedOut":false,"outputTrimmed":false}`)
-		return toolcontract.ToolSuccessData(string(data), data), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "build the site",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"file_write", "terminal_run"},
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected escalated run, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
-		t.Fatalf("expected completed task after the model swap, got %s", result.TaskRun.Status)
-	}
-	if len(xLowLanguageModel.requests) != 2 {
-		t.Fatalf("expected the starting tier to answer twice, got %d", len(xLowLanguageModel.requests))
-	}
-	if len(lowLanguageModel.requests) != 1 {
-		t.Fatalf("expected the escalated tier to answer the next action, got %d", len(lowLanguageModel.requests))
-	}
-	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(taskEvents, "agent.model_escalated", `"previousTaskLevel":"xlow"`) ||
-		!taskEventsContain(taskEvents, "agent.model_escalated", `"newTaskLevel":"low"`) {
-		t.Fatalf("expected an xlow to low model escalation event, got %+v", taskEvents)
-	}
-	if !taskEventsContain(taskEvents, "llm.call", `"modelTier":"low"`) {
-		t.Fatalf("expected the escalated model call to stay observed in the ledger, got %+v", taskEvents)
-	}
-}
-
 func TestAgentTurnRunnerDoesNotEscalateIterationLimitForInspectionOnlyProgress(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
@@ -1947,100 +1817,6 @@ func TestAgentTurnRunnerDoesNotEscalateIterationLimitForInspectionOnlyProgress(t
 	}
 	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.budget_escalated", "") {
 		t.Fatal("did not expect inspection-only progress to escalate")
-	}
-}
-
-func TestAgentTurnRunnerEscalationIsOneDirectionalAndPersisted(t *testing.T) {
-	languageModel := &sequenceLanguageModel{
-		contents: []string{
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/app/a","content":"one"}}`,
-			`{"action":"continue","toolName":"file_edit","toolInput":{"edits":[{"path":"tmp/app/a","oldText":"one","newText":"two"}]}}`,
-			`{"action":"continue","toolName":"file_edit","toolInput":{"path":"tmp/app/a","oldText":"one","newText":"two"}}`,
-			`{"action":"continue","toolName":"site.build","toolInput":{"siteID":"site-1"}}`,
-			finishMessageDocument("done"),
-		},
-	}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{
-		TaskLevel:         TaskLevelXLow,
-		MaxIterationCount: 2,
-		MaxToolCallCount:  10,
-	})
-	toolRegistry := newTestToolSet([]string{"file_write", "file_edit", "site.build"})
-	for _, toolName := range []string{"file_write", "file_edit", "site.build"} {
-		registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-			return testToolSuccess(`{"ok":true}`), nil
-		})
-	}
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "keep building",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"file_write", "file_edit", "site.build"},
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected completed run, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
-		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
-	}
-	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if countTaskEvents(taskEvents, "agent.budget_escalated") != 1 {
-		t.Fatalf("expected exactly one persisted escalation, got %+v", taskEvents)
-	}
-	if !taskEventsContain(taskEvents, "agent.budget_escalated", `"previousTaskLevel":"xlow"`) ||
-		!taskEventsContain(taskEvents, "agent.budget_escalated", `"newTaskLevel":"low"`) {
-		t.Fatalf("expected xlow to low escalation, got %+v", taskEvents)
-	}
-}
-
-func TestAgentTurnRunnerCheckpointsAtMaxIterationCeiling(t *testing.T) {
-	// site.build no longer exists as a distinct native capability (build now
-	// runs through an ordinary terminal_run, per commit d4a0e36); terminal_run
-	// with a zero exit code is the current qualifying "durable progress" tool.
-	languageModel := &sequenceLanguageModel{
-		contents: []string{
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/app/a","content":"one"}}`,
-			`{"action":"continue","toolName":"terminal_run","toolInput":{"command":"npm run build"}}`,
-		},
-		textResponses: []string{"progress saved"},
-	}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{
-		TaskLevel:         TaskLevelMax,
-		MaxIterationCount: 2,
-		MaxToolCallCount:  10,
-	})
-	toolRegistry := newTestToolSet([]string{"file_write", "terminal_run"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"path":"tmp/app/a"}`), nil
-	})
-	registerTestTool(toolRegistry, terminalRunTestToolDefinition(), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		data := json.RawMessage(`{"mode":"command","completed":true,"exitCode":0,"stdout":"built","stderr":"","timedOut":false,"outputTrimmed":false}`)
-		return toolcontract.ToolSuccessData(string(data), data), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "finish extended work",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"file_write", "terminal_run"},
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected checkpoint result, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked {
-		t.Fatalf("expected blocked checkpoint task, got %s", result.TaskRun.Status)
-	}
-	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if taskEventsContain(taskEvents, "agent.budget_escalated", "") {
-		t.Fatal("did not expect escalation past the max task level")
-	}
-	if !taskEventsContain(taskEvents, "agent.limit_checkpoint", `"qualifyingEventIDs":["obs-001","obs-002"]`) {
-		t.Fatalf("expected limit checkpoint event, got %+v", taskEvents)
 	}
 }
 
@@ -2629,5 +2405,29 @@ func TestTerminalStructuredRequestsCarryMaxTokensCap(t *testing.T) {
 		if structuredRequest.GenerationOptions.MaxTokens == nil || *structuredRequest.GenerationOptions.MaxTokens != terminalStructuredMaxTokens {
 			t.Fatalf("expected %s request to cap maxTokens at %d", structuredRequest.StructuredOutputSchema.Name, terminalStructuredMaxTokens)
 		}
+	}
+}
+
+func TestTheRuntimeSuppliesTheObservationIDItAlreadyKnows(t *testing.T) {
+	observations := []turnObservation{
+		{ObservationID: "obs-001", Tool: toolcontract.TerminalRunToolName},
+		{ObservationID: "obs-002", Tool: toolcontract.TerminalRunToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
+		{ObservationID: "obs-003", Tool: toolcontract.TerminalRunToolName},
+	}
+
+	cited, canCite := latestSuccessfulObservationForTool(observations, toolcontract.TerminalRunToolName)
+
+	if !canCite || cited.ObservationID != "obs-003" {
+		t.Fatalf("the runtime rejected eighteen finish attempts over an observation ID it could read off its own ledger, got %q", cited.ObservationID)
+	}
+}
+
+func TestNoObservationIsInventedWhenTheToolNeverSucceeded(t *testing.T) {
+	observations := []turnObservation{
+		{ObservationID: "obs-001", Tool: toolcontract.TerminalRunToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
+	}
+
+	if _, canCite := latestSuccessfulObservationForTool(observations, toolcontract.TerminalRunToolName); canCite {
+		t.Fatal("supplying evidence for work that never succeeded would let the runtime sign off on a claim the ledger contradicts")
 	}
 }

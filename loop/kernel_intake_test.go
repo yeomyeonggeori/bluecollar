@@ -12,7 +12,7 @@ import (
 
 func TestAgentKernelPreservesScheduledIntakeRefusalAfterSkillSelection(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"give_up","classification":"unsupported","taskShape":"immediate_reply","level":"medium","estimatedMinutes":1,"requestedOutputFormats":null,"reason":"background loops are unsupported","userFacingReply":"지원하지 않습니다."}`,
+		`{"route":"give_up","classification":"unsupported","taskShape":"immediate_reply","level":"medium","requestedOutputFormats":null,"reason":"background loops are unsupported","userFacingReply":"지원하지 않습니다."}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"schedule_create","toolInput":{"taskInstruction":"현재 대화에 \"죄송합니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite","timeZone":"Asia/Seoul"}}`,
@@ -50,7 +50,7 @@ func TestAgentKernelPreservesScheduledIntakeRefusalAfterSkillSelection(t *testin
 
 func TestAgentKernelSelectsArtifactSkillOnceAfterRouting(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"medium","estimatedMinutes":1,"requestedOutputFormats":["pptx"],"initialToolNames":["file_deliver"],"reason":"create and deliver the requested presentation","userFacingReply":""}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"medium","requestedOutputFormats":["pptx"],"initialToolNames":["file_deliver"],"reason":"create and deliver the requested presentation","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/deck/deck.pptx"}}`,
@@ -148,9 +148,8 @@ func TestAgentKernelSelectsSkillForTypedToolContract(t *testing.T) {
 		Prompt:         "Use task.add.",
 		ToolReferences: []string{"task_add"},
 	}}}, request, IntakeDecision{
-		Classification:   IntakeClassificationBoundedTask,
-		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 2,
+		Classification: IntakeClassificationBoundedTask,
+		TaskLevel:      TaskLevelLow,
 	})
 
 	if bundle.RetrievalMode == "tool_contract" || bundle.IndexStatus == "bypassed" {
@@ -166,7 +165,7 @@ func TestAgentKernelSelectsSkillForTypedToolContract(t *testing.T) {
 
 func TestAgentKernelPreservesUnsupportedArtifactWithoutSelectedSkill(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"give_up","classification":"unsupported","taskShape":"immediate_reply","level":"low","estimatedMinutes":1,"requestedOutputFormats":["pptx"],"initialToolNames":["file_deliver"],"responseLanguage":"ko","reason":"previous permission failure","userFacingReply":"PPTX 파일 생성은 불가능합니다."}`,
+		`{"route":"give_up","classification":"unsupported","taskShape":"immediate_reply","level":"low","requestedOutputFormats":["pptx"],"initialToolNames":["file_deliver"],"responseLanguage":"ko","reason":"previous permission failure","userFacingReply":"PPTX 파일 생성은 불가능합니다."}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/deck/deck.pptx"}}`,
@@ -206,7 +205,7 @@ func TestAgentKernelPreservesUnsupportedArtifactWithoutSelectedSkill(t *testing.
 
 func TestAgentKernelRecoversPriorTaskAttachmentContract(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","estimatedMinutes":1,"requestedOutputFormats":null,"responseLanguage":"ko","reason":"latest message asks to deliver prior file outcome","userFacingReply":"","initialToolNames":[],"priorTaskReference":"outcome_recovery"}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"latest message asks to deliver prior file outcome","userFacingReply":"","initialToolNames":[],"priorTaskReference":"outcome_recovery"}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("기존 작업이 이미 완료되어 파일이 준비되었습니다."),
@@ -273,7 +272,7 @@ func TestAgentKernelRecoversPriorTaskAttachmentContract(t *testing.T) {
 
 func TestAgentKernelRecoversLegacyPriorAttachmentContractFromIntakeOutput(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","estimatedMinutes":1,"requestedOutputFormats":["docx"],"responseLanguage":"ko","reason":"latest message asks for the prior Word file as an attachment","userFacingReply":"","initialToolNames":["file_deliver"],"priorTaskReference":"outcome_recovery"}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":["docx"],"responseLanguage":"ko","reason":"latest message asks for the prior Word file as an attachment","userFacingReply":"","initialToolNames":["file_deliver"],"priorTaskReference":"outcome_recovery"}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("기존 작업이 이미 완료되어 파일이 준비되었습니다."),
@@ -326,7 +325,7 @@ func TestAgentKernelRecoversLegacyPriorAttachmentContractFromIntakeOutput(t *tes
 
 func TestAgentKernelUsesIntakeBeforeRunningTools(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"medium","estimatedMinutes":1,"requestedOutputFormats":null,"reason":"ambiguous target","clarificationQuestion":"Which one do you mean?","clarificationOptions":[{"key":"A","label":"First","value":"First"},{"key":"B","label":"Second","value":"Second"}],"userFacingReply":"Which one do you mean?"}`,
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"medium","requestedOutputFormats":null,"reason":"ambiguous target","clarificationQuestion":"Which one do you mean?","clarificationOptions":[{"key":"A","label":"First","value":"First"},{"key":"B","label":"Second","value":"Second"}],"userFacingReply":"Which one do you mean?"}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("should not run"),
@@ -362,7 +361,7 @@ func TestAgentKernelUsesIntakeBeforeRunningTools(t *testing.T) {
 
 func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","estimatedMinutes":1,"requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs output choice","userFacingReply":"","clarificationQuestion":"어떤 형식으로 만들까요?","clarificationOptions":[{"key":"A","label":"웹사이트","value":"website"},{"key":"B","label":"발표자료","value":"slides"}]}`,
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs output choice","userFacingReply":"","clarificationQuestion":"어떤 형식으로 만들까요?","clarificationOptions":[{"key":"A","label":"웹사이트","value":"website"},{"key":"B","label":"발표자료","value":"slides"}]}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("should not run"),
@@ -399,7 +398,7 @@ func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 
 func TestAgentKernelQuickReplyAllowsToolFreeReplyWithoutAskInput(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","estimatedMinutes":1,"requestedOutputFormats":null,"reason":"direct answer","userFacingReply":""}`,
+		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"reason":"direct answer","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("hello"),
@@ -436,7 +435,7 @@ func TestAgentKernelQuickReplyAllowsToolFreeReplyWithoutAskInput(t *testing.T) {
 
 func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","estimatedMinutes":1,"requestedOutputFormats":null,"initialToolNames":["alpha"],"reason":"needs tool","userFacingReply":""}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","requestedOutputFormats":null,"initialToolNames":["alpha"],"reason":"needs tool","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","message":"확인 중입니다.","toolName":"alpha","toolInput":{"value":"one"}}`,
@@ -454,7 +453,6 @@ func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeMaintenanceTask,
 		TaskLevel:        TaskLevelLow,
-		EstimatedMinutes: 1,
 		Reason:           "needs tool",
 		UserFacingReply:  "",
 		InitialToolNames: []string{"alpha"},
@@ -487,7 +485,7 @@ func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 
 func TestAgentKernelQuickReplyPromotesToolFailureToRecovery(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","estimatedMinutes":1,"requestedOutputFormats":null,"initialToolNames":["primary_lookup","backup_lookup"],"reason":"quick with useful tool","userFacingReply":""}`,
+		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"initialToolNames":["primary_lookup","backup_lookup"],"reason":"quick with useful tool","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"primary_lookup","toolInput":{"query":"hello"}}`,
@@ -529,7 +527,7 @@ func TestAgentKernelQuickReplyPromotesToolFailureToRecovery(t *testing.T) {
 
 func TestAgentKernelQuickReplyFailureDoesNotInventToolFailure(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","estimatedMinutes":1,"requestedOutputFormats":null,"reason":"direct answer","userFacingReply":""}`,
+		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"reason":"direct answer","userFacingReply":""}`,
 	}}
 	services := newKernelIntakeTestServices(failingLanguageModel{}, intakeLanguageModel)
 
@@ -554,7 +552,7 @@ func TestAgentKernelQuickReplyFailureDoesNotInventToolFailure(t *testing.T) {
 
 func TestAgentKernelQuickReplyCanUseInitialTool(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","estimatedMinutes":1,"requestedOutputFormats":null,"initialToolNames":["schedule_list"],"responseLanguage":"ko","reason":"schedule question","userFacingReply":""}`,
+		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"initialToolNames":["schedule_list"],"responseLanguage":"ko","reason":"schedule question","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"schedule_list","toolInput":{}}`,
@@ -585,7 +583,7 @@ func TestAgentKernelQuickReplyCanUseInitialTool(t *testing.T) {
 
 func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","estimatedMinutes":1,"requestedOutputFormats":null,"expectedResults":[{"id":"interactive-choice","type":"message","description":"사용자가 직접 고를 수 있는 선택지 UI가 표시됨","required":true,"acceptanceHints":["ask_input"]}],"responseLanguage":"ko","reason":"choice probe","userFacingReply":""}`,
+		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"expectedResults":[{"id":"interactive-choice","type":"message","description":"사용자가 직접 고를 수 있는 선택지 UI가 표시됨","required":true,"acceptanceHints":["ask_input"]}],"responseLanguage":"ko","reason":"choice probe","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("아래 세 가지 중 하나를 선택해 주세요.\n\n1. 선택지 1\n2. 선택지 2\n3. 선택지 3"),
@@ -632,7 +630,7 @@ func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T)
 
 func TestAgentKernelPreservesQuickReplyAfterSkillSelection(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","estimatedMinutes":1,"requestedOutputFormats":null,"reason":"direct answer","userFacingReply":""}`,
+		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"reason":"direct answer","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("deck created too early"),
@@ -691,7 +689,7 @@ func TestAgentKernelPreservesQuickReplyAfterSkillSelection(t *testing.T) {
 
 func TestAgentKernelUsesStructuredOutputFormatsForAttachmentRequirements(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","estimatedMinutes":1,"requestedOutputFormats":["html"],"initialToolNames":["file_deliver"],"reason":"explicit html output","userFacingReply":""}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":["html"],"initialToolNames":["file_deliver"],"reason":"explicit html output","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"deck.html"}}`,

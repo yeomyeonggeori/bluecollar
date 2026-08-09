@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"context"
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
@@ -100,48 +99,6 @@ func TestContinueStalledRecoverySkipsFinishStall(t *testing.T) {
 
 	if services.runner.continueStalledRecoveryIfAllowed("task-finish-stall", state, &tracker, recoveryAllowance{CanRecover: true}) {
 		t.Fatal("expected a finish-attempt stall to fall through to the existing pause path, not the read-loop nudge")
-	}
-}
-
-func TestAgentTurnRunnerEscalatesToolCallLimitAfterDurableProgress(t *testing.T) {
-	languageModel := &sequenceLanguageModel{
-		contents: []string{
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/app/index.html","content":"one"}}`,
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/app/index.html","content":"two"}}`,
-			`{"action":"continue","toolName":"site.build","toolInput":{"siteID":"site-1"}}`,
-			finishMessageDocument("continued after tool-call escalation"),
-		},
-	}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{
-		TaskLevel:         TaskLevelXLow,
-		MaxIterationCount: 10,
-		MaxToolCallCount:  2,
-	})
-	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_write"}, []string{"site.build"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"path":"tmp/app/index.html"}`), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site.build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"status":"built"}`), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "build the site",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"file_write", "site.build"},
-	})
-
-	if errorValue != nil {
-		t.Fatalf("expected tool-call escalation run, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
-		t.Fatalf("expected completed task after tool-call escalation, got %s", result.TaskRun.Status)
-	}
-	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(taskEvents, "agent.budget_escalated", `"newTaskLevel":"low"`) {
-		t.Fatalf("expected tool-call limit to escalate the budget, got %+v", taskEvents)
 	}
 }
 

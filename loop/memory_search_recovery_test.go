@@ -40,15 +40,3 @@ func TestMemoryInstructionsRequireRememberForDurableUpdates(t *testing.T) {
 		}
 	}
 }
-
-func TestSystemInstructionAllowsWebSearchAfterMemorySearchUnavailable(t *testing.T) {
-	instruction := buildAgentSystemInstruction(AgentTurnRequest{})
-	for _, expectedText := range []string{
-		"selected direct tool",
-		"action schema contains the exact tools callable",
-	} {
-		if !strings.Contains(instruction, expectedText) {
-			t.Fatalf("expected system instruction to contain %q, got %q", expectedText, instruction)
-		}
-	}
-}

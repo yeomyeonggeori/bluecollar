@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
+	"sort"
+	"strconv"
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -25,7 +27,7 @@ func TestActionSchemasRecursivelyCloseEveryObject(t *testing.T) {
 		}`),
 	}}
 	schemaDocuments := map[string]string{
-		"agent action":      buildActionSchemaFromToolDefinitions(toolDefinitions, true, nil, true),
+		"agent action":      buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, nil, true),
 		"finalizer":         finalizerActionSchema(),
 		"terminal no tools": terminalNoToolsActionSchema(),
 		"recovery decision": recoveryDecisionSchema(),
@@ -47,7 +49,7 @@ const eightToolActionSchemaByteCeiling = 19500
 func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 	toolDefinitions := eightToolCapabilityCatalogFixture(t)
 
-	schemaDocument := buildActionSchemaFromToolDefinitions(toolDefinitions, true, nil, false)
+	schemaDocument := buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, nil, false)
 
 	t.Logf("action schema byte length for an 8-tool catalog: %d", len(schemaDocument))
 	if len(schemaDocument) >= eightToolActionSchemaByteCeiling {
@@ -63,7 +65,7 @@ func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 }
 
 func legacyRootOneOfFinalizerSchema(hasFailureDebt bool) string {
-	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{finishActionSchema(hasFailureDebt), failActionSchema(hasFailureDebt)}})
+	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{finishActionSchema(hasFailureDebt, nil), failActionSchema(hasFailureDebt)}})
 }
 
 func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing.T) {
@@ -106,10 +108,10 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 }
 
 func TestTerminalActionSchemasAcceptFinishAndFailDocuments(t *testing.T) {
-	finishDocument := `{"action":"finish","message":"done","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":[],"qualityReview":[]}`
-	failDocument := `{"action":"fail","message":"","reason":"blocked by captcha","goalStatus":"blocked","goalSatisfied":false}`
-	failWithDebtDocument := `{"action":"fail","message":"","reason":"blocked by captcha","goalStatus":"blocked","goalSatisfied":false,"failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"terminal_run","errorCode":"operation_failed","failureStage":"terminal_run","message":"blocked"}],"budgetState":"failure_report_required"}}`
-	finishWithDebtDocument := `{"action":"finish","message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":[],"qualityReview":[],"failureResolution":"no_tool_fallback"}`
+	finishDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","remainingWork":"","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
+	failDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","remainingWork":"","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
+	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","remainingWork":"","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"terminal_run","errorCode":"operation_failed","failureStage":"terminal_run","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
+	finishWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"no_tool_fallback","remainingWork":"","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
 
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), finishDocument)
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), failDocument)
@@ -188,4 +190,132 @@ func assertEveryObjectSchemaIsClosed(t *testing.T, schemaValue any) {
 			assertEveryObjectSchemaIsClosed(t, child)
 		}
 	}
+}
+
+func TestAStrictActionSchemaRequiresEveryPropertyItDeclares(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+
+	for _, allowQualityCriteria := range []bool{false, true} {
+		for _, hasFailureDebt := range []bool{false, true} {
+			document := actionSchemaForToolSet(toolSet, nil, allowQualityCriteria, nil, hasFailureDebt, true, true)
+			missing := propertiesMissingFromRequired(t, document)
+			if len(missing) > 0 {
+				t.Fatalf("a strict schema whose required list omits %v is rejected before the model ever sees it (quality=%v debt=%v)", missing, allowQualityCriteria, hasFailureDebt)
+			}
+		}
+	}
+}
+
+func propertiesMissingFromRequired(t *testing.T, document string) []string {
+	t.Helper()
+	var schema any
+	if errorValue := json.Unmarshal([]byte(document), &schema); errorValue != nil {
+		t.Fatalf("expected a decodable schema: %v", errorValue)
+	}
+	missing := []string{}
+	collectPropertiesMissingFromRequired(schema, "", &missing)
+	sort.Strings(missing)
+	return missing
+}
+
+func collectPropertiesMissingFromRequired(node any, path string, missing *[]string) {
+	object, isObject := node.(map[string]any)
+	if !isObject {
+		if list, isList := node.([]any); isList {
+			for index, item := range list {
+				collectPropertiesMissingFromRequired(item, path+"["+strconv.Itoa(index)+"]", missing)
+			}
+		}
+		return
+	}
+	properties, hasProperties := object["properties"].(map[string]any)
+	if hasProperties {
+		required := map[string]bool{}
+		for _, name := range asStrings(object["required"]) {
+			required[name] = true
+		}
+		for name := range properties {
+			if !required[name] {
+				*missing = append(*missing, path+"."+name)
+			}
+		}
+	}
+	for key, value := range object {
+		collectPropertiesMissingFromRequired(value, path+"."+key, missing)
+	}
+}
+
+func asStrings(value any) []string {
+	list, isList := value.([]any)
+	if !isList {
+		return nil
+	}
+	names := make([]string, 0, len(list))
+	for _, item := range list {
+		if name, isString := item.(string); isString {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func TestFinishCanOnlyCiteEvidenceThatExists(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+
+	document := actionSchemaForToolSet(toolSet, []string{"obs-001", "obs-003"}, false, nil, false, true, true)
+
+	var schema any
+	if errorValue := json.Unmarshal([]byte(document), &schema); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	allowed := completionEvidenceEnumInSchema(t, schema)
+	if len(allowed) != 2 || allowed[0] != "obs-001" || allowed[1] != "obs-003" {
+		t.Fatalf("a model that can name an observation the run never made will be refused every turn until the run dies, got %v", allowed)
+	}
+}
+
+func TestFinishCitesFreelyWhenThereIsNoEvidenceToName(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+
+	document := actionSchemaForToolSet(toolSet, nil, false, nil, false, true, true)
+
+	var schema any
+	if errorValue := json.Unmarshal([]byte(document), &schema); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if allowed := completionEvidenceEnumInSchema(t, schema); allowed != nil {
+		t.Fatalf("an empty enum is not a schema any model can satisfy, got %v", allowed)
+	}
+}
+
+func completionEvidenceEnumInSchema(t *testing.T, node any) []string {
+	t.Helper()
+	object, isObject := node.(map[string]any)
+	if !isObject {
+		list, isList := node.([]any)
+		if !isList {
+			return nil
+		}
+		for _, item := range list {
+			if found := completionEvidenceEnumInSchema(t, item); found != nil {
+				return found
+			}
+		}
+		return nil
+	}
+	properties, hasProperties := object["properties"].(map[string]any)
+	if hasProperties {
+		if evidence, hasEvidence := properties["completionEvidenceIDs"].(map[string]any); hasEvidence {
+			items, hasItems := evidence["items"].(map[string]any)
+			if hasItems {
+				return stringSliceFromAny(items["enum"])
+			}
+		}
+	}
+	for _, child := range object {
+		if found := completionEvidenceEnumInSchema(t, child); found != nil {
+			return found
+		}
+	}
+	return nil
 }

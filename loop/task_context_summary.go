@@ -412,14 +412,14 @@ func estimatePromptTokenCount(messages []model.Message) int {
 			byteCount += len(part.Type) + len(part.Text) + len(part.MimeType) + len(part.DataBase64)
 		}
 	}
-	return (byteCount + 3) / 4
+	return (byteCount + charactersPerToken - 1) / charactersPerToken
 }
 
 func compactionTriggerTokenThreshold(contextWindowTokens int) int {
 	if contextWindowTokens <= 0 {
 		return defaultCompactionTriggerTokens
 	}
-	threshold := contextWindowTokens * 6 / 10
+	threshold := contextWindowTokens * conversationShareOfContextPercent / 100
 	if threshold <= 0 {
 		return defaultCompactionTriggerTokens
 	}

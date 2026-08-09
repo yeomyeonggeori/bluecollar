@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestCapabilityDomainPhraseDerivesFriendlyLabelsFromSkillTools(t *testing.T) {
+func TestCapabilityDomainPhraseNamesWhateverTheHostCalledItsTools(t *testing.T) {
 	skills := []SkillInstruction{
 		{Name: "direct-message", ToolReferences: []string{"message_send", "message_context"}},
 		{Name: "flow", ToolReferences: []string{"task_list", "task_add"}},
@@ -15,9 +15,9 @@ func TestCapabilityDomainPhraseDerivesFriendlyLabelsFromSkillTools(t *testing.T)
 
 	phrase := capabilityDomainPhrase(skills)
 
-	for _, expected := range []string{"messages", "tasks", "schedules", "hologram"} {
+	for _, expected := range []string{"message", "task", "schedule", "hologram"} {
 		if !strings.Contains(phrase, expected) {
-			t.Fatalf("expected phrase to include %q, got %q", expected, phrase)
+			t.Fatalf("a friendly name for %q would be this package guessing at a vocabulary the host owns; the tool's own prefix is the only name it can know: %q", expected, phrase)
 		}
 	}
 }

@@ -1,0 +1,74 @@
+#!/bin/bash
+set -euo pipefail
+
+# shellcheck source=bench/environment-file
+source "$(dirname "$0")/../environment-file"
+loadEnvironmentFile
+
+dataset="${BENCH_DATASET:-terminal-bench-core==0.1.1}"
+model="${BENCH_MODEL:-openai/gpt-5.6-luna}"
+endpoint="${BENCH_ENDPOINT:-https://openrouter.ai/api/v1}"
+outputRoot="${BENCH_OUTPUT:-/tmp/bench-comparison}"
+concurrency="${BENCH_CONCURRENCY:-4}"
+harnessFilter="${BENCH_HARNESS:-}"
+agentTimeoutSecond="${BENCH_AGENT_TIMEOUT:-3600}"
+testTimeoutSecond="${BENCH_TEST_TIMEOUT:-600}"
+taskArguments=()
+for taskID in "$@"; do taskArguments+=(--task-id "$taskID"); done
+
+refuseUnknownModel() {
+  local responseFile status
+  responseFile="$(mktemp)"
+  trap 'rm -f "$responseFile"' RETURN
+  status="$(curl -s -o "$responseFile" -w '%{http_code}' --max-time 30 \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -H 'Content-Type: application/json' \
+    -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}],\"max_tokens\":1}" \
+    "$endpoint/chat/completions")"
+  if [ "$status" = "200" ]; then return 0; fi
+  echo "the endpoint refused $model with HTTP $status before any task ran:" >&2
+  cat "$responseFile" >&2
+  exit 2
+}
+
+removeAbandonedTaskContainers() {
+  local abandoned
+  abandoned="$(docker ps -a --format '{{.Names}}' | grep -E -- '-[0-9]+-of-[0-9]+-[0-9]{4}-[0-9]{2}-[0-9]{2}__' || true)"
+  if [ -z "$abandoned" ]; then return 0; fi
+  echo "removing $(printf '%s\n' "$abandoned" | wc -l | tr -d ' ') task containers a previous run left behind" >&2
+  printf '%s\n' "$abandoned" | xargs docker rm -f > /dev/null
+  docker network prune -f > /dev/null
+}
+
+refuseUnknownModel
+removeAbandonedTaskContainers
+
+go build -o /tmp/bluecollar ./cmd/bluecollar
+
+runHarness() {
+  local harnessName="$1" importPath="$2"
+  if [ -n "$harnessFilter" ] && [ "$harnessFilter" != "$harnessName" ]; then return 0; fi
+  echo "== $harnessName on $dataset with $model =="
+  PYTHONPATH="$PWD" \
+  BLUECOLLAR_BINARY=/tmp/bluecollar \
+  BLUECOLLAR_MODEL_ENDPOINT="$endpoint" \
+  BLUECOLLAR_MODEL="$model" \
+  BLUECOLLAR_API_KEY="$OPENROUTER_API_KEY" \
+  PI_BASE_URL="$endpoint" \
+  PI_MODEL_ID="$model" \
+  PI_API_KEY="$OPENROUTER_API_KEY" \
+    uvx --from terminal-bench --with 'litellm==1.77.0' tb run \
+      --dataset "$dataset" \
+      --agent-import-path "$importPath" \
+      --model "$model" \
+      --n-concurrent "$concurrency" \
+      --global-agent-timeout-sec "$agentTimeoutSecond" \
+      --global-test-timeout-sec "$testTimeoutSecond" \
+      ${taskArguments[@]+"${taskArguments[@]}"} \
+      --output-path "$outputRoot/$harnessName"
+}
+
+runHarness bluecollar bench.terminalbench.bluecollar_agent:BluecollarAgent
+runHarness pi bench.terminalbench.pi_agent:PiAgent
+
+python3 "$(dirname "$0")/summarize-comparison" "$outputRoot" "$dataset" "$model"

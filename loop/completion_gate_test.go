@@ -1145,7 +1145,7 @@ func TestAgentTurnRunnerRejectsCompletionEvidenceFromErrorObservation(t *testing
 	if result.TaskRun.Status != taskstate.TaskStatusFailed {
 		t.Fatalf("expected failed task, got %s", result.TaskRun.Status)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "unknown or failed observation") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "not a successful observation") {
 		t.Fatal("expected failed evidence gate event")
 	}
 }
@@ -2171,5 +2171,90 @@ func TestFinishHiddenAfterAttachmentRejectionDespiteToolEvidence(t *testing.T) {
 	rejection := completionGateObservation(2, completionGateResult{Message: "attach the artifact", EvidenceKind: "attachment_missing"}, []turnObservation{successfulRead})
 	if !finishWasRejectedWithoutAnyToolEvidence([]turnObservation{successfulRead, rejection}) {
 		t.Fatalf("expected finish hidden after attachment rejection even with prior tool evidence")
+	}
+}
+
+func TestAContractCannotRequireAToolThePaletteCannotCall(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	contract := OutcomeContract{
+		ArtifactRequirement:        ArtifactRequirementRequired,
+		RequiredAttachmentSuffixes: []string{".txt"},
+		RequiredEvidenceTools:      []string{toolcontract.FileDeliverToolName},
+	}
+
+	result := validateOutcomeContractRequirements(contractReducedToCallableTools(toolSet, contract), nil, nil)
+
+	if !result.IsSatisfied {
+		t.Fatalf("a task holding only a terminal can never deliver a file, so the gate would ask for it every turn until the run dies: %+v", result)
+	}
+}
+
+func TestAContractStillRequiresAToolThePaletteDoesCall(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName, toolcontract.FileDeliverToolName})
+	contract := OutcomeContract{RequiredEvidenceTools: []string{toolcontract.FileDeliverToolName}}
+
+	result := validateOutcomeContractRequirements(contractReducedToCallableTools(toolSet, contract), nil, nil)
+
+	if result.IsSatisfied {
+		t.Fatal("expected the gate to keep asking for evidence from a tool the task can actually call")
+	}
+}
+
+func TestARequiredFileResultIsNotRequiredWhenNothingCanDeliverIt(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	contract := OutcomeContract{ExpectedResults: []ExpectedResult{{Type: ExpectedResultTypeFile, Required: true}}}
+
+	reduced := contractReducedToCallableTools(toolSet, contract)
+
+	if expectedResultRequiresFileAttachment(reduced) {
+		t.Fatal("a required file on a task that holds only a terminal is a demand no turn can meet, and the run spends every remaining turn on it")
+	}
+}
+
+func TestEveryCopyOfTheContractIsReducedToWhatTheTaskCanCall(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	undeliverable := OutcomeContract{
+		RequiredEvidenceTools:      []string{toolcontract.FileDeliverToolName},
+		RequiredAttachmentSuffixes: []string{".txt"},
+		ExpectedResults:            []ExpectedResult{{Type: ExpectedResultTypeFile, Required: true}},
+	}
+	request := AgentTurnRequest{
+		ToolSet:               toolSet,
+		OutcomeContract:       undeliverable,
+		ActiveGoal:            ActiveGoal{OutcomeContract: undeliverable},
+		RequiredEvidenceTools: []string{toolcontract.FileDeliverToolName},
+	}
+
+	request.OutcomeContract = contractReducedToCallableTools(request.ToolSet, request.OutcomeContract)
+	request.ActiveGoal.OutcomeContract = contractReducedToCallableTools(request.ToolSet, request.ActiveGoal.OutcomeContract)
+	request.RequiredEvidenceTools = callableToolNames(request.ToolSet, request.RequiredEvidenceTools)
+
+	if expectedResultRequiresFileAttachment(request.ActiveGoal.OutcomeContract) {
+		t.Fatal("the goal carries its own copy of the contract, and reducing only the request's copy left the demand alive where the gates actually read it")
+	}
+	if len(request.RequiredEvidenceTools) != 0 {
+		t.Fatalf("the request carries a third copy as a flat list, got %v", request.RequiredEvidenceTools)
+	}
+}
+
+func TestARejectedCitationNamesTheOnesThatWouldHaveDone(t *testing.T) {
+	observations := []turnObservation{
+		{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run", Summary: "listed the workspace"},
+		{ObservationID: "obs-002", Action: "continue", Tool: "terminal_run", Summary: "wrote avg_temp.txt"},
+	}
+
+	errorValue := validateCompletionEvidenceReferences(nil, observations, []completionEvidenceReference{{ObservationID: "obs-009"}})
+
+	if errorValue == nil {
+		t.Fatal("citing an observation that does not exist has to fail")
+	}
+	message := errorValue.Error()
+	for _, expected := range []string{"obs-009", "obs-001", "obs-002", "ledger"} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("an agent cannot correct a citation without the bad one, the good ones, and where to read what they did; %q missing from %q", expected, message)
+		}
+	}
+	if strings.Contains(message, "listed the workspace") {
+		t.Fatalf("repeating each summary here put a plan document into the message eight times over and cost 8x the prompt: %q", message)
 	}
 }

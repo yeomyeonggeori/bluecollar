@@ -14,7 +14,17 @@ type toolUseRequirement struct {
 }
 
 func deriveToolUseRequirements(request AgentTurnRequest) []toolUseRequirement {
-	return evidenceToolRequirements(request)
+	return requirementsTheTaskCanCall(request.ToolSet, evidenceToolRequirements(request))
+}
+
+func requirementsTheTaskCanCall(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement) []toolUseRequirement {
+	callable := []toolUseRequirement{}
+	for _, requirement := range requirements {
+		if isToolCallable(toolSet, requirement.ToolName) {
+			callable = append(callable, requirement)
+		}
+	}
+	return callable
 }
 
 func evidenceToolRequirements(request AgentTurnRequest) []toolUseRequirement {

@@ -8,3 +8,5 @@
 *.pem
 *.key
 /cmd/bluecollar-acp/bluecollar-acp
+__pycache__/
+*.pyc

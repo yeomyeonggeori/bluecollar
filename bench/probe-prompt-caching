@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Send the same long prefix twice and report how many prompt tokens the second
+# call was served from cache. Automatic caching engages only above a provider
+# minimum and only on an identical prefix, so whether this loop can benefit
+# from it is a property of the endpoint, not something the harness can assume.
+set -euo pipefail
+
+# shellcheck source=bench/environment-file
+source "$(dirname "$0")/environment-file"
+loadEnvironmentFile
+
+
+model="${BENCH_MODEL:-openai/gpt-5.6-luna}"
+prefixWordCount="${PROBE_PREFIX_WORDS:-3000}"
+
+requestFile="$(mktemp)"
+responseFile="$(mktemp)"
+trap 'rm -f "$requestFile" "$responseFile"' EXIT
+PROBE_MODEL="$model" PROBE_WORDS="$prefixWordCount" PROBE_NONCE="$(date +%s)-$$" python3 - "$requestFile" <<'PYTHON'
+import json, os, sys
+
+prefix = " ".join(
+    f"Standing instruction {index} for run {os.environ['PROBE_NONCE']}: keep the workspace tidy and report what you did."
+    for index in range(int(os.environ["PROBE_WORDS"]) // 12)
+)
+request = {
+    "model": os.environ["PROBE_MODEL"],
+    "usage": {"include": True},
+    "messages": [
+        {"role": "system", "content": prefix},
+        {"role": "user", "content": "Reply with the single word: ready"},
+    ],
+}
+open(sys.argv[1], "w").write(json.dumps(request))
+PYTHON
+
+for attempt in first second; do
+  responseBody="$(curl -sS https://openrouter.ai/api/v1/chat/completions \
+    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+    -H "Content-Type: application/json" \
+    -d @"$requestFile")"
+  printf '%s' "$responseBody" > "$responseFile"
+  PROBE_ATTEMPT="$attempt" python3 - "$responseFile" <<'PYTHON'
+import json, os, sys
+
+usage = (json.load(open(sys.argv[1])).get("usage") or {})
+cached = (usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)
+prompt = usage.get("prompt_tokens", 0)
+share = f"{100 * cached / prompt:.0f}%" if prompt else "n/a"
+print(f"{os.environ['PROBE_ATTEMPT']:>6} call: prompt {prompt} tokens, {cached} served from cache ({share})")
+PYTHON
+done

@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
-	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -88,8 +87,8 @@ func TestNextTaskLevelWalksLadderAndStopsAtMax(t *testing.T) {
 
 func TestTaskLevelProfileForLevelMapsLimits(t *testing.T) {
 	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
-	if mediumProfile.MaxIterationCount != 180 || mediumProfile.MaxToolCallCount != 100 || mediumProfile.Duration.Minutes() != 20 {
-		t.Fatalf("expected medium profile limits, got %+v", mediumProfile)
+	if mediumProfile.TaskLevel != TaskLevelMedium {
+		t.Fatalf("expected the medium profile, got %+v", mediumProfile)
 	}
 
 	fallbackProfile := TaskLevelProfileForLevel(TaskLevel(""))
@@ -140,19 +139,18 @@ func TestArtifactTaskLevelFloorRaisesVisualDeliverableFromIntakeDecisionOutputFo
 }
 
 func TestTaskLevelProfilesOwnWorkDuration(t *testing.T) {
-	expectedDurations := map[TaskLevel]time.Duration{
-		TaskLevelXLow:   3 * time.Minute,
-		TaskLevelLow:    10 * time.Minute,
-		TaskLevelMedium: 20 * time.Minute,
-		TaskLevelHigh:   40 * time.Minute,
-		TaskLevelXHigh:  time.Hour,
-		TaskLevelMax:    time.Hour,
-	}
-	for taskLevel, expectedDuration := range expectedDurations {
-		actualDuration := TaskLevelProfileForLevel(taskLevel).Duration
-		if actualDuration != expectedDuration {
-			t.Fatalf("expected %s duration %s, got %s", taskLevel, expectedDuration, actualDuration)
+	workingLevels := []TaskLevel{TaskLevelLow, TaskLevelMedium, TaskLevelHigh, TaskLevelXHigh, TaskLevelMax}
+
+	for index := 1; index < len(workingLevels); index++ {
+		previous := TaskLevelProfileForLevel(workingLevels[index-1]).Duration
+		current := TaskLevelProfileForLevel(workingLevels[index]).Duration
+		if current < previous*2 {
+			t.Fatalf("escalating from %s to %s buys %s more, and a task stopped for time needs enough of it to finish, not a little more of it",
+				workingLevels[index-1], workingLevels[index], current-previous)
 		}
+	}
+	if TaskLevelProfileForLevel(TaskLevelXLow).Duration >= TaskLevelProfileForLevel(TaskLevelLow).Duration {
+		t.Fatal("the tier that answers without tools should not outlast the tier that uses them")
 	}
 }
 

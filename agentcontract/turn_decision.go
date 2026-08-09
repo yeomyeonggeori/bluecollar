@@ -65,7 +65,6 @@ type IntakeDecision struct {
 	Classification         IntakeClassification  `json:"classification"`
 	TaskShape              TaskShape             `json:"taskShape"`
 	TaskLevel              TaskLevel             `json:"level"`
-	EstimatedMinutes       int                   `json:"estimatedMinutes"`
 	RequestedOutputFormats []string              `json:"requestedOutputFormats"`
 	DeliverableKind        DeliverableKind       `json:"deliverableKind,omitempty"`
 	ExpectedResults        []ExpectedResult      `json:"expectedResults,omitempty"`
@@ -93,7 +92,6 @@ type TurnDecision struct {
 	Classification         IntakeClassification  `json:"classification"`
 	TaskShape              TaskShape             `json:"taskShape"`
 	TaskLevel              TaskLevel             `json:"level"`
-	EstimatedMinutes       int                   `json:"estimatedMinutes"`
 	RequestedOutputFormats []string              `json:"requestedOutputFormats"`
 	DeliverableKind        DeliverableKind       `json:"deliverableKind,omitempty"`
 	ExpectedResults        []ExpectedResult      `json:"expectedResults,omitempty"`
@@ -116,7 +114,6 @@ func (turnDecision TurnDecision) IntakeDecision() IntakeDecision {
 		Classification:         turnDecision.Classification,
 		TaskShape:              turnDecision.TaskShape,
 		TaskLevel:              NormalizeTaskLevel(string(turnDecision.TaskLevel)),
-		EstimatedMinutes:       turnDecision.EstimatedMinutes,
 		RequestedOutputFormats: append([]string{}, turnDecision.RequestedOutputFormats...),
 		DeliverableKind:        turnDecision.DeliverableKind,
 		ExpectedResults:        NormalizeExpectedResults(turnDecision.ExpectedResults),
@@ -131,13 +128,12 @@ func (turnDecision TurnDecision) IntakeDecision() IntakeDecision {
 }
 
 func (turnDecision TurnDecision) WithRestoredIntakeState(intakeDecision IntakeDecision) TurnDecision {
-	if intakeDecision.EstimatedMinutes < 1 {
+	if NormalizeTaskLevel(string(intakeDecision.TaskLevel)) == "" {
 		return turnDecision
 	}
 	turnDecision.Classification = intakeDecision.Classification
 	turnDecision.TaskShape = intakeDecision.TaskShape
 	turnDecision.TaskLevel = intakeDecision.TaskLevel
-	turnDecision.EstimatedMinutes = intakeDecision.EstimatedMinutes
 	turnDecision.RequestedOutputFormats = append([]string{}, intakeDecision.RequestedOutputFormats...)
 	turnDecision.ExpectedResults = NormalizeExpectedResults(intakeDecision.ExpectedResults)
 	turnDecision.InitialToolNames = append([]string{}, intakeDecision.InitialToolNames...)

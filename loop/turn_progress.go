@@ -7,7 +7,12 @@ import (
 )
 
 const progressMessageLimit = 6000
-const toolResultContextLimit = 12000
+const toolResultContextLimit = 120000
+
+const unredactedOutputLimit = 20000
+
+const charactersPerToken = 4
+const conversationShareOfContextPercent = 60
 const maxProgressObservations = 12
 const maxInteractiveReferences = 20
 const maxSummaryTextLength = 500
@@ -39,6 +44,7 @@ type ProgressObservation struct {
 	AttemptFingerprint string               `json:"attemptFingerprint,omitempty"`
 	RecoveryStep       string               `json:"recoveryStep,omitempty"`
 	RepeatCount        int                  `json:"repeatCount,omitempty"`
+	SameOutputAs       string               `json:"sameOutputAs,omitempty"`
 }
 
 type ProgressFailureDebt struct {
@@ -208,6 +214,7 @@ func summarizeObservation(observation turnObservation) ProgressObservation {
 		ImageRefs:          append([]ToolResultImageRef{}, observation.ImageRefs...),
 		AttemptFingerprint: strings.TrimSpace(observation.AttemptFingerprint),
 		RecoveryStep:       strings.TrimSpace(observation.RecoveryStep),
+		SameOutputAs:       strings.TrimSpace(observation.RepeatsObservationID),
 	}
 }
 
@@ -225,7 +232,7 @@ func toolResultContextItems(observations []turnObservation) []ToolResultContextI
 			break
 		}
 		if len(summary) > remainingLength {
-			summary = summary[:remainingLength] + "\n[trimmed]"
+			summary = strings.ToValidUTF8(summary[:remainingLength], "") + "\n[trimmed]"
 		}
 		totalLength += len(summary)
 		status := "success"
@@ -312,7 +319,10 @@ func summarizeObservationContent(observation turnObservation) string {
 		if observation.Failed() {
 			return truncateText(compactWhitespace(redactUnsafeText(content)), 500)
 		}
-		return summarizeSafeJSONFields(content, []string{"ok", "status", "message", "error", "url", "title", "filename", "sizeBytes", "contentType"})
+		if fields := summarizeSafeJSONFields(content, []string{"ok", "status", "message", "error", "url", "title", "filename", "sizeBytes", "contentType"}); fields != "" {
+			return fields
+		}
+		return truncateText(redactUnsafeText(content), unredactedOutputLimit)
 	}
 }
 
@@ -556,6 +566,9 @@ func summarizeStructuredFailure(observation turnObservation) string {
 func summarizeTerminalRun(observation turnObservation) string {
 	tail, ok := terminalObservationTail(observation)
 	if !ok {
+		return ""
+	}
+	if len(tail.StdoutTail) == 0 && len(tail.StderrTail) == 0 {
 		return ""
 	}
 	parts := []string{}

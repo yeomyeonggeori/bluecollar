@@ -261,19 +261,15 @@ func tailLines(value string, maxLines int, maxCharacters int) ([]string, bool) {
 }
 
 func executionStateSchema() map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"properties": map[string]any{
-			"goal":           stringSchema(),
-			"workspace":      stringSchema(),
-			"steps":          planStepArraySchema(),
-			"knownFacts":     stringArraySchema(executionStateMaxKnownFacts),
-			"triedAndFailed": stringArraySchema(executionStateMaxTriedAndFailed),
-			"currentBlocker": stringSchema(),
-			"nextPlan":       stringSchema(),
-		},
-	}
+	return nullableObjectSchema(map[string]any{
+		"goal":           stringSchema(),
+		"workspace":      stringSchema(),
+		"steps":          planStepArraySchema(),
+		"knownFacts":     stringArraySchema(executionStateMaxKnownFacts),
+		"triedAndFailed": stringArraySchema(executionStateMaxTriedAndFailed),
+		"currentBlocker": stringSchema(),
+		"nextPlan":       stringSchema(),
+	})
 }
 
 func stringArraySchema(maxItems int) map[string]any {

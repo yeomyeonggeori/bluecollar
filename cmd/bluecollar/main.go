@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -9,10 +10,12 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/bench"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func main() {
@@ -21,6 +24,11 @@ func main() {
 	modelName := flag.String("model", envOrDefault("BLUECOLLAR_MODEL", "qwen3"), "model to ask")
 	agentName := flag.String("agent-name", "the assistant", "what the agent calls itself")
 	timeout := flag.Duration("timeout", 5*time.Minute, "how long one turn may run")
+	workspacePath := flag.String("workspace", ".", "directory the agent's shell commands run in")
+	withoutTools := flag.Bool("without-tools", false, "answer from reasoning alone, giving the agent no shell")
+	execPrefix := flag.String("exec-prefix", "", "run every shell command through this wrapper, such as \"docker exec -i <container>\"")
+	metricsPath := flag.String("metrics", "", "write what this turn cost, as JSON, to this path")
+	withoutIntake := flag.Bool("without-intake", false, "skip the intake classifier, losing the outcome contract it builds")
 	flag.Parse()
 
 	prompt := strings.TrimSpace(strings.Join(flag.Args(), " "))
@@ -29,7 +37,19 @@ func main() {
 		os.Exit(2)
 	}
 
-	result, errorValue := runOneTurn(*endpointURL, *apiKey, *modelName, *agentName, prompt, *timeout)
+	result, errorValue := runOneTurn(runOptions{
+		endpointURL:   *endpointURL,
+		apiKey:        *apiKey,
+		modelName:     *modelName,
+		agentName:     *agentName,
+		prompt:        prompt,
+		timeout:       *timeout,
+		workspacePath: *workspacePath,
+		withoutTools:  *withoutTools,
+		execPrefix:    *execPrefix,
+		metricsPath:   *metricsPath,
+		withoutIntake: *withoutIntake,
+	})
 	if errorValue != nil {
 		fmt.Fprintln(os.Stderr, "bluecollar:", errorValue)
 		os.Exit(1)
@@ -37,32 +57,51 @@ func main() {
 	printResult(result)
 }
 
-func runOneTurn(endpointURL string, apiKey string, modelName string, agentName string, prompt string, timeout time.Duration) (agentcontract.AgentTurnResult, error) {
-	languageModel := openaicompatible.NewProvider(endpointURL, apiKey, modelName)
+type runOptions struct {
+	endpointURL   string
+	apiKey        string
+	modelName     string
+	agentName     string
+	prompt        string
+	timeout       time.Duration
+	workspacePath string
+	withoutTools  bool
+	execPrefix    string
+	metricsPath   string
+	withoutIntake bool
+}
+
+func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
+	languageModel := openaicompatible.NewProvider(options.endpointURL, options.apiKey, options.modelName)
 	taskEventService := taskstate.NewTaskEventService()
 	taskRunService := taskstate.NewTaskRunService(taskEventService)
 	kernel := loop.NewAgentKernel(taskRunService, taskstate.NewTaskStepService())
 	kernel.UseLanguageModelProvider(languageModel)
 
-	turnContext, cancel := context.WithTimeout(context.Background(), timeout)
+	turnContext, cancel := context.WithTimeout(context.Background(), options.timeout)
 	defer cancel()
 
+	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: languageModel.ContextWindowTokens(turnContext)})
+
+	runningShell := turnShellWithInterpreter(turnContext, options)
+	workspacePath := runningShell.resolvedWorkingDirectoryPath(turnContext)
 	request := agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-local",
-		RequesterName:     currentUserName(),
-		ConversationID:    "conversation-local",
-		Prompt:            prompt,
-		AgentIdentity:     agentcontract.AgentIdentity{Name: agentName},
+		RequesterPersonID:    "person-local",
+		RequesterName:        currentUserName(),
+		ConversationID:       "conversation-local",
+		Prompt:               options.prompt,
+		AgentIdentity:        agentcontract.AgentIdentity{Name: options.agentName},
+		WorkspaceRootPath:    workspacePath,
+		WorkspaceDefaultPath: workspacePath,
+		ToolSet:              turnToolSet(options, runningShell),
 	}
 
-	turnDecision, errorValue := routeTurn(turnContext, languageModel, request)
-	if errorValue != nil {
-		return agentcontract.AgentTurnResult{}, errorValue
-	}
+	turnDecision := decideTurn(turnContext, languageModel, request, options)
 	request.PrecomputedTurnDecision = &turnDecision
 
 	result, errorValue := kernel.RunTurn(turnContext, request)
 	printLedger(taskRunService, result.TaskRun.TaskRunID)
+	writeMetrics(options.metricsPath, taskRunService, result.TaskRun.TaskRunID)
 	return result, errorValue
 }
 
@@ -76,12 +115,12 @@ func printLedger(taskRunService *taskstate.TaskRunService, taskRunID string) {
 }
 
 func truncated(text string) string {
-	const limit = 160
+	const limit = 20000
 	collapsed := strings.Join(strings.Fields(text), " ")
 	if len(collapsed) <= limit {
 		return collapsed
 	}
-	return collapsed[:limit] + "…"
+	return strings.ToValidUTF8(collapsed[:limit], "") + "…"
 }
 
 func routeTurn(ctx context.Context, languageModel *openaicompatible.Provider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
@@ -91,6 +130,8 @@ func routeTurn(ctx context.Context, languageModel *openaicompatible.Provider, re
 		RequesterName:     request.RequesterName,
 		ConversationID:    request.ConversationID,
 		Prompt:            request.Prompt,
+		WorkspaceRootPath: request.WorkspaceRootPath,
+		ToolSet:           request.ToolSet,
 	})
 }
 
@@ -123,4 +164,72 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func turnShell(options runOptions) shell {
+	return shell{
+		workingDirectoryPath: options.workspacePath,
+		commandPrefix:        strings.Fields(options.execPrefix),
+	}
+}
+
+func turnShellWithInterpreter(ctx context.Context, options runOptions) shell {
+	return turnShell(options).withInterpreterFound(ctx)
+}
+
+func turnToolSet(options runOptions, runningShell shell) *toolcontract.ToolSet {
+	if options.withoutTools {
+		return nil
+	}
+	return newWorkspaceToolSet(runningShell)
+}
+
+func writeMetrics(metricsPath string, taskRunService *taskstate.TaskRunService, taskRunID string) {
+	if strings.TrimSpace(metricsPath) == "" {
+		return
+	}
+	metrics := bench.MeasureTaskRun(taskRunID, taskRunService.ListTaskEvent(taskRunID))
+	document, errorValue := json.MarshalIndent(metrics, "", "  ")
+	if errorValue != nil {
+		fmt.Fprintln(os.Stderr, "bluecollar: could not measure the turn:", errorValue)
+		return
+	}
+	if writeError := os.WriteFile(metricsPath, document, 0o644); writeError != nil {
+		fmt.Fprintln(os.Stderr, "bluecollar: could not write the measurements:", writeError)
+	}
+}
+
+func decideTurn(ctx context.Context, languageModel *openaicompatible.Provider, request agentcontract.AgentTurnRequest, options runOptions) agentcontract.TurnDecision {
+	if options.withoutIntake {
+		return boundedTaskDecision()
+	}
+	turnDecision, routingError := routeTurn(ctx, languageModel, request)
+	if routingError != nil {
+		fmt.Fprintln(os.Stderr, "bluecollar: classifying the request failed, doing it anyway:", routingError)
+		return boundedTaskDecision()
+	}
+	return startingTheTaskItWasGiven(turnDecision)
+}
+
+func startingTheTaskItWasGiven(turnDecision agentcontract.TurnDecision) agentcontract.TurnDecision {
+	if turnDecision.Route == agentcontract.TurnRouteStartTask || turnDecision.Route == agentcontract.TurnRouteContinueTask {
+		return turnDecision
+	}
+	fmt.Fprintf(os.Stderr, "bluecollar: the classifier answered %q; the runner was given a task, so it starts one\n", turnDecision.Route)
+	turnDecision.Route = agentcontract.TurnRouteStartTask
+	turnDecision.Classification = agentcontract.IntakeClassificationBoundedTask
+	if turnDecision.TaskShape == agentcontract.TaskShapeImmediateReply || turnDecision.TaskShape == "" {
+		turnDecision.TaskShape = agentcontract.TaskShapeMaintenanceTask
+	}
+	return turnDecision
+}
+
+func boundedTaskDecision() agentcontract.TurnDecision {
+	return agentcontract.TurnDecision{
+		Route:          agentcontract.TurnRouteStartTask,
+		Classification: agentcontract.IntakeClassificationBoundedTask,
+		TaskShape:      agentcontract.TaskShapeMaintenanceTask,
+		TaskLevel:      agentcontract.TaskLevelLow,
+		Reason:         "the runner was given one thing to do",
+	}
 }

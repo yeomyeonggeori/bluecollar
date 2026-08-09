@@ -55,6 +55,8 @@ type EvidenceCondition struct {
 	Equals      json.RawMessage `json:"equals"`
 }
 
+const RetryPolicyDoNotRetry = "do_not_retry"
+
 type ResourceEffectContract struct {
 	ObjectType     string             `json:"objectType"`
 	Effect         string             `json:"effect"`
@@ -274,6 +276,7 @@ func ToolFailureResult(kind FailureKind, code FailureCode, stage string, summary
 			Code:            CanonicalFailureCode(code),
 			Stage:           strings.TrimSpace(stage),
 			UserSafeSummary: strings.TrimSpace(summary),
+			Retryable:       true,
 		},
 	}
 }
@@ -666,14 +669,21 @@ func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation Too
 	}
 	if boundTool.Definition.ResultContract == nil {
 		if len(result.Effects) > 0 {
-			return ToolFailureResult(FailureExternalService, FailureCodes.OperationFailed, "tool_result_contract", "tool returned effects without a result contract"), nil
+			return toolResultContractFailure("tool returned effects without a result contract"), nil
 		}
 		return result, nil
 	}
 	if errorValue := ValidateSuccessfulToolResult(*boundTool.Definition.ResultContract, result); errorValue != nil {
-		return ToolFailureResult(FailureExternalService, FailureCodes.OperationFailed, "tool_result_contract", errorValue.Error()), nil
+		return toolResultContractFailure(errorValue.Error()), nil
 	}
 	return result, nil
+}
+
+func toolResultContractFailure(summary string) ToolResult {
+	result := ToolFailureResult(FailureExternalService, FailureCodes.OperationFailed, "tool_result_contract", summary)
+	result.Failure.Retryable = false
+	result.Failure.RetryPolicy = RetryPolicyDoNotRetry
+	return result
 }
 
 func ValidateToolInput(schemaDocument json.RawMessage, inputDocument json.RawMessage) (json.RawMessage, error) {

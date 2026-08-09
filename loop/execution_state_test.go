@@ -199,7 +199,7 @@ func messagesText(messages []model.Message) string {
 }
 
 func TestExecutionStateSchemaIsPresentOnToolCalls(t *testing.T) {
-	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{Name: "terminal_run"}}, false, nil, false)
+	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{Name: "terminal_run"}}, nil, false, nil, false)
 	var schema struct {
 		OneOf []map[string]any `json:"oneOf"`
 	}

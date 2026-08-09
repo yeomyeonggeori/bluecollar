@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Ask the endpoint how much context the benchmark model has. The tool-result
+# limit is derived from this number, so a model the catalogue does not describe
+# silently sends the whole derivation back to a fixed ceiling.
+set -euo pipefail
+
+# shellcheck source=bench/environment-file
+source "$(dirname "$0")/environment-file"
+loadEnvironmentFile
+
+model="${BENCH_MODEL:-openai/gpt-5.6-luna}"
+catalogueFile="$(mktemp)"
+trap 'rm -f "$catalogueFile"' EXIT
+
+curl -sS https://openrouter.ai/api/v1/models \
+  -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  > "$catalogueFile"
+
+PROBE_MODEL="$model" python3 - "$catalogueFile" <<'PYTHON'
+import json, os, sys
+
+catalogue = json.load(open(sys.argv[1])).get("data") or []
+wanted = os.environ["PROBE_MODEL"]
+described = [entry for entry in catalogue if entry.get("id") == wanted]
+if described:
+    print(f"{wanted}: context_length {described[0].get('context_length')}")
+else:
+    print(f"{wanted}: not described by the catalogue, so the derivation falls back")
+PYTHON

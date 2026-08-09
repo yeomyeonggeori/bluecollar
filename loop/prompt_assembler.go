@@ -22,7 +22,7 @@ type InjectedContextInput struct {
 }
 
 func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
-	contextText := (LLMContextBuilder{}).Build(LLMContextInput{
+	contextInput := LLMContextInput{
 		ResponseLanguage:     input.RuntimeRequest.ResponseLanguage,
 		RequesterPersonID:    input.RuntimeRequest.RequesterPersonID,
 		RequesterName:        input.RuntimeRequest.RequesterName,
@@ -54,10 +54,12 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 		ToolSet:               input.RuntimeRequest.ToolSet,
 		RequiredEvidenceTools: append([]string{}, input.RuntimeRequest.RequiredEvidenceTools...),
 		OutcomeContract:       input.RuntimeRequest.OutcomeContract,
-	})
+	}
+	contextBuilder := LLMContextBuilder{}
 	return compactMessages([]model.Message{
 		systemMessage(input.BaseInstruction),
-		systemMessage(contextText),
+		systemMessage(contextBuilder.BuildUnchangingContext(contextInput)),
+		systemMessage(contextBuilder.BuildChangingContext(contextInput)),
 		toolResultImageContextMessage(input.Observations),
 	})
 }
@@ -155,6 +157,7 @@ func buildWorkspaceContextDescription(request AgentTurnRequest) string {
 		return ""
 	}
 	lines := []string{
+		"Your shell starts in " + strings.TrimSpace(request.WorkspaceDefaultPath) + " and stays there between commands. You do not need to discover where you are.",
 		"Terminal commands run as the requester POSIX identity; ~ is your Linux home ($HOME) and your private workspace, and the same ~ path works in a tool path field and in a shell command.",
 		"A concrete POSIX path under your home also resolves, so open one you see in ls output instead of giving up.",
 		"If unsure, inspect access from a working directory such as ~: id; pwd; ls -ld .; stat -c '%A %U %G %n' .; test -w .",

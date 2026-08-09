@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""Print one comparison row per harness from the runs both just wrote.
+
+Terminal-Bench records the verdict and the agent's own span for every harness
+on the row, and the clock column comes from that span for both — one source,
+one definition. Reading each harness's self-reported duration instead
+compares two different measurements, and on tasks both solve it reversed the
+answer. The columns only one harness can see stay blank rather than being
+guessed from the outside.
+"""
+
+import glob
+import json
+import os
+import statistics
+from datetime import datetime
+import sys
+
+
+def harness_names(output_root):
+    names = [os.path.basename(path.rstrip("/")) for path in glob.glob(os.path.join(output_root, "*/"))]
+    return sorted(names)
+
+
+def latest_run_directory(harness_root):
+    directories = sorted(glob.glob(os.path.join(harness_root, "*/")), key=os.path.getmtime)
+    return directories[-1] if directories else None
+
+
+def task_verdicts(run_directory):
+    report_path = os.path.join(run_directory, "results.json")
+    if not os.path.exists(report_path):
+        return []
+    return json.load(open(report_path)).get("results", [])
+
+
+def measured_runs(run_directory):
+    metrics = []
+    for path in glob.glob(os.path.join(run_directory, "**/*-metrics.json"), recursive=True):
+        metrics.append(json.load(open(path)))
+    return metrics
+
+
+def median_of(metrics, field):
+    values = [entry.get(field) for entry in metrics if entry.get(field)]
+    return statistics.median(values) if values else None
+
+
+def formatted(value, digits=0):
+    if value is None:
+        return "not reported"
+    return f"{value:,.{digits}f}"
+
+
+def median_agent_second(verdicts):
+    spans = []
+    for verdict in verdicts:
+        started, ended = verdict.get("agent_started_at"), verdict.get("agent_ended_at")
+        if started and ended:
+            spans.append((datetime.fromisoformat(ended) - datetime.fromisoformat(started)).total_seconds())
+    if not spans:
+        return "not reported"
+    return f"{statistics.median(spans):,.1f}s"
+
+
+def harness_row(harness_name, harness_root):
+    run_directory = latest_run_directory(harness_root)
+    if run_directory is None:
+        return None
+    verdicts = task_verdicts(run_directory)
+    resolved = sum(1 for verdict in verdicts if verdict.get("is_resolved"))
+    metrics = measured_runs(run_directory)
+    reached_end = [entry for entry in metrics if entry.get("reachedEnd")]
+    return {
+        "harness": harness_name,
+        "tasks": len(verdicts),
+        "resolved": resolved,
+        "reachedEnd": f"{len(reached_end)}/{len(metrics)}" if metrics else "not reported",
+        "turns": formatted(median_of(metrics, "turns")),
+        "languageModelCalls": formatted(median_of(metrics, "languageModelCalls")),
+        "promptTokensPerTurn": formatted(median_of(metrics, "promptTokensPerTurn")),
+        "wallClockSecond": median_agent_second(verdicts),
+    }
+
+
+def main():
+    output_root, dataset, model = sys.argv[1], sys.argv[2], sys.argv[3]
+    rows = [row for row in (harness_row(name, os.path.join(output_root, name)) for name in harness_names(output_root)) if row]
+    if not rows:
+        print("no runs to summarise")
+        return
+    print(f"\n== {dataset} with {model} ==")
+    print("| harness | tasks | resolved | reached end | median turns | median model calls | median prompt tokens/turn | median wall clock |")
+    print("|---|---|---|---|---|---|---|---|")
+    for row in rows:
+        print(f"| {row['harness']} | {row['tasks']} | {row['resolved']} | {row['reachedEnd']} | "
+              f"{row['turns']} | {row['languageModelCalls']} | {row['promptTokensPerTurn']} | {row['wallClockSecond']} |")
+
+
+main()

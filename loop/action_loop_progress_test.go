@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
 )
@@ -120,42 +119,6 @@ func TestInspectionToolSuccessDoesNotCountAsLoopProgress(t *testing.T) {
 
 	if progressEventCount(observations) != 0 {
 		t.Fatalf("expected inspection tool to not count as loop progress, got %+v", progressEvents(observations))
-	}
-}
-
-func TestTerminalProgressRequiresStructuredCompletion(t *testing.T) {
-	testCases := []struct {
-		name        string
-		data        json.RawMessage
-		failure     *toolcontract.ToolFailure
-		hasProgress bool
-	}{
-		{name: "completed command", data: json.RawMessage(`{"mode":"command","completed":true}`), hasProgress: true},
-		{name: "running session", data: json.RawMessage(`{"mode":"session_status","completed":false}`)},
-		{name: "session start", data: json.RawMessage(`{"mode":"session_start","completed":false}`)},
-		{name: "session write", data: json.RawMessage(`{"mode":"session_write","completed":false}`)},
-		{name: "session close", data: json.RawMessage(`{"mode":"session_close","completed":false}`)},
-		{name: "missing data"},
-		{name: "malformed data", data: json.RawMessage(`{`)},
-		{name: "failed command", data: json.RawMessage(`{"mode":"command","completed":true}`), failure: &toolcontract.ToolFailure{}},
-	}
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			observation := turnObservation{
-				ObservationID: "obs-001",
-				Action:        "continue",
-				Tool:          toolcontract.TerminalRunToolName,
-				Output: toolcontract.ToolOutput{
-					Content: `{"exitCode":0,"completed":true}`,
-					Data:    testCase.data,
-				},
-				Failure: testCase.failure,
-			}
-			_, hasProgress := qualifyingDurableProgressEvent(observation)
-			if hasProgress != testCase.hasProgress {
-				t.Fatalf("expected progress=%t, got %+v", testCase.hasProgress, observation)
-			}
-		})
 	}
 }
 

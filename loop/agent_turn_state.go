@@ -21,6 +21,7 @@ const maximumAgentActionCorrectionCount = 2
 type agentAction = turnActionDocument
 
 type agentTaskState struct {
+	PendingBatchedActions              []turnActionDocument
 	TaskRunID                          string
 	Status                             taskstate.TaskStatus
 	Request                            AgentTurnRequest
@@ -428,7 +429,7 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool) 
 		Messages: messages,
 		StructuredOutputSchema: model.StructuredOutputSchema{
 			Name:               "bluecollar_agent_turn_action",
-			Document:           actionSchemaForToolSet(modelToolSet, allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFail, allowFinish),
+			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFail, allowFinish),
 			IsStrictlyEnforced: true,
 		},
 		GenerationOptions: agentActionGenerationOptions(state.Options.GenerationOptions),
@@ -503,11 +504,19 @@ func finishWasRejectedWithoutAnyToolEvidence(observations []turnObservation) boo
 	return true
 }
 
-func actionSchemaForToolSet(toolSet *toolcontract.ToolSet, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, allowFailValues ...bool) string {
-	if toolSet == nil {
-		return buildActionSchemaFromToolDefinitions(nil, allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFailValues...)
+func actionSchemaForToolSet(toolSet *toolcontract.ToolSet, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, allowFailValues ...bool) string {
+	return actionSchemaCitingEvidence(toolSet, citableEvidenceIDs, allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFailValues...)
+}
+
+func citableEvidenceIDs(observations []turnObservation) []string {
+	evidenceIDs := []string{}
+	for _, observation := range observations {
+		if observation.Failed() || strings.TrimSpace(observation.Tool) == "" {
+			continue
+		}
+		evidenceIDs = append(evidenceIDs, observation.ObservationID)
 	}
-	return ActionSchemaForToolSet(toolSet, allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFailValues...)
+	return evidenceIDs
 }
 
 func ParseAgentActionResponse(response model.StructuredResponse) (agentAction, error) {
@@ -723,24 +732,37 @@ func decideAgentActionWithChat(ctx context.Context, chatCompleter model.ChatComp
 	for correctionCount := 0; ; correctionCount++ {
 		response, errorValue := chatCompleter.GenerateChatCompletion(ctx, currentRequest)
 		if errorValue == nil {
-			return parseNativeAgentActionResponse(response, currentRequest.Tools)
+			action, parseError := parseNativeAgentActionResponse(response, currentRequest.Tools)
+			if parseError == nil {
+				return action, nil
+			}
+			retryRequest, canRetry := correctedAgentActionRequest(currentRequest, nativeActionParseCorrection(parseError), state, correctionCount)
+			if !canRetry {
+				return turnActionDocument{}, parseError
+			}
+			currentRequest = retryRequest
+			continue
 		}
 		if errors.Is(errorValue, context.Canceled) || errors.Is(errorValue, context.DeadlineExceeded) || ctx.Err() != nil {
-			return turnActionDocument{}, errorValue
-		}
-		if correctionCount >= maximumAgentActionCorrectionCount {
 			return turnActionDocument{}, errorValue
 		}
 		correction, isCorrectable := model.StructuredOutputCorrectionFromError(errorValue)
 		if !isCorrectable {
 			return turnActionDocument{}, errorValue
 		}
-		retryRequest, canRetry := retryAgentActionChatCompletionRequest(currentRequest, correction, state)
+		retryRequest, canRetry := correctedAgentActionRequest(currentRequest, correction, state, correctionCount)
 		if !canRetry {
 			return turnActionDocument{}, errorValue
 		}
 		currentRequest = retryRequest
 	}
+}
+
+func correctedAgentActionRequest(request model.ChatCompletionRequest, correction model.StructuredOutputCorrection, state agentTaskState, correctionCount int) (model.ChatCompletionRequest, bool) {
+	if correctionCount >= maximumAgentActionCorrectionCount {
+		return model.ChatCompletionRequest{}, false
+	}
+	return retryAgentActionChatCompletionRequest(request, correction, state)
 }
 
 func retryAgentActionChatCompletionRequest(request model.ChatCompletionRequest, correction model.StructuredOutputCorrection, state agentTaskState) (model.ChatCompletionRequest, bool) {
@@ -845,6 +867,15 @@ func agentActionCompletionIsBlocked(state agentTaskState) bool {
 	return hasFailureDebt
 }
 
+func nativeActionParseCorrection(parseError error) model.StructuredOutputCorrection {
+	return model.StructuredOutputCorrection{
+		Diagnostic: model.StructuredOutputDiagnostic{
+			Category:         model.StructuredOutputDiagnosticSchemaValidation,
+			ValidationIssues: []model.StructuredOutputValidationIssue{{FieldPath: parseError.Error()}},
+		},
+	}
+}
+
 func agentActionCorrectionMessage(correction model.StructuredOutputCorrection) string {
 	diagnostic := correction.Diagnostic
 	messageParts := []string{
@@ -882,7 +913,7 @@ func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredRes
 		Messages:          messages,
 		Tools:             tools,
 		ToolChoice:        json.RawMessage(`"required"`),
-		ParallelToolCalls: false,
+		ParallelToolCalls: true,
 		GenerationOptions: structuredRequest.GenerationOptions,
 	}, true
 }
@@ -994,7 +1025,27 @@ func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools
 	if len(response.Message.ToolCalls) == 0 {
 		return turnActionDocument{}, errors.New("native agent action chat expected at least one tool call")
 	}
-	toolCall := response.Message.ToolCalls[0]
+	firstAction, errorValue := nativeAgentActionFromToolCall(response.Message.ToolCalls[0], tools)
+	if errorValue != nil || firstAction.Action != "continue" {
+		return firstAction, errorValue
+	}
+	firstAction.BatchedActions = batchedNativeAgentActions(response.Message.ToolCalls[1:], tools)
+	return firstAction, nil
+}
+
+func batchedNativeAgentActions(toolCalls []model.ChatCompletionToolCall, tools []model.ChatCompletionTool) []turnActionDocument {
+	var actions []turnActionDocument
+	for _, toolCall := range toolCalls {
+		action, errorValue := nativeAgentActionFromToolCall(toolCall, tools)
+		if errorValue != nil || action.Action != "continue" {
+			return actions
+		}
+		actions = append(actions, action)
+	}
+	return actions
+}
+
+func nativeAgentActionFromToolCall(toolCall model.ChatCompletionToolCall, tools []model.ChatCompletionTool) (turnActionDocument, error) {
 	if strings.TrimSpace(toolCall.ID) == "" {
 		return turnActionDocument{}, errors.New("native agent action chat tool call ID is empty")
 	}

@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""Derive the task level budgets from runs that finished, instead of guessing them.
+
+A budget answers one question: how much work does a task that is going to
+succeed actually take? Runs that succeeded answer it directly. Runs that
+failed answer nothing except where the old ceiling was, which is why they are
+read separately here and never used to set the number.
+
+The first tier is the 95th percentile of the successful runs, which is the
+same rule an SRE timeout follows: choose the false-stop rate you can live
+with, then read the budget off the success distribution. Five percent of
+successful runs will be stopped early by that budget, and progress-gated
+escalation is what gives them their next one.
+
+Each tier after the first doubles. Doubling bounds the overshoot at twice the
+true need and reaches any ceiling in a logarithmic number of steps, which is
+the same reason backoff and growable arrays double. A ladder that steps from
+220 to 260 is not a ladder.
+
+Usage: derive-budgets <run output directory> [more directories...]
+"""
+
+import glob
+import json
+import os
+import sys
+
+FALSE_STOP_RATE = 0.05
+TIER_COUNT = 5
+
+
+def measured_runs(output_root):
+    runs = []
+    for report_path in glob.glob(os.path.join(output_root, "*/*/results.json")):
+        run_directory = os.path.dirname(report_path)
+        try:
+            results = json.load(open(report_path))["results"]
+        except (ValueError, KeyError):
+            continue
+        for result in results:
+            metrics = metrics_for_task(run_directory, result["task_id"])
+            if metrics is None:
+                continue
+            runs.append({
+                "solved": bool(result.get("is_resolved")),
+                "turns": metrics.get("turns") or 0,
+                "toolCalls": metrics.get("toolCalls") or 0,
+            })
+    return runs
+
+
+def metrics_for_task(run_directory, task_id):
+    task_directories = glob.glob(os.path.join(run_directory, task_id, "*/"))
+    if not task_directories:
+        return None
+    metrics_paths = glob.glob(os.path.join(task_directories[0], "**/bluecollar-metrics.json"), recursive=True)
+    if not metrics_paths:
+        return None
+    return json.load(open(metrics_paths[0]))
+
+
+def percentile(values, fraction):
+    ordered = sorted(values)
+    if not ordered:
+        return 0
+    position = int(round(fraction * (len(ordered) - 1)))
+    return ordered[min(position, len(ordered) - 1)]
+
+
+def doubling_ladder(firstTier, tierCount):
+    return [firstTier * (2 ** step) for step in range(tierCount)]
+
+
+def report(runs):
+    solved = [run for run in runs if run["solved"]]
+    unsolved = [run for run in runs if not run["solved"]]
+    if not solved:
+        print("no successful run to derive a budget from")
+        return
+    keptFraction = 1 - FALSE_STOP_RATE
+    turnBudget = percentile([run["turns"] for run in solved], keptFraction)
+    toolCallBudget = percentile([run["toolCalls"] for run in solved], keptFraction)
+
+    print(f"{len(runs)} measured runs, {len(solved)} of them successful\n")
+    print(f"successful runs, turns:      p50={percentile([r['turns'] for r in solved], 0.5)} "
+          f"p90={percentile([r['turns'] for r in solved], 0.9)} p95={turnBudget} max={max(r['turns'] for r in solved)}")
+    print(f"successful runs, tool calls: p50={percentile([r['toolCalls'] for r in solved], 0.5)} "
+          f"p90={percentile([r['toolCalls'] for r in solved], 0.9)} p95={toolCallBudget} max={max(r['toolCalls'] for r in solved)}")
+    if unsolved:
+        print(f"failed runs, tool calls:     p50={percentile([r['toolCalls'] for r in unsolved], 0.5)} "
+              f"p90={percentile([r['toolCalls'] for r in unsolved], 0.9)} max={max(r['toolCalls'] for r in unsolved)}"
+              f"   (where the old ceiling was, not where a budget belongs)")
+
+    print(f"\nladder at a {int(FALSE_STOP_RATE * 100)}% false-stop rate, doubling each tier:")
+    turnLadder = doubling_ladder(turnBudget, TIER_COUNT)
+    toolCallLadder = doubling_ladder(toolCallBudget, TIER_COUNT)
+    for tierIndex in range(TIER_COUNT):
+        print(f"  tier {tierIndex + 1}: {turnLadder[tierIndex]:4} iterations  {toolCallLadder[tierIndex]:4} tool calls")
+
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        raise SystemExit(2)
+    runs = []
+    for output_root in sys.argv[1:]:
+        runs.extend(measured_runs(output_root))
+    report(runs)
+
+
+main()
