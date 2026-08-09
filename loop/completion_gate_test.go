@@ -1145,7 +1145,7 @@ func TestAgentTurnRunnerRejectsCompletionEvidenceFromErrorObservation(t *testing
 	if result.TaskRun.Status != taskstate.TaskStatusFailed {
 		t.Fatalf("expected failed task, got %s", result.TaskRun.Status)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "unknown or failed observation") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "not a successful observation") {
 		t.Fatal("expected failed evidence gate event")
 	}
 }
@@ -2234,5 +2234,27 @@ func TestEveryCopyOfTheContractIsReducedToWhatTheTaskCanCall(t *testing.T) {
 	}
 	if len(request.RequiredEvidenceTools) != 0 {
 		t.Fatalf("the request carries a third copy as a flat list, got %v", request.RequiredEvidenceTools)
+	}
+}
+
+func TestARejectedCitationSaysWhichObservationsWouldHaveDone(t *testing.T) {
+	observations := []turnObservation{
+		{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run", Summary: "exitCode=0\nlisted the workspace"},
+		{ObservationID: "obs-002", Action: "continue", Tool: "terminal_run", Summary: "wrote avg_temp.txt"},
+	}
+
+	errorValue := validateCompletionEvidenceReferences(nil, observations, []completionEvidenceReference{{ObservationID: "obs-009"}})
+
+	if errorValue == nil {
+		t.Fatal("citing an observation that does not exist has to fail")
+	}
+	message := errorValue.Error()
+	if !strings.Contains(message, "obs-009") {
+		t.Fatalf("an agent cannot correct a citation it is not told about, got %q", message)
+	}
+	for _, expected := range []string{"obs-001", "obs-002", "listed the workspace", "wrote avg_temp.txt"} {
+		if !strings.Contains(message, expected) {
+			t.Fatalf("the candidates have to say what each observation reported, or the agent picks one at random; %q missing from %q", expected, message)
+		}
 	}
 }

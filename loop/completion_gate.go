@@ -937,10 +937,40 @@ func validateCompletionEvidenceReferences(toolSet *toolcontract.ToolSet, observa
 	for _, reference := range references {
 		observation, isFound := findSuccessfulObservation(observations, reference)
 		if !isFound || !observationSatisfiesEvidenceCondition(toolSet, observation) {
-			return errors.New("completionEvidence references an unknown or failed observation")
+			return errors.New("completionEvidence cites " + citedReferenceDescription(reference) +
+				", which is not a successful observation of this task. Cite one of: " + strings.Join(citableEvidenceDescriptions(toolSet, observations), ", "))
 		}
 	}
 	return nil
+}
+
+func citedReferenceDescription(reference completionEvidenceReference) string {
+	described := strings.TrimSpace(reference.ObservationID)
+	if described == "" {
+		described = "an observation with no observationID"
+	}
+	if toolName := strings.TrimSpace(reference.ToolName); toolName != "" {
+		described += " from " + toolName
+	}
+	return described
+}
+
+func citableEvidenceDescriptions(toolSet *toolcontract.ToolSet, observations []turnObservation) []string {
+	descriptions := []string{}
+	for _, observation := range observations {
+		if observation.Failed() || !observationSatisfiesEvidenceCondition(toolSet, observation) {
+			continue
+		}
+		described := strings.TrimSpace(observation.ObservationID) + " from " + strings.TrimSpace(observation.Tool)
+		if reported := truncateText(compactWhitespace(observation.Summary), maxSummaryTextLength); reported != "" {
+			described += " (" + reported + ")"
+		}
+		descriptions = append(descriptions, described)
+	}
+	if len(descriptions) == 0 {
+		return []string{"no successful observation yet"}
+	}
+	return descriptions
 }
 
 func completionReferencesForRequirement(requirement toolUseRequirement, observations []turnObservation, references []completionEvidenceReference) []completionEvidenceReference {
