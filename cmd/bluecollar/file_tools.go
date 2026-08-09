@@ -216,14 +216,22 @@ func mustMarshalFileOutput(path string, content string) json.RawMessage {
 	return document
 }
 
-func (runningShell shell) readFile(ctx context.Context, path string) (string, error) {
+func (runningShell shell) readFileBase64(ctx context.Context, path string) (string, error) {
 	capturedOutput := &bytes.Buffer{}
 	command := runningShell.command(ctx, "base64 < "+shellQuoted(path))
 	command.Stdout = capturedOutput
 	if errorValue := command.Run(); errorValue != nil {
 		return "", errors.New("could not read " + path)
 	}
-	decoded, errorValue := base64.StdEncoding.DecodeString(strings.Join(strings.Fields(capturedOutput.String()), ""))
+	return strings.Join(strings.Fields(capturedOutput.String()), ""), nil
+}
+
+func (runningShell shell) readFile(ctx context.Context, path string) (string, error) {
+	encoded, errorValue := runningShell.readFileBase64(ctx, path)
+	if errorValue != nil {
+		return "", errorValue
+	}
+	decoded, errorValue := base64.StdEncoding.DecodeString(encoded)
 	if errorValue != nil {
 		return "", errorValue
 	}

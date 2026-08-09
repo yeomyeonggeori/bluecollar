@@ -83,7 +83,7 @@ func chatCompletionRequest(modelName string, request model.ChatCompletionRequest
 func chatCompletionMessages(messages []model.ChatCompletionMessage) []map[string]any {
 	chat := make([]map[string]any, 0, len(messages))
 	for _, message := range messages {
-		entry := map[string]any{"role": message.Role, "content": messageText(message.Content, message.Parts)}
+		entry := map[string]any{"role": message.Role, "content": chatCompletionContent(message.Content, message.Parts)}
 		if message.ToolCallID != "" {
 			entry["tool_call_id"] = message.ToolCallID
 		}
@@ -218,6 +218,42 @@ func chatMessages(messages []model.Message) []map[string]string {
 		chat = append(chat, map[string]string{"role": message.Role, "content": messageText(message.Content, message.Parts)})
 	}
 	return chat
+}
+
+func chatCompletionContent(content string, parts []model.MessagePart) any {
+	if !partsCarryAnImage(parts) {
+		return messageText(content, parts)
+	}
+	contentParts := []map[string]any{}
+	if text := strings.TrimSpace(content); text != "" {
+		contentParts = append(contentParts, map[string]any{"type": "text", "text": text})
+	}
+	for _, part := range parts {
+		if isImagePart(part) {
+			contentParts = append(contentParts, map[string]any{
+				"type":      "image_url",
+				"image_url": map[string]any{"url": "data:" + part.MimeType + ";base64," + part.DataBase64},
+			})
+			continue
+		}
+		if text := strings.TrimSpace(part.Text); text != "" {
+			contentParts = append(contentParts, map[string]any{"type": "text", "text": text})
+		}
+	}
+	return contentParts
+}
+
+func partsCarryAnImage(parts []model.MessagePart) bool {
+	for _, part := range parts {
+		if isImagePart(part) {
+			return true
+		}
+	}
+	return false
+}
+
+func isImagePart(part model.MessagePart) bool {
+	return strings.HasPrefix(strings.TrimSpace(part.MimeType), "image/") && strings.TrimSpace(part.DataBase64) != ""
 }
 
 func messageText(content string, parts []model.MessagePart) string {
