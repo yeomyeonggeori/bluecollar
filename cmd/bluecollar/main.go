@@ -110,17 +110,12 @@ func printLedger(taskRunService *taskstate.TaskRunService, taskRunID string) {
 		return
 	}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		fmt.Fprintf(os.Stderr, "  %s  %s\n", taskEvent.Name, truncated(taskEvent.Body))
+		fmt.Fprintf(os.Stderr, "  %s  %s\n", taskEvent.Name, collapsedWhitespace(taskEvent.Body))
 	}
 }
 
-func truncated(text string) string {
-	const limit = 20000
-	collapsed := strings.Join(strings.Fields(text), " ")
-	if len(collapsed) <= limit {
-		return collapsed
-	}
-	return strings.ToValidUTF8(collapsed[:limit], "") + "…"
+func collapsedWhitespace(text string) string {
+	return strings.Join(strings.Fields(text), " ")
 }
 
 func routeTurn(ctx context.Context, languageModel *openaicompatible.Provider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
