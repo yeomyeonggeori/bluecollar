@@ -516,7 +516,7 @@ func turnRouterSchema(request agentcontract.AgentRequest) string {
 			map[string]any{"type": "null"},
 		}},
 	}
-	requiredProperties := []string{"route", "classification", "taskShape", "level", "requestedOutputFormats", "deliverableKind", "responseLanguage", "reason", "userFacingReply", "priorTaskReference"}
+	requiredProperties := []string{"route", "classification", "taskShape", "level", "requestedOutputFormats", "deliverableKind", "responseLanguage", "reason", "userFacingReply", "priorTaskReference", "expectedResults", "initialToolNames", "clarificationQuestion", "clarificationOptions", "reactionEmojiName"}
 	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
 		properties["approval"] = map[string]any{"type": "string", "enum": []string{string(agentcontract.ApprovalSignalApprove), string(agentcontract.ApprovalSignalApproveTask), string(agentcontract.ApprovalSignalReject), string(agentcontract.ApprovalSignalUnclear)}}
 		requiredProperties = append(requiredProperties, "approval")
@@ -580,7 +580,7 @@ func expectedResultsSchema() map[string]any {
 				"required":        map[string]any{"type": "boolean"},
 				"acceptanceHints": map[string]any{"type": "array", "maxItems": 4, "items": map[string]any{"type": "string", "maxLength": 128}},
 			},
-			"required":             []string{"description", "required"},
+			"required":             []string{"id", "type", "description", "required", "acceptanceHints"},
 			"additionalProperties": false,
 		},
 	}
@@ -631,7 +631,7 @@ func clarificationOptionsSchema() map[string]any {
 				"label": map[string]any{"type": "string", "maxLength": 128},
 				"value": map[string]any{"type": "string", "maxLength": 256},
 			},
-			"required":             []string{"key", "label"},
+			"required":             []string{"key", "label", "value"},
 			"additionalProperties": false,
 		},
 	}
