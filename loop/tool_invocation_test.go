@@ -71,10 +71,10 @@ func TestAgentTurnRunnerStoresLargeToolResultAsArtifact(t *testing.T) {
 		`{"action":"continue","toolName":"large","toolInput":{}}`,
 		finishMessageDocument("summarized"),
 	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ToolResultMaxBytes: 8})
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestCapabilityToolSet([]string{"large"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "large"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(strings.Repeat("x", 32)), nil
+		return testToolSuccess(strings.Repeat("x", 40000)), nil
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{

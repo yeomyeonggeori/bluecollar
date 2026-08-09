@@ -419,7 +419,7 @@ func compactionTriggerTokenThreshold(contextWindowTokens int) int {
 	if contextWindowTokens <= 0 {
 		return defaultCompactionTriggerTokens
 	}
-	threshold := contextWindowTokens * 6 / 10
+	threshold := contextWindowTokens * conversationShareOfContextPercent / 100
 	if threshold <= 0 {
 		return defaultCompactionTriggerTokens
 	}

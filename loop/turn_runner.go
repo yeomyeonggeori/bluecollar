@@ -241,12 +241,13 @@ func (agentTurnRunner *AgentTurnRunner) noteContextInUse(promptTokens int64) {
 }
 
 func (agentTurnRunner *AgentTurnRunner) toolResultLimit() int {
-	contextWindowTokens := agentTurnRunner.options.ContextWindowTokens
-	if contextWindowTokens <= 0 {
-		return agentTurnRunner.options.ToolResultMaxBytes
+	conversationBudgetTokens := compactionTriggerTokenThreshold(agentTurnRunner.options.ContextWindowTokens)
+	shareOfOneObservation := conversationBudgetTokens * charactersPerToken / maxProgressObservations
+	if agentTurnRunner.options.ContextWindowTokens <= 0 {
+		return max(shareOfOneObservation, maxSummaryTextLength)
 	}
-	remainingCharacters := (int64(contextWindowTokens) - agentTurnRunner.promptTokensInUse) * charactersPerToken
-	return max(min(int(remainingCharacters), agentTurnRunner.options.ToolResultMaxBytes), maxSummaryTextLength)
+	remainingCharacters := (int64(agentTurnRunner.options.ContextWindowTokens) - agentTurnRunner.promptTokensInUse) * charactersPerToken
+	return max(min(int(remainingCharacters), shareOfOneObservation), maxSummaryTextLength)
 }
 
 func (agentTurnRunner *AgentTurnRunner) recordIterationCost(startedAt time.Time) {
@@ -277,9 +278,6 @@ func normalizeTurnOptions(options TurnOptions) TurnOptions {
 	}
 	if options.MaxElapsedSecond <= 0 {
 		options.MaxElapsedSecond = int(taskLevelProfile.Duration.Seconds())
-	}
-	if options.ToolResultMaxBytes <= 0 {
-		options.ToolResultMaxBytes = 32768
 	}
 	if recoveryBudgetIsUnset(options.RecoveryBudget) {
 		options.RecoveryBudget = defaultRecoveryBudget()
