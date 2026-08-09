@@ -334,7 +334,7 @@ rate.
 
 ## What has not worked
 
-Three changes were made, measured, and judged by the measurement rather than by
+Four changes were made, measured, and judged by the measurement rather than by
 the reasoning behind them.
 
 Restoring the contract's file requirement wherever a write tool existed took
@@ -365,6 +365,24 @@ offered, and a dataset whose work is genuinely independent is where it would
 show. This dataset is not that, and the pass rate moving from four to three
 across those runs belongs to `grid-pattern-transform`, which batched nothing
 and has been flaky for this model all along.
+
+Taking the observation-id enum out of the finish tool's schema was aimed at
+prompt caching, which reports zero cached tokens on every run. Tools sit ahead
+of the messages in a cached prefix and the enum grew with every observation, so
+the prefix could never survive a step. Removing it cached nothing and cost
+8 to 13 times the prompt: count-dataset-tokens went from 358k tokens to 2.83M,
+fix-git from 81k to 1.03M, the median run from 8 turns to 35.
+
+Two things went wrong together. Without the enum the model cites ids that do not
+exist, and the gate's refusal — improved in the same session to name the valid
+candidates — was repeating each one's summary, which for a plan_update is the
+whole plan document. Eight refusals carried it eight times.
+
+The test that was replaced had said so: TestFinishCanOnlyCiteEvidenceThatExists
+warned that a model naming an observation the run never made "will be refused
+every turn until the run dies". Replacing it was justified by the candidates
+list making one corrected turn enough, and the measurement disagreed. Reverted;
+the candidates list stayed and now points at the ledger instead of copying it.
 
 ## Open
 
