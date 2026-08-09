@@ -26,10 +26,11 @@ type terminalRunInput struct {
 }
 
 type terminalRunOutput struct {
-	ExitCode  int    `json:"exitCode"`
-	Output    string `json:"output"`
-	Truncated bool   `json:"truncated"`
-	Completed bool   `json:"completed"`
+	ExitCode   int    `json:"exitCode"`
+	Output     string `json:"output"`
+	Truncated  bool   `json:"truncated"`
+	Completed  bool   `json:"completed"`
+	OutputPath string `json:"outputPath,omitempty"`
 }
 
 var terminalRunInputSchema = json.RawMessage(`{
@@ -50,7 +51,8 @@ var terminalRunOutputSchema = json.RawMessage(`{
     "exitCode": {"type": "integer"},
     "output": {"type": "string"},
     "truncated": {"type": "boolean"},
-    "completed": {"type": "boolean"}
+    "completed": {"type": "boolean"},
+    "outputPath": {"type": "string"}
   },
   "required": ["exitCode", "output"],
   "additionalProperties": false
@@ -158,7 +160,7 @@ func runShellCommand(ctx context.Context, runningShell shell, input terminalRunI
 		return toolcontract.ToolFailureResult(toolcontract.FailureNotFound, toolcontract.FailureCodes.ToolNameInShell, "terminal_run",
 			"the shell could not find "+firstWordOf(command)+"; this tool runs shell commands, so send something a shell can run")
 	}
-	return terminalRunResult(exitCode, capturedOutput.String(), runError)
+	return terminalRunResult(ctx, runningShell, exitCode, capturedOutput.String(), runError)
 }
 
 func firstWordOf(command string) string {
@@ -166,9 +168,13 @@ func firstWordOf(command string) string {
 	return firstWord
 }
 
-func terminalRunResult(exitCode int, output string, runError error) toolcontract.ToolResult {
+func terminalRunResult(ctx context.Context, runningShell shell, exitCode int, output string, runError error) toolcontract.ToolResult {
 	truncatedOutput, wasTruncated := truncateOutput(output)
-	document, marshalError := json.Marshal(terminalRunOutput{ExitCode: exitCode, Output: truncatedOutput, Truncated: wasTruncated, Completed: exitCode == 0})
+	outputPath := ""
+	if wasTruncated {
+		outputPath = runningShell.spilledOutputPath(ctx, output)
+	}
+	document, marshalError := json.Marshal(terminalRunOutput{ExitCode: exitCode, Output: truncatedOutput, Truncated: wasTruncated, Completed: exitCode == 0, OutputPath: outputPath})
 	if marshalError != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "terminal_run", marshalError.Error())
 	}
@@ -176,6 +182,20 @@ func terminalRunResult(exitCode int, output string, runError error) toolcontract
 		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "terminal_run", runError.Error())
 	}
 	return toolcontract.ToolSuccessData(truncatedOutput, document)
+}
+
+func (runningShell shell) spilledOutputPath(ctx context.Context, output string) string {
+	capturedPath := &bytes.Buffer{}
+	command := runningShell.command(ctx, "mktemp /tmp/terminal-output-XXXXXX")
+	command.Stdout = capturedPath
+	if command.Run() != nil {
+		return ""
+	}
+	path := strings.TrimSpace(capturedPath.String())
+	if path == "" || runningShell.writeFile(ctx, path, output) != nil {
+		return ""
+	}
+	return path
 }
 
 func truncateOutput(output string) (string, bool) {

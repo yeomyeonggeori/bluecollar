@@ -281,7 +281,7 @@ func TestALocalShellKeepsTheWorkspaceItWasGiven(t *testing.T) {
 }
 
 func TestASuccessfulCommandIsVisibleAsProgress(t *testing.T) {
-	result := terminalRunResult(0, "done\n", nil)
+	result := terminalRunResult(context.Background(), shell{}, 0, "done\n", nil)
 
 	var output terminalRunOutput
 	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
@@ -293,7 +293,7 @@ func TestASuccessfulCommandIsVisibleAsProgress(t *testing.T) {
 }
 
 func TestAFailedCommandIsNotProgress(t *testing.T) {
-	result := terminalRunResult(1, "no such file\n", nil)
+	result := terminalRunResult(context.Background(), shell{}, 1, "no such file\n", nil)
 
 	var output terminalRunOutput
 	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
@@ -335,5 +335,29 @@ func TestACommandTheModelFlaggedForApprovalStillRuns(t *testing.T) {
 	}
 	if _, errorValue := os.Stat(filepath.Join(workspacePath, "flagged.txt")); errorValue != nil {
 		t.Fatal("expected the command to have run")
+	}
+}
+
+func TestOutputTooLongToReturnIsLeftSomewhereReadable(t *testing.T) {
+	runningShell := shell{workingDirectoryPath: t.TempDir()}.withInterpreterFound(context.Background())
+
+	result := terminalRunResult(context.Background(), runningShell, 0, strings.Repeat("x", maximumCapturedOutput+2000), nil)
+
+	var output terminalRunOutput
+	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !output.Truncated {
+		t.Fatal("an output past the cap has to say it was cut")
+	}
+	if output.OutputPath == "" {
+		t.Fatal("telling an agent its output was cut and leaving it nowhere to read the rest is a dead end")
+	}
+	spilled, errorValue := os.ReadFile(output.OutputPath)
+	if errorValue != nil {
+		t.Fatalf("the path handed to the agent has to hold the output: %v", errorValue)
+	}
+	if len(spilled) != maximumCapturedOutput+2000 {
+		t.Fatalf("the whole output has to be there, got %d characters", len(spilled))
 	}
 }
