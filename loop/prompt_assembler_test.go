@@ -59,18 +59,11 @@ func TestBuildTurnMessagesKeepsStablePrefixClockInvariant(t *testing.T) {
 		t.Fatalf("expected the base instruction message to be clock invariant")
 	}
 
-	earlyContext := earlyMessages[1].Content
-	lateContext := lateMessages[1].Content
-	earlyRuntimeIndex := strings.Index(earlyContext, "Runtime:")
-	lateRuntimeIndex := strings.Index(lateContext, "Runtime:")
-	if earlyRuntimeIndex < 0 || lateRuntimeIndex < 0 {
-		t.Fatalf("expected a Runtime section in the context message, got %s", earlyContext)
+	if earlyMessages[1].Content != lateMessages[1].Content {
+		t.Fatalf("a prompt cache keys on a byte-identical prefix, and this message changing with the clock costs full price on every call:\n%s\nvs\n%s", earlyMessages[1].Content, lateMessages[1].Content)
 	}
-	if earlyRuntimeIndex != lateRuntimeIndex {
-		t.Fatalf("expected the Runtime section to start at the same offset regardless of wall clock, got %d vs %d", earlyRuntimeIndex, lateRuntimeIndex)
-	}
-	if earlyContext[:earlyRuntimeIndex] != lateContext[:lateRuntimeIndex] {
-		t.Fatalf("expected the stable prefix before Runtime: to be byte-identical across different wall-clock times, got:\n%s\nvs\n%s", earlyContext[:earlyRuntimeIndex], lateContext[:lateRuntimeIndex])
+	if !strings.Contains(earlyMessages[2].Content, "Runtime:") {
+		t.Fatalf("the clock belongs after the prefix it would otherwise break, got %s", earlyMessages[2].Content)
 	}
 }
 
@@ -84,17 +77,19 @@ func TestBuildTurnMessagesPlacesVolatileContentAfterStablePrefix(t *testing.T) {
 	if len(messages) < 2 {
 		t.Fatalf("expected a context message, got %d messages", len(messages))
 	}
-	contextText := messages[1].Content
+	unchangingContext := messages[1].Content
+	changingContext := messages[2].Content
 
-	toolDescriptionIndex := strings.Index(contextText, "Available tool catalog")
-	runtimeIndex := strings.Index(contextText, "Runtime:")
-	stepBudgetIndex := strings.Index(contextText, "Step budget:")
-
-	if toolDescriptionIndex < 0 || runtimeIndex < 0 || stepBudgetIndex < 0 {
-		t.Fatalf("expected tool description, runtime, and step budget sections, got %s", contextText)
+	if !strings.Contains(unchangingContext, "Available tool catalog") {
+		t.Fatalf("the tool catalogue is the same on every call and belongs in the cacheable prefix, got %s", unchangingContext)
 	}
-	if !(toolDescriptionIndex < runtimeIndex && runtimeIndex < stepBudgetIndex) {
-		t.Fatalf("expected the stable tool description before the volatile runtime and step budget context, got %s", contextText)
+	runtimeIndex := strings.Index(changingContext, "Runtime:")
+	stepBudgetIndex := strings.Index(changingContext, "Step budget:")
+	if runtimeIndex < 0 || stepBudgetIndex < 0 {
+		t.Fatalf("expected runtime and step budget in the changing context, got %s", changingContext)
+	}
+	if runtimeIndex > stepBudgetIndex {
+		t.Fatalf("expected the runtime clock before the step budget, got %s", changingContext)
 	}
 }
 

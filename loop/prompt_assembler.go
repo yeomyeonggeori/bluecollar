@@ -22,7 +22,7 @@ type InjectedContextInput struct {
 }
 
 func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
-	contextText := (LLMContextBuilder{}).Build(LLMContextInput{
+	contextInput := LLMContextInput{
 		ResponseLanguage:     input.RuntimeRequest.ResponseLanguage,
 		RequesterPersonID:    input.RuntimeRequest.RequesterPersonID,
 		RequesterName:        input.RuntimeRequest.RequesterName,
@@ -54,10 +54,12 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 		ToolSet:               input.RuntimeRequest.ToolSet,
 		RequiredEvidenceTools: append([]string{}, input.RuntimeRequest.RequiredEvidenceTools...),
 		OutcomeContract:       input.RuntimeRequest.OutcomeContract,
-	})
+	}
+	contextBuilder := LLMContextBuilder{}
 	return compactMessages([]model.Message{
 		systemMessage(input.BaseInstruction),
-		systemMessage(contextText),
+		systemMessage(contextBuilder.BuildUnchangingContext(contextInput)),
+		systemMessage(contextBuilder.BuildChangingContext(contextInput)),
 		toolResultImageContextMessage(input.Observations),
 	})
 }

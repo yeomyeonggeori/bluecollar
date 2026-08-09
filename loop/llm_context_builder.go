@@ -52,6 +52,13 @@ type WorkspaceContext struct {
 
 func (builder LLMContextBuilder) Build(input LLMContextInput) string {
 	return strings.Join(nonEmptyStrings([]string{
+		builder.BuildUnchangingContext(input),
+		builder.BuildChangingContext(input),
+	}), "\n\n")
+}
+
+func (builder LLMContextBuilder) BuildUnchangingContext(input LLMContextInput) string {
+	return strings.Join(nonEmptyStrings([]string{
 		builder.requesterContext(input),
 		builder.companyContext(input),
 		buildInstructionContext(input.InstructionPrompt),
@@ -61,6 +68,11 @@ func (builder LLMContextBuilder) Build(input LLMContextInput) string {
 		builder.conversationContext(input.VisibleContext),
 		builder.taskContext(input),
 		builder.memoryContext(input),
+	}), "\n\n")
+}
+
+func (builder LLMContextBuilder) BuildChangingContext(input LLMContextInput) string {
+	return strings.Join(nonEmptyStrings([]string{
 		builder.runtimeContext(input),
 		builder.artifactManifestContext(input.ArtifactManifest),
 		strings.TrimSpace(input.StepBudgetContext),
