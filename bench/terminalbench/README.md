@@ -384,6 +384,32 @@ every turn until the run dies". Replacing it was justified by the candidates
 list making one corrected turn enough, and the measurement disagreed. Reverted;
 the candidates list stayed and now points at the ledger instead of copying it.
 
+Prompt caching was chased and dropped. Every run reports zero cached tokens
+while the endpoint caches an identical prefix at 98 to 100% — with a tools
+array as well as without, so the tools are not what stops it. The prompt was
+split into a message that does not change and one that does, which left a
+prefix of 4,932 bytes, about 1,233 tokens, ahead of the turn clock. That clears
+the 1,024-token minimum, and it still cached nothing.
+
+The action schema is why. It is rebuilt from five pieces of per-step state, and
+each one changes it: a blocked tool takes it from 4,162 bytes to 2,859, fail
+being withheld to 3,157, finish being withheld to 2,319, quality criteria
+appearing to 5,266, failure debt opening to 4,736. finish and fail move almost
+every step. Tools sit in the cached prefix, so it breaks before the messages are
+reached — which is why removing the observation-id enum, one of those five,
+changed nothing.
+
+Making the schema hold still for a task means moving all five controls to
+runtime validation, and the enum attempt already showed what that costs. The
+prize is small anyway: 1,233 tokens against the 50k to 300k a task spends. It
+would only be worth it if the observation history were in the prefix too, and
+that means an append-only conversation instead of a prompt rebuilt each turn —
+a different design, not a caching fix.
+
+Without caching, re-sending images every turn is paid at full price. Anthropic's
+advice not to prune them assumes a cache that makes re-sending cheap, so it does
+not apply here.
+
 ## Open
 
 The runs that fail now fail in two shapes, and both come from the same place:
