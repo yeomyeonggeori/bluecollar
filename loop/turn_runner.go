@@ -240,14 +240,18 @@ func (agentTurnRunner *AgentTurnRunner) noteContextInUse(promptTokens int64) {
 	agentTurnRunner.promptTokensInUse = promptTokens
 }
 
+func observationShareOf(conversationBudgetTokens int) int {
+	return conversationBudgetTokens * charactersPerToken / maxProgressObservations
+}
+
 func (agentTurnRunner *AgentTurnRunner) toolResultLimit() int {
-	conversationBudgetTokens := compactionTriggerTokenThreshold(agentTurnRunner.options.ContextWindowTokens)
-	shareOfOneObservation := conversationBudgetTokens * charactersPerToken / maxProgressObservations
+	shareOfOneObservation := observationShareOf(compactionTriggerTokenThreshold(agentTurnRunner.options.ContextWindowTokens))
+	unmeasuredShare := observationShareOf(defaultCompactionTriggerTokens)
 	if agentTurnRunner.options.ContextWindowTokens <= 0 {
-		return max(shareOfOneObservation, maxSummaryTextLength)
+		return max(unmeasuredShare, maxSummaryTextLength)
 	}
 	remainingCharacters := (int64(agentTurnRunner.options.ContextWindowTokens) - agentTurnRunner.promptTokensInUse) * charactersPerToken
-	return max(min(int(remainingCharacters), shareOfOneObservation), maxSummaryTextLength)
+	return max(min(int(remainingCharacters), shareOfOneObservation, unmeasuredShare), maxSummaryTextLength)
 }
 
 func (agentTurnRunner *AgentTurnRunner) recordIterationCost(startedAt time.Time) {
