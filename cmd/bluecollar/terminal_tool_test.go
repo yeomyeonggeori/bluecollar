@@ -361,3 +361,19 @@ func TestOutputTooLongToReturnIsLeftSomewhereReadable(t *testing.T) {
 		t.Fatalf("the whole output has to be there, got %d characters", len(spilled))
 	}
 }
+
+func TestSpilledOutputLandsWhereThisPersonMayWrite(t *testing.T) {
+	temporaryDirectory := t.TempDir()
+	t.Setenv("TMPDIR", temporaryDirectory)
+	runningShell := shell{workingDirectoryPath: t.TempDir()}.withInterpreterFound(context.Background())
+
+	result := terminalRunResult(context.Background(), runningShell, 0, strings.Repeat("x", maximumCapturedOutput+2000), nil)
+
+	var output terminalRunOutput
+	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !strings.HasPrefix(output.OutputPath, temporaryDirectory) {
+		t.Fatalf("a host that gives each person their own tmp expects the spill to land there, and a shared /tmp lets one person read another's output: %q", output.OutputPath)
+	}
+}

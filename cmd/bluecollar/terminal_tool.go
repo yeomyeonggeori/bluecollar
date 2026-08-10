@@ -186,7 +186,7 @@ func terminalRunResult(ctx context.Context, runningShell shell, exitCode int, ou
 
 func (runningShell shell) spilledOutputPath(ctx context.Context, output string) string {
 	capturedPath := &bytes.Buffer{}
-	command := runningShell.command(ctx, "mktemp /tmp/terminal-output-XXXXXX")
+	command := runningShell.command(ctx, `mktemp "${TMPDIR:-/tmp}/terminal-output-XXXXXX"`)
 	command.Stdout = capturedPath
 	if command.Run() != nil {
 		return ""
