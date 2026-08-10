@@ -1124,3 +1124,31 @@ func TestSelectStaleUnattendedTaskRunsOldestFirst(t *testing.T) {
 		}
 	}
 }
+
+func TestAnInterruptNobodyResumesEventuallyExpires(t *testing.T) {
+	now := time.Now()
+	abandoned := TaskRun{
+		TaskRunID:     "task-1",
+		Status:        TaskStatusInterrupted,
+		FailureReason: "runtime no longer owns this execution",
+		UpdatedAt:     now.Add(-staleBlockedTaskRunAge - time.Hour),
+	}
+
+	if StaleUnattendedTaskRunReason(abandoned, now) == "" {
+		t.Fatal("an interrupt with a reason nothing resumes reaches no terminal status, so nothing ever reclaims what the run left behind")
+	}
+}
+
+func TestAnInterruptWaitingToResumeIsLeftAlone(t *testing.T) {
+	now := time.Now()
+	resumable := TaskRun{
+		TaskRunID:     "task-1",
+		Status:        TaskStatusInterrupted,
+		FailureReason: TaskInterruptReasonRuntimeRestart,
+		UpdatedAt:     now.Add(-staleBlockedTaskRunAge - time.Hour),
+	}
+
+	if StaleUnattendedTaskRunReason(resumable, now) != "" {
+		t.Fatal("a run the resumer will pick up must not be failed out from under it")
+	}
+}

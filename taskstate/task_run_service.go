@@ -710,6 +710,10 @@ func StaleUnattendedTaskRunReason(taskRun TaskRun, now time.Time) string {
 		if now.Sub(taskRun.UpdatedAt) > staleWaitingTaskRunAge {
 			return "waiting_expired"
 		}
+	case TaskStatusInterrupted:
+		if !TaskRunWasInterruptedByRuntimeRestart(taskRun) && now.Sub(taskRun.UpdatedAt) > staleBlockedTaskRunAge {
+			return "interrupted_expired"
+		}
 	}
 	return ""
 }
