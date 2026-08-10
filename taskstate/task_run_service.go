@@ -43,13 +43,16 @@ func (transitionError ErrIllegalTransition) Error() string {
 }
 
 type TaskRunService struct {
-	mutex            sync.RWMutex
-	taskRuns         map[string]TaskRun
-	taskAttempts     map[string]TaskAttempt
-	activeAttempts   map[string]activeTaskAttempt
-	taskEventService *TaskEventService
-	repository       TaskRunRepository
-	runnerID         string
+	mutex                    sync.RWMutex
+	taskRuns                 map[string]TaskRun
+	taskAttempts             map[string]TaskAttempt
+	activeAttempts           map[string]activeTaskAttempt
+	taskEventService         *TaskEventService
+	repository               TaskRunRepository
+	runnerID                 string
+	transitionObserverMutex  sync.RWMutex
+	transitionObservers      map[int]func(TaskRun)
+	nextTransitionObserverID int
 }
 
 type activeTaskAttempt struct {
@@ -66,11 +69,12 @@ type InterruptedTaskResumeSelection struct {
 
 func NewTaskRunService(taskEventService *TaskEventService) *TaskRunService {
 	return &TaskRunService{
-		taskRuns:         map[string]TaskRun{},
-		taskAttempts:     map[string]TaskAttempt{},
-		activeAttempts:   map[string]activeTaskAttempt{},
-		taskEventService: taskEventService,
-		runnerID:         defaultTaskRunnerID(),
+		taskRuns:            map[string]TaskRun{},
+		taskAttempts:        map[string]TaskAttempt{},
+		activeAttempts:      map[string]activeTaskAttempt{},
+		taskEventService:    taskEventService,
+		runnerID:            defaultTaskRunnerID(),
+		transitionObservers: map[int]func(TaskRun){},
 	}
 }
 
@@ -123,6 +127,34 @@ func (taskRunService *TaskRunService) AppendTaskEventWithError(taskRunID string,
 
 func (taskRunService *TaskRunService) RegisterTaskRunObserver(taskRunID string, observer func(RawTurnEvent)) func() {
 	return taskRunService.taskEventService.RegisterTaskRunObserver(taskRunID, observer)
+}
+
+func (taskRunService *TaskRunService) RegisterTaskRunTransitionObserver(observer func(TaskRun)) func() {
+	if observer == nil {
+		return func() {}
+	}
+	taskRunService.transitionObserverMutex.Lock()
+	observerID := taskRunService.nextTransitionObserverID
+	taskRunService.nextTransitionObserverID++
+	taskRunService.transitionObservers[observerID] = observer
+	taskRunService.transitionObserverMutex.Unlock()
+	return func() {
+		taskRunService.transitionObserverMutex.Lock()
+		delete(taskRunService.transitionObservers, observerID)
+		taskRunService.transitionObserverMutex.Unlock()
+	}
+}
+
+func (taskRunService *TaskRunService) notifyTaskRunTransitionObservers(taskRun TaskRun) {
+	taskRunService.transitionObserverMutex.RLock()
+	observers := make([]func(TaskRun), 0, len(taskRunService.transitionObservers))
+	for _, observer := range taskRunService.transitionObservers {
+		observers = append(observers, observer)
+	}
+	taskRunService.transitionObserverMutex.RUnlock()
+	for _, observer := range observers {
+		observer(taskRun)
+	}
 }
 
 func (taskRunService *TaskRunService) RegisterTaskRunCancel(taskRunID string, cancelFunction context.CancelFunc) func() {
@@ -245,6 +277,15 @@ func (taskRunService *TaskRunService) FailTaskRun(taskRunID string, reason strin
 }
 
 func (taskRunService *TaskRunService) TransitionTaskRun(transition TaskRunTransition) (TaskRun, error) {
+	taskRun, errorValue := taskRunService.transitionTaskRunExclusively(transition)
+	if errorValue != nil {
+		return TaskRun{}, errorValue
+	}
+	taskRunService.notifyTaskRunTransitionObservers(taskRun)
+	return taskRun, nil
+}
+
+func (taskRunService *TaskRunService) transitionTaskRunExclusively(transition TaskRunTransition) (TaskRun, error) {
 	taskRunService.mutex.Lock()
 	defer taskRunService.mutex.Unlock()
 
