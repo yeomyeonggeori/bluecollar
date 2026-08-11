@@ -319,9 +319,6 @@ func (turnRouter TurnRouter) normalizeDecision(decision agentcontract.TurnDecisi
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid task level")
 	}
 	decision.TaskLevel = normalizedTaskLevel
-	if errorValue := validateTurnDecisionConsistency(decision); errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
 	decision.InitialToolNames = agentcontract.RegisteredToolNamesOnly(request.ToolSet, appendUniqueStrings(decision.InitialToolNames))
 	decision.ResponseLanguage = resolveDecisionResponseLanguage(decision.ResponseLanguage, request.ResponseLanguage)
 	decision.Reason = strings.TrimSpace(decision.Reason)
@@ -394,7 +391,10 @@ func includesRegisteredSideEffectEvidence(toolSet *toolcontract.ToolSet, toolNam
 func canonicalizeTurnDecision(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
 	switch decision.Classification {
 	case agentcontract.IntakeClassificationQuickReply:
+		decision.Route = answerableTurnRoute(decision.Route)
 		decision.TaskShape = agentcontract.TaskShapeImmediateReply
+	case agentcontract.IntakeClassificationBoundedTask:
+		decision.Route = executableTurnRoute(decision.Route)
 	case agentcontract.IntakeClassificationNeedsConfirmation:
 		decision.Route = agentcontract.TurnRouteClarify
 		decision.TaskShape = agentcontract.TaskShapeApprovalGatedTask
@@ -405,23 +405,22 @@ func canonicalizeTurnDecision(decision agentcontract.TurnDecision) agentcontract
 	return decision
 }
 
-func validateTurnDecisionConsistency(decision agentcontract.TurnDecision) error {
-	switch decision.Classification {
-	case agentcontract.IntakeClassificationBoundedTask:
-		if decision.Route == agentcontract.TurnRouteConsume || decision.Route == agentcontract.TurnRouteClarify || decision.Route == agentcontract.TurnRouteGiveUp {
-			return errors.New("turn router returned bounded_task with a terminal route")
-		}
+func executableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
+	switch route {
+	case agentcontract.TurnRouteConsume, agentcontract.TurnRouteClarify, agentcontract.TurnRouteGiveUp:
+		return agentcontract.TurnRouteStartTask
+	default:
+		return route
 	}
-	if decision.Route == agentcontract.TurnRouteConsume && decision.Classification != agentcontract.IntakeClassificationQuickReply {
-		return errors.New("turn router returned consume without quick_reply classification")
+}
+
+func answerableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
+	switch route {
+	case agentcontract.TurnRouteClarify, agentcontract.TurnRouteGiveUp:
+		return agentcontract.TurnRouteAnswerQuestion
+	default:
+		return route
 	}
-	if decision.Route == agentcontract.TurnRouteClarify && decision.Classification != agentcontract.IntakeClassificationNeedsConfirmation {
-		return errors.New("turn router returned clarify without needs_confirmation classification")
-	}
-	if decision.Route == agentcontract.TurnRouteGiveUp && decision.Classification != agentcontract.IntakeClassificationUnsupported {
-		return errors.New("turn router returned give_up without unsupported classification")
-	}
-	return nil
 }
 
 func isValidBusyRoute(busyRoute agentcontract.BusyRoute) bool {

@@ -200,19 +200,54 @@ func TestTurnRouterPreservesUnsupportedArtifactDecision(t *testing.T) {
 	}
 }
 
-func TestTurnRouterRejectsInconsistentDecisionFields(t *testing.T) {
-	validDecision := agentcontract.TurnDecision{
-		Route:              agentcontract.TurnRouteStartTask,
+func TestTurnRouterRepairsInconsistentDecisionFields(t *testing.T) {
+	decision := mustNormalizeTurn(t, NewTurnRouter(nil, agentcontract.IntakeOptions{}), agentcontract.TurnDecision{
+		Route:              agentcontract.TurnRouteConsume,
 		Classification:     agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:          agentcontract.TaskShapeMaintenanceTask,
 		TaskLevel:          agentcontract.TaskLevelLow,
 		ResponseLanguage:   "ko",
 		PriorTaskReference: agentcontract.PriorTaskReferenceNone,
+	}, agentcontract.AgentRequest{AllowGiveUp: true})
+
+	if decision.Route != agentcontract.TurnRouteStartTask || decision.Classification != agentcontract.IntakeClassificationBoundedTask {
+		t.Fatalf("expected bounded task to keep an executable route, got %+v", decision)
 	}
-	validDecision.Route = agentcontract.TurnRouteConsume
-	_, errorValue := NewTurnRouter(nil, agentcontract.IntakeOptions{}).normalizeDecision(validDecision, agentcontract.AgentRequest{AllowGiveUp: true})
-	if errorValue == nil || !strings.Contains(errorValue.Error(), "bounded_task with a terminal route") {
-		t.Fatalf("expected bounded terminal route error, got %v", errorValue)
+}
+
+func TestTurnRouterRepairsBoundedClarifyIntoAnExecutableRoute(t *testing.T) {
+	decision := mustNormalizeTurn(t, NewTurnRouter(nil, agentcontract.IntakeOptions{IsEnabled: false}), agentcontract.TurnDecision{
+		Route:                 agentcontract.TurnRouteClarify,
+		Classification:        agentcontract.IntakeClassificationBoundedTask,
+		TaskShape:             agentcontract.TaskShapeMaintenanceTask,
+		TaskLevel:             agentcontract.TaskLevelLow,
+		ResponseLanguage:      "ko",
+		ClarificationQuestion: "무엇을 바꿀까요?",
+		InitialToolNames:      []string{"task_update"},
+	}, agentcontract.AgentRequest{
+		Prompt:  "바꾸라고",
+		ToolSet: newTestToolSet([]string{"task_update"}),
+	})
+
+	if decision.Route != agentcontract.TurnRouteStartTask {
+		t.Fatalf("expected a bounded clarify to start the task, got %+v", decision)
+	}
+	if decision.TaskShape != agentcontract.TaskShapeMaintenanceTask {
+		t.Fatalf("expected the router task shape to survive the repair, got %+v", decision)
+	}
+}
+
+func TestTurnRouterRepairsQuickReplyClarifyIntoAnAnswer(t *testing.T) {
+	decision := mustNormalizeTurn(t, NewTurnRouter(nil, agentcontract.IntakeOptions{IsEnabled: false}), agentcontract.TurnDecision{
+		Route:            agentcontract.TurnRouteClarify,
+		Classification:   agentcontract.IntakeClassificationQuickReply,
+		TaskShape:        agentcontract.TaskShapeImmediateReply,
+		TaskLevel:        agentcontract.TaskLevelXLow,
+		ResponseLanguage: "ko",
+	}, agentcontract.AgentRequest{Prompt: "이름이 뭐야"})
+
+	if decision.Route != agentcontract.TurnRouteAnswerQuestion {
+		t.Fatalf("expected a quick reply clarify to answer instead, got %+v", decision)
 	}
 }
 
@@ -949,10 +984,10 @@ func TestTurnRouterRequiresDirectMessageConsumeFallback(t *testing.T) {
 	}
 }
 
-func TestTurnRouterRejectsTaskfulConsumeRoute(t *testing.T) {
+func TestTurnRouterRepairsTaskfulConsumeRoute(t *testing.T) {
 	router := NewTurnRouter(nil, agentcontract.IntakeOptions{IsEnabled: false})
 	toolSet := newTestToolSet([]string{"task_add", "task_list", "task_update"})
-	_, errorValue := router.normalizeDecision(agentcontract.TurnDecision{
+	decision := mustNormalizeTurn(t, router, agentcontract.TurnDecision{
 		Route:            agentcontract.TurnRouteConsume,
 		Classification:   agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:        agentcontract.TaskShapeResearchTask,
@@ -965,14 +1000,14 @@ func TestTurnRouterRejectsTaskfulConsumeRoute(t *testing.T) {
 		ToolSet: toolSet,
 	})
 
-	if errorValue == nil || !strings.Contains(errorValue.Error(), "bounded_task with a terminal route") {
-		t.Fatalf("expected contradictory consume error, got %v", errorValue)
+	if decision.Route != agentcontract.TurnRouteStartTask {
+		t.Fatalf("expected a taskful consume to start the task, got %+v", decision)
 	}
 }
 
-func TestTurnRouterRejectsBoundedGiveUp(t *testing.T) {
+func TestTurnRouterRepairsBoundedGiveUp(t *testing.T) {
 	router := NewTurnRouter(nil, agentcontract.IntakeOptions{IsEnabled: false})
-	_, errorValue := router.normalizeDecision(agentcontract.TurnDecision{
+	decision := mustNormalizeTurn(t, router, agentcontract.TurnDecision{
 		Route:                  agentcontract.TurnRouteGiveUp,
 		Classification:         agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:              agentcontract.TaskShapeMaintenanceTask,
@@ -991,8 +1026,8 @@ func TestTurnRouterRejectsBoundedGiveUp(t *testing.T) {
 		},
 	})
 
-	if errorValue == nil || !strings.Contains(errorValue.Error(), "bounded_task with a terminal route") {
-		t.Fatalf("expected bounded give_up error, got %v", errorValue)
+	if decision.Route != agentcontract.TurnRouteStartTask {
+		t.Fatalf("expected a bounded give_up to start the task, got %+v", decision)
 	}
 }
 
