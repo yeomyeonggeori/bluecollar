@@ -488,3 +488,32 @@ func TestRequestedToolsAttachOwningSkillInstructions(t *testing.T) {
 		t.Fatalf("expected the caller's decisions to stay untouched, got %+v", request.SkillDecisions)
 	}
 }
+
+func TestCapabilityFailureRecoveryHintExposesAskInput(t *testing.T) {
+	toolSet := testToolSet(append(toolcontract.KernelToolNames(), "task_add", toolcontract.AskInputToolName))
+	instructionBundle := InstructionBundle{
+		Skills:         []SkillInstruction{{Name: "internkim-flow", ToolReferences: []string{"task_add"}}},
+		SkillDecisions: []SkillSelectionDecision{{Name: "internkim-flow", Status: "selected"}},
+	}
+	observation := newFailureObservation("obs-001", "continue", "task_add", "the name matches more than one person", toolcontract.FailureInteractionRequired, toolcontract.FailureCodes.InteractionRequired, "target_resolution")
+	observation.ToolInputKey = "task_add\x00{\"participantPersonHints\":[\"샘플\"]}"
+	observation.Failure.RecoveryHints = []toolcontract.RecoveryHint{{
+		Action:    "ask_the_user_to_choose_a_candidate",
+		ToolNames: []string{toolcontract.AskInputToolName},
+	}}
+
+	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
+		toolSet,
+		instructionBundle,
+		AgentRequest{},
+		ExecutionPlan{},
+		false,
+		OutcomeContract{},
+		ToolExposureEvent{},
+		[]turnObservation{observation},
+	)
+
+	if !filteredToolSet.IsAllowed(toolcontract.AskInputToolName) {
+		t.Fatalf("expected the recovery hint to expose ask_input, got %+v", filteredToolSet.ListToolNames())
+	}
+}
