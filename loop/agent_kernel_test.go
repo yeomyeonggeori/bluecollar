@@ -200,7 +200,7 @@ func TestAgentKernelConsumeRouteSuppressesReply(t *testing.T) {
 	}
 }
 
-func TestAgentKernelRejectsExecutableConsumeContradiction(t *testing.T) {
+func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
 	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
 		Route:            TurnRouteConsume,
@@ -228,13 +228,16 @@ func TestAgentKernelRejectsExecutableConsumeContradiction(t *testing.T) {
 	request.ToolSet = toolSet
 	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
 	if errorValue != nil {
-		t.Fatalf("expected router failure result: %v", errorValue)
+		t.Fatalf("expected the repaired decision to run: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusFailed {
-		t.Fatalf("expected failed task for contradictory decision, got %q", result.TaskRun.Status)
+	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+		t.Fatalf("expected the repaired decision to complete the task, got %q", result.TaskRun.Status)
 	}
-	if toolCallCount != 0 {
-		t.Fatalf("expected no tool call after contradictory decision, got %d", toolCallCount)
+	if toolCallCount != 1 {
+		t.Fatalf("expected the requested task to be registered once, got %d calls", toolCallCount)
+	}
+	if result.ReplySuppressed {
+		t.Fatalf("expected a worked reply instead of a suppressed consume")
 	}
 }
 
