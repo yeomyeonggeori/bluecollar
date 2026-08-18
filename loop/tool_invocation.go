@@ -41,6 +41,14 @@ func (agentTurnRunner *AgentTurnRunner) recordToolObservation(taskRunID string, 
 	}
 	state.Observations = append(state.Observations, observation)
 	state.Attachments = appendObservationAttachments(state.Attachments, observation)
+	if reminder, consecutiveCount, hasReminder := toolRepeatReminderObservation(state.Observations, observation); hasReminder {
+		state.Observations = append(state.Observations, reminder)
+		agentTurnRunner.appendEvent(taskRunID, "agent.repeated_tool_call", marshalEventBody(map[string]any{
+			"observationID": observation.ObservationID,
+			"toolName":      observation.Tool,
+			"consecutive":   consecutiveCount,
+		}))
+	}
 	if observation.Failed() {
 		agentTurnRunner.appendEvent(taskRunID, "agent.failure_debt_created", marshalEventBody(activeFailureDebtEventBody(state.Observations, agentTurnRunner.options.RecoveryBudget)))
 		if recoveryAttemptCount(state.Observations) < agentTurnRunner.options.RecoveryAttemptLimit {
@@ -96,9 +104,11 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	originalContent := content
 	isError := toolResult.Failed()
 	artifactID := ""
+	spillRef := ToolResultSpillRef{}
 	if resultLimit := agentTurnRunner.toolResultLimit(); len(content) > resultLimit {
 		taskArtifact := agentTurnRunner.taskArtifactService.AddTaskArtifactBody(taskRunID, "tool."+toolName+".result", content)
 		artifactID = taskArtifact.TaskArtifactID
+		spillRef = agentTurnRunner.spillToolResult(ctx, taskRunID, observationID, toolName, workspaceRootPath, content)
 		content = withMiddleElided(content, resultLimit)
 	}
 	attachments := []toolcontract.FileAttachment{}
@@ -131,7 +141,7 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	}
 	observation.Output.Content = content
 	observation.ImageRefs = toolResultImageRefs(observationID, attachments)
-	observation.Summary = agentTurnRunner.buildToolResultSummary(ctx, taskRunID, toolName, originalContent, isError, attachments, artifactID, toolResult)
+	observation.Summary = agentTurnRunner.buildToolResultSummary(ctx, taskRunID, toolName, originalContent, isError, attachments, artifactID, spillRef, toolResult)
 	observation.ToolInputKey = toolInputKey
 	observation.DurationMS = durationMS
 	if observation.Failed() {
@@ -181,7 +191,7 @@ func recoveryActionsFromObservations(observations []turnObservation) []toolcontr
 	return recoveryActions
 }
 
-func (agentTurnRunner *AgentTurnRunner) buildToolResultSummary(ctx context.Context, taskRunID string, toolName string, content string, isError bool, attachments []toolcontract.FileAttachment, artifactID string, toolResult toolcontract.ToolResult) string {
+func (agentTurnRunner *AgentTurnRunner) buildToolResultSummary(ctx context.Context, taskRunID string, toolName string, content string, isError bool, attachments []toolcontract.FileAttachment, artifactID string, spillRef ToolResultSpillRef, toolResult toolcontract.ToolResult) string {
 	observation := turnObservation{
 		Tool:        toolName,
 		Output:      toolcontract.ToolOutput{Content: content, Data: append(json.RawMessage{}, toolResult.Output.Data...)},
@@ -191,7 +201,9 @@ func (agentTurnRunner *AgentTurnRunner) buildToolResultSummary(ctx context.Conte
 		observation.Failure = toolResult.Failure
 	}
 	summary := modelVisibleToolResultSummary(ctx, agentTurnRunner.languageModel, toolName, observation)
-	if strings.TrimSpace(artifactID) != "" {
+	if spillRef.isUsable() {
+		summary = strings.TrimSpace(summary) + " " + spilledOutputAdvice(spillRef)
+	} else if strings.TrimSpace(artifactID) != "" {
 		summary = strings.TrimSpace(summary) + " " + narrowTheOutputAdvice
 	}
 	return strings.TrimSpace(summary)

@@ -26,6 +26,7 @@ type AgentTurnRunner struct {
 	languageModel          model.LanguageModelProvider
 	languageModelTaskLevel TaskLevel
 	recoveryLanguageModel  model.LanguageModelProvider
+	toolResultSpillStore   ToolResultSpillStore
 	options                TurnOptions
 }
 
@@ -209,6 +210,10 @@ func NewAgentTurnRunnerWithRecoveryModel(taskRunService taskstate.TaskRunStore, 
 		recoveryLanguageModel:  recoveryLanguageModel,
 		options:                normalizedOptions,
 	}
+}
+
+func (agentTurnRunner *AgentTurnRunner) UseToolResultSpillStore(toolResultSpillStore ToolResultSpillStore) {
+	agentTurnRunner.toolResultSpillStore = toolResultSpillStore
 }
 
 func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID string) llmCallObserver {

@@ -61,6 +61,10 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	if estimatedTokenCount <= compactionTriggerTokenThreshold(state.Options.ContextWindowTokens) {
 		return promptObservations
 	}
+	promptObservations, estimatedTokenCount = agentTurnRunner.promptObservationsWithLongToolResultsPruned(taskRunID, state, promptObservations, pinnedObservationIDs, estimatedTokenCount)
+	if estimatedTokenCount <= compactionTriggerTokenThreshold(state.Options.ContextWindowTokens) {
+		return promptObservations
+	}
 	plan, shouldCompact := buildTaskContextCompactionPlan(state.Observations, currentSummary, pinnedObservationIDs)
 	if !shouldCompact {
 		return promptObservations
@@ -77,6 +81,24 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	summary = normalizeTaskContextSummary(summary)
 	agentTurnRunner.appendEvent(taskRunID, taskContextSummaryEventName, marshalEventBody(summary))
 	return compactedObservations
+}
+
+// A pass that does not actually shrink the prompt is discarded, so a turn never reports
+// progress it did not make and never sends a summarizer a projection it did not improve.
+func (agentTurnRunner *AgentTurnRunner) promptObservationsWithLongToolResultsPruned(taskRunID string, state agentTaskState, promptObservations []turnObservation, pinnedObservationIDs map[string]bool, estimatedTokenCount int) ([]turnObservation, int) {
+	prunedObservations, didPrune := observationsWithLongToolResultsPruned(promptObservations, pinnedObservationIDs)
+	if !didPrune {
+		return promptObservations, estimatedTokenCount
+	}
+	prunedTokenCount := estimatePromptTokenCount(BuildAgentActionRequest(withPromptObservations(state, prunedObservations)).Messages)
+	if prunedTokenCount >= estimatedTokenCount {
+		return promptObservations, estimatedTokenCount
+	}
+	agentTurnRunner.appendEvent(taskRunID, "agent.tool_results_pruned", marshalEventBody(map[string]any{
+		"estimatedTokensBefore": estimatedTokenCount,
+		"estimatedTokensAfter":  prunedTokenCount,
+	}))
+	return prunedObservations, prunedTokenCount
 }
 
 func summaryAccountingForCompactedObservations(summary TaskContextSummary, previousSummary TaskContextSummary, compactedObservations []turnObservation, plan taskContextCompactionPlan, events []taskstate.TaskEvent) TaskContextSummary {
