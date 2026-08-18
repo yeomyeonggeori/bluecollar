@@ -90,3 +90,11 @@ func toolRepeatReminderObservation(observations []turnObservation, observation t
 		toolRepeatReminderMessage(observation.Tool, observation.ToolInputKey, count),
 	), count, true
 }
+
+// The reminder reaches the model, so the ledger carries its words and not just the
+// fact that one fired: a reader replaying the record has to see what the model saw.
+type reminderEventBody struct {
+	Observation         turnObservation `json:"observation"`
+	RepeatedObservation string          `json:"repeatedObservationID"`
+	ConsecutiveCalls    int             `json:"consecutiveCalls"`
+}
