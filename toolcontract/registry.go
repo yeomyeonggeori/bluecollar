@@ -8,7 +8,9 @@ import (
 	"io"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -36,6 +38,9 @@ type ToolDescriptor struct {
 	Completion              ToolCompletion      `json:"completion,omitempty"`
 	Idempotency             string              `json:"idempotency,omitempty"`
 	IdempotencyScope        string              `json:"idempotencyScope,omitempty"`
+	// Declaring TimeoutMS promises the handler honors the invocation context: the
+	// deadline notifies through that context and never kills a handler that ignores it.
+	TimeoutMS int `json:"timeoutMS,omitempty"`
 }
 
 type ToolDefinition = ToolDescriptor
@@ -188,6 +193,7 @@ var FailureCodes = struct {
 	RateLimited         FailureCode
 	InteractionRequired FailureCode
 	ToolNameInShell     FailureCode
+	Timeout             FailureCode
 }{
 	Unavailable:         "unavailable",
 	InvalidInput:        "invalid_input",
@@ -199,6 +205,7 @@ var FailureCodes = struct {
 	RateLimited:         "rate_limited",
 	InteractionRequired: "interaction_required",
 	ToolNameInShell:     "tool_name_in_terminal",
+	Timeout:             "timeout",
 }
 
 func (failureCode FailureCode) String() string {
@@ -230,6 +237,8 @@ func CanonicalFailureCode(code FailureCode) string {
 		return FailureCodes.RateLimited.String()
 	case "blocked_by_captcha", "interaction_required":
 		return FailureCodes.InteractionRequired.String()
+	case "timeout", "deadline_exceeded":
+		return FailureCodes.Timeout.String()
 	case "":
 		return FailureCodes.OperationFailed.String()
 	default:
@@ -663,7 +672,7 @@ func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation Too
 	if reviewResult, isWithheld := toolSet.reviewToolCall(ctx, toolInvocation, boundTool.Definition); isWithheld {
 		return reviewResult, nil
 	}
-	result, errorValue := boundTool.Handler(ctx, toolInvocation)
+	result, errorValue := toolSet.invokeWithinDeclaredBudget(ctx, boundTool, toolInvocation)
 	if errorValue != nil || result.Failed() {
 		return result, errorValue
 	}
@@ -677,6 +686,33 @@ func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation Too
 		return toolResultContractFailure(errorValue.Error()), nil
 	}
 	return result, nil
+}
+
+// The deadline only notifies: a handler that ignores its context runs to completion and
+// its result stands, so only a tool that forwards the context should declare a budget.
+func (toolSet *ToolSet) invokeWithinDeclaredBudget(ctx context.Context, boundTool BoundTool, toolInvocation ToolInvocation) (ToolResult, error) {
+	timeoutMS := boundTool.Definition.TimeoutMS
+	if timeoutMS <= 0 {
+		return boundTool.Handler(ctx, toolInvocation)
+	}
+	budgetContext, releaseBudget := context.WithTimeout(ctx, time.Duration(timeoutMS)*time.Millisecond)
+	defer releaseBudget()
+	result, errorValue := boundTool.Handler(budgetContext, toolInvocation)
+	if budgetDeadlineWon(ctx, budgetContext) {
+		return toolBudgetExpiredFailure(boundTool.Definition.Name, timeoutMS), nil
+	}
+	return result, errorValue
+}
+
+func budgetDeadlineWon(callerContext context.Context, budgetContext context.Context) bool {
+	return errors.Is(budgetContext.Err(), context.DeadlineExceeded) && !errors.Is(callerContext.Err(), context.Canceled)
+}
+
+func toolBudgetExpiredFailure(toolName string, timeoutMS int) ToolResult {
+	result := ToolFailureResult(FailureExternalService, FailureCodes.Timeout, strings.TrimSpace(toolName),
+		"the tool did not finish within its "+strconv.Itoa(timeoutMS)+"ms budget")
+	result.Failure.Retryable = true
+	return result
 }
 
 func toolResultContractFailure(summary string) ToolResult {
