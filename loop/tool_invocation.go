@@ -43,10 +43,10 @@ func (agentTurnRunner *AgentTurnRunner) recordToolObservation(taskRunID string, 
 	state.Attachments = appendObservationAttachments(state.Attachments, observation)
 	if reminder, consecutiveCount, hasReminder := toolRepeatReminderObservation(state.Observations, observation); hasReminder {
 		state.Observations = append(state.Observations, reminder)
-		agentTurnRunner.appendEvent(taskRunID, "agent.repeated_tool_call", marshalEventBody(map[string]any{
-			"observationID": observation.ObservationID,
-			"toolName":      observation.Tool,
-			"consecutive":   consecutiveCount,
+		agentTurnRunner.appendEvent(taskRunID, "agent.repeated_tool_call", marshalEventBody(reminderEventBody{
+			Observation:         reminder,
+			RepeatedObservation: observation.ObservationID,
+			ConsecutiveCalls:    consecutiveCount,
 		}))
 	}
 	if observation.Failed() {
