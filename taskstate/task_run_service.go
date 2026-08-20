@@ -426,15 +426,6 @@ func advanceTaskRunFromStates() []TaskStatus {
 	}
 }
 
-func CanPauseTaskRun(status TaskStatus) bool {
-	for _, pausableStatus := range pauseTaskRunFromStates() {
-		if pausableStatus == status {
-			return true
-		}
-	}
-	return false
-}
-
 func pauseTaskRunFromStates() []TaskStatus {
 	return []TaskStatus{
 		TaskStatusPlanned,
