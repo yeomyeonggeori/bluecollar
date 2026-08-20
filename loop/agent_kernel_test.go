@@ -426,6 +426,44 @@ func TestSemanticRevisionStartsNewTaskRun(t *testing.T) {
 	}
 }
 
+func TestSemanticRevisionKeepsTheRunTheHostOpenedForThisTurn(t *testing.T) {
+	agentKernel, taskRunService := newKernelTestServices()
+	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
+		Route:            TurnRouteReviseTask,
+		Classification:   IntakeClassificationBoundedTask,
+		TaskShape:        TaskShapeMaintenanceTask,
+		TaskLevel:        TaskLevelLow,
+		InitialToolNames: []string{"task_add"},
+		ResponseLanguage: "ko",
+	}})
+	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
+		`{"action":"continue","toolName":"task_add","toolInput":{"title":"새 업무"}}`,
+		finishMessageWithEvidence("새 업무를 추가했습니다.", "obs-001", "task_add", 0),
+	}})
+	taskAddDefinition := testToolDescriptor("task_add")
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{taskAddDefinition})
+	registerTestTool(toolSet, taskAddDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return testToolSuccess(`{"taskID":"new-task"}`), nil
+	})
+	hostTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "다시 해봐")
+	request := kernelTestRequest("다시 해봐")
+	request.ToolSet = toolSet
+	request.ExistingTaskRunID = hostTaskRun.TaskRunID
+	request.IsTaskRunOpenedForThisTurn = true
+
+	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+
+	if errorValue != nil {
+		t.Fatalf("expected semantic revision to run: %v", errorValue)
+	}
+	if result.TaskRun.TaskRunID != hostTaskRun.TaskRunID {
+		t.Fatalf("a revision supersedes a prior task, and a run opened for this very turn is not one, got %q against %q", result.TaskRun.TaskRunID, hostTaskRun.TaskRunID)
+	}
+	if taskRunCount := len(taskRunService.ListTaskRun()); taskRunCount != 1 {
+		t.Fatalf("expected the turn to stay on the one run the host opened, got %d runs", taskRunCount)
+	}
+}
+
 func TestInvalidPersistedActiveGoalBlocksBeforeToolHandler(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
