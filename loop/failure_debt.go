@@ -208,11 +208,11 @@ func classifyRecoveryStep(toolSet *toolcontract.ToolSet, failureDebt FailureDebt
 	if failedToolName == recoveryToolName {
 		return recoveryStepCorrectedRetry
 	}
-	if isAlternateRouteToolPair(toolSet, failedToolName, recoveryToolName) {
-		return recoveryStepAlternateRoute
-	}
 	if evidenceToolIsReadOnly(toolSet, recoveryToolName) {
 		return recoveryStepInspection
+	}
+	if isAlternateRouteToolPair(toolSet, failedToolName, recoveryToolName) {
+		return recoveryStepAlternateRoute
 	}
 	return recoveryStepAdjacentTool
 }
