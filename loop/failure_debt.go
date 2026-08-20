@@ -4,15 +4,21 @@ import (
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
 const (
-	recoveryStepCorrectedRetry = "corrected_retry"
-	recoveryStepAlternateRoute = "alternate_route"
-	recoveryStepAdjacentTool   = "adjacent_tool"
-	recoveryStepInspection     = "inspection"
-	recoveryStepRejectedRepeat = "rejected_repeat"
+	recoveryStepCorrectedRetry  = "corrected_retry"
+	recoveryStepAlternateRoute  = "alternate_route"
+	recoveryStepAdjacentTool    = "adjacent_tool"
+	recoveryStepInspection      = "inspection"
+	recoveryStepRejectedRepeat  = "rejected_repeat"
+	recoveryStepIndependentWork = "independent_work"
+
+	recoveryTargetShared   = "shared"
+	recoveryTargetDistinct = "distinct"
+	recoveryTargetUnknown  = "unknown"
 
 	failureResolutionRecoveredWithSuccess = "recovered_with_success"
 	failureResolutionNoToolFallback       = "no_tool_fallback"
@@ -95,8 +101,14 @@ func recoveryToolBudgetTotal(budget RecoveryBudget) int {
 }
 
 func activeFailureDebt(observations []turnObservation) (FailureDebt, bool) {
+	failureDebt, _, hasFailureDebt := failureDebtWithEpisodeStart(observations)
+	return failureDebt, hasFailureDebt
+}
+
+func failureDebtWithEpisodeStart(observations []turnObservation) (FailureDebt, int, bool) {
 	var activeDebt FailureDebt
-	for _, observation := range observations {
+	episodeStartIndex := 0
+	for index, observation := range observations {
 		if observation.Action != "continue" {
 			continue
 		}
@@ -104,17 +116,28 @@ func activeFailureDebt(observations []turnObservation) (FailureDebt, bool) {
 			if failureObservationDoesNotCreateDebt(observation) {
 				continue
 			}
+			if strings.TrimSpace(activeDebt.LatestFailure.ObservationID) == "" {
+				episodeStartIndex = index
+			}
 			activeDebt = FailureDebt{LatestFailure: observation}
 			continue
 		}
 		if !observation.Failed() && strings.TrimSpace(activeDebt.LatestFailure.ObservationID) != "" {
-			if successfulObservationIsInspection(observation) {
+			if successfulObservationKeepsFailureDebt(observation) {
 				continue
 			}
 			activeDebt = FailureDebt{}
 		}
 	}
-	return activeDebt, strings.TrimSpace(activeDebt.LatestFailure.ObservationID) != ""
+	return activeDebt, episodeStartIndex, strings.TrimSpace(activeDebt.LatestFailure.ObservationID) != ""
+}
+
+func recoveryEpisodeObservations(observations []turnObservation) []turnObservation {
+	_, episodeStartIndex, hasFailureDebt := failureDebtWithEpisodeStart(observations)
+	if !hasFailureDebt {
+		return nil
+	}
+	return observations[episodeStartIndex:]
 }
 
 func failureObservationDoesNotCreateDebt(observation turnObservation) bool {
@@ -128,12 +151,8 @@ func failureObservationDoesNotCreateDebt(observation turnObservation) bool {
 }
 
 func optionalSiteControlFileToolInputKey(toolInputKey string) bool {
-	_, inputDocument, isFound := strings.Cut(toolInputKey, "\x00")
-	if !isFound {
-		return false
-	}
-	input := map[string]any{}
-	if json.Unmarshal([]byte(inputDocument), &input) != nil {
+	input := inputDocumentFromToolInputKey(toolInputKey)
+	if input == nil {
 		return false
 	}
 	normalizedPath := strings.ToLower(filepath.ToSlash(strings.TrimSpace(stringValue(input["path"]))))
@@ -148,6 +167,13 @@ func optionalSiteControlFileToolInputKey(toolInputKey string) bool {
 		}
 	}
 	return false
+}
+
+func successfulObservationKeepsFailureDebt(observation turnObservation) bool {
+	if strings.TrimSpace(observation.RecoveryStep) == recoveryStepIndependentWork {
+		return true
+	}
+	return successfulObservationIsInspection(observation)
 }
 
 func successfulObservationIsInspection(observation turnObservation) bool {
@@ -175,6 +201,9 @@ func previousNonRetryableToolFailure(observations []turnObservation, toolName st
 		return turnObservation{}, false
 	}
 	for _, observation := range observations {
+		if observation.Action == "policy" {
+			continue
+		}
 		if observation.Failure == nil || strings.TrimSpace(observation.Failure.RetryPolicy) != toolcontract.RetryPolicyDoNotRetry {
 			continue
 		}
@@ -202,7 +231,7 @@ func previousFailedToolInput(observations []turnObservation, toolName string, to
 	return turnObservation{}, false
 }
 
-func classifyRecoveryStep(toolSet *toolcontract.ToolSet, failureDebt FailureDebt, toolName string) string {
+func classifyRecoveryStep(toolSet *toolcontract.ToolSet, failureDebt FailureDebt, toolName string, toolInput json.RawMessage) string {
 	failedToolName := strings.TrimSpace(failureDebt.LatestFailure.Tool)
 	recoveryToolName := strings.TrimSpace(toolName)
 	if failedToolName == recoveryToolName {
@@ -211,10 +240,84 @@ func classifyRecoveryStep(toolSet *toolcontract.ToolSet, failureDebt FailureDebt
 	if evidenceToolIsReadOnly(toolSet, recoveryToolName) {
 		return recoveryStepInspection
 	}
+	if recoveryTargetRelation(failureDebt.LatestFailure.ToolInputKey, toolInput) == recoveryTargetDistinct {
+		return recoveryStepIndependentWork
+	}
 	if isAlternateRouteToolPair(toolSet, failedToolName, recoveryToolName) {
 		return recoveryStepAlternateRoute
 	}
 	return recoveryStepAdjacentTool
+}
+
+func recoveryStepSpendsBudget(recoveryStep string) bool {
+	switch strings.TrimSpace(recoveryStep) {
+	case recoveryStepInspection, recoveryStepIndependentWork:
+		return false
+	default:
+		return true
+	}
+}
+
+func recoveryTargetRelation(failedToolInputKey string, toolInput json.RawMessage) string {
+	failedFields := comparableInputFields(inputDocumentFromToolInputKey(failedToolInputKey))
+	candidateFields := comparableInputFields(inputDocumentFromToolInput(toolInput))
+	hasSharedField := false
+	for fieldName, failedValue := range failedFields {
+		candidateValue, isShared := candidateFields[fieldName]
+		if !isShared {
+			continue
+		}
+		if candidateValue != failedValue {
+			return recoveryTargetDistinct
+		}
+		hasSharedField = true
+	}
+	if !hasSharedField {
+		return recoveryTargetUnknown
+	}
+	return recoveryTargetShared
+}
+
+func comparableInputFields(inputDocument map[string]any) map[string]string {
+	fields := map[string]string{}
+	for fieldName, value := range inputDocument {
+		comparableValue := comparableInputValue(value)
+		if comparableValue == "" {
+			continue
+		}
+		fields[strings.TrimSpace(fieldName)] = comparableValue
+	}
+	return fields
+}
+
+func comparableInputValue(value any) string {
+	switch typedValue := value.(type) {
+	case string:
+		return strings.TrimSpace(typedValue)
+	case float64:
+		return strconv.FormatFloat(typedValue, 'f', -1, 64)
+	default:
+		return ""
+	}
+}
+
+func inputDocumentFromToolInputKey(toolInputKey string) map[string]any {
+	_, inputDocument, isFound := strings.Cut(toolInputKey, "\x00")
+	if !isFound {
+		return nil
+	}
+	return inputDocumentFromToolInput(json.RawMessage(inputDocument))
+}
+
+func inputDocumentFromToolInput(toolInput json.RawMessage) map[string]any {
+	if len(toolInput) == 0 {
+		return nil
+	}
+	inputDocument := map[string]any{}
+	if json.Unmarshal(toolInput, &inputDocument) != nil {
+		return nil
+	}
+	return inputDocument
 }
 
 func toolDefinitionForRecovery(toolSet *toolcontract.ToolSet, toolName string) (toolcontract.ToolDefinition, bool) {
@@ -249,7 +352,7 @@ func recoveryBudgetAllowsStep(observations []turnObservation, budget RecoveryBud
 		return recoveryStepUseCount(observations, recoveryStepAlternateRoute) < budget.AlternateRoute
 	case recoveryStepAdjacentTool:
 		return recoveryStepUseCount(observations, recoveryStepAdjacentTool) < budget.AdjacentTool
-	case recoveryStepInspection:
+	case recoveryStepInspection, recoveryStepIndependentWork:
 		return true
 	default:
 		return false
@@ -258,7 +361,7 @@ func recoveryBudgetAllowsStep(observations []turnObservation, budget RecoveryBud
 
 func recoveryStepUseCount(observations []turnObservation, recoveryStep string) int {
 	count := 0
-	for _, observation := range observations {
+	for _, observation := range recoveryEpisodeObservations(observations) {
 		if observation.RecoveryAttemptSpent && strings.TrimSpace(observation.RecoveryStep) == recoveryStep {
 			count++
 		}
@@ -284,14 +387,15 @@ func repeatedFailedAttemptObservation(toolSet *toolcontract.ToolSet, index int, 
 	return observation
 }
 
-func recoveryBudgetExhaustedObservation(toolSet *toolcontract.ToolSet, index int, failedObservation turnObservation, recoveryStep string, originalInstruction string) turnObservation {
+func recoveryBudgetExhaustedObservation(toolSet *toolcontract.ToolSet, index int, failedObservation turnObservation, recoveryStep string, refusedToolName string, originalInstruction string) turnObservation {
 	content := "The recovery budget for " + strings.TrimSpace(recoveryStep) + " is exhausted. Choose another recovery step, answer without tools using failureResolution=no_tool_fallback if enough context exists, or return fail if no recovery tool budget remains."
 	observation := recoveryGuidanceObservation(toolSet, index, failedObservation, originalInstruction)
 	observation.Action = "policy"
 	observation = withObservationContent(observation, content+" "+observation.ContentText())
 	observation.Summary = observation.ContentText()
+	observation.Tool = firstNonEmptyString(strings.TrimSpace(refusedToolName), observation.Tool)
 	observation.RecoveryStep = strings.TrimSpace(recoveryStep)
-	observation.RecoveryAttemptSpent = true
+	observation.RecoveryAttemptSpent = false
 	observation.PolicyCode = "recovery_budget_exhausted"
 	return observation
 }

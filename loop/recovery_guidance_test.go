@@ -129,3 +129,135 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 		t.Fatal("expected precondition recovery event")
 	}
 }
+
+type calendarCallRecording struct {
+	deleteCallCount int
+	updateCallCount int
+}
+
+func newCalendarRecoveryToolRegistry(recording *calendarCallRecording) *toolcontract.ToolSet {
+	deleteDefinition := namespacedToolDefinition("calendar_delete", "calendar", toolcontract.ToolSideEffectStateChange)
+	updateDefinition := namespacedToolDefinition("calendar_update", "calendar", toolcontract.ToolSideEffectStateChange)
+	listDefinition := namespacedToolDefinition("calendar_list", "calendar", toolcontract.ToolSideEffectRead)
+	toolRegistry := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{deleteDefinition, updateDefinition, listDefinition})
+	registerTestTool(toolRegistry, deleteDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		recording.deleteCallCount++
+		return structuredFailureToolResult("일정을 찾지 못했습니다", "일정을 찾지 못했습니다", toolcontract.FailureCodes.NotFound.String(), "calendar_lookup", false, false), nil
+	})
+	registerTestTool(toolRegistry, updateDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		recording.updateCallCount++
+		return testToolSuccess(`{"eventID":"event-2"}`), nil
+	})
+	return toolRegistry
+}
+
+func calendarDeleteFailureReportDocument() string {
+	return failureReportDocument(
+		"지난 워크숍 회고 일정을 찾지 못해 삭제하지 못했습니다.",
+		"calendar_delete",
+		"지난 워크숍 회고",
+		toolcontract.FailureCodes.NotFound.String(),
+		"calendar_lookup",
+		"일정을 찾지 못했습니다",
+	)
+}
+
+func twoRequestCalendarLanguageModel(secondRequestEventHint string) *sequenceLanguageModel {
+	return &sequenceLanguageModel{contents: []string{
+		`{"action":"continue","toolName":"calendar_delete","toolInput":{"eventHint":"지난 워크숍 회고"}}`,
+		`{"action":"continue","toolName":"calendar_update","toolInput":{"eventHint":"` + secondRequestEventHint + `","people":["이샘플","박예시"]}}`,
+		calendarDeleteFailureReportDocument(),
+	}}
+}
+
+func runTwoRequestCalendarTurn(t *testing.T, languageModel *sequenceLanguageModel, options TurnOptions) (turnRunnerTestServices, AgentTurnResult, *calendarCallRecording) {
+	t.Helper()
+	recording := &calendarCallRecording{}
+	services := newTurnRunnerTestServices(languageModel, options)
+	toolRegistry := newCalendarRecoveryToolRegistry(recording)
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "지난 워크숍 회고 일정은 지우고, 상하이 생산 미팅에는 이샘플 님을 넣어줘",
+		ToolSet:           toolRegistry,
+		PinnedToolNames:   toolRegistry.ListToolNames(),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the turn to finish: %v", errorValue)
+	}
+	return services, result, recording
+}
+
+func TestWorkOnADifferentEventRunsEvenWhenTheRecoveryBudgetIsGone(t *testing.T) {
+	services, result, recording := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅"), TurnOptions{
+		MaxIterationCount: 8,
+		MaxToolCallCount:  6,
+		RecoveryBudget:    terminalNoToolRecoveryBudgetForTest(),
+	})
+
+	if recording.updateCallCount != 1 {
+		t.Fatalf("expected the second request to run once despite the failed delete's exhausted budget, got %d calls", recording.updateCallCount)
+	}
+	if countTaskEvents(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.recovery_budget_exhausted") != 0 {
+		t.Fatal("work on another event must never be refused by the failed call's recovery budget")
+	}
+}
+
+func TestTheSecondRequestInOneMessageRunsAfterTheFirstOneFails(t *testing.T) {
+	services, result, recording := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅"), TurnOptions{
+		MaxIterationCount: 8,
+		MaxToolCallCount:  6,
+		RecoveryBudget:    defaultRecoveryBudget(),
+	})
+
+	if recording.updateCallCount != 1 {
+		t.Fatalf("expected the second request to run exactly once, got %d calls", recording.updateCallCount)
+	}
+	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
+	if countTaskEvents(taskEvents, "agent.recovery_budget_exhausted") != 0 {
+		t.Fatal("the second request must not be refused")
+	}
+	if taskEventsContain(taskEvents, "task.paused", "max_iterations") {
+		t.Fatal("a two-item request must not thrash until the iteration ceiling")
+	}
+}
+
+func TestTheAgentStillReportsTheDeleteItCouldNotDo(t *testing.T) {
+	services, result, _ := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅"), TurnOptions{
+		MaxIterationCount: 8,
+		MaxToolCallCount:  6,
+		RecoveryBudget:    defaultRecoveryBudget(),
+	})
+
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.failure_report_facts_used", "calendar_delete") {
+		t.Fatal("finishing the second request must not settle the first request's failure in silence")
+	}
+}
+
+func runRefusedSameEventCalendarTurn(t *testing.T) (turnRunnerTestServices, AgentTurnResult, *calendarCallRecording) {
+	t.Helper()
+	return runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("지난 워크숍 회고"), TurnOptions{
+		MaxIterationCount: 8,
+		MaxToolCallCount:  6,
+		RecoveryBudget:    terminalNoToolRecoveryBudgetForTest(),
+	})
+}
+
+func TestRepeatedAttemptsAtTheSameFailedTargetStillRunOutOfBudget(t *testing.T) {
+	services, result, recording := runRefusedSameEventCalendarTurn(t)
+
+	if recording.updateCallCount != 0 {
+		t.Fatalf("another route to the event that just failed stays rationed, got %d calls", recording.updateCallCount)
+	}
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.recovery_budget_exhausted", recoveryStepAlternateRoute) {
+		t.Fatal("expected the alternate route to the same event to be refused")
+	}
+}
+
+func TestTheRefusalNamesTheToolItRefused(t *testing.T) {
+	services, result, _ := runRefusedSameEventCalendarTurn(t)
+
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.recovery_budget_exhausted", `"tool":"calendar_update"`) {
+		t.Fatal("the refusal must name the call it refused, not the call that failed")
+	}
+}

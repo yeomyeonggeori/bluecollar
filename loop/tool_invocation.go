@@ -28,7 +28,7 @@ func earlierObservationWithIdenticalOutput(observations []turnObservation, obser
 func (agentTurnRunner *AgentTurnRunner) recordToolObservation(taskRunID string, state *agentTaskState, actionDocument turnActionDocument, successfulToolCalls map[string]turnObservation, observation turnObservation, recoveryStep string) {
 	if recoveryStep != "" {
 		observation.RecoveryStep = recoveryStep
-		observation.RecoveryAttemptSpent = recoveryStep != recoveryStepInspection
+		observation.RecoveryAttemptSpent = recoveryStepSpendsBudget(recoveryStep)
 		observation.RecoveryAttemptKey = canonicalToolCallKey(actionDocument.ToolName, actionDocument.ToolInput)
 	}
 	observation.RepeatsObservationID = earlierObservationWithIdenticalOutput(state.Observations, observation)
