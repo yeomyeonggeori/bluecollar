@@ -226,12 +226,8 @@ type terminalObservationInputDocument struct {
 }
 
 func terminalObservationInput(toolInputKey string) terminalObservationInputDocument {
-	parts := strings.SplitN(toolInputKey, "\x00", 2)
-	if len(parts) != 2 {
-		return terminalObservationInputDocument{}
-	}
-	var document map[string]any
-	if json.Unmarshal([]byte(parts[1]), &document) != nil {
+	document := inputDocumentFromToolInputKey(toolInputKey)
+	if document == nil {
 		return terminalObservationInputDocument{}
 	}
 	return terminalObservationInputDocument{

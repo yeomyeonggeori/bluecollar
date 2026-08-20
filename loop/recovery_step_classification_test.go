@@ -25,7 +25,7 @@ func failureDebtForTool(toolName string) FailureDebt {
 }
 
 func TestLookingUpTheTargetOfAFailedMutationCountsAsInspection(t *testing.T) {
-	recoveryStep := classifyRecoveryStep(calendarRecoveryToolSet(), failureDebtForTool("calendar_delete"), "calendar_list")
+	recoveryStep := classifyRecoveryStep(calendarRecoveryToolSet(), failureDebtForTool("calendar_delete"), "calendar_list", nil)
 	if recoveryStep != recoveryStepInspection {
 		t.Fatalf("a read-only lookup after a failed mutation is inspection, got %q", recoveryStep)
 	}
@@ -43,14 +43,14 @@ func TestInspectionAfterAFailedMutationIsNotRationed(t *testing.T) {
 }
 
 func TestAnotherMutationInTheSameNamespaceIsStillAnAlternateRoute(t *testing.T) {
-	recoveryStep := classifyRecoveryStep(calendarRecoveryToolSet(), failureDebtForTool("calendar_delete"), "calendar_update")
+	recoveryStep := classifyRecoveryStep(calendarRecoveryToolSet(), failureDebtForTool("calendar_delete"), "calendar_update", nil)
 	if recoveryStep != recoveryStepAlternateRoute {
 		t.Fatalf("a sibling mutation is an alternate route, got %q", recoveryStep)
 	}
 }
 
 func TestRetryingTheSameToolIsStillACorrectedRetry(t *testing.T) {
-	recoveryStep := classifyRecoveryStep(calendarRecoveryToolSet(), failureDebtForTool("calendar_list"), "calendar_list")
+	recoveryStep := classifyRecoveryStep(calendarRecoveryToolSet(), failureDebtForTool("calendar_list"), "calendar_list", nil)
 	if recoveryStep != recoveryStepCorrectedRetry {
 		t.Fatalf("the same tool again is a corrected retry, got %q", recoveryStep)
 	}
