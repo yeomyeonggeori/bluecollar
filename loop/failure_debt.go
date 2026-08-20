@@ -16,10 +16,6 @@ const (
 	recoveryStepRejectedRepeat  = "rejected_repeat"
 	recoveryStepIndependentWork = "independent_work"
 
-	recoveryTargetShared   = "shared"
-	recoveryTargetDistinct = "distinct"
-	recoveryTargetUnknown  = "unknown"
-
 	failureResolutionRecoveredWithSuccess = "recovered_with_success"
 	failureResolutionNoToolFallback       = "no_tool_fallback"
 	failureResolutionFailureReport        = "failure_report"
@@ -240,7 +236,7 @@ func classifyRecoveryStep(toolSet *toolcontract.ToolSet, failureDebt FailureDebt
 	if evidenceToolIsReadOnly(toolSet, recoveryToolName) {
 		return recoveryStepInspection
 	}
-	if recoveryTargetRelation(failureDebt.LatestFailure.ToolInputKey, toolInput) == recoveryTargetDistinct {
+	if hasDistinctTarget(failureDebt.LatestFailure.ToolInputKey, toolInput) {
 		return recoveryStepIndependentWork
 	}
 	if isAlternateRouteToolPair(toolSet, failedToolName, recoveryToolName) {
@@ -258,24 +254,16 @@ func recoveryStepSpendsBudget(recoveryStep string) bool {
 	}
 }
 
-func recoveryTargetRelation(failedToolInputKey string, toolInput json.RawMessage) string {
+func hasDistinctTarget(failedToolInputKey string, toolInput json.RawMessage) bool {
 	failedFields := comparableInputFields(inputDocumentFromToolInputKey(failedToolInputKey))
 	candidateFields := comparableInputFields(inputDocumentFromToolInput(toolInput))
-	hasSharedField := false
 	for fieldName, failedValue := range failedFields {
 		candidateValue, isShared := candidateFields[fieldName]
-		if !isShared {
-			continue
+		if isShared && candidateValue != failedValue {
+			return true
 		}
-		if candidateValue != failedValue {
-			return recoveryTargetDistinct
-		}
-		hasSharedField = true
 	}
-	if !hasSharedField {
-		return recoveryTargetUnknown
-	}
-	return recoveryTargetShared
+	return false
 }
 
 func comparableInputFields(inputDocument map[string]any) map[string]string {
