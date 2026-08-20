@@ -128,6 +128,7 @@ func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request
 		IsApprovalContinuation:     request.IsApprovalContinuation,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
 		ExistingTaskRunID:          request.ExistingTaskRunID,
+		IsTaskRunOpenedForThisTurn: request.IsTaskRunOpenedForThisTurn,
 		OriginReplyTargetID:        request.OriginReplyTargetID,
 		OriginIsThread:             request.OriginIsThread,
 		ProfileName:                request.ProfileName,
@@ -249,12 +250,14 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	}
 	lifecycleMode := taskLifecycleModeForRequest(turnDecision, request)
 	if lifecycleMode == taskLifecycleSemanticRevision {
-		request.ExistingTaskRunID = ""
-		request.IsRuntimeRestartResume = false
 		request.ActiveGoal = ActiveGoal{}
-		intakeRequest.ExistingTaskRunID = ""
-		intakeRequest.IsRuntimeRestartResume = false
 		intakeRequest.ActiveGoal = ActiveGoal{}
+		if !request.IsTaskRunOpenedForThisTurn {
+			request.ExistingTaskRunID = ""
+			request.IsRuntimeRestartResume = false
+			intakeRequest.ExistingTaskRunID = ""
+			intakeRequest.IsRuntimeRestartResume = false
+		}
 	}
 	startsNewSemanticRun := lifecycleMode == taskLifecycleFresh || lifecycleMode == taskLifecycleSemanticRevision
 	request.PinnedToolNames = appendUniqueStrings(append([]string{}, request.PinnedToolNames...), intakeDecision.InitialToolNames...)

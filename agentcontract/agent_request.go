@@ -19,6 +19,7 @@ type AgentRequest struct {
 	IsApprovalContinuation     bool
 	IsRuntimeRestartResume     bool
 	ExistingTaskRunID          string
+	IsTaskRunOpenedForThisTurn bool
 	OriginReplyTargetID        string
 	OriginIsThread             bool
 	ProfileName                string
@@ -113,6 +114,7 @@ type AgentTurnRequest struct {
 	IsApprovalContinuation       bool
 	IsRuntimeRestartResume       bool
 	ExistingTaskRunID            string
+	IsTaskRunOpenedForThisTurn   bool
 	OriginReplyTargetID          string
 	OriginIsThread               bool
 	Platform                     string
