@@ -49,7 +49,6 @@ type AgentRequest struct {
 	PrecomputedTurnDecision    *TurnDecision
 	IsPrecomputedDecisionExact bool
 	SkipSkillSelection         bool
-	AmbientDuty                AmbientDutyContext
 	TaskLevel                  TaskLevel
 	TurnStartedAt              time.Time
 	CarriedOutCalls            []CarriedOutCall
@@ -158,7 +157,6 @@ type AgentTurnRequest struct {
 	PrecomputedTurnDecision      *TurnDecision
 	IsPrecomputedDecisionExact   bool
 	SkipSkillSelection           bool
-	AmbientDuty                  AmbientDutyContext
 	TaskShape                    TaskShape
 	TaskLevel                    TaskLevel
 	TurnStartedAt                time.Time

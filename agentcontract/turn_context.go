@@ -52,6 +52,9 @@ func (context AmbientDutyContext) Normalized() AmbientDutyContext {
 	if !context.IsMatch || name == "" {
 		return AmbientDutyContext{}
 	}
+	if _, isKnownDuty := StandingDutyByName(name); !isKnownDuty {
+		return AmbientDutyContext{}
+	}
 	confidence := context.Confidence
 	if confidence < 0 {
 		confidence = 0
