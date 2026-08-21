@@ -38,6 +38,7 @@ func buildAgentSystemInstruction(request AgentTurnRequest) string {
 	instruction += "\n\nFailure recovery: If a tool call fails, it creates FailureDebt. Do not give up after one failed attempt. Do not finish until every failure is resolved, recovered, or reported: a finish that ignores an unresolved failure is wrong even when the rest of the work succeeded."
 	if len(request.RequiredAttachmentSuffixes) > 0 {
 		instruction += "\n\nRequired artifacts: This task requires attached artifacts with these filename suffixes before finish: " + strings.Join(request.RequiredAttachmentSuffixes, ", ") + "."
+		instruction += " The artifact must contain the real content, never placeholders or stand-in text marking where content you could not obtain belongs. An artifact that describes its content instead of carrying it is worse than none, so keep working to obtain the content; if it truly is not reachable, say so in your reply and name what is missing rather than attaching a file that reads as complete."
 	}
 	if hostInstruction := strings.TrimSpace(request.HostInstruction); hostInstruction != "" {
 		instruction += "\n\n" + hostInstruction
