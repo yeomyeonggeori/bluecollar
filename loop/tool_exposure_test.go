@@ -517,3 +517,48 @@ func TestCapabilityFailureRecoveryHintExposesAskInput(t *testing.T) {
 		t.Fatalf("expected the recovery hint to expose ask_input, got %+v", filteredToolSet.ListToolNames())
 	}
 }
+
+func TestRegisteredToolNameCeilingSurvivesSkillReexposure(t *testing.T) {
+	fullToolSet := testToolSet(append(toolcontract.KernelToolNames(), "message_send", "calendar_add", "calendar_list"))
+	ceilingToolSet := fullToolSet.WithRegisteredToolNamesLimitedTo([]string{"calendar_add", "calendar_list", "conversation_history"})
+	instructionBundle := InstructionBundle{
+		Skills: []SkillInstruction{
+			{Name: "mattermost", ToolReferences: []string{"message_send"}},
+			{Name: "calendar", ToolReferences: []string{"calendar_add", "calendar_list"}},
+		},
+		SkillDecisions: []SkillSelectionDecision{
+			{Name: "mattermost", Status: "selected"},
+			{Name: "calendar", Status: "selected"},
+		},
+	}
+
+	filteredToolSet, event := toolSetForAgentTurnWithExposure(ceilingToolSet, instructionBundle, AgentRequest{}, ExecutionPlan{}, false, OutcomeContract{}, ToolExposureEvent{})
+
+	for _, toolName := range []string{"message_send", toolcontract.TerminalRunToolName, toolcontract.FileWriteToolName} {
+		if filteredToolSet.IsAllowed(toolName) {
+			t.Fatalf("expected %s to stay outside the ceiling, got %+v", toolName, filteredToolSet.ListToolNames())
+		}
+		if stringSliceContains(event.ExposedToolIDs, toolName) {
+			t.Fatalf("expected %s to stay unexposed, got %+v", toolName, event.ExposedToolIDs)
+		}
+	}
+	if !filteredToolSet.IsAllowed("calendar_add") {
+		t.Fatalf("expected the ceiling tools to stay callable, got %+v", filteredToolSet.ListToolNames())
+	}
+}
+
+func TestRegisteredToolNameCeilingBlocksToolAcquisition(t *testing.T) {
+	fullToolSet := testToolSet(append(toolcontract.KernelToolNames(), "message_send", "calendar_add"))
+	ceilingToolSet := fullToolSet.WithRegisteredToolNamesLimitedTo([]string{"calendar_add"})
+
+	if ceilingToolSet.IsRegistered("message_send") {
+		t.Fatalf("expected message_send to be unregistered so request_tools cannot acquire it")
+	}
+	if ceilingToolSet.CanExpose("message_send") {
+		t.Fatalf("expected message_send to be unexposable under the ceiling")
+	}
+	widenedToolSet := ceilingToolSet.WithAdditionalAllowedToolNames([]string{"message_send"})
+	if widenedToolSet.IsAllowed("message_send") {
+		t.Fatalf("expected pinning to be unable to widen past the ceiling")
+	}
+}

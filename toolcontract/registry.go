@@ -627,6 +627,23 @@ func (toolSet *ToolSet) WithAllowedToolNames(toolNames []string) *ToolSet {
 	return filteredToolSet
 }
 
+func (toolSet *ToolSet) WithRegisteredToolNamesLimitedTo(toolNames []string) *ToolSet {
+	if toolSet == nil {
+		return nil
+	}
+	limitedToolSet := NewToolSet(toolNames)
+	for toolName, boundTool := range toolSet.boundToolByName {
+		if !limitedToolSet.allowedToolNameByName[toolName] {
+			continue
+		}
+		limitedToolSet.boundToolByName[toolName] = boundTool
+		limitedToolSet.boundToolNameByID[boundTool.Definition.ID] = toolName
+	}
+	limitedToolSet.quarantinedProviders = append([]QuarantinedToolProvider{}, toolSet.quarantinedProviders...)
+	limitedToolSet.toolCallGate = toolSet.toolCallGate
+	return limitedToolSet
+}
+
 func (toolSet *ToolSet) QuarantinedProviders() []QuarantinedToolProvider {
 	if toolSet == nil {
 		return nil

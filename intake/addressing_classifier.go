@@ -40,16 +40,6 @@ func normalizeAddressingReactionEmoji(name string) string {
 	return ""
 }
 
-type StandingDutySeed struct {
-	Name        string
-	Description string
-}
-
-var AddressingStandingDutySeeds = []StandingDutySeed{
-	{Name: "calendar_upkeep", Description: "a specific meeting, deadline, or scheduled event that should be created or updated as a calendar event right now"},
-	{Name: "team_flow_update", Description: "a specific work task assigned to a person that should be added, or whose status or details should be updated or completed right now"},
-}
-
 func (classifier *Classifier) ClassifyAddressing(ctx context.Context, request agentcontract.AddressingClassificationRequest) (agentcontract.AddressingDecision, error) {
 	languageModel := classifier.languageModel
 	if languageModel == nil {
@@ -110,7 +100,7 @@ func addressingClassificationPrompt(request agentcontract.AddressingClassificati
 		"Set dutyMatch=true only when the latest message specifies a concrete task or calendar item that should be added, updated, or completed right now, with enough detail to act such as a named assignee, a clear deliverable, or a date, even when it is not addressed to the assistant. Do not set dutyMatch for vague mentions, opinions, questions, hypotheticals, or chit-chat. Set dutyName to the exact standing duty name or empty string, and dutyConfidence 0 to 1.",
 		"Standing duties:",
 	}
-	for _, duty := range AddressingStandingDutySeeds {
+	for _, duty := range agentcontract.StandingDuties() {
 		lines = append(lines, "- "+duty.Name+": "+duty.Description)
 	}
 	lines = append(lines,
