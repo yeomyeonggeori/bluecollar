@@ -38,25 +38,16 @@ func StandingDutyByName(dutyName string) (StandingDuty, bool) {
 	return StandingDuty{}, false
 }
 
-const (
-	ambientDutyContextHeading   = "Ambient duty context"
-	ambientDutyNotAddressed     = "This message is not addressed to you and no one asked you for anything."
-	ambientDutyNoReplyDirective = "Never send a text reply, a message, a reaction, or any other visible response about it."
-)
+const ambientDutyContextHeading = "Ambient duty context"
 
 func AmbientDutyInstructionPrompt(duty StandingDuty, overheardMessage string, senderName string) string {
-	lines := []string{
+	return strings.Join([]string{
 		ambientDutyContextHeading + " (" + duty.Name + ")",
-		ambientDutyNotAddressed,
-		ambientDutyNoReplyDirective,
-		"Your only job is the standing duty below. It is normal for an overheard message to need nothing at all.",
-		"",
-		"Standing duty: " + duty.Instruction,
+		duty.Instruction,
 		"",
 		ambientDutyOverheardHeading(senderName),
 		strings.TrimSpace(overheardMessage),
-	}
-	return strings.Join(lines, "\n")
+	}, "\n")
 }
 
 func ambientDutyOverheardHeading(senderName string) string {
@@ -65,4 +56,15 @@ func ambientDutyOverheardHeading(senderName string) string {
 		return "Overheard message:"
 	}
 	return "Overheard message from " + trimmedSenderName + ":"
+}
+
+func AmbientDutyTurnDecision(duty StandingDuty, responseLanguage string) TurnDecision {
+	return TurnDecision{
+		Route:            TurnRouteStartTask,
+		Classification:   IntakeClassificationBoundedTask,
+		TaskShape:        TaskShapeMaintenanceTask,
+		TaskLevel:        TaskLevelLow,
+		ResponseLanguage: responseLanguage,
+		Reason:           "ambient_duty_" + duty.Name,
+	}
 }
