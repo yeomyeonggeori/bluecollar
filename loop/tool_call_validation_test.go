@@ -893,3 +893,35 @@ func TestALongEditResultStillSaysWhichFileItChanged(t *testing.T) {
 		t.Fatalf("the edit is invisible, so the read cache will hand the model the file as it was before its own edit: %v", paths)
 	}
 }
+
+func TestATerminalCommandThatIsActuallyAToolNameIsRefusedBeforeTheShellRuns(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName, "get_weather"})
+
+	validationError, failureCode := malformedToolInputError(turnActionDocument{
+		ToolName:  toolcontract.TerminalRunToolName,
+		ToolInput: json.RawMessage(`{"command":"get_weather Seoul"}`),
+	}, toolSet)
+
+	if validationError == nil {
+		t.Fatal("a registered tool name typed into the shell is a call the model meant to make directly, and running it wastes a step on a guaranteed 127")
+	}
+	if failureCode != toolcontract.FailureCodes.ToolNameInShell {
+		t.Fatalf("expected the refusal to name what went wrong, got %q", failureCode)
+	}
+	if !strings.Contains(validationError.Error(), "get_weather") {
+		t.Fatalf("expected the model to be told which word was a tool name, got %q", validationError.Error())
+	}
+}
+
+func TestAShellCommandThatMerelyResemblesAToolNameStillRuns(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName, "get_weather"})
+
+	validationError, _ := malformedToolInputError(turnActionDocument{
+		ToolName:  toolcontract.TerminalRunToolName,
+		ToolInput: json.RawMessage(`{"command":"cd /app && python convert.py"}`),
+	}, toolSet)
+
+	if validationError != nil {
+		t.Fatalf("an ordinary command must reach the shell, got %v", validationError)
+	}
+}

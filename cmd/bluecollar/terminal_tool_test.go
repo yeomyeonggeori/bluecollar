@@ -161,17 +161,18 @@ func TestAClassifierThatAlreadyWantsToStartIsLeftAlone(t *testing.T) {
 	}
 }
 
-func TestAToolNameSentAsAShellCommandComesBackAsAFailureRatherThanASuccess(t *testing.T) {
-	result := invokeTerminalRun(t, t.TempDir(), `{"command":"get_weather"}`)
+func TestAMissingCommandIsNamedByTheShellRatherThanGuessedFromTheFirstWord(t *testing.T) {
+	result := invokeTerminalRun(t, t.TempDir(), `{"command":"cd . \u0026\u0026 definitely-not-installed --version"}`)
 
-	if !result.Failed() {
-		t.Fatal("a command the shell cannot find is not work done, and reading it as success burns the iteration budget on nothing")
+	output := decodedOutput(t, result)
+	if output.ExitCode != 127 {
+		t.Fatalf("expected the shell's own exit code, got %+v", output)
 	}
-	if result.FailureCode() != toolcontract.FailureCodes.ToolNameInShell.String() {
-		t.Fatalf("expected the failure to name what went wrong, got %q", result.FailureCode())
+	if !strings.Contains(output.Output, "definitely-not-installed") {
+		t.Fatalf("the shell said which command was missing and the model has to see it, got %q", output.Output)
 	}
-	if !strings.Contains(result.UserSafeFailureSummary(), "get_weather") {
-		t.Fatalf("expected the agent to be told which word was not a command, got %q", result.UserSafeFailureSummary())
+	if strings.Contains(output.Output, "could not find cd") {
+		t.Fatalf("cd is a builtin that cannot be missing; blaming the first word sends the model after the wrong thing, got %q", output.Output)
 	}
 }
 
