@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
@@ -108,5 +109,34 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 	})
 	if len(services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)) != 0 {
 		t.Fatal("the call that was held, carried back under its own token, spends it")
+	}
+}
+
+func TestACrashedToolLeavesItsStackInTheLedgerAndNotInTheTurn(t *testing.T) {
+	services := newTurnRunnerTestServices(&sequenceLanguageModel{modelTier: "xlow", contents: []string{finishMessageDocument("done")}},
+		TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "read the file")
+	toolSet := toolcontract.NewToolSet([]string{"crashing_tool"})
+	toolSet.AllowTestReplacement()
+	toolSet.RegisterBoundTool(toolcontract.BoundTool{
+		Definition:   testToolDescriptor("crashing_tool"),
+		Availability: toolcontract.ToolAvailability{Status: toolcontract.ToolAvailabilityAvailable},
+		Handler: func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+			var missingDefinition *toolcontract.ToolDefinition
+			return toolcontract.ToolSuccess(missingDefinition.Name), nil
+		},
+	})
+
+	observation := services.runner.invokeTool(context.Background(), toolSet, taskRun.TaskRunID, "obs-1", "crashing_tool",
+		json.RawMessage(`{}`), "", time.Time{}, "ko", "")
+
+	if !observation.Failed() {
+		t.Fatalf("a crashed tool is a failed call: %+v", observation)
+	}
+	if strings.Contains(observation.ContentText(), "goroutine") || strings.Contains(observation.Summary, "goroutine") {
+		t.Fatalf("a stack in front of the model is context spent on something it cannot act on: %q", observation.ContentText())
+	}
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "tool.crashed", "goroutine") {
+		t.Fatal("recovering the panic took away the goroutine dump the crash used to print; without it in the ledger, whoever has to fix that tool has one sentence")
 	}
 }

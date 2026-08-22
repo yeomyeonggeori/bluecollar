@@ -86,6 +86,7 @@ func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegi
 	if errorValue != nil {
 		toolResult = toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, trimmedToolName, errorValue.Error())
 	}
+	agentTurnRunner.recordToolCrash(taskRunID, observationID, trimmedToolName, toolResult)
 	observation := agentTurnRunner.saveToolObservation(ctx, taskRunID, observationID, trimmedToolName, toolDefinition.ID, toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolResult, !toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition), workspaceRootPath, minimumModifiedAt, time.Since(invocationStartedAt).Milliseconds())
 	return observation
 }
@@ -335,6 +336,21 @@ func toolResultImageRefs(observationID string, attachments []toolcontract.FileAt
 		})
 	}
 	return imageRefs
+}
+
+// Before this, a panicking tool printed a full goroutine dump and took the process
+// with it. Recovering kept the task alive and left whoever has to fix that tool with
+// one sentence, so the stack goes where it is useful and nowhere else.
+func (agentTurnRunner *AgentTurnRunner) recordToolCrash(taskRunID string, observationID string, toolName string, toolResult toolcontract.ToolResult) {
+	if toolResult.Failure == nil || strings.TrimSpace(toolResult.Failure.CrashStack) == "" {
+		return
+	}
+	agentTurnRunner.appendEvent(taskRunID, "tool.crashed", marshalEventBody(map[string]any{
+		"observationID": observationID,
+		"toolName":      strings.TrimSpace(toolName),
+		"reason":        toolResult.Failure.UserSafeSummary,
+		"stack":         toolResult.Failure.CrashStack,
+	}))
 }
 
 func isApprovalRequiredObservation(observation turnObservation) bool {
