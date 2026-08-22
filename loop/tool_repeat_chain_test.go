@@ -102,3 +102,39 @@ func TestALongInputIsQuotedShortButComparedWhole(t *testing.T) {
 		t.Fatalf("an agent reading a shortened input needs to know it was shortened, got %q", reminder.ContentText())
 	}
 }
+
+func toolSetDeclaringPlanUpdateWithoutSideEffect(t *testing.T) *toolcontract.ToolSet {
+	t.Helper()
+	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		{Name: toolcontract.PlanUpdateToolName, SideEffectClass: toolcontract.ToolSideEffectNone, Visibility: toolcontract.ToolVisibilityModel},
+		{Name: toolcontract.TerminalRunToolName, SideEffectClass: toolcontract.ToolSideEffectStateChange, Visibility: toolcontract.ToolVisibilityModel},
+	})
+}
+
+func TestAPlanResubmittedAcrossRealWorkStillChangedNothing(t *testing.T) {
+	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
+	observations := []turnObservation{
+		callObservation("obs-1", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}"),
+		callObservation("obs-2", toolcontract.TerminalRunToolName, "terminal_run\x00{\"command\":\"ls\"}"),
+	}
+	repeated := callObservation("obs-3", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}")
+	repeated.RepeatsObservationID = "obs-1"
+
+	reminder, hasReminder := unchangedResultReminderObservation(toolSet, observations, repeated)
+	if !hasReminder {
+		t.Fatal("doing work between two identical plans does not make the second plan a change, and nothing else in the loop tells the agent")
+	}
+	if !strings.Contains(reminder.Output.Content, "obs-1") {
+		t.Fatalf("the reminder has to name the earlier result it matched, got %q", reminder.Output.Content)
+	}
+}
+
+func TestARepeatedResultFromAToolThatDoesSomethingIsNotANoOp(t *testing.T) {
+	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
+	repeated := callObservation("obs-3", toolcontract.TerminalRunToolName, "terminal_run\x00{\"command\":\"ls\"}")
+	repeated.RepeatsObservationID = "obs-1"
+
+	if _, hasReminder := unchangedResultReminderObservation(toolSet, nil, repeated); hasReminder {
+		t.Fatal("a command that prints the same thing twice may have changed the machine both times")
+	}
+}

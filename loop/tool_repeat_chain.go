@@ -96,5 +96,35 @@ func toolRepeatReminderObservation(observations []turnObservation, observation t
 type reminderEventBody struct {
 	Observation         turnObservation `json:"observation"`
 	RepeatedObservation string          `json:"repeatedObservationID"`
-	ConsecutiveCalls    int             `json:"consecutiveCalls"`
+	ConsecutiveCalls    int             `json:"consecutiveCalls,omitempty"`
+}
+
+// A tool that declares no side effect produces nothing but its own result, so a result
+// identical to an earlier one means the call changed nothing. That holds however much
+// work happened in between, which is why this does not go through the consecutive chain.
+func unchangedResultReminderObservation(toolSet *toolcontract.ToolSet, observations []turnObservation, observation turnObservation) (turnObservation, bool) {
+	if observation.RepeatsObservationID == "" || !toolChangesNothingOfItsOwn(toolSet, observation.Tool) {
+		return turnObservation{}, false
+	}
+	return newContentObservation(
+		nextObservationIDForObservations(observations),
+		"policy",
+		strings.TrimSpace(observation.Tool),
+		unchangedResultReminderMessage(observation.Tool, observation.RepeatsObservationID),
+	), true
+}
+
+func toolChangesNothingOfItsOwn(toolSet *toolcontract.ToolSet, toolName string) bool {
+	if toolSet == nil {
+		return false
+	}
+	toolDefinition, isKnown := toolSet.ToolDefinition(strings.TrimSpace(toolName))
+	return isKnown && toolDefinition.SideEffectClass == toolcontract.ToolSideEffectNone
+}
+
+func unchangedResultReminderMessage(toolName string, repeatedObservationID string) string {
+	return strings.Join([]string{
+		strings.TrimSpace(toolName) + " returned exactly what it returned in " + repeatedObservationID + ", so this call changed nothing.",
+		"Spend the next step on the work itself, or call it with something different from what is already recorded.",
+	}, "\n")
 }

@@ -221,7 +221,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	}
 	intakeDecision := turnDecision.IntakeDecision()
 	intakeDecision = promoteArtifactTaskLevelForRequest(intakeRequest, intakeDecision)
-	turnOptions := agentKernel.turnOptionsForIntakeDecision(intakeDecision)
+	turnOptions := agentKernel.turnOptionsForIntakeDecision(responseContext, intakeDecision)
 	taskBudget := newTurnBudgetContext(responseContext, request.TurnStartedAt, request.IsRuntimeRestartResume, requestReceivedAt, turnOptions)
 	defer taskBudget.cancel()
 	taskContext := taskBudget.workContext
@@ -835,14 +835,30 @@ func turnAnchorClampedEventBody(turnBudget turnBudgetContext) map[string]any {
 	}
 }
 
-func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(intakeDecision IntakeDecision) TurnOptions {
+func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(ctx context.Context, intakeDecision IntakeDecision) TurnOptions {
 	baseOptions := normalizeTurnOptions(agentKernel.turnOptions)
 	taskLevelProfile := TaskLevelProfileForLevel(intakeDecision.TaskLevel)
 	baseOptions.TaskLevel = taskLevelProfile.TaskLevel
 	baseOptions.MaxIterationCount = taskLevelProfile.MaxIterationCount
 	baseOptions.MaxToolCallCount = taskLevelProfile.MaxToolCallCount
 	baseOptions.MaxElapsedSecond = int(elapsedBudgetForProfile(taskLevelProfile, agentKernel.iterationCostObserver.CostOfModelInUse()).Seconds())
-	return baseOptions
+	return withElapsedBudgetInsideDeadline(ctx, baseOptions)
+}
+
+// A budget the caller's deadline will not honour is not a budget. The loop reserves its
+// closing time out of MaxElapsedSecond, so a number larger than the time actually left
+// buys nothing and costs the report: the turn is cancelled where it stands.
+func withElapsedBudgetInsideDeadline(ctx context.Context, turnOptions TurnOptions) TurnOptions {
+	deadline, hasDeadline := ctx.Deadline()
+	if !hasDeadline {
+		return turnOptions
+	}
+	remainingSecond := int(time.Until(deadline).Seconds())
+	if remainingSecond <= 0 || turnOptions.MaxElapsedSecond <= remainingSecond {
+		return turnOptions
+	}
+	turnOptions.MaxElapsedSecond = remainingSecond
+	return turnOptions
 }
 
 func elapsedBudgetForProfile(taskLevelProfile TaskLevelProfile, throughput IterationCost) time.Duration {
