@@ -698,6 +698,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}
 	}
 	if isApprovalRequiredObservation(observation) {
+		agentTurnRunner.mintHeldCallApproval(taskRunID, observation)
 		if pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments); isPaused {
 			agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "approval "+actionDocument.ToolName, observation.ContentText())
 			return toolCallActionOutcome{Result: pausedResult, ShouldReturn: true, WasHandled: true}
@@ -2276,11 +2277,13 @@ func firstNonEmptyString(values ...string) string {
 }
 
 func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation) {
+	heldCalls := agentTurnRunner.heldCallsAwaitingApproval(taskRunID)
 	for _, carriedOutCall := range request.CarriedOutCalls {
 		toolName := strings.TrimSpace(carriedOutCall.ToolName)
 		if toolName == "" {
 			continue
 		}
+		carriedOutCall.Result = agentTurnRunner.settleHeldCallApproval(taskRunID, heldCalls, carriedOutCall)
 		observationID := agentTurnRunner.nextUnusedObservationID(taskRunID, state.Observations)
 		agentTurnRunner.appendEvent(taskRunID, "tool."+toolName+".requested", marshalEventBody(map[string]any{
 			"observationID": observationID,

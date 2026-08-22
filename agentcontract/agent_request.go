@@ -99,9 +99,10 @@ func (workingSet ContractToolWorkingSet) IsAuthoritative() bool {
 }
 
 type CarriedOutCall struct {
-	ToolName  string                  `json:"toolName"`
-	ToolInput json.RawMessage         `json:"toolInput,omitempty"`
-	Result    toolcontract.ToolResult `json:"result"`
+	ToolName      string                  `json:"toolName"`
+	ToolInput     json.RawMessage         `json:"toolInput,omitempty"`
+	Result        toolcontract.ToolResult `json:"result"`
+	ApprovalToken string                  `json:"approvalToken,omitempty"`
 }
 
 type AgentTurnRequest struct {
