@@ -220,10 +220,21 @@ the ledger:
 - Lifting that ceiling moved the stop to the iteration ceiling, which comes
   from the same profile.
 
-Those three are fixed. The gap is not closed: after them, one of the two tasks
-reaches a proper end and reports rather than dying on a count, and both still
-fail. Whatever remains is not the budget and not the judge being worn down,
-and finding it is the next round.
+Three more came out of the rounds that followed: seventeen shell results
+repeating an earlier one with the agent told about none of them, a judge asked
+to certify totals while seeing 300 bytes of the result they came from, and a
+single malformed tool call discarding thirteen turns of work.
+
+All six are fixed and none of them made a task pass. What each closed was the
+thing hiding the next one. The last round is where it stops being a harness
+defect: the judge no longer complains about truncation, the ledger carries no
+elided content, the agent reads the app's `--help` and logs in, and its
+transaction query returns zero rows. The judge declines to certify a zero it
+cannot distinguish from a wrong filter, which is the call it should make. pi
+resolved that task, so the answer was there to find.
+
+The gap is open and its remaining cause is not visible in the ledger as
+something the runtime did.
 
 A `Failed to activate server: 500` from the verification step is not an
 infrastructure row, and reading it as one costs a whole run. The full dev set
