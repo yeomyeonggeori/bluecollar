@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -377,6 +378,8 @@ func validateBrowserToolInput(toolName string, toolInput json.RawMessage) error 
 	}
 }
 
+var agentActionsNoShellCanRun = []string{toolcontract.FileDeliverToolName, "set_quality_criteria", "finish"}
+
 type terminalToolNameError struct {
 	toolName string
 }
@@ -406,13 +409,10 @@ func validateTerminalToolInput(toolName string, toolInput json.RawMessage, toolS
 	if len(toolSets) > 0 {
 		toolSet = toolSets[0]
 	}
-	if commandToolName := firstTerminalCommandToken(command); toolSet != nil && toolSet.IsRegistered(commandToolName) {
+	commandToolName := firstTerminalCommandToken(command)
+	isRegisteredTool := toolSet != nil && toolSet.IsRegistered(commandToolName)
+	if isRegisteredTool || slices.Contains(agentActionsNoShellCanRun, commandToolName) {
 		return terminalToolNameError{toolName: commandToolName}
-	}
-	for _, toolAlias := range []string{toolcontract.FileDeliverToolName, "set_quality_criteria", "finish"} {
-		if strings.Contains(command, toolAlias) {
-			return errors.New(strings.TrimSpace(toolName) + " command cannot call agent action " + toolAlias + "; call that action directly instead")
-		}
 	}
 	return nil
 }

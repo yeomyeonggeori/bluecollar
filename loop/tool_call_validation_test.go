@@ -925,3 +925,26 @@ func TestAShellCommandThatMerelyResemblesAToolNameStillRuns(t *testing.T) {
 		t.Fatalf("an ordinary command must reach the shell, got %v", validationError)
 	}
 }
+
+func TestAnOrdinaryCommandIsNotAnAgentActionForMentioningOne(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+
+	for _, command := range []string{"grep -rn finish build.log", "ls /app/finished", "echo done > finish.txt"} {
+		input, _ := json.Marshal(map[string]string{"command": command})
+		validationError := validateTerminalToolInput(toolcontract.TerminalRunToolName, input, toolSet)
+		if validationError != nil {
+			t.Errorf("%q names no agent action and has to reach the shell, got %v", command, validationError)
+		}
+	}
+}
+
+func TestAnAgentActionTypedAsTheWholeCommandIsStillRefused(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+
+	for _, command := range []string{"finish", "set_quality_criteria --strict"} {
+		input, _ := json.Marshal(map[string]string{"command": command})
+		if validateTerminalToolInput(toolcontract.TerminalRunToolName, input, toolSet) == nil {
+			t.Errorf("%q is an action the model meant to call directly, and no shell can run it", command)
+		}
+	}
+}
