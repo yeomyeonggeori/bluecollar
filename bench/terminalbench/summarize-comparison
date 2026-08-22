@@ -69,13 +69,14 @@ def harness_row(harness_name, harness_root):
         return None
     verdicts = task_verdicts(run_directory)
     resolved = sum(1 for verdict in verdicts if verdict.get("is_resolved"))
+    task_identifiers = {verdict.get("task_id") for verdict in verdicts}
     metrics = measured_runs(run_directory)
     measured_end = [entry for entry in metrics if "reachedEnd" in entry]
     reached_end = [entry for entry in measured_end if entry.get("reachedEnd")]
     return {
         "harness": harness_name,
-        "tasks": len(verdicts),
-        "resolved": resolved,
+        "tasks": len(task_identifiers),
+        "resolved": f"{resolved}/{len(verdicts)}",
         "reachedEnd": f"{len(reached_end)}/{len(measured_end)}" if measured_end else "not reported",
         "turns": formatted(median_of(metrics, "turns")),
         "languageModelCalls": formatted(median_of(metrics, "languageModelCalls")),

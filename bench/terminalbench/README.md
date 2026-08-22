@@ -83,7 +83,9 @@ resolve: `host.docker.internal`, not `127.0.0.1`.
 Three benchmarks, `google/gemini-3.1-flash-lite` on both harnesses, one
 attempt each, small task samples. Run-to-run variance on this model is one to
 two tasks out of eight, so nothing here separates the harnesses by less than
-that.
+that. Rows meant to settle something are run with `BENCH_ATTEMPTS`, which
+passes `--n-attempts` through, and the resolved column then reads as resolved
+trials over trials run.
 
 | benchmark | tasks | bluecollar | pi |
 |---|---|---|---|

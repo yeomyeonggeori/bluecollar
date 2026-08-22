@@ -10,6 +10,7 @@ model="${BENCH_MODEL:-openai/gpt-5.6-luna}"
 endpoint="${BENCH_ENDPOINT:-https://openrouter.ai/api/v1}"
 outputRoot="${BENCH_OUTPUT:-/tmp/bench-comparison}"
 concurrency="${BENCH_CONCURRENCY:-4}"
+attempts="${BENCH_ATTEMPTS:-1}"
 harnessFilter="${BENCH_HARNESS:-}"
 agentTimeoutSecond="${BENCH_AGENT_TIMEOUT:-3600}"
 testTimeoutSecond="${BENCH_TEST_TIMEOUT:-600}"
@@ -62,6 +63,7 @@ runHarness() {
       --agent-import-path "$importPath" \
       --model "$model" \
       --n-concurrent "$concurrency" \
+      --n-attempts "$attempts" \
       --global-agent-timeout-sec "$agentTimeoutSecond" \
       --global-test-timeout-sec "$testTimeoutSecond" \
       ${taskArguments[@]+"${taskArguments[@]}"} \
