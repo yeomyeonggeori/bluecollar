@@ -34,6 +34,14 @@ def task_verdicts(run_directory):
     return json.load(open(report_path)).get("results", [])
 
 
+def has_started_a_turn(run_directory, verdict):
+    trial_name = verdict.get("trial_name")
+    if not trial_name:
+        return False
+    trial_directory = os.path.join(run_directory, verdict.get("task_id", ""), trial_name)
+    return bool(glob.glob(os.path.join(trial_directory, "agent-logs", "*-metrics.json")))
+
+
 def measured_runs(run_directory):
     metrics = []
     for path in glob.glob(os.path.join(run_directory, "**/*-metrics.json"), recursive=True):
@@ -67,7 +75,8 @@ def harness_row(harness_name, harness_root):
     run_directory = latest_run_directory(harness_root)
     if run_directory is None:
         return None
-    verdicts = task_verdicts(run_directory)
+    recorded = task_verdicts(run_directory)
+    verdicts = [verdict for verdict in recorded if has_started_a_turn(run_directory, verdict)]
     resolved = sum(1 for verdict in verdicts if verdict.get("is_resolved"))
     task_identifiers = {verdict.get("task_id") for verdict in verdicts}
     metrics = measured_runs(run_directory)
@@ -82,6 +91,7 @@ def harness_row(harness_name, harness_root):
         "languageModelCalls": formatted(median_of(metrics, "languageModelCalls")),
         "promptTokensPerTurn": formatted(median_of(metrics, "promptTokensPerTurn")),
         "wallClockSecond": median_agent_second(verdicts),
+        "neverRan": len(recorded) - len(verdicts),
     }
 
 
@@ -97,6 +107,9 @@ def main():
     for row in rows:
         print(f"| {row['harness']} | {row['tasks']} | {row['resolved']} | {row['reachedEnd']} | "
               f"{row['turns']} | {row['languageModelCalls']} | {row['promptTokensPerTurn']} | {row['wallClockSecond']} |")
+    for row in rows:
+        if row["neverRan"]:
+            print(f"{row['neverRan']} {row['harness']} trials never started a turn and are not counted in that row")
 
 
 main()
