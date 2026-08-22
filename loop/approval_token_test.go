@@ -75,18 +75,26 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 		t.Fatalf("a held call is minted once and waits in the ledger: %v", heldCalls)
 	}
 
-	settled := services.runner.settleHeldCallApproval(taskRun.TaskRunID, heldCalls, CarriedOutCall{
-		ToolName:      "message_send",
-		ToolInput:     json.RawMessage(`{"to":["everyone"]}`),
-		ApprovalToken: heldCalls[0].ApprovalToken,
-		Result:        toolcontract.ToolSuccess("sent to everyone"),
-	})
+	state := &agentTaskState{}
+	services.runner.recordCarriedOutCalls(context.Background(), taskRun.TaskRunID, AgentTurnRequest{
+		CarriedOutCalls: []CarriedOutCall{{
+			ToolName:      "message_send",
+			ToolInput:     json.RawMessage(`{"to":["everyone"]}`),
+			ApprovalToken: heldCalls[0].ApprovalToken,
+			Result:        toolcontract.ToolSuccessData(`{"messageID":"m-1"}`, json.RawMessage(`{"messageID":"m-1"}`)),
+		}},
+	}, state, map[string]turnObservation{})
 
-	if !strings.Contains(settled.ContentText(), "sent to everyone") {
-		t.Fatal("the send happened, so the ledger and the model have to carry it; the loop cannot unsend it by disagreeing")
+	if len(state.Observations) == 0 {
+		t.Fatal("the send happened, so the ledger and the model have to carry it")
 	}
-	if !strings.Contains(settled.ContentText(), approvalUnmatchedObservationNote) {
-		t.Fatalf("the model has to be told that what ran is not what was waiting: %q", settled.ContentText())
+	observation := state.Observations[0]
+	document := map[string]any{}
+	if json.Unmarshal([]byte(observation.ContentText()), &document) != nil {
+		t.Fatalf("a tool that promised JSON still has to parse: eight readers in this package unmarshal this field and every one of them fails silently: %q", observation.ContentText())
+	}
+	if !strings.Contains(observation.Summary, approvalUnmatchedObservationNote) {
+		t.Fatalf("the loop's own sentence about the observation is where the note goes: %q", observation.Summary)
 	}
 	if len(services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)) != 1 {
 		t.Fatal("a call nobody approved does not spend the approval that is still waiting")

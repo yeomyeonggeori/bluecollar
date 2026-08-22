@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"strings"
-
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const (
@@ -94,17 +92,17 @@ func heldCallForCarriedOutCall(heldCalls []heldCallRecord, carriedOutCall Carrie
 	return heldCallRecord{}, false
 }
 
-// The effect already happened, so it is recorded as it happened. What a mismatch
-// changes is the bookkeeping around it: the hold stays unspent, the ledger says so,
-// and the model is told that what ran is not what was waiting.
-func (agentTurnRunner *AgentTurnRunner) settleHeldCallApproval(taskRunID string, heldCalls []heldCallRecord, carriedOutCall CarriedOutCall) toolcontract.ToolResult {
+// The effect already happened, so the tool's own result is left exactly as it is.
+// What a mismatch changes is the bookkeeping around it: the hold stays unspent and
+// the ledger says so.
+func (agentTurnRunner *AgentTurnRunner) settleHeldCallApproval(taskRunID string, heldCalls []heldCallRecord, carriedOutCall CarriedOutCall) (didDriftFromItsHold bool) {
 	if !toolWasHeldForApproval(heldCalls, carriedOutCall.ToolName) {
-		return carriedOutCall.Result
+		return false
 	}
 	heldCall, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall)
 	if isMatched {
 		agentTurnRunner.appendEvent(taskRunID, approvalExecutedEventName, marshalEventBody(heldCall))
-		return carriedOutCall.Result
+		return false
 	}
 	agentTurnRunner.appendEvent(taskRunID, approvalUnheldCallEventName, marshalEventBody(map[string]any{
 		"toolName":            strings.TrimSpace(carriedOutCall.ToolName),
@@ -112,9 +110,14 @@ func (agentTurnRunner *AgentTurnRunner) settleHeldCallApproval(taskRunID string,
 		"presentedToken":      strings.TrimSpace(carriedOutCall.ApprovalToken),
 		"awaitingHeldCallIDs": heldCallObservationIDs(heldCalls),
 	}))
-	result := carriedOutCall.Result
-	result.Output.Content = strings.TrimSpace(result.ContentText() + "\n\n" + approvalUnmatchedObservationNote)
-	return result
+	return true
+}
+
+// The summary is the loop's sentence about an observation, so a note belongs there.
+// Output is the tool's, and a result contract that promised JSON still has to parse.
+func observationNotingApprovalDrift(observation turnObservation) turnObservation {
+	observation.Summary = strings.TrimSpace(observation.Summary + " " + approvalUnmatchedObservationNote)
+	return observation
 }
 
 func heldCallObservationIDs(heldCalls []heldCallRecord) []string {
