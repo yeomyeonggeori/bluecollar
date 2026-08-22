@@ -232,3 +232,51 @@ func TestACompactedRunResumesToExactlyWhatTheModelWasLastShown(t *testing.T) {
 		t.Fatalf("expected the resumed run to still own its %d iterations, got %d", len(observations), resumedState.IterationCount)
 	}
 }
+
+func requestedToolTaskEvent(taskEventID string, observationID string, toolName string) taskstate.TaskEvent {
+	return taskstate.TaskEvent{
+		TaskEventID: taskEventID,
+		Name:        "tool." + toolName + ".requested",
+		Body:        marshalEventBody(map[string]any{"observationID": observationID, "toolName": toolName, "input": map[string]string{"to": "이샘플"}}),
+	}
+}
+
+func TestARestartSeesACallThatWasStartedAndNeverAnswered(t *testing.T) {
+	events := []taskstate.TaskEvent{
+		requestedToolTaskEvent("event-1", "observation-1", "note_write"),
+		toolResultTaskEvent("event-2", "observation-1"),
+		requestedToolTaskEvent("event-3", "observation-2", "message_send"),
+	}
+
+	observations := observationsFromTaskEvents(events)
+
+	if len(observations) != 2 {
+		t.Fatalf("the answered call and the interrupted one are both facts about this task: %+v", observations)
+	}
+	interrupted := observations[1]
+	if interrupted.ObservationID != "observation-2" || interrupted.Tool != "message_send" {
+		t.Fatalf("expected the unanswered message_send to come back: %+v", interrupted)
+	}
+	if !interrupted.Failed() {
+		t.Fatal("a call whose effect is unknown is unresolved work, and failure debt is how this loop refuses to finish on unresolved work")
+	}
+	if !strings.Contains(interrupted.ContentText(), "whether it took effect is unknown") {
+		t.Fatalf("the model has to be told what it does not know, not just that something failed: %q", interrupted.ContentText())
+	}
+	if !strings.Contains(string(interrupted.ToolInput), "이샘플") {
+		t.Fatalf("the input was recorded before the call and is what says which message may already be sent: %q", interrupted.ToolInput)
+	}
+}
+
+func TestAnAnsweredCallLeavesNothingBehind(t *testing.T) {
+	events := []taskstate.TaskEvent{
+		requestedToolTaskEvent("event-1", "observation-1", "note_write"),
+		toolResultTaskEvent("event-2", "observation-1"),
+	}
+
+	observations := observationsFromTaskEvents(events)
+
+	if len(observations) != 1 || observations[0].Failed() {
+		t.Fatalf("a call that finished is not interrupted, and inventing debt for it would stop every clean restart: %+v", observations)
+	}
+}

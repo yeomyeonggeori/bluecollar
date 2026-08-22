@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -1150,14 +1151,62 @@ func isToolResultTaskEvent(event taskstate.TaskEvent) bool {
 
 func observationsFromTaskEvents(events []taskstate.TaskEvent) []turnObservation {
 	observations := []turnObservation{}
+	unanswered := map[string]requestedToolCall{}
 	for _, event := range events {
+		if requestedCall, isRequest := requestedToolCallFromTaskEvent(event); isRequest {
+			unanswered[requestedCall.ObservationID] = requestedCall
+			continue
+		}
 		if !isToolResultTaskEvent(event) {
 			continue
 		}
 		observation, errorValue := decodeTurnObservation([]byte(event.Body))
-		if errorValue == nil && strings.TrimSpace(observation.ObservationID) != "" && !isApprovalRequiredObservation(observation) {
+		if errorValue != nil || strings.TrimSpace(observation.ObservationID) == "" {
+			continue
+		}
+		delete(unanswered, observation.ObservationID)
+		if !isApprovalRequiredObservation(observation) {
 			observations = append(observations, observation)
 		}
+	}
+	return append(observations, interruptedCallObservations(unanswered)...)
+}
+
+type requestedToolCall struct {
+	ObservationID string          `json:"observationID"`
+	ToolName      string          `json:"toolName"`
+	Input         json.RawMessage `json:"input"`
+}
+
+func requestedToolCallFromTaskEvent(event taskstate.TaskEvent) (requestedToolCall, bool) {
+	if !strings.HasPrefix(event.Name, "tool.") || !strings.HasSuffix(event.Name, ".requested") {
+		return requestedToolCall{}, false
+	}
+	requestedCall := requestedToolCall{}
+	if json.Unmarshal([]byte(event.Body), &requestedCall) != nil || strings.TrimSpace(requestedCall.ObservationID) == "" {
+		return requestedToolCall{}, false
+	}
+	return requestedCall, true
+}
+
+// The intent is written before the call and the result after it, so a request with no
+// result is the record of a process that stopped mid-call. Reading only results turns
+// that into a call the turn believes never happened, and the obvious next move is to
+// do it again.
+func interruptedCallObservations(unanswered map[string]requestedToolCall) []turnObservation {
+	observationIDs := make([]string, 0, len(unanswered))
+	for observationID := range unanswered {
+		observationIDs = append(observationIDs, observationID)
+	}
+	sort.Strings(observationIDs)
+	observations := make([]turnObservation, 0, len(observationIDs))
+	for _, observationID := range observationIDs {
+		requestedCall := unanswered[observationID]
+		observation := newFailureObservation(observationID, "continue", requestedCall.ToolName,
+			"This call was started and the runtime stopped before its result was recorded, so whether it took effect is unknown. Check the current state before running it again.",
+			toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "interrupted")
+		observation.ToolInput = append(json.RawMessage{}, requestedCall.Input...)
+		observations = append(observations, observation)
 	}
 	return observations
 }
