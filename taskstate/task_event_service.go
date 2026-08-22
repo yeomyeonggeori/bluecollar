@@ -1,6 +1,8 @@
 package taskstate
 
 import (
+	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -54,14 +56,48 @@ func (taskEventService *TaskEventService) RegisterTaskRunObserver(taskRunID stri
 }
 
 func (taskEventService *TaskEventService) notifyTaskRunObserver(rawTurnEvent RawTurnEvent) {
+	for _, observerFailure := range taskEventService.deliverToObservers(rawTurnEvent) {
+		taskEventService.recordObserverFailure(rawTurnEvent, observerFailure)
+	}
+}
+
+func (taskEventService *TaskEventService) deliverToObservers(rawTurnEvent RawTurnEvent) []string {
 	taskEventService.observerMutex.RLock()
 	defer taskEventService.observerMutex.RUnlock()
+	observerFailures := []string{}
 	if observer := taskEventService.observers[rawTurnEvent.TaskRunID]; observer != nil {
-		observer(rawTurnEvent)
+		if observerFailure := deliverTurnEvent(observer, rawTurnEvent); observerFailure != "" {
+			observerFailures = append(observerFailures, observerFailure)
+		}
 	}
 	for _, globalObserver := range taskEventService.globalObservers {
-		globalObserver(rawTurnEvent)
+		if observerFailure := deliverTurnEvent(globalObserver, rawTurnEvent); observerFailure != "" {
+			observerFailures = append(observerFailures, observerFailure)
+		}
 	}
+	return observerFailures
+}
+
+// An observer belongs to the host. One that panics must not take down the append that
+// notified it, and must not starve the observers queued behind it.
+func deliverTurnEvent(observer func(RawTurnEvent), rawTurnEvent RawTurnEvent) (observerFailure string) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			observerFailure = fmt.Sprint(recovered)
+		}
+	}()
+	observer(rawTurnEvent)
+	return ""
+}
+
+// Recorded without notifying, because the observer that would hear about it is the one
+// that just crashed.
+func (taskEventService *TaskEventService) recordObserverFailure(rawTurnEvent RawTurnEvent, observerFailure string) {
+	body, errorValue := json.Marshal(map[string]string{"observedEvent": rawTurnEvent.Name, "reason": observerFailure})
+	if errorValue != nil {
+		return
+	}
+	taskEventService.storeTaskEvent(rawTurnEvent.TaskRunID, "task.observer_crashed", string(body))
 }
 
 func (taskEventService *TaskEventService) UseRepository(repository TaskEventRepository) {
@@ -74,6 +110,12 @@ func (taskEventService *TaskEventService) AppendTaskEvent(taskRunID string, name
 }
 
 func (taskEventService *TaskEventService) AppendTaskEventWithError(taskRunID string, name string, body string) (TaskEvent, error) {
+	taskEvent, saveError := taskEventService.storeTaskEvent(taskRunID, name, body)
+	taskEventService.notifyTaskRunObserver(RawTurnEvent{TaskRunID: taskRunID, Name: name, Body: body})
+	return taskEvent, saveError
+}
+
+func (taskEventService *TaskEventService) storeTaskEvent(taskRunID string, name string, body string) (TaskEvent, error) {
 	taskEvent := TaskEvent{
 		TaskEventID: NewIdentifier(),
 		TaskRunID:   taskRunID,
@@ -81,14 +123,10 @@ func (taskEventService *TaskEventService) AppendTaskEventWithError(taskRunID str
 		Body:        body,
 		CreatedAt:   time.Now(),
 	}
-
 	taskEventService.mutex.Lock()
+	defer taskEventService.mutex.Unlock()
 	taskEventService.taskEvents[taskRunID] = append(taskEventService.taskEvents[taskRunID], taskEvent)
-	saveError := taskEventService.saveTaskEvent(taskEvent)
-	taskEventService.mutex.Unlock()
-
-	taskEventService.notifyTaskRunObserver(RawTurnEvent{TaskRunID: taskRunID, Name: name, Body: body})
-	return taskEvent, saveError
+	return taskEvent, taskEventService.saveTaskEvent(taskEvent)
 }
 
 func (taskEventService *TaskEventService) RecordTaskEvent(taskEvent TaskEvent) {

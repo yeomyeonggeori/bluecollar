@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"sort"
@@ -194,6 +195,7 @@ var FailureCodes = struct {
 	InteractionRequired FailureCode
 	ToolNameInShell     FailureCode
 	Timeout             FailureCode
+	ToolCrashed         FailureCode
 }{
 	Unavailable:         "unavailable",
 	InvalidInput:        "invalid_input",
@@ -206,6 +208,7 @@ var FailureCodes = struct {
 	InteractionRequired: "interaction_required",
 	ToolNameInShell:     "tool_name_in_terminal",
 	Timeout:             "timeout",
+	ToolCrashed:         "tool_crashed",
 }
 
 func (failureCode FailureCode) String() string {
@@ -239,6 +242,8 @@ func CanonicalFailureCode(code FailureCode) string {
 		return FailureCodes.InteractionRequired.String()
 	case "timeout", "deadline_exceeded":
 		return FailureCodes.Timeout.String()
+	case "tool_crashed":
+		return FailureCodes.ToolCrashed.String()
 	case "":
 		return FailureCodes.OperationFailed.String()
 	default:
@@ -710,15 +715,38 @@ func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation Too
 func (toolSet *ToolSet) invokeWithinDeclaredBudget(ctx context.Context, boundTool BoundTool, toolInvocation ToolInvocation) (ToolResult, error) {
 	timeoutMS := boundTool.Definition.TimeoutMS
 	if timeoutMS <= 0 {
-		return boundTool.Handler(ctx, toolInvocation)
+		return callToolHandler(ctx, boundTool, toolInvocation)
 	}
 	budgetContext, releaseBudget := context.WithTimeout(ctx, time.Duration(timeoutMS)*time.Millisecond)
 	defer releaseBudget()
-	result, errorValue := boundTool.Handler(budgetContext, toolInvocation)
+	result, errorValue := callToolHandler(budgetContext, boundTool, toolInvocation)
 	if budgetDeadlineWon(ctx, budgetContext) {
 		return toolBudgetExpiredFailure(boundTool.Definition.Name, timeoutMS), nil
 	}
 	return result, errorValue
+}
+
+// The handler belongs to the host, so its panic is an input to this package rather than a
+// bug in it. Recovering turns one crashed call into one failed observation and leaves the
+// task able to report or recover; a panic anywhere else still takes the process down.
+func callToolHandler(ctx context.Context, boundTool BoundTool, toolInvocation ToolInvocation) (result ToolResult, errorValue error) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		result = toolCrashedFailure(boundTool.Definition.Name, recovered)
+		errorValue = nil
+	}()
+	return boundTool.Handler(ctx, toolInvocation)
+}
+
+func toolCrashedFailure(toolName string, recovered any) ToolResult {
+	result := ToolFailureResult(FailureExternalService, FailureCodes.ToolCrashed, strings.TrimSpace(toolName),
+		"the tool crashed while running: "+fmt.Sprint(recovered))
+	result.Failure.Retryable = false
+	result.Failure.RetryPolicy = RetryPolicyDoNotRetry
+	return result
 }
 
 func budgetDeadlineWon(callerContext context.Context, budgetContext context.Context) bool {
