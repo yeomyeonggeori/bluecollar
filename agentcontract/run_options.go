@@ -20,6 +20,9 @@ type TurnOptions struct {
 	RecoveryBudget       RecoveryBudget
 	TaskLevel            TaskLevel
 	GenerationOptions    model.GenerationOptions
+	// The base instruction has one version. A host whose provider laddered the turn onto a
+	// different model states what that model needs here, so nothing forks the base to say it.
+	SystemInstructionOverlay func(AgentTurnRequest) string
 }
 
 type IntakeOptions struct {

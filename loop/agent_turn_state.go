@@ -415,7 +415,7 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool) 
 	messages := (PromptAssembler{}).BuildTurnMessages(
 		state.Request,
 		state.Observations,
-		buildAgentSystemInstruction(state.Request),
+		systemInstructionFor(state.Options, state.Request).Text(),
 		toolDescription,
 		state.ExecutionState,
 	)
