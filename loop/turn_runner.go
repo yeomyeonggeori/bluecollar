@@ -47,6 +47,8 @@ type turnActionDocument struct {
 	HasRemainingWork      bool                          `json:"hasRemainingWork"`
 	CompletionEvidenceIDs []string                      `json:"completionEvidenceIDs"`
 	CompletionEvidence    []completionEvidenceReference `json:"completionEvidence"`
+	Instruction           string                        `json:"instruction,omitempty"`
+	ExpectedResult        string                        `json:"expectedResult,omitempty"`
 	QualityCriteria       []string                      `json:"qualityCriteria"`
 	QualityReview         []qualityReviewItem           `json:"qualityReview"`
 	RemainingWork         string                        `json:"remainingWork"`
@@ -516,6 +518,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				"criteria": state.QualityCriteria,
 			}))
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "set_quality_criteria", marshalEventBody(map[string]any{"criteria": state.QualityCriteria}))
+			continue
+		case "delegate":
+			observation := agentTurnRunner.runDelegatedTurn(workContext, taskRun.TaskRunID, &state, actionDocument)
+			agentTurnRunner.recordToolObservation(taskRun.TaskRunID, &state, actionDocument, successfulToolCalls, observation, "")
+			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "delegate", observation.ContentText())
 			continue
 		case "finish":
 			completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(workContext, taskRun.TaskRunID, request, toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, actionDocument)

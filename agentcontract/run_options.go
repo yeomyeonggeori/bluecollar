@@ -20,6 +20,9 @@ type TurnOptions struct {
 	RecoveryBudget       RecoveryBudget
 	TaskLevel            TaskLevel
 	GenerationOptions    model.GenerationOptions
+	// Zero keeps delegation off, and off costs a turn nothing: the delegate action is
+	// absent from the schema and the instruction says nothing about it.
+	DelegationLimit int
 	// The base instruction has one version. A host whose provider laddered the turn onto a
 	// different model states what that model needs here, so nothing forks the base to say it.
 	SystemInstructionOverlay func(AgentTurnRequest) string

@@ -41,7 +41,7 @@ func TestBuildTurnMessagesKeepsStablePrefixClockInvariant(t *testing.T) {
 		WorkspaceDefaultPath: "/workspace/private/people/person-1",
 		ResponseLanguage:     "ko",
 	}
-	baseInstruction := buildAgentSystemInstruction(baseRequest).Text()
+	baseInstruction := buildAgentSystemInstruction(baseRequest, TurnOptions{}).Text()
 	toolDescription := "Available tool catalog:\n- calendar_list: List calendar events."
 
 	earlyRequest := baseRequest

@@ -72,6 +72,12 @@ The harness has no identity of its own. The host supplies `AgentIdentity`, the w
 instruction bundle and the company context; with none given, the agent is "the assistant" and knows
 nothing about where it runs.
 
+Delegation is the loop's, for the same reason. A `delegate` action hands one self-contained piece
+of a task to a fresh turn carrying the same identity and the same tool set, with its own outcome
+contract and completion gate, and reports back as an observation. The host still executes every tool
+call, so a child reaches nothing its parent could not. It is off unless a host sets
+`TurnOptions.DelegationLimit`, and off costs a turn nothing: no action variant, no paragraph.
+
 ## Provider-agnostic
 
 Models reach bluecollar through a provider port. Anything satisfying it works, and

@@ -3,6 +3,7 @@ package loop
 import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -11,14 +12,14 @@ func (agentTurnRunner *AgentTurnRunner) buildSystemInstruction(request AgentTurn
 }
 
 func systemInstructionFor(options TurnOptions, request AgentTurnRequest) SystemInstruction {
-	systemInstruction := buildAgentSystemInstruction(request)
+	systemInstruction := buildAgentSystemInstruction(request, options)
 	if options.SystemInstructionOverlay == nil {
 		return systemInstruction
 	}
 	return systemInstruction.Append("overlay", options.SystemInstructionOverlay(request))
 }
 
-func buildAgentSystemInstruction(request AgentTurnRequest) SystemInstruction {
+func buildAgentSystemInstruction(request AgentTurnRequest, options TurnOptions) SystemInstruction {
 	systemInstruction := SystemInstruction{}.Append("identity",
 		"You are "+request.AgentIdentity.DisplayName()+". Work as a careful task agent. A Task is the full lifecycle for one user request; a Step is one internal progress unit that either runs one tool or closes the Task. Use continue when more work requires a tool, and finish only when goalSatisfied is true and hasRemainingWork is false. finish is the permanent final reply for this task, not a progress update or promise that later tool work will happen. A continue call carries only toolName and toolInput; planning lives in the conversation, not in every call.")
 	systemInstruction = systemInstruction.Append("completion_evidence",
@@ -40,11 +41,21 @@ func buildAgentSystemInstruction(request AgentTurnRequest) SystemInstruction {
 			" When an image is in front of you, write what it shows into executionStateUpdate.knownFacts on that same call, in enough detail to work from later. The image is shown once; the note is what you will still have."+
 			" If a steer observation appears, treat it as the latest user correction for the current task and update the plan before continuing."+
 			" Never repeat an add or create operation for a record a successful observation in this task already created: one user request creates at most one record, and anything wrong or missing on it is fixed with the matching update operation, using the record's exact current title or ID as the hint.")
+	systemInstruction = systemInstruction.Append("delegation", delegationInstructionBody(options))
 	systemInstruction = systemInstruction.Append("skills", skillsInstructionBody(request))
 	systemInstruction = systemInstruction.Append("failure_recovery",
 		"Failure recovery: If a tool call fails, it creates FailureDebt. Do not give up after one failed attempt. Do not finish until every failure is resolved, recovered, or reported: a finish that ignores an unresolved failure is wrong even when the rest of the work succeeded.")
 	systemInstruction = systemInstruction.Append("required_artifacts", requiredArtifactsInstructionBody(request))
 	return systemInstruction.Append("host", request.HostInstruction)
+}
+
+func delegationInstructionBody(options TurnOptions) string {
+	if !delegationIsAllowed(options) {
+		return ""
+	}
+	return "Delegation: delegate hands one self-contained piece of this task to a fresh turn that runs with your identity and your tools and reports back. Use it when a piece is large enough to crowd this conversation and separable enough to describe in a sentence; do the work yourself when it is neither." +
+		" This task may delegate " + strconv.Itoa(options.DelegationLimit) + " times in total, the delegated turn cannot delegate again, and it spends from the same budget you do." +
+		" Say in instruction exactly what it should do, and in expectedResult what you need back. It sees none of this conversation, so anything it needs has to be in those two fields."
 }
 
 func skillsInstructionBody(request AgentTurnRequest) string {

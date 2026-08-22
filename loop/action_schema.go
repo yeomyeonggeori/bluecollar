@@ -35,6 +35,10 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	if len(terminalActionValues) > 1 {
 		allowFinish = terminalActionValues[1]
 	}
+	allowDelegate := false
+	if len(terminalActionValues) > 2 {
+		allowDelegate = terminalActionValues[2]
+	}
 	var variants []any
 	if allowFinish {
 		variants = append(variants, finishActionSchema(hasFailureDebt, citableEvidenceIDs))
@@ -44,6 +48,9 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	}
 	if allowQualityCriteria {
 		variants = append(variants, setQualityCriteriaActionSchema())
+	}
+	if allowDelegate {
+		variants = append(variants, delegateActionSchema())
 	}
 	hasContinueVariant := false
 	for _, toolDefinition := range toolDefinitions {
@@ -123,6 +130,14 @@ func agentPartArraySchema() map[string]any {
 			}),
 		}),
 	}
+}
+
+func delegateActionSchema() map[string]any {
+	return closedObjectSchema(map[string]any{
+		"action":         enumStringSchema("delegate"),
+		"instruction":    stringSchema(),
+		"expectedResult": stringSchema(),
+	})
 }
 
 func setQualityCriteriaActionSchema() map[string]any {
