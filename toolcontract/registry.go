@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -280,6 +281,9 @@ type ToolFailure struct {
 	RecoveryHints       []RecoveryHint       `json:"recoveryHints,omitempty"`
 	DiagnosticArtifacts []DiagnosticArtifact `json:"diagnosticArtifacts,omitempty"`
 	AffectedResources   []AffectedResource   `json:"affectedResources,omitempty"`
+	// Never serialized: a stack is for whoever has to fix the tool, and every field
+	// that reaches the ledger also reaches the model through the recovery packet.
+	CrashStack string `json:"-"`
 }
 
 type ToolResult struct {
@@ -762,6 +766,7 @@ func toolCrashedFailure(toolName string, recovered any) ToolResult {
 		"the tool crashed while running: "+fmt.Sprint(recovered))
 	result.Failure.Retryable = false
 	result.Failure.RetryPolicy = RetryPolicyDoNotRetry
+	result.Failure.CrashStack = string(debug.Stack())
 	return result
 }
 
