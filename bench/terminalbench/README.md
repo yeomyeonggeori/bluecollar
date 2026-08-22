@@ -121,6 +121,30 @@ in both directions. `grid-pattern-transform` is missing because its container
 failed to build for both harnesses, which is an infrastructure row and not a
 result.
 
+Widened to twenty tasks at two attempts, then run again after six fixes landed
+in the harness, on the same tasks and the same model:
+
+| | trials | resolved |
+|---|---|---|
+| bluecollar, before the fixes | 34 | 18 |
+| bluecollar, after them | 35 | 18 |
+| pi, unchanged throughout | 35 | 17 |
+
+Six merged fixes moved this by nothing. Per-task the runs moved in both
+directions and cancelled: `fibonacci-server`, `password-recovery` and
+`hello-world` gained a trial each, `chess-best-move` and
+`count-dataset-tokens` lost one each. Across three rounds and roughly a
+hundred trials a harness, terminal-bench-core at this model does not
+distinguish the two.
+
+That is a statement about the benchmark as much as about the harnesses. What
+the runs did produce is defects the row cannot show: a shell failure that
+replaced the shell's own message, a substring that refused ordinary commands,
+an elapsed budget larger than the deadline enforcing it, cited completion
+evidence nothing resolved, and two counting bugs in this directory that scored
+unmeasured things as losses. Each was found by reading a ledger, not by
+reading a total.
+
 ## The benchmark that measured the harness
 
 The three rows above mostly measure the model. The same harness scored 2/8 on
