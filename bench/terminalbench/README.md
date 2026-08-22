@@ -205,10 +205,14 @@ each, at the point where terminal-bench-core had stopped saying anything:
 | 0d8a4ee_1 | fail, twice | resolved |
 | 23cf851_1 | fail | resolved |
 | 37a8675_1 | fail | resolved |
+| 383cbac_1 | resolved | resolved |
+| 396c5a2_1 | fail | resolved |
+| 3ab5b8b_1 | fail | fail |
+| | 1/6 | 5/6 |
 
-A hundred trials a harness on terminal-bench-core separated nothing. Three
-AppWorld tasks separated them completely, and each loss named its own cause in
-the ledger:
+A hundred trials a harness on terminal-bench-core separated nothing. Six
+AppWorld tasks separate them at one attempt each, and the losses named their
+own causes in the ledger:
 
 - The completion judge refused a finish three times, the third time naming the
   gap exactly. The agent called no tool and finished again. The fourth verdict
