@@ -97,7 +97,6 @@ func finishActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[st
 		"hasRemainingWork":      booleanSchema(),
 		"completionEvidenceIDs": completionEvidenceIDArraySchema(citableEvidenceIDs),
 		"qualityReview":         qualityReviewSchema(),
-		"remainingWork":         stringSchema(),
 		"executionStateUpdate":  executionStateSchema(),
 	})
 }
@@ -147,7 +146,6 @@ func setQualityCriteriaActionSchema() map[string]any {
 		"reason":               stringSchema(),
 		"goalStatus":           enumValuesStringSchema([]string{"in_progress"}),
 		"goalSatisfied":        booleanSchema(),
-		"remainingWork":        stringSchema(),
 		"executionStateUpdate": executionStateSchema(),
 	})
 }
@@ -158,7 +156,6 @@ func failActionSchema(hasFailureDebt bool) map[string]any {
 		"reason":               stringSchema(),
 		"goalStatus":           enumValuesStringSchema([]string{"blocked"}),
 		"goalSatisfied":        booleanSchema(),
-		"remainingWork":        stringSchema(),
 		"executionStateUpdate": executionStateSchema(),
 	}
 	if hasFailureDebt {
@@ -178,11 +175,9 @@ func continueActionSchema(toolDefinition toolcontract.ToolDefinition) (map[strin
 		"toolName":             enumStringSchema(toolDefinition.Name),
 		"toolInput":            inputSchema,
 		"message":              stringSchema(),
-		"reason":               stringSchema(),
 		"goalStatus":           enumValuesStringSchema([]string{"in_progress"}),
 		"goalSatisfied":        booleanSchema(),
 		"hasRemainingWork":     booleanSchema(),
-		"remainingWork":        stringSchema(),
 		"executionStateUpdate": executionStateUpdateRefSchema(),
 	})
 	if description := toolDefinition.ModelFacingDescription(); description != "" {
@@ -324,7 +319,6 @@ func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
 		"hasRemainingWork":      booleanSchema(),
 		"completionEvidenceIDs": stringArraySchema(0),
 		"qualityReview":         qualityReviewSchema(),
-		"remainingWork":         stringSchema(),
 		"executionStateUpdate":  executionStateSchema(),
 	}
 	if hasFailureDebt {

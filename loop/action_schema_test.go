@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"bytes"
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
@@ -108,10 +109,10 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 }
 
 func TestTerminalActionSchemasAcceptFinishAndFailDocuments(t *testing.T) {
-	finishDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","remainingWork":"","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
-	failDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","remainingWork":"","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
-	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","remainingWork":"","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"terminal_run","errorCode":"operation_failed","failureStage":"terminal_run","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
-	finishWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"no_tool_fallback","remainingWork":"","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
+	finishDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
+	failDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
+	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"terminal_run","errorCode":"operation_failed","failureStage":"terminal_run","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
+	finishWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"no_tool_fallback","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
 
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), finishDocument)
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), failDocument)
@@ -318,4 +319,38 @@ func completionEvidenceEnumInSchema(t *testing.T, node any) []string {
 		}
 	}
 	return nil
+}
+
+func TestAContinueVariantAsksOnlyForWhatTheLoopReads(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	var schema struct {
+		OneOf []struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+			Required   []string                   `json:"required"`
+		} `json:"oneOf"`
+	}
+	if json.Unmarshal([]byte(ActionSchemaForToolSet(toolSet, false, nil, false)), &schema) != nil {
+		t.Fatal("the action schema is not JSON")
+	}
+
+	readByTheLoop := map[string]bool{
+		"action": true, "toolName": true, "toolInput": true,
+		"message":              true,
+		"goalStatus":           true,
+		"goalSatisfied":        true,
+		"hasRemainingWork":     true,
+		"executionStateUpdate": true,
+	}
+	for _, variant := range schema.OneOf {
+		if !bytes.Contains(variant.Properties["action"], []byte(`"continue"`)) {
+			continue
+		}
+		for _, field := range variant.Required {
+			if !readByTheLoop[field] {
+				t.Fatalf("a continue call must fill in %q and nothing in this package reads it, so every step of every task writes it and throws it away", field)
+			}
+		}
+		return
+	}
+	t.Fatal("no continue variant in the schema")
 }

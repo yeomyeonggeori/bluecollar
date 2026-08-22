@@ -165,7 +165,6 @@ func TestCompletionGateRejectsSatisfiedFinishWithUnresolvedFailureDebt(t *testin
 			HasRemainingWork:   true,
 			CompletionEvidence: []completionEvidenceReference{},
 			QualityReview:      []qualityReviewItem{},
-			RemainingWork:      "권한 확인 후 재시도 필요",
 		},
 	)
 	if result.IsSatisfied {
@@ -186,7 +185,6 @@ func TestCompletionGateAcceptsZeroRemainingWork(t *testing.T) {
 		HasRemainingWork:   false,
 		CompletionEvidence: []completionEvidenceReference{},
 		QualityReview:      []qualityReviewItem{},
-		RemainingWork:      "0",
 	})
 	if !result.IsSatisfied {
 		t.Fatalf("expected zero remaining work to satisfy completion gate, got %q", result.Message)
