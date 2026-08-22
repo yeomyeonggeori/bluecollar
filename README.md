@@ -107,6 +107,11 @@ task.completed
 Every step is a ledger entry, which is the point of reading it: the same events appear whether the
 turn calls fifty tools or none.
 
+`--trace <path>` writes the same run as one file instead of scrollback: the request, the reply, what
+it cost, and every ledger entry in order. A path ending in `.json` gets JSON and any other path gets
+Markdown, both from one snapshot. The file keeps whatever the task carried, so read it before
+sending it anywhere.
+
 ## What it promises
 
 The loop's guarantees are written as tests, so the names are the specification.

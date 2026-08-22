@@ -16,6 +16,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/trace"
 )
 
 func main() {
@@ -29,6 +30,7 @@ func main() {
 	execPrefix := flag.String("exec-prefix", "", "run every shell command through this wrapper, such as \"docker exec -i <container>\"")
 	metricsPath := flag.String("metrics", "", "write what this turn cost, as JSON, to this path")
 	withoutIntake := flag.Bool("without-intake", false, "skip the intake classifier, losing the outcome contract it builds")
+	tracePath := flag.String("trace", "", "write the whole run - request, reply, cost and every ledger entry - to this path, as JSON when it ends in .json and Markdown otherwise")
 	flag.Parse()
 
 	prompt := strings.TrimSpace(strings.Join(flag.Args(), " "))
@@ -49,6 +51,7 @@ func main() {
 		execPrefix:    *execPrefix,
 		metricsPath:   *metricsPath,
 		withoutIntake: *withoutIntake,
+		tracePath:     *tracePath,
 	})
 	if errorValue != nil {
 		fmt.Fprintln(os.Stderr, "bluecollar:", errorValue)
@@ -69,6 +72,7 @@ type runOptions struct {
 	execPrefix    string
 	metricsPath   string
 	withoutIntake bool
+	tracePath     string
 }
 
 func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
@@ -102,6 +106,7 @@ func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
 	result, errorValue := kernel.RunTurn(turnContext, request)
 	printLedger(taskRunService, result.TaskRun.TaskRunID)
 	writeMetrics(options.metricsPath, taskRunService, result.TaskRun.TaskRunID)
+	writeTrace(options.tracePath, taskRunService, result)
 	return result, errorValue
 }
 
@@ -177,6 +182,32 @@ func turnToolSet(options runOptions, runningShell shell) *toolcontract.ToolSet {
 		return nil
 	}
 	return newWorkspaceToolSet(runningShell)
+}
+
+func writeTrace(tracePath string, taskRunService *taskstate.TaskRunService, result agentcontract.AgentTurnResult) {
+	if strings.TrimSpace(tracePath) == "" {
+		return
+	}
+	bundle := trace.Build(result.TaskRun, taskRunService.ListTaskEvent(result.TaskRun.TaskRunID),
+		firstNonEmpty(result.FinishMessage, result.UserNotice))
+	document, errorValue := renderTrace(tracePath, bundle)
+	if errorValue != nil {
+		fmt.Fprintln(os.Stderr, "bluecollar: could not render the trace:", errorValue)
+		return
+	}
+	if writeError := os.WriteFile(tracePath, document, 0o600); writeError != nil {
+		fmt.Fprintln(os.Stderr, "bluecollar: could not write the trace:", writeError)
+		return
+	}
+	fmt.Fprintln(os.Stderr, "trace:", tracePath)
+	fmt.Fprintln(os.Stderr, trace.PrivacyNotice)
+}
+
+func renderTrace(tracePath string, bundle trace.Bundle) ([]byte, error) {
+	if strings.HasSuffix(strings.ToLower(tracePath), ".json") {
+		return bundle.JSON()
+	}
+	return []byte(bundle.Markdown()), nil
 }
 
 func writeMetrics(metricsPath string, taskRunService *taskstate.TaskRunService, taskRunID string) {
