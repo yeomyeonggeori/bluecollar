@@ -93,12 +93,33 @@ trials over trials run.
 | quixbugs | 6 | 0 | 4 |
 | aider-polyglot | 6 | 1 | 3 |
 
-pi is ahead. One row reads differently underneath: on quixbugs every
-functional test passed for all six of bluecollar's runs — it found and fixed
-each bug — and all six failed only `test_one_line_change`, because it rewrote
-the file instead of copying it and changing one line. pi solved four
-outright. On finding the bug bluecollar was 6/6 against pi's 4/6; on minimal
-diff discipline it was 0/6.
+pi is ahead on those rows. One of them reads differently underneath: on
+quixbugs every functional test passed for all six of bluecollar's runs, which
+found and fixed each bug, and all six failed only `test_one_line_change`,
+because it rewrote the file instead of copying it and changing one line. pi
+solved four outright. On finding the bug bluecollar was 6/6 against pi's 4/6;
+on minimal diff discipline it was 0/6.
+
+The first row run at three attempts, `openai/gpt-5.6-luna`, seven tasks, 21
+trials each:
+
+| task | bluecollar | pi |
+|---|---|---|
+| chess-best-move | 0/3 | 0/3 |
+| count-dataset-tokens | 1/3 | 3/3 |
+| csv-to-parquet | 2/3 | 0/3 |
+| fix-git | 1/3 | 0/3 |
+| fix-permissions | 3/3 | 3/3 |
+| hello-world | 3/3 | 3/3 |
+| heterogeneous-dates | 3/3 | 2/3 |
+| **total** | **13/21** | **11/21** |
+
+Two trials in 21 is inside the variance stated above, so this separates
+nothing either. It does retire the single-attempt terminal-bench-core row as a
+description of the current code: four of the seven tasks split, and they split
+in both directions. `grid-pattern-transform` is missing because its container
+failed to build for both harnesses, which is an infrastructure row and not a
+result.
 
 ## The benchmark that measured the harness
 
