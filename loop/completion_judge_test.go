@@ -296,3 +296,39 @@ func TestCompletionGateRunsJudgeFromLedgerWhenContractIsEmpty(t *testing.T) {
 		t.Fatal("expected a completion_judge.verdict event from the ledger-triggered judge")
 	}
 }
+
+func TestAFinishThatAddedNothingGetsTheVerdictItAlreadyGot(t *testing.T) {
+	rejection := completionGateObservation(3, completionGateResult{
+		Message:        "Filter the contacts to those without an account before sending.",
+		EvidenceKind:   evidenceKindExpectedResult,
+		IsJudgeVerdict: true,
+	}, nil)
+	observations := []turnObservation{
+		newContentObservation("obs-001", "continue", toolcontract.TerminalRunToolName, "sent to everyone"),
+		rejection,
+	}
+
+	standing, isStanding := standingJudgeRejection(observations)
+
+	if !isStanding {
+		t.Fatal("re-finishing without touching the ledger is the same finish, and asking the judge again only lets repetition pass a gate that work did not")
+	}
+	if !strings.Contains(standing.Message, "without an account") {
+		t.Fatalf("the agent has to be told the same thing it was told, got %q", standing.Message)
+	}
+}
+
+func TestAFinishThatDidMoreWorkIsJudgedAgain(t *testing.T) {
+	rejection := completionGateObservation(3, completionGateResult{
+		Message:      "Filter the contacts to those without an account before sending.",
+		EvidenceKind: evidenceKindExpectedResult,
+	}, nil)
+	observations := []turnObservation{
+		rejection,
+		newContentObservation("obs-004", "continue", toolcontract.TerminalRunToolName, "re-sent to the filtered list"),
+	}
+
+	if _, isStanding := standingJudgeRejection(observations); isStanding {
+		t.Fatal("an agent that went and did the missing work has to get a fresh verdict on it")
+	}
+}

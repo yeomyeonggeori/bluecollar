@@ -59,7 +59,28 @@ func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithJudge(ctx cont
 	return completionGateResult
 }
 
+// The judge reads the observation ledger, so a finish that added nothing to it is the same
+// finish it already refused. Asking again could only change the answer by chance.
+func standingJudgeRejection(observations []turnObservation) (completionGateResult, bool) {
+	if len(observations) == 0 {
+		return completionGateResult{}, false
+	}
+	latestObservation := observations[len(observations)-1]
+	if latestObservation.Action != "evidence_missing" || latestObservation.PolicyCode != evidenceKindExpectedResult || latestObservation.Failure == nil {
+		return completionGateResult{}, false
+	}
+	return completionGateResult{
+		Message:        latestObservation.Failure.UserSafeSummary,
+		EvidenceKind:   evidenceKindExpectedResult,
+		IsJudgeVerdict: true,
+	}, true
+}
+
 func (agentTurnRunner *AgentTurnRunner) evaluateCompletionJudge(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) completionGateResult {
+	if standingRejection, isStanding := standingJudgeRejection(observations); isStanding {
+		agentTurnRunner.appendEvent(taskRunID, "completion_judge.standing_verdict", marshalEventBody(map[string]string{"reason": standingRejection.Message}))
+		return standingRejection
+	}
 	if agentTurnRunner.languageModel == nil {
 		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": "completion judge language model was not configured"}))
 		return completionGateResult{IsSatisfied: true}
