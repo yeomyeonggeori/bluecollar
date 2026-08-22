@@ -489,6 +489,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if !isBatched {
 			actionDocument, actionError = agentTurnRunner.nextAction(workContext, taskRun.TaskRunID, iterationRequest, toolUseRequirements, state.Observations, state.ExecutionState, state.ContextSummary, allowQualityCriteria)
 		}
+		if actionError != nil && isUnreadableModelActionError(actionError) {
+			state.Observations = append(state.Observations, unreadableActionObservation(state.Observations, actionError))
+			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.unreadable_action", marshalEventBody(map[string]string{"reason": actionError.Error()}))
+			continue
+		}
 		if actionError != nil {
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusFailed, "agent turn iteration", actionError.Error())
 			if errors.Is(actionError, context.Canceled) {
@@ -1088,6 +1093,18 @@ func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID strin
 		"maxIterationCount": grantedProfile.MaxIterationCount,
 	}))
 	return true
+}
+
+func unreadableActionObservation(observations []turnObservation, actionError error) turnObservation {
+	return newFailureObservation(
+		nextObservationIDForObservations(observations),
+		"policy",
+		"",
+		actionError.Error()+". Send the action again as a well-formed call.",
+		toolcontract.FailureInvalidInput,
+		toolcontract.FailureCodes.InvalidInput,
+		"agent_action",
+	)
 }
 
 func (agentTurnRunner *AgentTurnRunner) stepBudgetContext(state agentTaskState) string {
