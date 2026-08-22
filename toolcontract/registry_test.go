@@ -316,3 +316,31 @@ func testToolResultContract() *ToolResultContract {
 func testToolSuccess(content string) ToolResult {
 	return ToolSuccessData(content, json.RawMessage(`{}`))
 }
+
+func TestACrashingToolFailsItsCallAndNotTheTurn(t *testing.T) {
+	for _, timeoutMS := range []int{0, 5000} {
+		toolSet := NewToolSet([]string{"crashing_tool"})
+		if errorValue := registerTestTool(
+			toolSet,
+			ToolDefinition{Name: "crashing_tool", TimeoutMS: timeoutMS},
+			func(context.Context, ToolInvocation) (ToolResult, error) {
+				var missingDefinition *ToolDefinition
+				return testToolSuccess(missingDefinition.Name), nil
+			},
+		); errorValue != nil {
+			t.Fatalf("registering the tool failed: %v", errorValue)
+		}
+
+		result, errorValue := toolSet.Invoke(context.Background(), ToolInvocation{ToolName: "crashing_tool"})
+
+		if errorValue != nil {
+			t.Fatalf("timeoutMS %d: a crashed tool is a failed call, not an error the loop has to interpret: %v", timeoutMS, errorValue)
+		}
+		if !result.Failed() || result.FailureCode() != FailureCodes.ToolCrashed.String() {
+			t.Fatalf("timeoutMS %d: the host owns the tool body, so its panic must arrive as one failure the task can report and recover from: %+v", timeoutMS, result)
+		}
+		if result.Failure.Retryable {
+			t.Fatalf("timeoutMS %d: the same input crashes the same way, so retrying it spends the budget on a repeat", timeoutMS)
+		}
+	}
+}

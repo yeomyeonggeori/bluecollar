@@ -1,6 +1,7 @@
 package taskstate
 
 import (
+	"strings"
 	"sync"
 	"testing"
 )
@@ -53,5 +54,33 @@ func TestTaskRunObserverWithoutRegistrationPersistsIdentically(t *testing.T) {
 	}
 	if stored[0].Name != "tool.x.result" || stored[0].Body != "body" {
 		t.Fatalf("expected persisted event unchanged, got %+v", stored[0])
+	}
+}
+
+func TestACrashingObserverDoesNotTakeTheAppendDownWithIt(t *testing.T) {
+	taskEventService := NewTaskEventService()
+	reachedAfterTheCrash := false
+	defer taskEventService.RegisterTurnObserver(func(RawTurnEvent) {
+		panic("the host's observer had a bad day")
+	})()
+	defer taskEventService.RegisterTurnObserver(func(RawTurnEvent) {
+		reachedAfterTheCrash = true
+	})()
+
+	taskEventService.AppendTaskEvent("run-1", "tool.x.result", "{}")
+
+	if !reachedAfterTheCrash {
+		t.Fatal("one bad subscriber starved the observers queued behind it")
+	}
+	stored := taskEventService.ListTaskEvent("run-1")
+	names := []string{}
+	for _, taskEvent := range stored {
+		names = append(names, taskEvent.Name)
+	}
+	if len(stored) != 2 || names[0] != "tool.x.result" || names[1] != "task.observer_crashed" {
+		t.Fatalf("a swallowed crash is a crash nobody can diagnose; the ledger has to say it happened: %v", names)
+	}
+	if !strings.Contains(stored[1].Body, "the host's observer had a bad day") {
+		t.Fatalf("expected the recorded crash to carry what the observer panicked with, got %q", stored[1].Body)
 	}
 }
