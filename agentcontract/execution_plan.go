@@ -16,9 +16,16 @@ type ExecutionPlan struct {
 	PermissionChange        bool     `json:"permissionChange"`
 	PublicDeploy            bool     `json:"publicDeploy"`
 	PaidAction              bool     `json:"paidAction"`
+	RequesterAuthorization  string   `json:"requesterAuthorization"`
 	MissingInformation      []string `json:"missingInformation"`
 	ContinuationInstruction string   `json:"continuationInstruction"`
 }
+
+const (
+	RequesterAuthorizationExplicit = "explicit"
+	RequesterAuthorizationImplied  = "implied"
+	RequesterAuthorizationAbsent   = "absent"
+)
 
 type ConfirmationReplyDecision struct {
 	Decision string `json:"decision"`

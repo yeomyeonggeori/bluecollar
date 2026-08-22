@@ -190,3 +190,35 @@ func TestTheConfirmationPlannerIsToldWhoCanAuthorizeAndWhoIsJustTalking(t *testi
 		t.Fatalf("a partition needs an identity: without the requester, the planner cannot tell which visible speaker is the one it is planning for: %s", assembled)
 	}
 }
+
+func TestARiskyEffectTheRequesterNamedDoesNotHoldTheTask(t *testing.T) {
+	deleteWhatTheyAskedFor := ExecutionPlan{
+		Summary:                "delete the three temp files the requester listed",
+		Destructive:            true,
+		RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit,
+	}
+	if EvaluateConfirmationPolicy(deleteWhatTheyAskedFor).RequiresConfirmation {
+		t.Fatal("nobody is watching this run, so holding work the requester asked for in plain words costs hours and buys nothing")
+	}
+
+	for _, authorization := range []string{agentcontract.RequesterAuthorizationImplied, agentcontract.RequesterAuthorizationAbsent, ""} {
+		deleteNobodyAskedFor := ExecutionPlan{Summary: "delete the build directory", Destructive: true, RequesterAuthorization: authorization}
+		if !EvaluateConfirmationPolicy(deleteNobodyAskedFor).RequiresConfirmation {
+			t.Fatalf("authorization %q is not the requester naming the effect, so the hold stays", authorization)
+		}
+	}
+}
+
+func TestAuthorizationDoesNotUnlockAnEffectThatReachesPastTheWorkspace(t *testing.T) {
+	explicitAndWide := []ExecutionPlan{
+		{Summary: "message every customer", ThirdPartyExternalSend: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
+		{Summary: "publish the site", PublicDeploy: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
+		{Summary: "buy the plan", PaidAction: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
+		{Summary: "grant them admin", PermissionChange: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
+	}
+	for _, executionPlan := range explicitAndWide {
+		if !EvaluateConfirmationPolicy(executionPlan).RequiresConfirmation {
+			t.Fatalf("%q spends money, changes who can do what, or reaches people outside this conversation; a model's reading of one sentence is not enough to skip that gate", executionPlan.Summary)
+		}
+	}
+}
