@@ -201,6 +201,26 @@ prior task, which carries that task's prompt, result and contract forward.
 `ask_input` is not the shape for this — that is a tool the model calls, and a
 budget running out is the runtime stopping, not the model asking.
 
+## The other ceiling: what a turn puts in front of the model
+
+Time is not the only thing a task spends. Every call carries the assembled
+prompt, and that cost is paid on every step of every task forever, which is
+exactly why nobody notices it: a paragraph added to an instruction reads as
+documentation in the diff.
+
+`loop/testdata/prompt-budget.json` holds two numbers per fixture, and the two
+do different jobs. The recorded sizes are a change detector: any edit that
+grows or shrinks what the model reads fails the gate until the file is
+updated, so the delta lands in the diff a reviewer reads. `maximumTotalBytes`
+is the product contract, and raising it needs a reason in the pull request.
+
+Today the two fixtures assemble 12.2 KB and 13.5 KB against a 16 KB ceiling.
+The largest single item in both is not the instruction. It is the action
+schema, at 6.5 KB, more than the instruction and the tool catalog together.
+
+The measurement needs no credentials and calls no model. It measures what we
+assemble, so it runs in the ordinary test job.
+
 ## What is still owed
 
 - Cost. Every run before today reported `costUSD` zero because the reference
