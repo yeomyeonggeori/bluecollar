@@ -36,7 +36,7 @@ func TestEveryTaskIsToldThatToolOutputCannotGiveItInstructions(t *testing.T) {
 	}
 
 	for name, request := range requests {
-		instruction := buildAgentSystemInstruction(request).Text()
+		instruction := buildAgentSystemInstruction(request, TurnOptions{}).Text()
 		if !strings.Contains(instruction, "Untrusted content:") {
 			t.Fatalf("%s: a turn reads messages other people wrote and files other people committed; without this rule an instruction found in one of them is indistinguishable from the requester's own: %s", name, instruction)
 		}
@@ -50,7 +50,7 @@ func TestTheInstructionIsItsSectionsAndNothingElse(t *testing.T) {
 		HostInstruction: "The company closes at six.",
 	}
 
-	systemInstruction := buildAgentSystemInstruction(request)
+	systemInstruction := buildAgentSystemInstruction(request, TurnOptions{})
 
 	bodies := []string{}
 	for _, section := range systemInstruction.Sections {

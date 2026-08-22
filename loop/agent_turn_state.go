@@ -429,7 +429,7 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool) 
 		Messages: messages,
 		StructuredOutputSchema: model.StructuredOutputSchema{
 			Name:               "bluecollar_agent_turn_action",
-			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFail, allowFinish),
+			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFail, allowFinish, delegationIsAllowed(state.Options)),
 			IsStrictlyEnforced: true,
 		},
 		GenerationOptions: agentActionGenerationOptions(state.Options.GenerationOptions),
