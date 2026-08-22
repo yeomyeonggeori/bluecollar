@@ -344,3 +344,34 @@ func TestACrashingToolFailsItsCallAndNotTheTurn(t *testing.T) {
 		}
 	}
 }
+
+func TestAToolCatalogCarriesTheHalfThatSaysWhenNotToUseIt(t *testing.T) {
+	toolSet := NewToolSet([]string{"scoped_tool", "bare_tool"})
+	if errorValue := registerTestTool(toolSet, ToolDefinition{
+		Name:         "scoped_tool",
+		Description:  "Replace one exact passage of a file.",
+		WhenToUse:    "changing a file that already exists.",
+		WhenNotToUse: "creating a file; use file_write.",
+	}, func(context.Context, ToolInvocation) (ToolResult, error) {
+		return testToolSuccess("done"), nil
+	}); errorValue != nil {
+		t.Fatalf("registering the scoped tool failed: %v", errorValue)
+	}
+	if errorValue := registerTestTool(toolSet, ToolDefinition{
+		Name:        "bare_tool",
+		Description: "Do the thing.",
+	}, func(context.Context, ToolInvocation) (ToolResult, error) {
+		return testToolSuccess("done"), nil
+	}); errorValue != nil {
+		t.Fatalf("registering the bare tool failed: %v", errorValue)
+	}
+
+	descriptions := toolSet.Descriptions()
+
+	if !strings.Contains(descriptions, "Replace one exact passage of a file. When to use: changing a file that already exists. When not to use: creating a file; use file_write.") {
+		t.Fatalf("a wrong-tool failure is fixed once on the descriptor or corrected by recovery guidance on every model, every time: %s", descriptions)
+	}
+	if !strings.Contains(descriptions, "bare_tool: Do the thing. [") {
+		t.Fatalf("a tool that states neither half reads exactly as it did before: %s", descriptions)
+	}
+}

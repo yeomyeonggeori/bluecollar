@@ -22,6 +22,8 @@ type ToolDescriptor struct {
 	Namespace               string              `json:"namespace,omitempty"`
 	Name                    string              `json:"name"`
 	Description             string              `json:"description"`
+	WhenToUse               string              `json:"whenToUse,omitempty"`
+	WhenNotToUse            string              `json:"whenNotToUse,omitempty"`
 	PrivacyClass            string              `json:"privacyClass,omitempty"`
 	RequiresUserPresence    bool                `json:"requiresUserPresence,omitempty"`
 	RequiresRequesterDevice bool                `json:"requiresRequesterDevice,omitempty"`
@@ -45,6 +47,20 @@ type ToolDescriptor struct {
 }
 
 type ToolDefinition = ToolDescriptor
+
+// The negative half is where a wrong-tool failure gets fixed once instead of being
+// corrected by recovery guidance on every model, every time. It names the tool that is
+// correct instead, so the model has somewhere to go.
+func (toolDescriptor ToolDescriptor) ModelFacingDescription() string {
+	sentences := []string{strings.TrimSpace(toolDescriptor.Description)}
+	if whenToUse := strings.TrimSpace(toolDescriptor.WhenToUse); whenToUse != "" {
+		sentences = append(sentences, "When to use: "+whenToUse)
+	}
+	if whenNotToUse := strings.TrimSpace(toolDescriptor.WhenNotToUse); whenNotToUse != "" {
+		sentences = append(sentences, "When not to use: "+whenNotToUse)
+	}
+	return strings.TrimSpace(strings.Join(sentences, " "))
+}
 
 type ToolCompletion struct {
 	Mode string `json:"mode,omitempty"`
@@ -1090,7 +1106,7 @@ func (toolSet *ToolSet) Descriptions() string {
 }
 
 func toolCatalogLine(toolName string, toolDefinition ToolDefinition, toolSet *ToolSet) string {
-	description := firstNonEmptyString(strings.TrimSpace(toolDefinition.Description), "No description.")
+	description := firstNonEmptyString(toolDefinition.ModelFacingDescription(), "No description.")
 	visibility := "hidden"
 	if toolSet.IsAllowed(toolName) {
 		visibility = "exposed"

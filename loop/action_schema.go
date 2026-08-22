@@ -170,7 +170,7 @@ func continueActionSchema(toolDefinition toolcontract.ToolDefinition) (map[strin
 		"remainingWork":        stringSchema(),
 		"executionStateUpdate": executionStateUpdateRefSchema(),
 	})
-	if description := strings.TrimSpace(toolDefinition.Description); description != "" {
+	if description := toolDefinition.ModelFacingDescription(); description != "" {
 		schema["description"] = description
 	}
 	return schema, true
