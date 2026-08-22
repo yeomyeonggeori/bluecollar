@@ -809,9 +809,24 @@ func ValidateToolInput(schemaDocument json.RawMessage, inputDocument json.RawMes
 		return nil, errors.New("tool input schema cannot be resolved")
 	}
 	if errorValue := resolvedSchema.Validate(input); errorValue != nil {
-		return nil, errors.New("tool input does not match its descriptor schema")
+		return nil, errors.New("tool input does not match its descriptor schema: " + compactWhitespace(errorValue.Error()) + acceptedParameterSentence(schema))
 	}
 	return normalizedInput, nil
+}
+
+// A model that invented a parameter cannot see the descriptor, so a rejection that
+// names neither what was wrong nor what exists leaves it guessing, and a guess costs
+// a whole round trip.
+func acceptedParameterSentence(schema jsonschema.Schema) string {
+	names := make([]string, 0, len(schema.Properties))
+	for name := range schema.Properties {
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return ""
+	}
+	sort.Strings(names)
+	return ". This tool takes: " + strings.Join(names, ", ")
 }
 
 func ValidateSuccessfulToolResult(contract ToolResultContract, result ToolResult) error {
