@@ -107,6 +107,13 @@ task.completed
 Every step is a ledger entry, which is the point of reading it: the same events appear whether the
 turn calls fifty tools or none.
 
+`--record-tape <path>` writes every model request and answer of the turn, and `--replay-tape <path>`
+answers from that file with no endpoint at all. A tape is for two things: giving the loop's own
+guarantees real inputs, including the malformed ones nobody would hand-write, and walking a run that
+went wrong again for nothing. It is never evidence that the agent works. That is measured live, by
+[`bench`](./bench), against the benchmark's own verifier, and a tape that no longer answers the calls
+the loop makes fails loudly instead of pretending.
+
 `--trace <path>` writes the same run as one file instead of scrollback: the request, the reply, what
 it cost, and every ledger entry in order. A path ending in `.json` gets JSON and any other path gets
 Markdown, both from one snapshot. The file keeps whatever the task carried, so read it before

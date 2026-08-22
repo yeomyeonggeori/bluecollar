@@ -13,7 +13,9 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/bench"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/loop"
+	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/bluecollar/model/tape"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"github.com/yeomyeonggeori/bluecollar/trace"
@@ -30,6 +32,8 @@ func main() {
 	execPrefix := flag.String("exec-prefix", "", "run every shell command through this wrapper, such as \"docker exec -i <container>\"")
 	metricsPath := flag.String("metrics", "", "write what this turn cost, as JSON, to this path")
 	withoutIntake := flag.Bool("without-intake", false, "skip the intake classifier, losing the outcome contract it builds")
+	recordTapePath := flag.String("record-tape", "", "write every model request and answer of this turn to this path, so the same turn can be replayed without a model")
+	replayTapePath := flag.String("replay-tape", "", "answer every model call from this tape instead of an endpoint; never evidence that the agent works, only that the loop still walks the same way")
 	tracePath := flag.String("trace", "", "write the whole run - request, reply, cost and every ledger entry - to this path, as JSON when it ends in .json and Markdown otherwise")
 	flag.Parse()
 
@@ -40,18 +44,20 @@ func main() {
 	}
 
 	result, errorValue := runOneTurn(runOptions{
-		endpointURL:   *endpointURL,
-		apiKey:        *apiKey,
-		modelName:     *modelName,
-		agentName:     *agentName,
-		prompt:        prompt,
-		timeout:       *timeout,
-		workspacePath: *workspacePath,
-		withoutTools:  *withoutTools,
-		execPrefix:    *execPrefix,
-		metricsPath:   *metricsPath,
-		withoutIntake: *withoutIntake,
-		tracePath:     *tracePath,
+		endpointURL:    *endpointURL,
+		apiKey:         *apiKey,
+		modelName:      *modelName,
+		agentName:      *agentName,
+		prompt:         prompt,
+		timeout:        *timeout,
+		workspacePath:  *workspacePath,
+		withoutTools:   *withoutTools,
+		execPrefix:     *execPrefix,
+		metricsPath:    *metricsPath,
+		withoutIntake:  *withoutIntake,
+		tracePath:      *tracePath,
+		recordTapePath: *recordTapePath,
+		replayTapePath: *replayTapePath,
 	})
 	if errorValue != nil {
 		fmt.Fprintln(os.Stderr, "bluecollar:", errorValue)
@@ -61,31 +67,38 @@ func main() {
 }
 
 type runOptions struct {
-	endpointURL   string
-	apiKey        string
-	modelName     string
-	agentName     string
-	prompt        string
-	timeout       time.Duration
-	workspacePath string
-	withoutTools  bool
-	execPrefix    string
-	metricsPath   string
-	withoutIntake bool
-	tracePath     string
+	endpointURL    string
+	apiKey         string
+	modelName      string
+	agentName      string
+	prompt         string
+	timeout        time.Duration
+	workspacePath  string
+	withoutTools   bool
+	execPrefix     string
+	metricsPath    string
+	withoutIntake  bool
+	tracePath      string
+	recordTapePath string
+	replayTapePath string
 }
 
 func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
-	languageModel := openaicompatible.NewProvider(options.endpointURL, options.apiKey, options.modelName)
+	endpointModel := openaicompatible.NewProvider(options.endpointURL, options.apiKey, options.modelName)
 	taskEventService := taskstate.NewTaskEventService()
 	taskRunService := taskstate.NewTaskRunService(taskEventService)
 	kernel := loop.NewAgentKernel(taskRunService, taskstate.NewTaskStepService())
-	kernel.UseLanguageModelProvider(languageModel)
 
 	turnContext, cancel := context.WithTimeout(context.Background(), options.timeout)
 	defer cancel()
 
-	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: languageModel.ContextWindowTokens(turnContext)})
+	languageModel, closeTape, tapeError := turnLanguageModel(options, endpointModel)
+	if tapeError != nil {
+		return agentcontract.AgentTurnResult{}, tapeError
+	}
+	defer closeTape()
+	kernel.UseLanguageModelProvider(languageModel)
+	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: contextWindowTokens(turnContext, options, endpointModel)})
 
 	runningShell := turnShellWithInterpreter(turnContext, options)
 	workspacePath := runningShell.resolvedWorkingDirectoryPath(turnContext)
@@ -123,7 +136,7 @@ func collapsedWhitespace(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
-func routeTurn(ctx context.Context, languageModel *openaicompatible.Provider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
+func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
 	router := intake.NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: request.RequesterPersonID,
@@ -225,7 +238,38 @@ func writeMetrics(metricsPath string, taskRunService *taskstate.TaskRunService, 
 	}
 }
 
-func decideTurn(ctx context.Context, languageModel *openaicompatible.Provider, request agentcontract.AgentTurnRequest, options runOptions) agentcontract.TurnDecision {
+func turnLanguageModel(options runOptions, endpointModel *openaicompatible.Provider) (model.LanguageModelProvider, func(), error) {
+	if replayPath := strings.TrimSpace(options.replayTapePath); replayPath != "" {
+		file, errorValue := os.Open(replayPath)
+		if errorValue != nil {
+			return nil, func() {}, errorValue
+		}
+		defer file.Close()
+		player, errorValue := tape.Read(file)
+		if errorValue != nil {
+			return nil, func() {}, errorValue
+		}
+		return player, func() {}, nil
+	}
+	recordPath := strings.TrimSpace(options.recordTapePath)
+	if recordPath == "" {
+		return endpointModel, func() {}, nil
+	}
+	file, errorValue := os.OpenFile(recordPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
+	if errorValue != nil {
+		return nil, func() {}, errorValue
+	}
+	return tape.NewRecorder(endpointModel, file), func() { file.Close() }, nil
+}
+
+func contextWindowTokens(ctx context.Context, options runOptions, endpointModel *openaicompatible.Provider) int {
+	if strings.TrimSpace(options.replayTapePath) != "" {
+		return 0
+	}
+	return endpointModel.ContextWindowTokens(ctx)
+}
+
+func decideTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest, options runOptions) agentcontract.TurnDecision {
 	if options.withoutIntake {
 		return boundedTaskDecision()
 	}
