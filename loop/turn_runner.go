@@ -698,7 +698,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 	}
 	agentTurnRunner.notePlanMissingBeforeStateChange(taskRunID, request, state, actionDocument)
 	state.ToolCallCount++
-	if state.ToolCallCount > maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations) {
+	if state.ToolCallCount > maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations) && !agentTurnRunner.extendToolCallCeilingOnce(taskRunID, state) {
 		result, shouldContinue, errorValue := agentTurnRunner.finalizeEscalateOrStopForLimit(ctx, taskRunID, request, "max_tool_calls", requirements, state.Observations, state.Attachments, state.QualityCriteria, state.ExecutionState, iteration, state.ToolCallCount)
 		if errorValue != nil || !shouldContinue {
 			agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusBlocked, "limit stop", "max_tool_calls")
@@ -1060,6 +1060,25 @@ func wrapUpDeliveryToolNames(request AgentTurnRequest) []string {
 		toolNames = appendUniqueStrings(toolNames, requiredSendToolNamesForRequest(request)...)
 	}
 	return toolNames
+}
+
+func toolCallCeilingCameFromTheLevel(options TurnOptions, taskLevel TaskLevel) bool {
+	return options.MaxToolCallCount == TaskLevelProfileForLevel(taskLevel).MaxToolCallCount
+}
+
+// The level profiles are doublings, so doubling is what the next level would have given.
+// The elapsed budget still ends the turn, which is why nothing here checks the clock.
+func (agentTurnRunner *AgentTurnRunner) extendToolCallCeilingOnce(taskRunID string, state *agentTaskState) bool {
+	if state.DidExtendToolCallCeiling || !toolCallCeilingCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
+		return false
+	}
+	state.DidExtendToolCallCeiling = true
+	agentTurnRunner.options.MaxToolCallCount *= 2
+	agentTurnRunner.appendEvent(taskRunID, "agent.tool_call_ceiling_extended", marshalEventBody(map[string]any{
+		"usedToolCallCount": state.ToolCallCount,
+		"maxToolCallCount":  agentTurnRunner.options.MaxToolCallCount,
+	}))
+	return true
 }
 
 func (agentTurnRunner *AgentTurnRunner) stepBudgetContext(state agentTaskState) string {
