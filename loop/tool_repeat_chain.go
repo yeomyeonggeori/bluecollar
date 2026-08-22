@@ -103,7 +103,10 @@ type reminderEventBody struct {
 // identical to an earlier one means the call changed nothing. That holds however much
 // work happened in between, which is why this does not go through the consecutive chain.
 func unchangedResultReminderObservation(toolSet *toolcontract.ToolSet, observations []turnObservation, observation turnObservation) (turnObservation, bool) {
-	if observation.RepeatsObservationID == "" || !toolChangesNothingOfItsOwn(toolSet, observation.Tool) {
+	if observation.RepeatsObservationID == "" {
+		return turnObservation{}, false
+	}
+	if !toolChangesNothingOfItsOwn(toolSet, observation.Tool) && !isToolRepeatReminderRunLength(identicalResultCount(observations, observation)) {
 		return turnObservation{}, false
 	}
 	return newContentObservation(
@@ -112,6 +115,19 @@ func unchangedResultReminderObservation(toolSet *toolcontract.ToolSet, observati
 		strings.TrimSpace(observation.Tool),
 		unchangedResultReminderMessage(observation.Tool, observation.RepeatsObservationID),
 	), true
+}
+
+// One repeat of a tool that changes something proves nothing: two runs of ls print the same
+// listing and may both have changed the machine. The same earlier result coming back three
+// times no longer reads as verification, so it earns the run lengths the input chain uses.
+func identicalResultCount(observations []turnObservation, observation turnObservation) int {
+	count := 0
+	for _, earlier := range observations {
+		if earlier.ObservationID == observation.RepeatsObservationID || earlier.RepeatsObservationID == observation.RepeatsObservationID {
+			count++
+		}
+	}
+	return count
 }
 
 func toolChangesNothingOfItsOwn(toolSet *toolcontract.ToolSet, toolName string) bool {

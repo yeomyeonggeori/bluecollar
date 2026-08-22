@@ -138,3 +138,34 @@ func TestARepeatedResultFromAToolThatDoesSomethingIsNotANoOp(t *testing.T) {
 		t.Fatal("a command that prints the same thing twice may have changed the machine both times")
 	}
 }
+
+func resultRepeating(observationID string, toolName string, repeatsObservationID string) turnObservation {
+	observation := callObservation(observationID, toolName, toolName+"\x00{}")
+	observation.RepeatsObservationID = repeatsObservationID
+	return observation
+}
+
+func TestTheThirdIdenticalResultFromASideEffectingToolIsALoop(t *testing.T) {
+	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
+	observations := []turnObservation{
+		callObservation("obs-1", toolcontract.TerminalRunToolName, "terminal_run\x00{}"),
+		resultRepeating("obs-2", toolcontract.TerminalRunToolName, "obs-1"),
+	}
+	third := resultRepeating("obs-3", toolcontract.TerminalRunToolName, "obs-1")
+
+	if _, hasReminder := unchangedResultReminderObservation(toolSet, observations, resultRepeating("obs-2", toolcontract.TerminalRunToolName, "obs-1")); hasReminder {
+		t.Fatal("one repeat of a command that changes things is not proof of a loop, and saying so would be noise")
+	}
+	if _, hasReminder := unchangedResultReminderObservation(toolSet, append(observations, third), third); !hasReminder {
+		t.Fatal("the same earlier result coming back a third time is not verification, and nothing else in the loop tells the agent")
+	}
+}
+
+func TestANoSideEffectToolStillGetsToldOnTheFirstRepeat(t *testing.T) {
+	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
+	repeated := resultRepeating("obs-2", toolcontract.PlanUpdateToolName, "obs-1")
+
+	if _, hasReminder := unchangedResultReminderObservation(toolSet, []turnObservation{repeated}, repeated); !hasReminder {
+		t.Fatal("a tool that changes nothing of its own already proved nothing changed the first time")
+	}
+}
