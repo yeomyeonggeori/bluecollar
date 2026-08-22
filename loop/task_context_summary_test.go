@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -153,4 +154,40 @@ func (languageModel *truncatingSummaryLanguageModel) GenerateStructuredResponse(
 		return model.StructuredResponse{}, errors.New("structured output truncated: finish reason length")
 	}
 	return model.StructuredResponse{Content: finishMessageDocument("done")}, nil
+}
+
+func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) {
+	observations := numberedContextSummaryObservations(40, 12, "SHORT_MARKER")
+	completedSteps := []string{}
+	for index := 0; index < 24; index++ {
+		completedSteps = append(completedSteps, `"`+strconv.Itoa(index)+" "+strings.Repeat("step ", 90)+`"`)
+	}
+	longSummary := `{"goal":"ship","completedSteps":[` + strings.Join(completedSteps, ",") + `],"artifacts":[],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":[]}`
+	languageModel := &sequenceLanguageModel{contents: []string{longSummary, finishMessageDocument("done"), finishMessageDocument("done")}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+
+	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, nil, observations, ExecutionState{}, TaskContextSummary{}, true); errorValue != nil {
+		t.Fatalf("expected action to succeed: %v", errorValue)
+	}
+
+	taskEvents := services.taskEventService.ListTaskEvent("task-1")
+	if taskEventsContain(taskEvents, taskContextSummaryEventName, "step step") {
+		t.Fatal("a summary bigger than the observations it replaces is not compaction; recording it grows the prompt and calls the work done")
+	}
+	if !taskEventsContain(taskEvents, contextCompactionFreedNothingEventName, "replacedCharacters") {
+		t.Fatalf("a discarded pass has to say so, or the next reader sees a task that never tried: %d events", len(taskEvents))
+	}
+
+	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, nil, observations, ExecutionState{}, TaskContextSummary{}, true); errorValue != nil {
+		t.Fatalf("expected the second action to succeed: %v", errorValue)
+	}
+	summaryRequestCount := 0
+	for _, request := range languageModel.requests {
+		if request.StructuredOutputSchema.Name == "bluecollar_task_context_summary" {
+			summaryRequestCount++
+		}
+	}
+	if summaryRequestCount != 1 {
+		t.Fatalf("summarizing the same observations again buys the same nothing and is paid for again: %d summary calls", summaryRequestCount)
+	}
 }

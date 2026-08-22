@@ -10,7 +10,10 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
-const taskContextSummaryEventName = "agent.context_summary"
+const (
+	taskContextSummaryEventName            = "agent.context_summary"
+	contextCompactionFreedNothingEventName = "agent.context_compaction_freed_nothing"
+)
 const defaultCompactionTriggerTokens = 96000
 const taskContextCompactionRecentObservationCount = 10
 const taskContextCompactionMinimumNewObservations = 6
@@ -66,7 +69,7 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 		return promptObservations
 	}
 	plan, shouldCompact := buildTaskContextCompactionPlan(state.Observations, currentSummary, pinnedObservationIDs)
-	if !shouldCompact {
+	if !shouldCompact || compactionAlreadyFreedNothing(taskEvents, plan.CompactedThroughObservationID) {
 		return promptObservations
 	}
 	summary, ok := agentTurnRunner.generateTaskContextSummary(ctx, state.Request, currentSummary, plan.CompactableObservations)
@@ -76,11 +79,39 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	summary.ObservationID = "context-summary-" + plan.CompactedThroughObservationID
 	summary.CompactedThroughObservationID = plan.CompactedThroughObservationID
 	summary.CompactedObservationIDs = append([]string{}, plan.CompactedObservationIDs...)
+	replacedCharacters := observationsCharacterCount(plan.CompactableObservations)
+	summaryCharacters := len(summaryObservation(summary).ContentText())
+	if summaryCharacters >= replacedCharacters {
+		agentTurnRunner.appendEvent(taskRunID, contextCompactionFreedNothingEventName, marshalEventBody(map[string]any{
+			"compactedThroughObservationID": plan.CompactedThroughObservationID,
+			"replacedCharacters":            replacedCharacters,
+			"summaryCharacters":             summaryCharacters,
+		}))
+		return promptObservations
+	}
 	compactedObservations := promptVisibleObservations(state.Observations, summary, pinnedObservationIDs)
 	summary = summaryAccountingForCompactedObservations(summary, currentSummary, compactedObservations, plan, taskEvents)
 	summary = normalizeTaskContextSummary(summary)
 	agentTurnRunner.appendEvent(taskRunID, taskContextSummaryEventName, marshalEventBody(summary))
 	return compactedObservations
+}
+
+// Once a summary of the same observations came back no smaller than what it replaced,
+// asking for it again every step buys the same nothing and pays the summarizer for it.
+func compactionAlreadyFreedNothing(events []taskstate.TaskEvent, compactedThroughObservationID string) bool {
+	trimmedObservationID := strings.TrimSpace(compactedThroughObservationID)
+	for _, taskEvent := range events {
+		if strings.TrimSpace(taskEvent.Name) != contextCompactionFreedNothingEventName {
+			continue
+		}
+		attempt := struct {
+			CompactedThroughObservationID string `json:"compactedThroughObservationID"`
+		}{}
+		if json.Unmarshal([]byte(taskEvent.Body), &attempt) == nil && strings.TrimSpace(attempt.CompactedThroughObservationID) == trimmedObservationID {
+			return true
+		}
+	}
+	return false
 }
 
 // A pass that does not actually shrink the prompt is discarded, so a turn never reports
