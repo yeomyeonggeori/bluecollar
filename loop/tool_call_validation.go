@@ -249,7 +249,7 @@ func isFileMutationTool(toolName string) bool {
 
 func observationMutatedPaths(observation turnObservation) []string {
 	payload := map[string]any{}
-	if json.Unmarshal([]byte(observation.ContentText()), &payload) != nil {
+	if json.Unmarshal(observation.StructuredOutput(), &payload) != nil {
 		return nil
 	}
 	paths := []string{}
@@ -282,7 +282,7 @@ func stalledReadRecoveryDirective(observations []turnObservation) string {
 
 func cachedFileReadObservation(observationID string, previousObservation turnObservation, message string) turnObservation {
 	payload := map[string]any{}
-	if json.Unmarshal([]byte(previousObservation.ContentText()), &payload) != nil {
+	if json.Unmarshal(previousObservation.StructuredOutput(), &payload) != nil {
 		payload = map[string]any{}
 	}
 	payload["cacheStatus"] = "hit"

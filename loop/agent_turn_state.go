@@ -257,14 +257,14 @@ func producedSourcePaths(events []taskstate.TaskEvent) []string {
 			var result struct {
 				Path string `json:"path"`
 			}
-			if json.Unmarshal([]byte(observation.Output.Content), &result) == nil {
+			if json.Unmarshal(observation.StructuredOutput(), &result) == nil {
 				addPath(result.Path)
 			}
 		case "file_edit":
 			var result struct {
 				EditedFiles []string `json:"editedFiles"`
 			}
-			if json.Unmarshal([]byte(observation.Output.Content), &result) == nil {
+			if json.Unmarshal(observation.StructuredOutput(), &result) == nil {
 				for _, path := range result.EditedFiles {
 					addPath(path)
 				}
