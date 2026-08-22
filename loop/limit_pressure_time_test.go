@@ -724,3 +724,28 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 		t.Fatalf("expected no continue variant for the dropped exploration tool, got %s", actionSchema)
 	}
 }
+
+func TestALowLevelGuessGetsOneMoreBlockOfToolCalls(t *testing.T) {
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	services := newTurnRunnerTestServices(nil, TurnOptions{MaxToolCallCount: mediumProfile.MaxToolCallCount})
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}, ToolCallCount: mediumProfile.MaxToolCallCount + 1}
+
+	if !services.runner.extendToolCallCeilingOnce("task-1", state) {
+		t.Fatal("a task that ran out of calls with work left is reporting a budget, not an answer")
+	}
+	if services.runner.options.MaxToolCallCount != mediumProfile.MaxToolCallCount*2 {
+		t.Fatalf("the grant is what the next level would have given, got %d", services.runner.options.MaxToolCallCount)
+	}
+	if services.runner.extendToolCallCeilingOnce("task-1", state) {
+		t.Fatal("a ceiling any agent can raise twice is not a ceiling")
+	}
+}
+
+func TestACeilingTheHostChoseIsTheHostsNumber(t *testing.T) {
+	services := newTurnRunnerTestServices(nil, TurnOptions{MaxToolCallCount: 1})
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}, ToolCallCount: 2}
+
+	if services.runner.extendToolCallCeilingOnce("task-1", state) {
+		t.Fatal("a host that asked for one tool call meant one")
+	}
+}
