@@ -197,6 +197,34 @@ in twenty minutes.
 BENCH_DATASET=appworld-dev bench/terminalbench/run-comparison 0d8a4ee_1
 ```
 
+It still measures the harness. Three tasks, `openai/gpt-5.6-luna`, one attempt
+each, at the point where terminal-bench-core had stopped saying anything:
+
+| task | bluecollar | pi |
+|---|---|---|
+| 0d8a4ee_1 | fail, twice | resolved |
+| 23cf851_1 | fail | resolved |
+| 37a8675_1 | fail | resolved |
+
+A hundred trials a harness on terminal-bench-core separated nothing. Three
+AppWorld tasks separated them completely, and each loss named its own cause in
+the ledger:
+
+- The completion judge refused a finish three times, the third time naming the
+  gap exactly. The agent called no tool and finished again. The fourth verdict
+  was satisfied, on a ledger that had not changed, and AppWorld's database then
+  failed the task for the reason the third verdict gave.
+- Two runs stopped at exactly 26 tool calls, the medium profile's ceiling, at
+  164 and 193 seconds of a 900 second deadline, with no failed tool call and no
+  recovery attempt. One said so in its own failure notice.
+- Lifting that ceiling moved the stop to the iteration ceiling, which comes
+  from the same profile.
+
+Those three are fixed. The gap is not closed: after them, one of the two tasks
+reaches a proper end and reports rather than dying on a count, and both still
+fail. Whatever remains is not the budget and not the judge being worn down,
+and finding it is the next round.
+
 A `Failed to activate server: 500` from the verification step is not an
 infrastructure row, and reading it as one costs a whole run. The full dev set
 returned that 500 on 52 of 57 tasks and scored bluecollar 0, which looked like
