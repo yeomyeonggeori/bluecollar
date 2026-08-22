@@ -125,6 +125,18 @@ func (observation turnObservation) Failed() bool {
 	return observation.Failure != nil
 }
 
+// Output.Data is what a result contract validates, so a tool that declares a schema
+// cannot return without it. Output.Content is the text the model reads and is elided
+// when the result is long, which is why nothing that wants fields should read it.
+// The fallback carries the observations this loop writes itself, which have no
+// contract and are never long enough to be elided.
+func (observation turnObservation) StructuredOutput() []byte {
+	if len(observation.Output.Data) > 0 {
+		return observation.Output.Data
+	}
+	return []byte(observation.Output.Content)
+}
+
 func (observation turnObservation) ContentText() string {
 	if strings.TrimSpace(observation.Output.Content) != "" {
 		return observation.Output.Content
@@ -938,7 +950,7 @@ func checkpointObservationMessage(observation turnObservation) string {
 	var document struct {
 		Message string `json:"message"`
 	}
-	if json.Unmarshal([]byte(observation.ContentText()), &document) == nil {
+	if json.Unmarshal(observation.StructuredOutput(), &document) == nil {
 		return document.Message
 	}
 	return observation.Summary
@@ -952,7 +964,7 @@ func toolObservationMessage(observation turnObservation) string {
 	var document struct {
 		Message string `json:"message"`
 	}
-	if json.Unmarshal([]byte(observation.ContentText()), &document) != nil {
+	if json.Unmarshal(observation.StructuredOutput(), &document) != nil {
 		return ""
 	}
 	return strings.TrimSpace(document.Message)
@@ -979,7 +991,7 @@ func approvalObservationUserFacingMessage(observation turnObservation) string {
 		Message           string `json:"message"`
 		Question          string `json:"question"`
 	}
-	if json.Unmarshal([]byte(observation.ContentText()), &document) != nil {
+	if json.Unmarshal(observation.StructuredOutput(), &document) != nil {
 		return ""
 	}
 	return firstNonEmptyString(document.UserFacingMessage, document.Message, document.Question)

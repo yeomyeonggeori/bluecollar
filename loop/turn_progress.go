@@ -381,7 +381,7 @@ func progressFileContextFromObservation(observation turnObservation) (ProgressFi
 		return ProgressFileContext{}, false
 	}
 	payload := map[string]any{}
-	if json.Unmarshal([]byte(observation.ContentText()), &payload) != nil {
+	if json.Unmarshal(observation.StructuredOutput(), &payload) != nil {
 		return ProgressFileContext{}, false
 	}
 	path := stringField(payload, "path")

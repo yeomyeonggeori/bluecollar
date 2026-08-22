@@ -6,6 +6,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
@@ -871,5 +872,24 @@ func TestASecondReadOfTheSameFileIsAnsweredFromWhatWasAlreadyRead(t *testing.T) 
 
 	if !isRepeated {
 		t.Fatal("one aider-polyglot task read the same unchanged file 204 times with no cache hit, because the read reported no range for this guard to compare")
+	}
+}
+
+func TestALongEditResultStillSaysWhichFileItChanged(t *testing.T) {
+	services := newTurnRunnerTestServices(&sequenceLanguageModel{modelTier: "xlow", contents: []string{finishMessageDocument("done")}},
+		TurnOptions{ContextWindowTokens: 1000})
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "fix the test")
+	document, _ := json.Marshal(map[string]any{"path": "src/main.go", "diff": strings.Repeat("x", 40000)})
+
+	observation := services.runner.saveToolObservation(context.Background(), taskRun.TaskRunID, "obs-1",
+		toolcontract.FileEditToolName, "", json.RawMessage(`{}`), toolcontract.FileEditToolName, "",
+		toolcontract.ToolSuccessData(string(document), json.RawMessage(document)), false, "", time.Time{}, 0)
+
+	if !strings.Contains(observation.ContentText(), "elided from the middle") {
+		t.Fatalf("this fixture only means something once the result is long enough to be cut: %d bytes", len(observation.ContentText()))
+	}
+	paths := observationMutatedPaths(observation)
+	if len(paths) != 1 || paths[0] != "src/main.go" {
+		t.Fatalf("the edit is invisible, so the read cache will hand the model the file as it was before its own edit: %v", paths)
 	}
 }

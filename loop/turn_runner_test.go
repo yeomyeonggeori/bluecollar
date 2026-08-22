@@ -521,6 +521,8 @@ func TestOverlappingRepeatedFileReadDoesNotNarrowNextActionSchema(t *testing.T) 
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{
 		Name:            toolcontract.FileReadToolName,
 		SideEffectClass: toolcontract.ToolSideEffectRead,
+		ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(
+			`{"type":"object","properties":{"path":{"type":"string"},"startLine":{"type":"integer"},"endLine":{"type":"integer"},"content":{"type":"string"}},"additionalProperties":false}`)},
 	}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		var input struct {
 			Path      string `json:"path"`
@@ -542,7 +544,7 @@ func TestOverlappingRepeatedFileReadDoesNotNarrowNextActionSchema(t *testing.T) 
 			"endLine":   startLine + lineCount - 1,
 			"content":   "line content",
 		})
-		return testToolSuccess(string(content)), nil
+		return toolcontract.ToolSuccessData(string(content), json.RawMessage(content)), nil
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
