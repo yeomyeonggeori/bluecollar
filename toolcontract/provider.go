@@ -241,6 +241,8 @@ func normalizeProviderTool(providerID string, boundTool BoundTool) (BoundTool, e
 	toolDescriptor.Namespace = strings.TrimSpace(toolDescriptor.Namespace)
 	toolDescriptor.Name = strings.TrimSpace(toolDescriptor.Name)
 	toolDescriptor.Description = strings.TrimSpace(toolDescriptor.Description)
+	toolDescriptor.WhenToUse = strings.TrimSpace(toolDescriptor.WhenToUse)
+	toolDescriptor.WhenNotToUse = strings.TrimSpace(toolDescriptor.WhenNotToUse)
 	toolDescriptor.PrivacyClass = strings.TrimSpace(toolDescriptor.PrivacyClass)
 	toolDescriptor.Visibility = strings.TrimSpace(toolDescriptor.Visibility)
 	toolDescriptor.SideEffectClass = normalizeToolSideEffectClass(toolDescriptor.SideEffectClass)
