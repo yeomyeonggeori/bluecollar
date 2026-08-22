@@ -210,11 +210,14 @@ each, at the point where terminal-bench-core had stopped saying anything:
 | 3ab5b8b_1 | fail | fail |
 | 4ec8de5_1 | fail | fail |
 | 4fab96f_1 | fail | fail |
-| | 1/8 | 5/8 |
+| 50e1ac9_1 | fail | resolved |
+| 530b157_1 | fail | resolved |
+| 57c3486_1 | resolved | resolved |
+| | 2/11 | 8/11 |
 
-A hundred trials a harness on terminal-bench-core separated nothing. Eight
-AppWorld tasks separate them at one attempt each, and the losses named their
-own causes in the ledger:
+A hundred trials a harness on terminal-bench-core separated nothing. Eleven
+AppWorld tasks separate them by six at one attempt each, and the losses named
+their own causes in the ledger:
 
 - The completion judge refused a finish three times, the third time naming the
   gap exactly. The agent called no tool and finished again. The fourth verdict
@@ -240,7 +243,13 @@ cannot distinguish from a wrong filter, which is the call it should make. pi
 resolved that task, so the answer was there to find.
 
 The gap is open and its remaining cause is not visible in the ledger as
-something the runtime did.
+something the runtime did. Five losses read closely now share one shape: the
+completion judge accepts, citing the pagination the agent completed, the
+transaction it recorded with the right amount and description, the exact text
+it sent — and AppWorld's database grades the task a failure. The gate agrees
+with the agent and the grader agrees with neither. That is where this harness
+stands against pi on long stateful work, and it is not a defect any of the six
+fixes could have reached.
 
 A `Failed to activate server: 500` from the verification step is not an
 infrastructure row, and reading it as one costs a whole run. The full dev set
