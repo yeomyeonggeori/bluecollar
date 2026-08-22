@@ -436,7 +436,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration-1); isElapsed {
 			return result, errorValue
 		}
-		if iteration > agentTurnRunner.options.MaxIterationCount {
+		if iteration > agentTurnRunner.options.MaxIterationCount && !agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
 			result, shouldContinue, errorValue := agentTurnRunner.finalizeEscalateOrStopForLimit(workContext, taskRun.TaskRunID, request, "max_iterations", toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, state.ExecutionState, iteration-1, state.ToolCallCount)
 			if result.TaskRun.Status != taskstate.TaskStatusCompleted {
 				if elapsedResult, isElapsed, elapsedError := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration-1); isElapsed {
@@ -698,7 +698,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 	}
 	agentTurnRunner.notePlanMissingBeforeStateChange(taskRunID, request, state, actionDocument)
 	state.ToolCallCount++
-	if state.ToolCallCount > maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations) && !agentTurnRunner.extendToolCallCeilingOnce(taskRunID, state) {
+	if state.ToolCallCount > maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations) && !agentTurnRunner.extendBudgetOneLevelOnce(taskRunID, state) {
 		result, shouldContinue, errorValue := agentTurnRunner.finalizeEscalateOrStopForLimit(ctx, taskRunID, request, "max_tool_calls", requirements, state.Observations, state.Attachments, state.QualityCriteria, state.ExecutionState, iteration, state.ToolCallCount)
 		if errorValue != nil || !shouldContinue {
 			agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusBlocked, "limit stop", "max_tool_calls")
@@ -1062,21 +1062,30 @@ func wrapUpDeliveryToolNames(request AgentTurnRequest) []string {
 	return toolNames
 }
 
-func toolCallCeilingCameFromTheLevel(options TurnOptions, taskLevel TaskLevel) bool {
-	return options.MaxToolCallCount == TaskLevelProfileForLevel(taskLevel).MaxToolCallCount
+func budgetCameFromTheLevel(options TurnOptions, taskLevel TaskLevel) bool {
+	levelProfile := TaskLevelProfileForLevel(taskLevel)
+	return options.MaxToolCallCount == levelProfile.MaxToolCallCount && options.MaxIterationCount == levelProfile.MaxIterationCount
 }
 
-// The level profiles are doublings, so doubling is what the next level would have given.
-// The elapsed budget still ends the turn, which is why nothing here checks the clock.
-func (agentTurnRunner *AgentTurnRunner) extendToolCallCeilingOnce(taskRunID string, state *agentTaskState) bool {
-	if state.DidExtendToolCallCeiling || !toolCallCeilingCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
+// Both ceilings say how big the agent guessed the task was before it had seen it, so they
+// are raised together, the way a plan naming a larger level raises them. The elapsed budget
+// still ends the turn, which is why nothing here checks the clock.
+func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID string, state *agentTaskState) bool {
+	if state.DidExtendBudgetOneLevel || !budgetCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
 		return false
 	}
-	state.DidExtendToolCallCeiling = true
-	agentTurnRunner.options.MaxToolCallCount *= 2
-	agentTurnRunner.appendEvent(taskRunID, "agent.tool_call_ceiling_extended", marshalEventBody(map[string]any{
-		"usedToolCallCount": state.ToolCallCount,
-		"maxToolCallCount":  agentTurnRunner.options.MaxToolCallCount,
+	grantedLevel, hasNextLevel := nextTaskLevel(state.Request.TaskLevel)
+	if !hasNextLevel {
+		return false
+	}
+	grantedProfile := TaskLevelProfileForLevel(grantedLevel)
+	state.DidExtendBudgetOneLevel = true
+	agentTurnRunner.options.MaxToolCallCount = grantedProfile.MaxToolCallCount
+	agentTurnRunner.options.MaxIterationCount = grantedProfile.MaxIterationCount
+	agentTurnRunner.appendEvent(taskRunID, "agent.budget_extended_one_level", marshalEventBody(map[string]any{
+		"grantedLevel":      string(grantedLevel),
+		"maxToolCallCount":  grantedProfile.MaxToolCallCount,
+		"maxIterationCount": grantedProfile.MaxIterationCount,
 	}))
 	return true
 }

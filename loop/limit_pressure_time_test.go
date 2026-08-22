@@ -725,27 +725,44 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 	}
 }
 
-func TestALowLevelGuessGetsOneMoreBlockOfToolCalls(t *testing.T) {
+func TestALowLevelGuessGetsOneGrantOfTheNextLevel(t *testing.T) {
 	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
-	services := newTurnRunnerTestServices(nil, TurnOptions{MaxToolCallCount: mediumProfile.MaxToolCallCount})
-	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}, ToolCallCount: mediumProfile.MaxToolCallCount + 1}
+	highProfile := TaskLevelProfileForLevel(TaskLevelHigh)
+	services := newTurnRunnerTestServices(nil, TurnOptions{
+		MaxToolCallCount:  mediumProfile.MaxToolCallCount,
+		MaxIterationCount: mediumProfile.MaxIterationCount,
+	})
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}}
 
-	if !services.runner.extendToolCallCeilingOnce("task-1", state) {
-		t.Fatal("a task that ran out of calls with work left is reporting a budget, not an answer")
+	if !services.runner.extendBudgetOneLevelOnce("task-1", state) {
+		t.Fatal("a task that ran out of budget with work left is reporting a guess, not an answer")
 	}
-	if services.runner.options.MaxToolCallCount != mediumProfile.MaxToolCallCount*2 {
-		t.Fatalf("the grant is what the next level would have given, got %d", services.runner.options.MaxToolCallCount)
+	if services.runner.options.MaxToolCallCount != highProfile.MaxToolCallCount || services.runner.options.MaxIterationCount != highProfile.MaxIterationCount {
+		t.Fatalf("both ceilings describe one guess and have to move together, got %d calls and %d steps", services.runner.options.MaxToolCallCount, services.runner.options.MaxIterationCount)
 	}
-	if services.runner.extendToolCallCeilingOnce("task-1", state) {
+	if services.runner.extendBudgetOneLevelOnce("task-1", state) {
 		t.Fatal("a ceiling any agent can raise twice is not a ceiling")
 	}
 }
 
-func TestACeilingTheHostChoseIsTheHostsNumber(t *testing.T) {
-	services := newTurnRunnerTestServices(nil, TurnOptions{MaxToolCallCount: 1})
-	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}, ToolCallCount: 2}
+func TestABudgetTheHostChoseIsTheHostsNumber(t *testing.T) {
+	services := newTurnRunnerTestServices(nil, TurnOptions{MaxToolCallCount: 1, MaxIterationCount: 4})
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}}
 
-	if services.runner.extendToolCallCeilingOnce("task-1", state) {
+	if services.runner.extendBudgetOneLevelOnce("task-1", state) {
 		t.Fatal("a host that asked for one tool call meant one")
+	}
+}
+
+func TestTheTopLevelHasNothingToBeRaisedTo(t *testing.T) {
+	maxProfile := TaskLevelProfileForLevel(TaskLevelMax)
+	services := newTurnRunnerTestServices(nil, TurnOptions{
+		MaxToolCallCount:  maxProfile.MaxToolCallCount,
+		MaxIterationCount: maxProfile.MaxIterationCount,
+	})
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMax}}
+
+	if services.runner.extendBudgetOneLevelOnce("task-1", state) {
+		t.Fatal("the largest level is the largest budget, and inventing one above it is not a grant")
 	}
 }
