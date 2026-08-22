@@ -851,10 +851,10 @@ func evidenceMissingGuidance(evidenceKind string, message string) string {
 }
 
 func validateCompletionEvidence(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement, observations []turnObservation, references []completionEvidenceReference) ([]toolcontract.FileAttachment, error) {
+	if errorValue := validateCompletionEvidenceReferences(toolSet, observations, references); errorValue != nil {
+		return nil, errorValue
+	}
 	if len(requirements) == 0 {
-		if errorValue := validateCompletionEvidenceReferences(toolSet, observations, references); errorValue != nil {
-			return nil, errorValue
-		}
 		return collectReferenceDeliveryAttachments(observations, references), nil
 	}
 	attachments := collectReferenceDeliveryAttachments(observations, references)
