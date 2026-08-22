@@ -1047,17 +1047,32 @@ func batchedNativeAgentActions(toolCalls []model.ChatCompletionToolCall, tools [
 	return actions
 }
 
+// The model producing something the runtime cannot read is the model's mistake, which every
+// other layer hands back for one more try. Only a transport failure ends the turn.
+type unreadableModelActionError struct {
+	reason string
+}
+
+func (errorValue unreadableModelActionError) Error() string {
+	return errorValue.reason
+}
+
+func isUnreadableModelActionError(errorValue error) bool {
+	var typedError unreadableModelActionError
+	return errors.As(errorValue, &typedError)
+}
+
 func nativeAgentActionFromToolCall(toolCall model.ChatCompletionToolCall, tools []model.ChatCompletionTool) (turnActionDocument, error) {
 	if strings.TrimSpace(toolCall.ID) == "" {
-		return turnActionDocument{}, errors.New("native agent action chat tool call ID is empty")
+		return turnActionDocument{}, unreadableModelActionError{reason: "native agent action chat tool call ID is empty"}
 	}
 	if toolCall.Type != "function" || !containsNativeAgentTool(tools, toolCall.Function.Name) {
-		return turnActionDocument{}, fmt.Errorf("native agent action chat returned unknown tool %q", toolCall.Function.Name)
+		return turnActionDocument{}, unreadableModelActionError{reason: fmt.Sprintf("native agent action chat returned unknown tool %q", toolCall.Function.Name)}
 	}
 	input := json.RawMessage(toolCall.Function.Arguments)
 	var inputDocument map[string]json.RawMessage
 	if json.Unmarshal(input, &inputDocument) != nil || inputDocument == nil {
-		return turnActionDocument{}, fmt.Errorf("native agent action tool %q arguments must be an object", toolCall.Function.Name)
+		return turnActionDocument{}, unreadableModelActionError{reason: fmt.Sprintf("native agent action tool %q arguments must be an object, and this call sent %s", toolCall.Function.Name, truncateForLedger(string(input), 200))}
 	}
 	if !isNativeTerminalAction(toolCall.Function.Name) {
 		return turnActionDocument{Action: "continue", ToolName: toolCall.Function.Name, ToolInput: input}, nil

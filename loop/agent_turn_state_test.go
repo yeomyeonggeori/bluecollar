@@ -1689,3 +1689,30 @@ func TestProducedSourcePathsRecoversSourceFilesFromDurableResults(t *testing.T) 
 		t.Fatalf("expected deduped non-failed source paths, got %+v", paths)
 	}
 }
+
+func TestArgumentsThatAreNotAnObjectAreTheModelsMistakeNotTheRuntimes(t *testing.T) {
+	tools := []model.ChatCompletionTool{{Function: model.ChatCompletionFunction{Name: toolcontract.TerminalRunToolName}}}
+	toolCall := model.ChatCompletionToolCall{
+		ID:       "call-1",
+		Type:     "function",
+		Function: model.ChatCompletionToolCallFunction{Name: toolcontract.TerminalRunToolName, Arguments: `"ls -la"`},
+	}
+
+	_, errorValue := nativeAgentActionFromToolCall(toolCall, tools)
+
+	if errorValue == nil {
+		t.Fatal("a string where an object belongs is not a usable action")
+	}
+	if !isUnreadableModelActionError(errorValue) {
+		t.Fatalf("the model producing something unreadable is what every other layer hands back for one more try, got %T", errorValue)
+	}
+	if !strings.Contains(errorValue.Error(), `"ls -la"`) {
+		t.Fatalf("the model has to be told what it sent, got %q", errorValue.Error())
+	}
+}
+
+func TestATransportFailureIsStillATransportFailure(t *testing.T) {
+	if isUnreadableModelActionError(errors.New("dial tcp: connection refused")) {
+		t.Fatal("a failed request is a real error and must keep ending the turn")
+	}
+}
