@@ -2256,3 +2256,20 @@ func TestARejectedCitationNamesTheOnesThatWouldHaveDone(t *testing.T) {
 		t.Fatalf("repeating each summary here put a plan document into the message eight times over and cost 8x the prompt: %q", message)
 	}
 }
+
+func TestCitedEvidenceIsResolvedWhetherOrNotTheTurnHasRequirements(t *testing.T) {
+	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	observations := []turnObservation{
+		newContentObservation("obs-001", "continue", toolcontract.TerminalRunToolName, "ok"),
+	}
+	citesNothingReal := []completionEvidenceReference{{ObservationID: "obs-999"}}
+
+	for _, requirements := range [][]toolUseRequirement{
+		nil,
+		{{ToolName: toolcontract.TerminalRunToolName, Reason: "evidence"}},
+	} {
+		if _, errorValue := validateCompletionEvidence(toolSet, requirements, observations, citesNothingReal); errorValue == nil {
+			t.Errorf("a finish citing an observation the task never made is not evidence, and a turn with %d requirements checked it less than one with none", len(requirements))
+		}
+	}
+}
