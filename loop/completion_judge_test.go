@@ -94,7 +94,7 @@ func TestCompletionJudgeLedgerIncludesSuccessfulReadsAndWrites(t *testing.T) {
 		{ObservationID: "obs-003", Tool: "task_add", ToolID: "test:task_add", Failure: &toolcontract.ToolFailure{}},
 	}
 
-	ledger := completionJudgeLedger(toolSet, observations)
+	ledger := completionJudgeLedger(toolSet, observations, nil)
 
 	if len(ledger) != 2 || ledger[0].Tool != "task_add" || ledger[1].Tool != "task_list" {
 		t.Fatalf("expected successful reads and writes without the failed call, got %+v", ledger)
@@ -110,7 +110,7 @@ func TestCompletionJudgeLedgerBudgetsBytesAndNamesDroppedEntries(t *testing.T) {
 		observations = append(observations, successfulSideEffectObservation("obs", "task_list", bulkyInput, "listed"))
 	}
 
-	ledger := completionJudgeLedger(toolSet, observations)
+	ledger := completionJudgeLedger(toolSet, observations, nil)
 
 	if len(ledger) >= observationCount {
 		t.Fatalf("expected the byte budget to drop early entries, got %d of %d", len(ledger), observationCount)
@@ -129,7 +129,7 @@ func TestCompletionJudgeLedgerTruncatesInputAndResult(t *testing.T) {
 	toolSet := completionJudgeTestToolSet()
 	observation := successfulSideEffectObservation("obs-001", "task_add", `{"note":"`+longInput+`"}`, longResult)
 
-	ledger := completionJudgeLedger(toolSet, []turnObservation{observation})
+	ledger := completionJudgeLedger(toolSet, []turnObservation{observation}, nil)
 
 	if len(ledger) != 1 {
 		t.Fatalf("expected one ledger entry, got %+v", ledger)
@@ -330,5 +330,21 @@ func TestAFinishThatDidMoreWorkIsJudgedAgain(t *testing.T) {
 
 	if _, isStanding := standingJudgeRejection(observations); isStanding {
 		t.Fatal("an agent that went and did the missing work has to get a fresh verdict on it")
+	}
+}
+
+func TestTheResultAFinishCitesIsNotCutToThreeHundredBytes(t *testing.T) {
+	toolSet := completionJudgeTestToolSet()
+	longResult := strings.Repeat("b", completionJudgeResultMaxLength*4)
+	observation := successfulSideEffectObservation("obs-001", "task_add", `{"note":"x"}`, longResult)
+
+	uncited := completionJudgeLedger(toolSet, []turnObservation{observation}, nil)
+	cited := completionJudgeLedger(toolSet, []turnObservation{observation}, map[string]bool{"obs-001": true})
+
+	if len(uncited[0].Result) >= len(cited[0].Result) {
+		t.Fatalf("the judge exists to read what the finish points at, got %d bytes cited against %d uncited", len(cited[0].Result), len(uncited[0].Result))
+	}
+	if strings.Contains(cited[0].Result, "display truncated") {
+		t.Fatal("a cited result the judge cannot see whole is a fact it is asked to certify and cannot")
 	}
 }

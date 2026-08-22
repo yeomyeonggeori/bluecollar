@@ -17,6 +17,7 @@ const (
 	completionJudgeReasonMaxLength      = 400
 	completionJudgeInputMaxLength       = 2000
 	completionJudgeResultMaxLength      = 300
+	completionJudgeCitedResultMaxLength = 6000
 	completionJudgeLedgerByteBudget     = 24000
 )
 
@@ -154,7 +155,7 @@ func completionJudgeMessages(request AgentTurnRequest, observations []turnObserv
 		messages = append(messages, model.Message{Role: "system", Content: planContext})
 	}
 	messages = append(messages, model.Message{Role: "system", Content: completionJudgeAttachmentDescription(attachments)})
-	messages = append(messages, model.Message{Role: "user", Content: "Recorded successful operations this turn, reads and state changes alike:\n" + completionJudgeLedgerDocument(request.ToolSet, observations)})
+	messages = append(messages, model.Message{Role: "user", Content: "Recorded successful operations this turn, reads and state changes alike:\n" + completionJudgeLedgerDocument(request.ToolSet, observations, citedObservationIDs(actionDocument))})
 	return messages
 }
 
@@ -227,8 +228,8 @@ func completionJudgeExpectedResultsDescription(expectedResults []ExpectedResult)
 	return string(document)
 }
 
-func completionJudgeLedgerDocument(toolSet *toolcontract.ToolSet, observations []turnObservation) string {
-	document, errorValue := json.Marshal(completionJudgeLedger(toolSet, observations))
+func completionJudgeLedgerDocument(toolSet *toolcontract.ToolSet, observations []turnObservation, citedObservationIDs map[string]bool) string {
+	document, errorValue := json.Marshal(completionJudgeLedger(toolSet, observations, citedObservationIDs))
 	if errorValue != nil {
 		return "[]"
 	}
@@ -244,7 +245,26 @@ func observationsIncludeSideEffect(toolSet *toolcontract.ToolSet, observations [
 	return false
 }
 
-func completionJudgeLedger(toolSet *toolcontract.ToolSet, observations []turnObservation) []completionLedgerEntry {
+func citedObservationIDs(actionDocument turnActionDocument) map[string]bool {
+	citedIDs := map[string]bool{}
+	for _, reference := range actionDocument.CompletionEvidence {
+		if observationID := strings.TrimSpace(reference.ObservationID); observationID != "" {
+			citedIDs[observationID] = true
+		}
+	}
+	return citedIDs
+}
+
+// A finish points at the results that prove it, and those are what the judge exists to read.
+// Cutting them to the short cap asks it about bytes the runtime removed.
+func completionJudgeResultLimit(observation turnObservation, citedObservationIDs map[string]bool) int {
+	if citedObservationIDs[strings.TrimSpace(observation.ObservationID)] {
+		return completionJudgeCitedResultMaxLength
+	}
+	return completionJudgeResultMaxLength
+}
+
+func completionJudgeLedger(toolSet *toolcontract.ToolSet, observations []turnObservation, citedObservationIDs map[string]bool) []completionLedgerEntry {
 	ledger := []completionLedgerEntry{}
 	for _, observation := range observations {
 		if observation.Action != "continue" || observation.Failed() || strings.TrimSpace(observation.Tool) == "" {
@@ -253,7 +273,7 @@ func completionJudgeLedger(toolSet *toolcontract.ToolSet, observations []turnObs
 		ledger = append(ledger, completionLedgerEntry{
 			Tool:   strings.TrimSpace(observation.Tool),
 			Input:  truncateForLedger(string(observation.ToolInput), completionJudgeInputMaxLength),
-			Result: truncateForLedger(observation.ContentText(), completionJudgeResultMaxLength),
+			Result: truncateForLedger(observation.ContentText(), completionJudgeResultLimit(observation, citedObservationIDs)),
 		})
 	}
 	return newestLedgerEntriesWithinBudget(ledger, completionJudgeLedgerByteBudget)
