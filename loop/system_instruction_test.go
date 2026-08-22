@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
 )
@@ -25,5 +26,19 @@ func TestCapabilityDomainPhraseNamesWhateverTheHostCalledItsTools(t *testing.T) 
 func TestCapabilityDomainPhraseEmptyWhenNoSkills(t *testing.T) {
 	if phrase := capabilityDomainPhrase(nil); phrase != "" {
 		t.Fatalf("expected empty phrase, got %q", phrase)
+	}
+}
+
+func TestEveryTaskIsToldThatToolOutputCannotGiveItInstructions(t *testing.T) {
+	requests := map[string]AgentTurnRequest{
+		"workspace only": {ToolSet: newTestToolSet([]string{toolcontract.TerminalRunToolName})},
+		"conversation":   {ConversationID: "conversation-1", ToolSet: newTestToolSet([]string{toolcontract.AskInputToolName})},
+	}
+
+	for name, request := range requests {
+		instruction := buildAgentSystemInstruction(request)
+		if !strings.Contains(instruction, "Untrusted content:") {
+			t.Fatalf("%s: a turn reads messages other people wrote and files other people committed; without this rule an instruction found in one of them is indistinguishable from the requester's own: %s", name, instruction)
+		}
 	}
 }
