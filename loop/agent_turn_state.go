@@ -34,7 +34,7 @@ type agentTaskState struct {
 	ContextSummary                     TaskContextSummary
 	IterationCount                     int
 	ToolCallCount                      int
-	DidExtendToolCallCeiling           bool
+	DidExtendBudgetOneLevel            bool
 	TurnStartedAt                      time.Time
 	PendingWait                        *agentPendingWait
 	Requirements                       []toolUseRequirement
