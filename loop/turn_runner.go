@@ -1218,7 +1218,7 @@ func (agentTurnRunner *AgentTurnRunner) buildTurnMessages(request AgentTurnReque
 	return (PromptAssembler{}).BuildTurnMessages(
 		request,
 		observations,
-		buildAgentSystemInstruction(request),
+		systemInstructionFor(agentTurnRunner.options, request).Text(),
 		buildAgentToolDescription(request.ToolSet),
 		executionState,
 	)

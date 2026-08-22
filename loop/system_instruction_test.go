@@ -36,9 +36,51 @@ func TestEveryTaskIsToldThatToolOutputCannotGiveItInstructions(t *testing.T) {
 	}
 
 	for name, request := range requests {
-		instruction := buildAgentSystemInstruction(request)
+		instruction := buildAgentSystemInstruction(request).Text()
 		if !strings.Contains(instruction, "Untrusted content:") {
 			t.Fatalf("%s: a turn reads messages other people wrote and files other people committed; without this rule an instruction found in one of them is indistinguishable from the requester's own: %s", name, instruction)
 		}
+	}
+}
+
+func TestTheInstructionIsItsSectionsAndNothingElse(t *testing.T) {
+	request := AgentTurnRequest{
+		ConversationID:  "conversation-1",
+		ToolSet:         newTestToolSet([]string{toolcontract.AskInputToolName}),
+		HostInstruction: "The company closes at six.",
+	}
+
+	systemInstruction := buildAgentSystemInstruction(request)
+
+	bodies := []string{}
+	for _, section := range systemInstruction.Sections {
+		bodies = append(bodies, section.Body)
+	}
+	if systemInstruction.Text() != strings.Join(bodies, "\n\n") {
+		t.Fatal("the assembled text has to be the sections and nothing else, or measuring a section says nothing about what the model was charged")
+	}
+	if systemInstruction.BytesBySection()["host"] != len("The company closes at six.") {
+		t.Fatalf("every section reports its own size: %v", systemInstruction.BytesBySection())
+	}
+	if systemInstruction.Sections[len(systemInstruction.Sections)-1].Name != "host" {
+		t.Fatalf("the host has the last word, as it did before: %v", instructionSectionNames(systemInstruction))
+	}
+}
+
+func TestAnOverlayIsHowAModelGetsItsOwnWordingWithoutForkingTheBase(t *testing.T) {
+	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.TerminalRunToolName})}
+	base := systemInstructionFor(TurnOptions{}, request)
+
+	withOverlay := systemInstructionFor(TurnOptions{
+		SystemInstructionOverlay: func(AgentTurnRequest) string {
+			return "This model answers an empty tool call with prose; do not accept one."
+		},
+	}, request)
+
+	if withOverlay.Text() != base.Text()+"\n\nThis model answers an empty tool call with prose; do not accept one." {
+		t.Fatalf("an overlay is appended after the base and changes nothing in it: %q", withOverlay.Text())
+	}
+	if systemInstructionFor(TurnOptions{SystemInstructionOverlay: func(AgentTurnRequest) string { return "  " }}, request).Text() != base.Text() {
+		t.Fatal("an overlay with nothing to say costs the turn nothing")
 	}
 }
