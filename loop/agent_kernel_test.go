@@ -666,7 +666,7 @@ func TestSitePrototypeIntakePromotesToXHighLimits(t *testing.T) {
 		TaskLevel: TaskLevelLow,
 	})
 
-	turnOptions := agentKernel.turnOptionsForIntakeDecision(intakeDecision)
+	turnOptions := agentKernel.turnOptionsForIntakeDecision(context.Background(), intakeDecision)
 	xHighProfile := TaskLevelProfileForLevel(TaskLevelXHigh)
 
 	if taskLevelRank(turnOptions.TaskLevel) < taskLevelRank(TaskLevelXHigh) {
@@ -1005,4 +1005,33 @@ func taskEventNameCount(taskEvents []taskstate.TaskEvent, eventName string) int 
 		}
 	}
 	return count
+}
+
+func TestABudgetNeverOutlastsTheDeadlineItRunsUnder(t *testing.T) {
+	deadlineContext, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+
+	clamped := withElapsedBudgetInsideDeadline(deadlineContext, TurnOptions{MaxElapsedSecond: 1672})
+
+	if clamped.MaxElapsedSecond > 90 {
+		t.Fatalf("planning past the deadline gets the turn cancelled where it stands instead of finishing and reporting, got %d", clamped.MaxElapsedSecond)
+	}
+	if clamped.MaxElapsedSecond < 80 {
+		t.Fatalf("the whole remaining window is still available and taking less of it wastes the turn, got %d", clamped.MaxElapsedSecond)
+	}
+}
+
+func TestABudgetThatAlreadyFitsIsLeftAlone(t *testing.T) {
+	deadlineContext, cancel := context.WithTimeout(context.Background(), time.Hour)
+	defer cancel()
+
+	if clamped := withElapsedBudgetInsideDeadline(deadlineContext, TurnOptions{MaxElapsedSecond: 600}); clamped.MaxElapsedSecond != 600 {
+		t.Fatalf("a budget inside the deadline is the budget, got %d", clamped.MaxElapsedSecond)
+	}
+}
+
+func TestACallerWithNoDeadlineImposesNoBudget(t *testing.T) {
+	if clamped := withElapsedBudgetInsideDeadline(context.Background(), TurnOptions{MaxElapsedSecond: 1672}); clamped.MaxElapsedSecond != 1672 {
+		t.Fatalf("an embedding that sets no deadline keeps the derived budget, got %d", clamped.MaxElapsedSecond)
+	}
 }
