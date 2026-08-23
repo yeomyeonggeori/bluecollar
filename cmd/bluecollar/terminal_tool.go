@@ -18,10 +18,8 @@ const (
 )
 
 type terminalRunInput struct {
-	Command          string `json:"command"`
-	TimeoutSecond    int    `json:"timeoutSecond"`
-	ApprovalRequired bool   `json:"approvalRequired"`
-	ApprovalReason   string `json:"approvalReason"`
+	Command       string `json:"command"`
+	TimeoutSecond int    `json:"timeoutSecond"`
 }
 
 type terminalRunOutput struct {
@@ -36,9 +34,7 @@ var terminalRunInputSchema = json.RawMessage(`{
   "type": "object",
   "properties": {
     "command": {"type": "string", "minLength": 1},
-    "timeoutSecond": {"type": "integer"},
-    "approvalRequired": {"type": "boolean"},
-    "approvalReason": {"type": "string"}
+    "timeoutSecond": {"type": "integer"}
   },
   "required": ["command"],
   "additionalProperties": false
@@ -118,7 +114,7 @@ func newWorkspaceToolSet(runningShell shell) *toolcontract.ToolSet {
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/terminal_run",
 			Name:            toolcontract.TerminalRunToolName,
-			Description:     "Run one shell command in the working directory and read back its combined output and exit code. This is a full machine you control: a missing package is something to install and try again, not a reason the work cannot be done. There is no separate approver here — the person who started this runner is the one who asked — so approvalRequired changes nothing and never blocks a command.",
+			Description:     "Run one shell command in the working directory and read back its combined output and exit code. This is a full machine you control: a missing package is something to install and try again, not a reason the work cannot be done.",
 			WhenToUse:       "anything the file tools do not cover: building, testing, searching, installing, inspecting the machine.",
 			WhenNotToUse:    "reading or writing a file whose path you already have; file_read, file_write and file_edit do that with nothing to quote and nothing to escape.",
 			Visibility:      toolcontract.ToolVisibilityModel,

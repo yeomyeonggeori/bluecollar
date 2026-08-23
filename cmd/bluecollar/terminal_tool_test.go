@@ -321,24 +321,6 @@ func TestWithoutBashTheShellStillRuns(t *testing.T) {
 	}
 }
 
-func TestACommandTheModelFlaggedForApprovalStillRuns(t *testing.T) {
-	workspacePath := t.TempDir()
-	runningShell := shell{workingDirectoryPath: workspacePath}
-
-	result := runShellCommand(context.Background(), runningShell, terminalRunInput{
-		Command:          "printf ran > flagged.txt",
-		ApprovalRequired: true,
-		ApprovalReason:   "installs a dependency",
-	})
-
-	if result.Failure != nil {
-		t.Fatalf("this runner has one person and they started it, so there is nobody left to ask and refusing only stops the work: %+v", result.Failure)
-	}
-	if _, errorValue := os.Stat(filepath.Join(workspacePath, "flagged.txt")); errorValue != nil {
-		t.Fatal("expected the command to have run")
-	}
-}
-
 func TestOutputTooLongToReturnIsLeftSomewhereReadable(t *testing.T) {
 	runningShell := shell{workingDirectoryPath: t.TempDir()}.withInterpreterFound(context.Background())
 
