@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Count what each harness puts in front of the model, on one definition.
+
+Terminal-Bench records a verdict and a clock for both harnesses. It cannot see
+what either one sent, so the column the README calls the one that separates two
+harnesses on a fixed model — the prompt weight per call — is blank for whichever
+harness does not write its own metrics. Reading one harness's self-report
+against the other's silence is not a comparison.
+
+Both harnesses reach the model over HTTP and both take the endpoint from the
+environment. This forwards every request to the real endpoint untouched and
+appends the token counts the provider itself returned, so the number comes from
+the same field for both because it comes from the same reply. One listener per
+harness, so a call is attributed by the port it arrived on and neither harness
+has to be told it is being measured.
+
+    bench/terminalbench/prompt-meter serve bluecollar 8317
+    bench/terminalbench/prompt-meter serve pi 8318
+    bench/terminalbench/prompt-meter report
+"""
+
+import http.server
+import json
+import os
+import socketserver
+import statistics
+import sys
+import threading
+import urllib.error
+import urllib.request
+from collections import defaultdict
+
+UPSTREAM_ORIGIN = os.environ.get("PROMPT_METER_UPSTREAM", "https://openrouter.ai")
+LEDGER_PATH = os.environ.get("PROMPT_METER_LEDGER", "/tmp/prompt-meter.jsonl")
+
+ledger_lock = threading.Lock()
+
+
+def record_call(harness_name, request_byte_count, usage):
+    entry = {
+        "harness": harness_name,
+        "requestBytes": request_byte_count,
+        "promptTokens": usage.get("prompt_tokens"),
+        "completionTokens": usage.get("completion_tokens"),
+    }
+    with ledger_lock:
+        with open(LEDGER_PATH, "a") as ledger:
+            ledger.write(json.dumps(entry) + "\n")
+
+
+def usage_from_payload(payload):
+    try:
+        return json.loads(payload).get("usage") or {}
+    except (json.JSONDecodeError, AttributeError):
+        return usage_from_event_stream(payload)
+
+
+# A streamed reply carries its usage on one of the last data: lines rather than on the body,
+# and a harness that streams would otherwise be recorded as having sent nothing.
+def usage_from_event_stream(payload):
+    for line in reversed(payload.split(b"\n")):
+        if not line.startswith(b"data: ") or b'"usage"' not in line:
+            continue
+        try:
+            usage = json.loads(line[6:]).get("usage")
+        except json.JSONDecodeError:
+            continue
+        if usage:
+            return usage
+    return {}
+
+
+def forwarding_handler_for(harness_name):
+    class ForwardingHandler(http.server.BaseHTTPRequestHandler):
+        protocol_version = "HTTP/1.1"
+
+        def log_message(self, *_):
+            return
+
+        def do_POST(self):
+            body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            upstream_request = urllib.request.Request(
+                UPSTREAM_ORIGIN + self.path,
+                data=body,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": self.headers.get("Authorization", ""),
+                },
+            )
+            try:
+                with urllib.request.urlopen(upstream_request, timeout=900) as upstream_response:
+                    payload = self.relay(upstream_response)
+            except urllib.error.HTTPError as refusal:
+                payload = self.relay(refusal)
+
+            record_call(harness_name, len(body), usage_from_payload(payload))
+
+        def relay(self, upstream_response):
+            content_type = upstream_response.headers.get("Content-Type", "application/json")
+            self.send_response(upstream_response.status)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            collected = []
+            while True:
+                block = upstream_response.read(8192)
+                if not block:
+                    break
+                collected.append(block)
+                self.wfile.write(b"%X\r\n" % len(block) + block + b"\r\n")
+                self.wfile.flush()
+            self.wfile.write(b"0\r\n\r\n")
+            return b"".join(collected)
+
+    return ForwardingHandler
+
+
+class ThreadedServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+
+def serve(harness_name, port):
+    with ThreadedServer(("0.0.0.0", port), forwarding_handler_for(harness_name)) as server:
+        print(f"prompt-meter counting {harness_name} on {port}, forwarding to {UPSTREAM_ORIGIN}", flush=True)
+        server.serve_forever()
+
+
+def report():
+    if not os.path.exists(LEDGER_PATH):
+        print(f"no calls recorded in {LEDGER_PATH}")
+        return
+    per_harness = defaultdict(list)
+    for line in open(LEDGER_PATH):
+        entry = json.loads(line)
+        if entry.get("promptTokens"):
+            per_harness[entry["harness"]].append(entry["promptTokens"])
+    if not per_harness:
+        print("no call carried a usage block")
+        return
+    print("| harness | model calls | median prompt tokens per call | total prompt tokens |")
+    print("|---|---|---|---|")
+    for harness_name, tokens in sorted(per_harness.items()):
+        print(f"| {harness_name} | {len(tokens)} | {statistics.median(tokens):,.0f} | {sum(tokens):,} |")
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] == ["report"]:
+        report()
+    elif sys.argv[1:2] == ["serve"]:
+        serve(sys.argv[2], int(sys.argv[3]))
+    else:
+        sys.exit(__doc__)
