@@ -248,8 +248,23 @@ transaction query returns zero rows. The judge declines to certify a zero it
 cannot distinguish from a wrong filter, which is the call it should make. pi
 resolved that task, so the answer was there to find.
 
-The gap is open and its remaining cause is not visible in the ledger as
-something the runtime did. Five losses read closely now share one shape: the
+A second model rules out the obvious alternative. The three tasks bluecollar
+lost first were rerun on `google/gemini-3.7-flash`, both harnesses, same
+tasks:
+
+| same three tasks | bluecollar | pi |
+|---|---|---|
+| gpt-5.6-luna | 0/3 | 3/3 |
+| gemini-3.7-flash | 0/3 | 3/3 |
+| | 0/6 | 6/6 |
+
+Two independent models, six trials a harness, the same split. Whatever costs
+bluecollar these tasks travels with the harness rather than with the model.
+
+The gap is open and its remaining cause is not visible in the ledger, which is
+a statement about what the ledger shows and not about where the cause lives:
+the two-model control puts it here. Five losses read closely share one shape:
+the
 completion judge accepts, citing the pagination the agent completed, the
 transaction it recorded with the right amount and description, the exact text
 it sent — and AppWorld's database grades the task a failure. The gate agrees
