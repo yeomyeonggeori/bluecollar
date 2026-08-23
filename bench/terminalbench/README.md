@@ -197,33 +197,45 @@ in twenty minutes.
 BENCH_DATASET=appworld-dev bench/terminalbench/run-comparison 0d8a4ee_1
 ```
 
-It still measures the harness. Three tasks, `openai/gpt-5.6-luna`, one attempt
-each, at the point where terminal-bench-core had stopped saying anything:
+It still measures the harness. Seventeen tasks, `openai/gpt-5.6-luna`, one
+attempt each, at the point where terminal-bench-core had stopped saying
+anything:
 
 | task | bluecollar | pi |
 |---|---|---|
-| 0d8a4ee_1 | fail, twice | resolved |
+| 0d8a4ee_1 | fail | resolved |
 | 23cf851_1 | fail | resolved |
 | 37a8675_1 | fail | resolved |
-| 383cbac_1 | resolved | resolved |
+| 383cbac_1 | fail | resolved |
 | 396c5a2_1 | fail | resolved |
 | 3ab5b8b_1 | fail | fail |
 | 4ec8de5_1 | fail | fail |
 | 4fab96f_1 | fail | fail |
 | 50e1ac9_1 | fail | resolved |
-| 530b157_1 | resolved | resolved |
-| 57c3486_1 | resolved | resolved |
+| 530b157_1 | fail | resolved |
+| 57c3486_1 | fail | resolved |
 | 6171bbc_1 | resolved | resolved |
 | 68ee2c9_1 | fail | fail |
 | 6bdbc26_1 | resolved | resolved |
-| 6c2c621_1 | fail | fail |
-| 0d8a4ee_2 | fail | fail |
+| 6c2c621_1 | resolved | fail |
+| 0d8a4ee_2 | resolved | fail |
 | 23cf851_2 | fail | fail |
-| | 5/17 | 10/17 |
+| | 4/17 | 10/17 |
 
 A hundred trials a harness on terminal-bench-core separated nothing. Seventeen
-AppWorld tasks separate them by five at one attempt each, and the losses named
-their own causes in the ledger:
+AppWorld tasks separate them by six. Both columns are a single sweep: every
+task run once, in one configuration.
+
+An earlier version of this table read 5 of 17 and was not a sweep. After each
+fix I re-ran the tasks bluecollar had lost and recorded the ones that then
+passed, while pi's column stayed at its first measurement. That gives one
+column extra attempts on exactly its own failures, which is the bias #79 and
+#92 were filed about, committed here by hand rather than by the summariser.
+
+The sweep also found two tasks bluecollar resolves and pi does not, which the
+assembled table had recorded as failures for both.
+
+The losses named their own causes in the ledger:
 
 - The completion judge refused a finish three times, the third time naming the
   gap exactly. The agent called no tool and finished again. The fourth verdict
