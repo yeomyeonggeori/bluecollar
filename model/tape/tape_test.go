@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -91,5 +92,83 @@ func TestATapeThatNoLongerAnswersTheLoopSaysSo(t *testing.T) {
 		StructuredOutputSchema: model.StructuredOutputSchema{Name: "bluecollar_agent_turn_action"},
 	}); errorValue == nil || !strings.Contains(errorValue.Error(), "asked for one more") {
 		t.Fatalf("a loop that takes more steps than the tape recorded is a loop the tape cannot speak for: %v", errorValue)
+	}
+}
+
+type structuredOnlyProvider struct{}
+
+func (structuredOnlyProvider) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (structuredOnlyProvider) GenerateStructuredResponse(context.Context, model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	return model.StructuredResponse{}, nil
+}
+
+type chatCapableProvider struct {
+	structuredOnlyProvider
+	calls int
+}
+
+func (provider *chatCapableProvider) GenerateChatCompletion(context.Context, model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	provider.calls++
+	return model.ChatCompletionResponse{}, nil
+}
+
+func TestRecordingAProviderKeepsTheChatPathItWraps(t *testing.T) {
+	provider := &chatCapableProvider{}
+	if _, isAvailable := model.ResolveTextChatCompleter(provider); !isAvailable {
+		t.Fatal("the provider under test has to offer the path this is about")
+	}
+
+	recorder := NewRecorder(provider, io.Discard)
+
+	completer, isAvailable := model.ResolveTextChatCompleter(recorder)
+	if !isAvailable {
+		t.Fatal("wrapping a provider to watch it must not decide the loop takes the other path")
+	}
+	if _, errorValue := completer.GenerateChatCompletion(context.Background(), model.ChatCompletionRequest{}); errorValue != nil {
+		t.Fatalf("expected the call to reach the wrapped provider: %v", errorValue)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("the recorder has to delegate rather than answer, got %d calls through", provider.calls)
+	}
+}
+
+func TestRecordingAProviderWithNoChatPathOffersNone(t *testing.T) {
+	if _, isAvailable := model.ResolveTextChatCompleter(NewRecorder(structuredOnlyProvider{}, io.Discard)); isAvailable {
+		t.Fatal("a recorder cannot offer a path the provider it wraps does not have")
+	}
+}
+
+func TestATapeOfChatCallsIsReplayedDownTheChatPath(t *testing.T) {
+	recorded := &bytes.Buffer{}
+	recorder := NewRecorder(&chatCapableProvider{}, recorded)
+	completer, _ := model.ResolveTextChatCompleter(recorder)
+	if _, errorValue := completer.GenerateChatCompletion(context.Background(), model.ChatCompletionRequest{SchemaName: "an_action"}); errorValue != nil {
+		t.Fatalf("recording the call failed: %v", errorValue)
+	}
+
+	player, errorValue := Read(bytes.NewReader(recorded.Bytes()))
+	if errorValue != nil {
+		t.Fatalf("reading the tape back failed: %v", errorValue)
+	}
+
+	replay, isAvailable := model.ResolveTextChatCompleter(player)
+	if !isAvailable {
+		t.Fatal("a tape that holds chat calls has to be replayable where they were recorded")
+	}
+	if _, errorValue := replay.GenerateChatCompletion(context.Background(), model.ChatCompletionRequest{SchemaName: "an_action"}); errorValue != nil {
+		t.Fatalf("expected the recorded chat call back: %v", errorValue)
+	}
+}
+
+func TestATapeWithNoChatCallsOffersNoChatPath(t *testing.T) {
+	player, errorValue := Read(strings.NewReader(`{"index":0,"kind":"structured","schemaName":"a_schema"}`))
+	if errorValue != nil {
+		t.Fatalf("reading the tape failed: %v", errorValue)
+	}
+	if _, isAvailable := model.ResolveTextChatCompleter(player); isAvailable {
+		t.Fatal("a structured tape replayed down the chat path answers calls it never recorded")
 	}
 }

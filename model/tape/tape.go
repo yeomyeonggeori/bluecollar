@@ -16,6 +16,7 @@ import (
 const (
 	KindText       = "text"
 	KindStructured = "structured"
+	KindChat       = "chat"
 )
 
 type Call struct {
@@ -27,6 +28,9 @@ type Call struct {
 	Text       string                   `json:"text,omitempty"`
 	Response   model.StructuredResponse `json:"response,omitempty"`
 	Failure    string                   `json:"failure,omitempty"`
+
+	ChatMessages []model.ChatCompletionMessage `json:"chatMessages,omitempty"`
+	ChatResponse *model.ChatCompletionResponse `json:"chatResponse,omitempty"`
 }
 
 type Recorder struct {
@@ -54,6 +58,33 @@ func (recorder *Recorder) GenerateStructuredResponse(ctx context.Context, reques
 		Messages:   request.Messages,
 		Response:   response,
 		Failure:    failureText(errorValue),
+	})
+	return response, errorValue
+}
+
+// The loop picks its path by asking whether a chat completer is available, so a wrapper that
+// answers fewer questions than what it wraps changes the turn it is watching.
+func (recorder *Recorder) TextChatCompleter() (model.ChatCompleter, bool) {
+	completer, isAvailable := model.ResolveTextChatCompleter(recorder.languageModel)
+	if !isAvailable {
+		return nil, false
+	}
+	return recordingChatCompleter{recorder: recorder, completer: completer}, true
+}
+
+type recordingChatCompleter struct {
+	recorder  *Recorder
+	completer model.ChatCompleter
+}
+
+func (recording recordingChatCompleter) GenerateChatCompletion(ctx context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	response, errorValue := recording.completer.GenerateChatCompletion(ctx, request)
+	recording.recorder.write(Call{
+		Kind:         KindChat,
+		SchemaName:   request.SchemaName,
+		ChatMessages: request.Messages,
+		ChatResponse: &response,
+		Failure:      failureText(errorValue),
 	})
 	return response, errorValue
 }
@@ -107,6 +138,36 @@ func (player *Player) GenerateResponse(_ context.Context, prompt string) (string
 	}
 	_ = prompt
 	return call.Text, nil
+}
+
+// A tape is replayed down the path it was recorded on, for the same reason.
+func (player *Player) TextChatCompleter() (model.ChatCompleter, bool) {
+	return player, player.holds(KindChat)
+}
+
+func (player *Player) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	call, errorValue := player.take(KindChat, request.SchemaName)
+	if errorValue != nil {
+		return model.ChatCompletionResponse{}, errorValue
+	}
+	if call.Failure != "" {
+		return model.ChatCompletionResponse{}, errors.New(call.Failure)
+	}
+	if call.ChatResponse == nil {
+		return model.ChatCompletionResponse{}, nil
+	}
+	return *call.ChatResponse, nil
+}
+
+func (player *Player) holds(kind string) bool {
+	player.mutex.Lock()
+	defer player.mutex.Unlock()
+	for _, call := range player.calls {
+		if call.Kind == kind {
+			return true
+		}
+	}
+	return false
 }
 
 func (player *Player) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
