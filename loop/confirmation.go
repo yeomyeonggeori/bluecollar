@@ -103,7 +103,7 @@ func (agentKernel *AgentKernel) generateConfirmationUserMessage(responseContext 
 			Messages: []model.Message{
 				{Role: "system", Content: "Write one concise user-facing message. Do not expose JSON, task IDs, or internal tool names."},
 				{Role: "system", Content: responseLanguageInstruction(request.ResponseLanguage)},
-				{Role: "system", Content: buildTemporalContextDescription(request.TurnStartedAt)},
+				{Role: "system", Content: buildTemporalContextDescription(request.TurnStartedAt, request.EnvironmentNow)},
 				{Role: "system", Content: "For confirmation, state what you understood, how it will run, the target, and that approval will proceed. Mention repeat, start, or end conditions only when they are present in the execution plan or original request. For clarification, ask only for the missing information needed before execution."},
 				{Role: "user", Content: strings.Join([]string{
 					"Message kind: " + messageKind,
@@ -168,6 +168,7 @@ func confirmationPlanMessages(request AgentRequest, evidenceHints []string) []mo
 		ResponseLanguage:     request.ResponseLanguage,
 		UserPrompt:           request.Prompt,
 		TurnStartedAt:        request.TurnStartedAt,
+		EnvironmentNow:       request.EnvironmentNow,
 		VisibleContext:       request.VisibleContext,
 		ActiveGoal:           request.ActiveGoal,
 		RequesterPersonID:    request.RequesterPersonID,

@@ -28,6 +28,7 @@ func main() {
 	agentName := flag.String("agent-name", "the assistant", "what the agent calls itself")
 	timeout := flag.Duration("timeout", 5*time.Minute, "how long one turn may run")
 	workspacePath := flag.String("workspace", ".", "directory the agent's shell commands run in")
+	environmentNow := flag.String("environment-now", "", "the date the environment being worked on keeps, RFC3339 or 2006-01-02, when it is not the machine's")
 	withoutTools := flag.Bool("without-tools", false, "answer from reasoning alone, giving the agent no shell")
 	execPrefix := flag.String("exec-prefix", "", "run every shell command through this wrapper, such as \"docker exec -i <container>\"")
 	metricsPath := flag.String("metrics", "", "write what this turn cost, as JSON, to this path")
@@ -51,6 +52,7 @@ func main() {
 		prompt:         prompt,
 		timeout:        *timeout,
 		workspacePath:  *workspacePath,
+		environmentNow: parseEnvironmentNow(*environmentNow),
 		withoutTools:   *withoutTools,
 		execPrefix:     *execPrefix,
 		metricsPath:    *metricsPath,
@@ -74,6 +76,7 @@ type runOptions struct {
 	prompt         string
 	timeout        time.Duration
 	workspacePath  string
+	environmentNow time.Time
 	withoutTools   bool
 	execPrefix     string
 	metricsPath    string
@@ -109,6 +112,7 @@ func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
 		Prompt:               options.prompt,
 		AgentIdentity:        agentcontract.AgentIdentity{Name: options.agentName},
 		WorkspaceRootPath:    workspacePath,
+		EnvironmentNow:       options.environmentNow,
 		WorkspaceDefaultPath: workspacePath,
 		ToolSet:              turnToolSet(options, runningShell),
 	}
@@ -177,6 +181,19 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func parseEnvironmentNow(value string) time.Time {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return time.Time{}
+	}
+	for _, layout := range []string{time.RFC3339, "2006-01-02"} {
+		if parsed, errorValue := time.Parse(layout, trimmed); errorValue == nil {
+			return parsed
+		}
+	}
+	return time.Time{}
 }
 
 func turnShell(options runOptions) shell {

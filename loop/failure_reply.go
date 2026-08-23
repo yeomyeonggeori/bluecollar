@@ -243,6 +243,7 @@ func failurePromptContext(request AgentTurnRequest, observations []turnObservati
 		ResponseLanguage:  request.ResponseLanguage,
 		UserPrompt:        request.Prompt,
 		TurnStartedAt:     request.TurnStartedAt,
+		EnvironmentNow:    request.EnvironmentNow,
 		InstructionPrompt: request.InstructionPrompt,
 		WorkspaceContext: WorkspaceContext{
 			RootPath:          request.WorkspaceRootPath,

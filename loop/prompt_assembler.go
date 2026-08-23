@@ -15,6 +15,7 @@ type InjectedContextInput struct {
 	InstructionPrompt string
 	ToolDescription   string
 	TurnStartedAt     time.Time
+	EnvironmentNow    time.Time
 	RuntimeRequest    AgentTurnRequest
 	MemoryContext     string
 	Observations      []turnObservation
@@ -32,6 +33,7 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 		UserPrompt:           input.RuntimeRequest.Prompt,
 		InputParts:           append([]AgentPart{}, input.RuntimeRequest.InputParts...),
 		TurnStartedAt:        input.TurnStartedAt,
+		EnvironmentNow:       input.EnvironmentNow,
 		InstructionPrompt:    input.InstructionPrompt,
 		ToolDescription:      input.ToolDescription,
 		AdditionalToolNames:  droppedExposureToolNames(input.RuntimeRequest.ToolExposure),
@@ -74,6 +76,7 @@ func (promptAssembler PromptAssembler) BuildTurnMessages(request AgentTurnReques
 		InstructionPrompt: request.InstructionPrompt,
 		ToolDescription:   toolDescription,
 		TurnStartedAt:     request.TurnStartedAt,
+		EnvironmentNow:    request.EnvironmentNow,
 		RuntimeRequest:    request,
 		MemoryContext:     buildMemoryContext(request.MemoryFacts),
 		Observations:      observations,

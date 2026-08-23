@@ -236,7 +236,7 @@ func (turnRouter TurnRouter) buildMessages(request agentcontract.AgentRequest) [
 	if routingContext := turnRoutingContextDescription(request); routingContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: routingContext})
 	}
-	messages = append(messages, model.Message{Role: "system", Content: agentcontract.BuildTemporalContextDescription(request.TurnStartedAt)})
+	messages = append(messages, model.Message{Role: "system", Content: agentcontract.BuildTemporalContextDescription(request.TurnStartedAt, request.EnvironmentNow)})
 	messages = append(messages, model.Message{Role: "user", Content: request.Prompt})
 	return messages
 }
