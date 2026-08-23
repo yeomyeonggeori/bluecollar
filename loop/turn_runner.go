@@ -387,6 +387,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	successfulToolCalls := map[string]turnObservation{}
 	agentTurnRunner.recordCarriedOutCalls(workContext, taskRun.TaskRunID, request, &state, successfulToolCalls)
 	limitPressureWarnings := map[string]bool{}
+	warningsRetiredByGrant := false
 	progressTracker := newActionProgressTracker(state.Observations)
 	appliedSteerEventIDs := appliedSteerEventIDsFromTaskEvents(agentTurnRunner.taskRunService.ListTaskEvent(taskRun.TaskRunID))
 	noProgressStopEvaluation := func() (actionProgressEvaluation, bool) {
@@ -450,6 +451,13 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		}
 		state.Observations = agentTurnRunner.applyPendingSteeringEvents(taskRun.TaskRunID, state.Observations, appliedSteerEventIDs)
 		state.IterationCount = iteration - 1
+		if state.DidExtendBudgetOneLevel && !warningsRetiredByGrant {
+			warningsRetiredByGrant = true
+			limitPressureWarnings = map[string]bool{}
+			grantedBudget := grantedBudgetObservation(state.Observations, agentTurnRunner.options)
+			state.Observations = append(state.Observations, grantedBudget)
+			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.budget_update_sent", marshalEventBody(grantedBudget))
+		}
 		if warning := agentTurnRunner.nextLimitPressureWarning(iteration-1, state.ToolCallCount, agentTurnRunner.turnElapsed(request.EffortStartedAt), len(state.Observations)+1, limitPressureWarnings); warning != nil {
 			if warning.Observation != nil {
 				state.Observations = append(state.Observations, *warning.Observation)
@@ -1078,6 +1086,19 @@ func budgetCameFromTheLevel(options TurnOptions, taskLevel TaskLevel) bool {
 // A level is three numbers and a grant that raises two of them hands the turn work it has no
 // time to do. The ceiling is what the caller's deadline left at intake, so a grant can no more
 // plan past it than the derived budget could.
+// The budget check the agent was given quoted the budget of the moment, and a grant makes that
+// number wrong in the one direction that stops work: it told the agent to stop exploring. The
+// correction has to reach the model, because clearing the runtime's own bookkeeping does not
+// remove what the model already read.
+func grantedBudgetObservation(observations []turnObservation, options TurnOptions) turnObservation {
+	return newContentObservation(
+		nextObservationIDForObservations(observations),
+		"policy",
+		"",
+		fmt.Sprintf("Budget update: this task was resized and now has %d tool calls and %d steps in total. Any earlier budget check quoted the smaller budget and no longer applies.", options.MaxToolCallCount, options.MaxIterationCount),
+	)
+}
+
 func (agentTurnRunner *AgentTurnRunner) grantedElapsedSecond(grantedProfile TaskLevelProfile) int {
 	grantedSecond := int(elapsedBudgetForProfile(grantedProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
 	ceiling := agentTurnRunner.options.ElapsedSecondCeiling
