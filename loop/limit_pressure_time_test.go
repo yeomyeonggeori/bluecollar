@@ -766,3 +766,40 @@ func TestTheTopLevelHasNothingToBeRaisedTo(t *testing.T) {
 		t.Fatal("the largest level is the largest budget, and inventing one above it is not a grant")
 	}
 }
+
+func TestAGrantRaisesTheClockWithTheCounts(t *testing.T) {
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	services := newTurnRunnerTestServices(nil, TurnOptions{
+		MaxToolCallCount:     mediumProfile.MaxToolCallCount,
+		MaxIterationCount:    mediumProfile.MaxIterationCount,
+		MaxElapsedSecond:     451,
+		ElapsedSecondCeiling: 900,
+	})
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}}
+
+	if !services.runner.extendBudgetOneLevelOnce("task-1", state) {
+		t.Fatal("expected the grant to fire")
+	}
+	if services.runner.options.MaxElapsedSecond <= 451 {
+		t.Fatalf("a turn granted more calls and more steps has to be given the time to spend them, got %d", services.runner.options.MaxElapsedSecond)
+	}
+	if services.runner.options.MaxElapsedSecond > 900 {
+		t.Fatalf("a grant may not plan past the deadline the caller allowed, got %d", services.runner.options.MaxElapsedSecond)
+	}
+}
+
+func TestAGrantWithNoStatedCeilingKeepsTheProfileClock(t *testing.T) {
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	services := newTurnRunnerTestServices(nil, TurnOptions{
+		MaxToolCallCount:  mediumProfile.MaxToolCallCount,
+		MaxIterationCount: mediumProfile.MaxIterationCount,
+		MaxElapsedSecond:  451,
+	})
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}}
+
+	services.runner.extendBudgetOneLevelOnce("task-1", state)
+
+	if services.runner.options.MaxElapsedSecond <= 451 {
+		t.Fatalf("a caller that set no deadline bounds nothing, so the granted profile stands, got %d", services.runner.options.MaxElapsedSecond)
+	}
+}
