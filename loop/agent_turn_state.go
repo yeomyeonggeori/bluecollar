@@ -34,7 +34,7 @@ type agentTaskState struct {
 	ContextSummary                     TaskContextSummary
 	IterationCount                     int
 	ToolCallCount                      int
-	DidExtendBudgetOneLevel            bool
+	GrantedTaskLevel                   TaskLevel
 	TurnStartedAt                      time.Time
 	PendingWait                        *agentPendingWait
 	Requirements                       []toolUseRequirement
@@ -42,6 +42,17 @@ type agentTaskState struct {
 	CompletionIntentToolName           string
 	ShouldRestrictNextActionToTerminal bool
 	DidNudgePlan                       bool
+}
+
+func (state agentTaskState) didExtendBudgetOneLevel() bool {
+	return state.GrantedTaskLevel != ""
+}
+
+func (state agentTaskState) budgetTaskLevel() TaskLevel {
+	if state.GrantedTaskLevel != "" {
+		return state.GrantedTaskLevel
+	}
+	return state.Request.TaskLevel
 }
 
 type agentPendingWait struct {

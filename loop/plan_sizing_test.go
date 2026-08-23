@@ -99,3 +99,34 @@ func TestTheClockFollowsWhatIterationsActuallyCost(t *testing.T) {
 		t.Fatalf("a task whose iterations cost 40 seconds each cannot be held to a clock drawn for cheap ones, got %d against %d", runner.options.MaxElapsedSecond, fallbackClock)
 	}
 }
+
+func TestTheGrantedClockSurvivesTheNextIteration(t *testing.T) {
+	runner, state := runnerWithLevel(TaskLevelLow)
+	runner.noteModelInUse("a/model")
+	runner.recordIterationCost(time.Now().Add(-6 * time.Second))
+
+	if !runner.extendBudgetOneLevelOnce("task-1", state) {
+		t.Fatalf("a task sized from its level has one level of extension to give")
+	}
+	grantedSecond := runner.options.MaxElapsedSecond
+
+	runner.recordIterationCost(time.Now().Add(-6 * time.Second))
+	runner.refreshElapsedBudget(state.budgetTaskLevel())
+
+	if runner.options.MaxElapsedSecond < grantedSecond {
+		t.Fatalf("the clock a grant handed out cannot be taken back on the next iteration, granted %d and kept %d", grantedSecond, runner.options.MaxElapsedSecond)
+	}
+}
+
+func TestTheRefreshedClockStaysUnderTheHostDeadline(t *testing.T) {
+	runner, _ := runnerWithLevel(TaskLevelMedium)
+	runner.noteModelInUse("a/model")
+	runner.options.ElapsedSecondCeiling = 90
+	runner.recordIterationCost(time.Now().Add(-40 * time.Second))
+
+	runner.refreshElapsedBudget(TaskLevelMedium)
+
+	if runner.options.MaxElapsedSecond > 90 {
+		t.Fatalf("a budget recomputed from measured cost still cannot outlast the deadline the host gave, got %d against 90", runner.options.MaxElapsedSecond)
+	}
+}
