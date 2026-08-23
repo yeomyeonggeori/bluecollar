@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -801,5 +802,24 @@ func TestAGrantWithNoStatedCeilingKeepsTheProfileClock(t *testing.T) {
 
 	if services.runner.options.MaxElapsedSecond <= 451 {
 		t.Fatalf("a caller that set no deadline bounds nothing, so the granted profile stands, got %d", services.runner.options.MaxElapsedSecond)
+	}
+}
+
+func TestAGrantTellsTheAgentItsBudgetChanged(t *testing.T) {
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	highProfile := TaskLevelProfileForLevel(TaskLevelHigh)
+	granted := grantedBudgetObservation(nil, TurnOptions{
+		MaxToolCallCount:  highProfile.MaxToolCallCount,
+		MaxIterationCount: highProfile.MaxIterationCount,
+	})
+
+	if !strings.Contains(granted.Output.Content, strconv.Itoa(highProfile.MaxToolCallCount)) {
+		t.Fatalf("the new budget is the point of the message, got %q", granted.Output.Content)
+	}
+	if strings.Contains(granted.Output.Content, strconv.Itoa(mediumProfile.MaxToolCallCount)) {
+		t.Fatalf("quoting the old number again is what the agent already believed, got %q", granted.Output.Content)
+	}
+	if !strings.Contains(granted.Output.Content, "no longer applies") {
+		t.Fatalf("an earlier budget check told the agent to stop exploring and has to be retired by name, got %q", granted.Output.Content)
 	}
 }
