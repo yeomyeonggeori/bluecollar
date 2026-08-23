@@ -22,6 +22,7 @@ has to be told it is being measured.
 import http.server
 import json
 import os
+import pathlib
 import socketserver
 import statistics
 import sys
@@ -32,20 +33,35 @@ from collections import defaultdict
 
 UPSTREAM_ORIGIN = os.environ.get("PROMPT_METER_UPSTREAM", "https://openrouter.ai")
 LEDGER_PATH = os.environ.get("PROMPT_METER_LEDGER", "/tmp/prompt-meter.jsonl")
+BODY_DIRECTORY = os.environ.get("PROMPT_METER_BODY_DIRECTORY", "")
 
 ledger_lock = threading.Lock()
 
 
-def record_call(harness_name, request_byte_count, usage):
+# The Responses API names the same two counts input_tokens and output_tokens, and a harness that
+# speaks it would otherwise be recorded as having sent nothing.
+def record_call(harness_name, request_byte_count, usage, carries_tool_call_pairs):
     entry = {
         "harness": harness_name,
         "requestBytes": request_byte_count,
-        "promptTokens": usage.get("prompt_tokens"),
-        "completionTokens": usage.get("completion_tokens"),
+        "carriesToolCallPairs": carries_tool_call_pairs,
+        "promptTokens": usage.get("prompt_tokens") or usage.get("input_tokens"),
+        "completionTokens": usage.get("completion_tokens") or usage.get("output_tokens"),
     }
     with ledger_lock:
         with open(LEDGER_PATH, "a") as ledger:
             ledger.write(json.dumps(entry) + "\n")
+
+
+# The only place a harness's actual request can be read without wrapping the harness, which is
+# what made an earlier attempt to check one read as a disproof of a change that was working.
+def keep_body(harness_name, body):
+    if not BODY_DIRECTORY:
+        return
+    os.makedirs(BODY_DIRECTORY, exist_ok=True)
+    with ledger_lock:
+        index = len(os.listdir(BODY_DIRECTORY))
+    pathlib.Path(BODY_DIRECTORY, f"{harness_name}-{index:04d}.json").write_bytes(body)
 
 
 def usage_from_payload(payload):
@@ -94,7 +110,16 @@ def forwarding_handler_for(harness_name):
             except urllib.error.HTTPError as refusal:
                 payload = self.relay(refusal)
 
-            record_call(harness_name, len(body), usage_from_payload(payload))
+            record_call(harness_name, len(body), usage_from_payload(payload), b'"tool_call_id"' in body)
+            keep_body(harness_name, body)
+
+        # A harness that gives up on a call closes the socket mid-relay, which is its business and
+        # not an error here. Without this the server prints a traceback into the run's own log.
+        def handle_one_request(self):
+            try:
+                super().handle_one_request()
+            except (BrokenPipeError, ConnectionResetError):
+                self.close_connection = True
 
         def relay(self, upstream_response):
             content_type = upstream_response.headers.get("Content-Type", "application/json")
@@ -132,17 +157,22 @@ def report():
         print(f"no calls recorded in {LEDGER_PATH}")
         return
     per_harness = defaultdict(list)
+    per_harness_paired = defaultdict(int)
     for line in open(LEDGER_PATH):
         entry = json.loads(line)
-        if entry.get("promptTokens"):
-            per_harness[entry["harness"]].append(entry["promptTokens"])
+        if not entry.get("promptTokens"):
+            continue
+        per_harness[entry["harness"]].append(entry["promptTokens"])
+        if entry.get("carriesToolCallPairs"):
+            per_harness_paired[entry["harness"]] += 1
     if not per_harness:
         print("no call carried a usage block")
         return
-    print("| harness | model calls | median prompt tokens per call | total prompt tokens |")
-    print("|---|---|---|---|")
+    print("| harness | model calls | median prompt tokens per call | total prompt tokens | calls carrying tool-call pairs |")
+    print("|---|---|---|---|---|")
     for harness_name, tokens in sorted(per_harness.items()):
-        print(f"| {harness_name} | {len(tokens)} | {statistics.median(tokens):,.0f} | {sum(tokens):,} |")
+        paired = per_harness_paired[harness_name]
+        print(f"| {harness_name} | {len(tokens)} | {statistics.median(tokens):,.0f} | {sum(tokens):,} | {paired} |")
 
 
 if __name__ == "__main__":
