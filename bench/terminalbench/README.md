@@ -206,25 +206,30 @@ anything:
 | 0d8a4ee_1 | fail | resolved |
 | 23cf851_1 | fail | resolved |
 | 37a8675_1 | fail | resolved |
-| 383cbac_1 | fail | resolved |
+| 383cbac_1 | resolved | resolved |
 | 396c5a2_1 | fail | resolved |
 | 3ab5b8b_1 | fail | fail |
 | 4ec8de5_1 | fail | fail |
 | 4fab96f_1 | fail | fail |
-| 50e1ac9_1 | fail | resolved |
-| 530b157_1 | fail | resolved |
-| 57c3486_1 | fail | resolved |
+| 50e1ac9_1 | resolved | resolved |
+| 530b157_1 | resolved | resolved |
+| 57c3486_1 | resolved | resolved |
 | 6171bbc_1 | resolved | resolved |
 | 68ee2c9_1 | fail | fail |
 | 6bdbc26_1 | resolved | resolved |
 | 6c2c621_1 | resolved | fail |
-| 0d8a4ee_2 | resolved | fail |
+| 0d8a4ee_2 | fail | fail |
 | 23cf851_2 | fail | fail |
-| | 4/17 | 10/17 |
+| | 7/17 | 10/17 |
 
 A hundred trials a harness on terminal-bench-core separated nothing. Seventeen
-AppWorld tasks separate them by six. Both columns are a single sweep: every
+AppWorld tasks separate them by three. Both columns are a single sweep: every
 task run once, in one configuration.
+
+The bluecollar column was re-swept after the fixes below merged, because the
+row it replaced measured code that no longer runs. It went from 4 of 17 to 7:
+383cbac_1, 530b157_1, 50e1ac9_1 and 57c3486_1 gained, 0d8a4ee_2 lost. pi's
+column is unchanged and was not re-run, since nothing about pi changed.
 
 An earlier version of this table read 5 of 17 and was not a sweep. After each
 fix I re-ran the tasks bluecollar had lost and recorded the ones that then
