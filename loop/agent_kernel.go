@@ -844,13 +844,12 @@ func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(ctx context.Context
 	baseOptions.MaxIterationCount = taskLevelProfile.MaxIterationCount
 	baseOptions.MaxToolCallCount = taskLevelProfile.MaxToolCallCount
 	baseOptions.MaxElapsedSecond = int(elapsedBudgetForProfile(taskLevelProfile, agentKernel.iterationCostObserver.CostOfModelInUse()).Seconds())
-	return withElapsedBudgetInsideDeadline(ctx, baseOptions)
+	return withElapsedBudgetFromDeadline(ctx, baseOptions)
 }
 
-// A budget the caller's deadline will not honour is not a budget. The loop reserves its
-// closing time out of MaxElapsedSecond, so a number larger than the time actually left
-// buys nothing and costs the report: the turn is cancelled where it stands.
-func withElapsedBudgetInsideDeadline(ctx context.Context, turnOptions TurnOptions) TurnOptions {
+// The level a classifier reads off the instruction sizes how a turn paces itself. What ends
+// it is the deadline the caller gave, which is the only bound that knows what the work is worth.
+func withElapsedBudgetFromDeadline(ctx context.Context, turnOptions TurnOptions) TurnOptions {
 	deadline, hasDeadline := ctx.Deadline()
 	if !hasDeadline {
 		return turnOptions
@@ -859,10 +858,8 @@ func withElapsedBudgetInsideDeadline(ctx context.Context, turnOptions TurnOption
 	if remainingSecond <= 0 {
 		return turnOptions
 	}
-	turnOptions.ElapsedSecondCeiling = remainingSecond
-	if turnOptions.MaxElapsedSecond > remainingSecond {
-		turnOptions.MaxElapsedSecond = remainingSecond
-	}
+	turnOptions.DeadlineSecond = remainingSecond
+	turnOptions.MaxElapsedSecond = remainingSecond
 	return turnOptions
 }
 

@@ -1876,6 +1876,35 @@ func TestAgentTurnRunnerStopsWhenToolEffortIsExceeded(t *testing.T) {
 	}
 }
 
+func TestACallersDeadlineOutranksTheLevelsToolCallCount(t *testing.T) {
+	languageModel := &sequenceLanguageModel{
+		contents: []string{
+			directToolAction("continue", "", "loop", `{}`),
+			directToolAction("continue", "", "loop", `{}`),
+			`{"action":"finish","message":"둘 다 돌고 마쳤습니다.","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":["obs-001"],"qualityReview":[]}`,
+		},
+	}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 1, DeadlineSecond: 900})
+	toolRegistry := newTestCapabilityToolSet([]string{"loop"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "loop"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return testToolSuccess("again"), nil
+	})
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "do it",
+		ToolSet:           toolRegistry,
+		PinnedToolNames:   toolRegistry.ListToolNames(),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected a completed turn, got error: %v", errorValue)
+	}
+	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.limit_stop", "max_tool_calls") {
+		t.Fatal("a caller that allowed 900 seconds did not ask for the turn to end on a count a classifier picked")
+	}
+}
+
 type turnRunnerTestServices struct {
 	runner              *AgentTurnRunner
 	taskRunService      *taskstate.TaskRunService

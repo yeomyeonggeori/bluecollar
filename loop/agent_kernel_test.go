@@ -1011,27 +1011,31 @@ func TestABudgetNeverOutlastsTheDeadlineItRunsUnder(t *testing.T) {
 	deadlineContext, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	clamped := withElapsedBudgetInsideDeadline(deadlineContext, TurnOptions{MaxElapsedSecond: 1672})
+	bounded := withElapsedBudgetFromDeadline(deadlineContext, TurnOptions{MaxElapsedSecond: 1672})
 
-	if clamped.MaxElapsedSecond > 90 {
-		t.Fatalf("planning past the deadline gets the turn cancelled where it stands instead of finishing and reporting, got %d", clamped.MaxElapsedSecond)
+	if bounded.MaxElapsedSecond > 90 {
+		t.Fatalf("planning past the deadline gets the turn cancelled where it stands instead of finishing and reporting, got %d", bounded.MaxElapsedSecond)
 	}
-	if clamped.MaxElapsedSecond < 80 {
-		t.Fatalf("the whole remaining window is still available and taking less of it wastes the turn, got %d", clamped.MaxElapsedSecond)
+	if bounded.MaxElapsedSecond < 80 {
+		t.Fatalf("the whole remaining window is still available and taking less of it wastes the turn, got %d", bounded.MaxElapsedSecond)
 	}
 }
 
-func TestABudgetThatAlreadyFitsIsLeftAlone(t *testing.T) {
-	deadlineContext, cancel := context.WithTimeout(context.Background(), time.Hour)
+func TestABudgetSmallerThanTheDeadlineGrowsToMeetIt(t *testing.T) {
+	deadlineContext, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
-	if clamped := withElapsedBudgetInsideDeadline(deadlineContext, TurnOptions{MaxElapsedSecond: 600}); clamped.MaxElapsedSecond != 600 {
-		t.Fatalf("a budget inside the deadline is the budget, got %d", clamped.MaxElapsedSecond)
+	bounded := withElapsedBudgetFromDeadline(deadlineContext, TurnOptions{MaxElapsedSecond: 220})
+
+	if bounded.MaxElapsedSecond < 870 {
+		t.Fatalf("a level's guess must not end a turn the caller was willing to run four times longer, got %d of about 900", bounded.MaxElapsedSecond)
 	}
 }
 
 func TestACallerWithNoDeadlineImposesNoBudget(t *testing.T) {
-	if clamped := withElapsedBudgetInsideDeadline(context.Background(), TurnOptions{MaxElapsedSecond: 1672}); clamped.MaxElapsedSecond != 1672 {
-		t.Fatalf("an embedding that sets no deadline keeps the derived budget, got %d", clamped.MaxElapsedSecond)
+	bounded := withElapsedBudgetFromDeadline(context.Background(), TurnOptions{MaxElapsedSecond: 1672})
+
+	if bounded.MaxElapsedSecond != 1672 || bounded.DeadlineSecond != 0 {
+		t.Fatalf("an embedding that sets no deadline keeps the derived budget as its only bound, got %d seconds against a deadline of %d", bounded.MaxElapsedSecond, bounded.DeadlineSecond)
 	}
 }
