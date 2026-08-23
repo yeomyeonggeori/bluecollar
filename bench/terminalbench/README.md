@@ -216,9 +216,12 @@ each, at the point where terminal-bench-core had stopped saying anything:
 | 6171bbc_1 | fail | resolved |
 | 68ee2c9_1 | fail | fail |
 | 6bdbc26_1 | resolved | resolved |
-| | 3/14 | 10/14 |
+| 6c2c621_1 | fail | fail |
+| 0d8a4ee_2 | fail | fail |
+| 23cf851_2 | fail | fail |
+| | 3/17 | 10/17 |
 
-A hundred trials a harness on terminal-bench-core separated nothing. Fourteen
+A hundred trials a harness on terminal-bench-core separated nothing. Seventeen
 AppWorld tasks separate them by seven at one attempt each, and the losses
 named their own causes in the ledger:
 
