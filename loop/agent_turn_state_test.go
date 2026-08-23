@@ -82,7 +82,7 @@ func TestDecideAgentActionNativeChatOmitsTextToolCatalog(t *testing.T) {
 }
 
 func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *testing.T) {
-	state := nativeAgentActionTestState()
+	state := wrappingUpTestState(nativeAgentActionTestState())
 	seed := int64(77)
 	temperature := 0.4
 	maxTokens := 321
@@ -1714,5 +1714,28 @@ func TestArgumentsThatAreNotAnObjectAreTheModelsMistakeNotTheRuntimes(t *testing
 func TestATransportFailureIsStillATransportFailure(t *testing.T) {
 	if isUnreadableModelActionError(errors.New("dial tcp: connection refused")) {
 		t.Fatal("a failed request is a real error and must keep ending the turn")
+	}
+}
+
+// The give-up control only appears once the turn is wrapping up, so a state that exposes
+// every terminal control is one that has spent most of its budget.
+func wrappingUpTestState(state agentTaskState) agentTaskState {
+	state.Options.MaxIterationCount = 10
+	state.Options.MaxToolCallCount = 10
+	state.IterationCount = 9
+	state.ToolCallCount = 9
+	return state
+}
+
+func TestTheExitIsNotOnTheMenuBeforeAnythingHasGoneWrong(t *testing.T) {
+	fresh := nativeAgentActionTestState()
+	fresh.Options.MaxIterationCount = 10
+	fresh.Options.MaxToolCallCount = 10
+
+	if shouldExposeFailAction(fresh) {
+		t.Fatal("an error raised inside a tool call that succeeded never becomes failure debt, and offering the exit there is how a turn quits with budget it never spent")
+	}
+	if !shouldExposeFailAction(wrappingUpTestState(fresh)) {
+		t.Fatal("a turn already told to wrap up has to be able to say it could not do the work")
 	}
 }

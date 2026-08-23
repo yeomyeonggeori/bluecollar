@@ -470,7 +470,16 @@ func shouldExposeFailAction(state agentTaskState) bool {
 	if _, shouldContinue := recoverableWorkflowFailResult(state.Request, state.Observations); shouldContinue {
 		return false
 	}
-	return true
+	return turnIsAlreadyWrappingUp(state)
+}
+
+// Nothing the runtime can see has gone wrong, so there is nothing to fail about yet. An error
+// raised inside a tool call that succeeded never becomes failure debt, which is exactly the
+// state in which the exit used to be the one thing on offer. It comes back when the turn is
+// already being told to wrap up.
+func turnIsAlreadyWrappingUp(state agentTaskState) bool {
+	return limitUsageReached(state.IterationCount, state.Options.MaxIterationCount, wrapUpThresholdPercent) ||
+		limitUsageReached(state.ToolCallCount, state.Options.MaxToolCallCount, wrapUpThresholdPercent)
 }
 
 func shouldExposeFinishAction(state agentTaskState, requirements []toolUseRequirement) bool {
