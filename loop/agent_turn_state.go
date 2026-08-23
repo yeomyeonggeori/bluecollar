@@ -19,6 +19,8 @@ const defaultAgentActionMaxTokens = 4096
 const terminalStructuredMaxTokens = 1600
 const maximumAgentActionCorrectionCount = 2
 
+const refusalsThatWithdrawFinish = 2
+
 type agentAction = turnActionDocument
 
 type agentTaskState struct {
@@ -497,6 +499,9 @@ func shouldExposeFinishAction(state agentTaskState, requirements []toolUseRequir
 	if finishWasRejectedWithoutAnyToolEvidence(state.Observations) {
 		return false
 	}
+	if finishKeepsBeingRefusedWithNothingDoneBetween(state.Observations) {
+		return false
+	}
 	if _, hasFailureDebt := activeFailureDebt(state.Observations); !hasFailureDebt {
 		return true
 	}
@@ -504,6 +509,22 @@ func shouldExposeFinishAction(state agentTaskState, requirements []toolUseRequir
 		return true
 	}
 	return len(requirements) == 0 || completionRequirementsHaveEvidence(state.Request.ToolSet, requirements, state.Observations)
+}
+
+// A refusal the agent answers with the same finish is the refusal saying nothing. Withdrawing
+// the action leaves the work and the exit, which is the choice the refusal was describing.
+func finishKeepsBeingRefusedWithNothingDoneBetween(observations []turnObservation) bool {
+	refusalCount := 0
+	for index := len(observations) - 1; index >= 0; index-- {
+		observation := observations[index]
+		if !observation.Failed() && strings.TrimSpace(observation.Tool) != "" {
+			break
+		}
+		if observation.Action == "evidence_missing" {
+			refusalCount++
+		}
+	}
+	return refusalCount >= refusalsThatWithdrawFinish
 }
 
 func finishWasRejectedWithoutAnyToolEvidence(observations []turnObservation) bool {
