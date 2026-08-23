@@ -263,12 +263,27 @@ tool's own output on that result instead of the ledger's description of it.
 | 4fab96f_1 | fail | resolved | fail |
 | | 2/8 | 6/8 | 4/8 |
 
+That table is wrong about pi, and the way it is wrong is the point.
+
 One attempt per task per column, which this file has already said cannot tell a
-task a harness loses from one it wins a third of the time. The two bluecollar
-now takes that pi does not were rerun: `396c5a2_1` resolved on both attempts
-that started, `4fab96f_1` on the one that did. pi has not had the same reruns —
-`stealth/ox-alpha` began answering 429 before they could start — so read the
-right-hand column as one attempt and the sixes as three.
+task a harness loses from one it wins a third of the time. The two tasks
+bluecollar newly took were rerun and held. pi could not be rerun at the same
+time because `stealth/ox-alpha` started answering 429. When the limit lifted and
+pi got the same three attempts:
+
+| task | bluecollar | pi |
+|---|---|---|
+| 396c5a2_1 | 2 of 2 attempts that started | 3 of 3 |
+| 4fab96f_1 | 1 of 1 | 3 of 3 |
+
+pi solves both. Its two failures in the single sweep were the variance this file
+already documents, and reading them as losses produced a two-task lead that does
+not exist. The honest count on these eight is a tie at best, with bluecollar's
+six standing on one attempt for four of them.
+
+This is the bias #79 and #92 were filed about, arriving from the other side:
+extra attempts went to the harness whose changes were being measured, and the
+column that moved was the one that got them.
 
 What moved underneath is measured rather than inferred:
 
