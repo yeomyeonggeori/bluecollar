@@ -318,6 +318,29 @@ the attribute being read, and the same three trials then made 6, 18 and 6 venmo
 lookups with one resolving. `50e1ac9_1`, the same shape, went from 0 of 3 to 1
 of 2. `23cf851_1` and `37a8675_1` did not move.
 
+Ten changes were measured against this row, and they sort cleanly by kind.
+
+| | tried | changed behaviour |
+|---|---|---|
+| added a sentence or a field to the prompt | 4 | 0 |
+| changed what the runtime does | 6 | 5 |
+
+The four that did nothing: a `lastOutcomeFailed` field the model set zero times;
+a judge rule the instruction already contained and the judge ignored anyway; a
+sentence saying the clock might belong to the machine rather than the world; an
+index of commands already run, which raised the help share from 49% to 78%.
+
+The five that worked all removed or corrected something the runtime was doing:
+offering the exit where it had seen nothing fail, granting two of a level's
+three numbers, carrying a budget warning past the budget it described, accepting
+a set the instruction had filtered, and asserting the host's clock as the
+world's.
+
+The sixth runtime change missed its target rather than its category: it replaced
+duplicate results with a pointer at a seam the prompt does not read, and a
+second attempt at the right seam reached a tenth of the waste, because
+byte-identical repeats are 3 to 8 of the roughly 49 help calls a run.
+
 The gap is open and its remaining cause is not visible in the ledger, which is
 a statement about what the ledger shows and not about where the cause lives:
 the two-model control puts it here. Five losses read closely share one shape:
