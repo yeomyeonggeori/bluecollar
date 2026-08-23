@@ -32,7 +32,7 @@ func (agentTurnRunner *AgentTurnRunner) applyPlanUpdateObservation(taskRunID str
 		state.ExecutionState.Goal = document.Goal
 	}
 	state.ExecutionState.Steps = document.Steps
-	agentTurnRunner.widenBudgetForPlannedLevel(taskRunID, state, document.Level)
+	agentTurnRunner.widenPaceForPlannedLevel(taskRunID, state, document.Level)
 	agentTurnRunner.appendEvent(taskRunID, "agent.plan.updated", marshalEventBody(planUpdateDocument{Goal: state.ExecutionState.Goal, Level: document.Level, Steps: state.ExecutionState.Steps}))
 	agentTurnRunner.appendEvent(taskRunID, "agent.execution_state", marshalEventBody(normalizeExecutionState(state.ExecutionState)))
 }
@@ -72,7 +72,7 @@ func latestPlanUpdate(observations []turnObservation) (planUpdateDocument, bool)
 	return planUpdateDocument{}, false
 }
 
-func (agentTurnRunner *AgentTurnRunner) widenBudgetForPlannedLevel(taskRunID string, state *agentTaskState, plannedLevel TaskLevel) {
+func (agentTurnRunner *AgentTurnRunner) widenPaceForPlannedLevel(taskRunID string, state *agentTaskState, plannedLevel TaskLevel) {
 	normalizedLevel := NormalizeTaskLevel(string(plannedLevel))
 	if normalizedLevel == "" || taskLevelRank(normalizedLevel) <= taskLevelRank(state.Request.TaskLevel) {
 		return
@@ -80,7 +80,7 @@ func (agentTurnRunner *AgentTurnRunner) widenBudgetForPlannedLevel(taskRunID str
 	plannedProfile := TaskLevelProfileForLevel(normalizedLevel)
 	agentTurnRunner.options.MaxIterationCount = plannedProfile.MaxIterationCount
 	agentTurnRunner.options.MaxToolCallCount = plannedProfile.MaxToolCallCount
-	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(plannedProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	agentTurnRunner.setElapsedBudgetFromProfile(plannedProfile)
 	state.Request.TaskLevel = normalizedLevel
 	agentTurnRunner.appendEvent(taskRunID, "agent.plan.sized", marshalEventBody(map[string]any{
 		"level":             string(normalizedLevel),

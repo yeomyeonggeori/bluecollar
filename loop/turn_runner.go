@@ -276,15 +276,19 @@ func (agentTurnRunner *AgentTurnRunner) levelIsTheWall() bool {
 	return agentTurnRunner.options.DeadlineSecond <= 0
 }
 
-func (agentTurnRunner *AgentTurnRunner) refreshElapsedBudget(taskLevel TaskLevel) {
+// Every clock a level profile draws goes through here.
+func (agentTurnRunner *AgentTurnRunner) setElapsedBudgetFromProfile(taskLevelProfile TaskLevelProfile) {
 	if !agentTurnRunner.levelIsTheWall() {
 		return
 	}
-	measuredCost := agentTurnRunner.iterationCostObserver.CostOfModelInUse()
-	if measuredCost.CostPerIteration <= 0 {
+	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(taskLevelProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+}
+
+func (agentTurnRunner *AgentTurnRunner) refreshElapsedBudget(taskLevel TaskLevel) {
+	if agentTurnRunner.iterationCostObserver.CostOfModelInUse().CostPerIteration <= 0 {
 		return
 	}
-	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(TaskLevelProfileForLevel(taskLevel), measuredCost).Seconds())
+	agentTurnRunner.setElapsedBudgetFromProfile(TaskLevelProfileForLevel(taskLevel))
 }
 
 func normalizeTurnOptions(options TurnOptions) TurnOptions {
@@ -1118,7 +1122,7 @@ func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID strin
 	state.GrantedTaskLevel = grantedLevel
 	agentTurnRunner.options.MaxToolCallCount = grantedProfile.MaxToolCallCount
 	agentTurnRunner.options.MaxIterationCount = grantedProfile.MaxIterationCount
-	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(grantedProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	agentTurnRunner.setElapsedBudgetFromProfile(grantedProfile)
 	agentTurnRunner.appendEvent(taskRunID, "agent.budget_extended_one_level", marshalEventBody(map[string]any{
 		"grantedLevel":      string(grantedLevel),
 		"maxToolCallCount":  grantedProfile.MaxToolCallCount,

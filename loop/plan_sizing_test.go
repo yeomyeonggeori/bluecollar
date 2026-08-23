@@ -35,7 +35,7 @@ func TestAPlanThatNamesABiggerTaskGetsABiggerBudget(t *testing.T) {
 	runner, state := runnerWithLevel(TaskLevelMedium)
 	mediumToolCalls := runner.options.MaxToolCallCount
 
-	runner.widenBudgetForPlannedLevel("task-1", state, TaskLevelHigh)
+	runner.widenPaceForPlannedLevel("task-1", state, TaskLevelHigh)
 
 	if runner.options.MaxToolCallCount != TaskLevelProfileForLevel(TaskLevelHigh).MaxToolCallCount {
 		t.Fatalf("a task that turned out to be high has to be allowed to finish, got %d", runner.options.MaxToolCallCount)
@@ -49,7 +49,7 @@ func TestAPlanCannotShrinkTheBudgetItWasGiven(t *testing.T) {
 	runner, state := runnerWithLevel(TaskLevelHigh)
 	highToolCalls := runner.options.MaxToolCallCount
 
-	runner.widenBudgetForPlannedLevel("task-1", state, TaskLevelLow)
+	runner.widenPaceForPlannedLevel("task-1", state, TaskLevelLow)
 
 	if runner.options.MaxToolCallCount != highToolCalls || state.Request.TaskLevel != TaskLevelHigh {
 		t.Fatalf("an under-called plan must not cut work already sized larger, got %d at level %q", runner.options.MaxToolCallCount, state.Request.TaskLevel)
@@ -60,7 +60,7 @@ func TestAPlanWithNoLevelLeavesTheBudgetAlone(t *testing.T) {
 	runner, state := runnerWithLevel(TaskLevelMedium)
 	mediumToolCalls := runner.options.MaxToolCallCount
 
-	runner.widenBudgetForPlannedLevel("task-1", state, "")
+	runner.widenPaceForPlannedLevel("task-1", state, "")
 
 	if runner.options.MaxToolCallCount != mediumToolCalls {
 		t.Fatalf("a plan that says nothing about size must change nothing, got %d", runner.options.MaxToolCallCount)
@@ -79,7 +79,7 @@ func TestRestatingTheSameLevelChangesNothing(t *testing.T) {
 	runner, state := runnerWithLevel(TaskLevelMedium)
 	runner.options.MaxElapsedSecond = 836
 
-	runner.widenBudgetForPlannedLevel("task-1", state, TaskLevelMedium)
+	runner.widenPaceForPlannedLevel("task-1", state, TaskLevelMedium)
 
 	if runner.options.MaxElapsedSecond != 836 {
 		t.Fatalf("a plan that repeats its size must not quietly retighten the clock, got %d seconds", runner.options.MaxElapsedSecond)
@@ -141,5 +141,21 @@ func TestTheGrantOnlyExistsForACallerThatSetNoDeadline(t *testing.T) {
 	}
 	if runner.extendBudgetOneLevelOnce("task-1", state) {
 		t.Fatalf("there is nothing to extend when the level was never the wall")
+	}
+}
+
+func TestAPlanForABiggerTaskDoesNotShortenTheCallersDeadline(t *testing.T) {
+	runner, state := runnerWithLevel(TaskLevelLow)
+	runner.noteModelInUse("a/model")
+	runner.options.DeadlineSecond = 891
+	runner.options.MaxElapsedSecond = 891
+
+	runner.widenPaceForPlannedLevel("task-1", state, TaskLevelMedium)
+
+	if runner.options.MaxElapsedSecond != 891 {
+		t.Fatalf("a plan that names a bigger task cannot come back with a shorter clock than the caller gave, got %d against 891", runner.options.MaxElapsedSecond)
+	}
+	if runner.options.MaxToolCallCount != TaskLevelProfileForLevel(TaskLevelMedium).MaxToolCallCount {
+		t.Fatalf("the counts still pace the turn and still follow the plan, got %d", runner.options.MaxToolCallCount)
 	}
 }
