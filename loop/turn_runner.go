@@ -277,7 +277,8 @@ func (agentTurnRunner *AgentTurnRunner) refreshElapsedBudget(taskLevel TaskLevel
 	if measuredCost.CostPerIteration <= 0 {
 		return
 	}
-	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(TaskLevelProfileForLevel(taskLevel), measuredCost).Seconds())
+	budgetSecond := int(elapsedBudgetForProfile(TaskLevelProfileForLevel(taskLevel), measuredCost).Seconds())
+	agentTurnRunner.options.MaxElapsedSecond = agentTurnRunner.elapsedSecondWithinCeiling(budgetSecond)
 }
 
 func normalizeTurnOptions(options TurnOptions) TurnOptions {
@@ -425,7 +426,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	for iteration := 1; ; iteration++ {
 		if iteration > 1 {
 			agentTurnRunner.recordIterationCost(iterationStartedAt)
-			agentTurnRunner.refreshElapsedBudget(state.Request.TaskLevel)
+			agentTurnRunner.refreshElapsedBudget(state.budgetTaskLevel())
 			iterationStartedAt = time.Now()
 		}
 		if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
@@ -451,7 +452,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		}
 		state.Observations = agentTurnRunner.applyPendingSteeringEvents(taskRun.TaskRunID, state.Observations, appliedSteerEventIDs)
 		state.IterationCount = iteration - 1
-		if state.DidExtendBudgetOneLevel && !warningsRetiredByGrant {
+		if state.didExtendBudgetOneLevel() && !warningsRetiredByGrant {
 			warningsRetiredByGrant = true
 			limitPressureWarnings = map[string]bool{}
 			grantedBudget := grantedBudgetObservation(state.Observations, agentTurnRunner.options)
@@ -1101,15 +1102,19 @@ func grantedBudgetObservation(observations []turnObservation, options TurnOption
 
 func (agentTurnRunner *AgentTurnRunner) grantedElapsedSecond(grantedProfile TaskLevelProfile) int {
 	grantedSecond := int(elapsedBudgetForProfile(grantedProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	return agentTurnRunner.elapsedSecondWithinCeiling(grantedSecond)
+}
+
+func (agentTurnRunner *AgentTurnRunner) elapsedSecondWithinCeiling(elapsedSecond int) int {
 	ceiling := agentTurnRunner.options.ElapsedSecondCeiling
-	if ceiling > 0 && grantedSecond > ceiling {
+	if ceiling > 0 && elapsedSecond > ceiling {
 		return ceiling
 	}
-	return grantedSecond
+	return elapsedSecond
 }
 
 func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID string, state *agentTaskState) bool {
-	if state.DidExtendBudgetOneLevel || !budgetCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
+	if state.didExtendBudgetOneLevel() || !budgetCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
 		return false
 	}
 	grantedLevel, hasNextLevel := nextTaskLevel(state.Request.TaskLevel)
@@ -1117,7 +1122,7 @@ func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID strin
 		return false
 	}
 	grantedProfile := TaskLevelProfileForLevel(grantedLevel)
-	state.DidExtendBudgetOneLevel = true
+	state.GrantedTaskLevel = grantedLevel
 	agentTurnRunner.options.MaxToolCallCount = grantedProfile.MaxToolCallCount
 	agentTurnRunner.options.MaxIterationCount = grantedProfile.MaxIterationCount
 	agentTurnRunner.options.MaxElapsedSecond = agentTurnRunner.grantedElapsedSecond(grantedProfile)
