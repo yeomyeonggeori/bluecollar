@@ -226,6 +226,50 @@ A hundred trials a harness on terminal-bench-core separated nothing. Seventeen
 AppWorld tasks separate them by three. Both columns are a single sweep: every
 task run once, in one configuration.
 
+## Both columns on one model, one day
+
+The table above was assembled over several days, and pi's half of it was older
+than bluecollar's. `stealth/ox-alpha` is free while it lasts, which made it
+cheap enough to sweep both harnesses again from scratch in one sitting. Eight
+tasks got through before the run was stopped:
+
+| task | bluecollar | pi |
+|---|---|---|
+| 0d8a4ee_1 | resolved | resolved |
+| 23cf851_1 | fail | resolved |
+| 37a8675_1 | resolved | resolved |
+| 383cbac_1 | fail | resolved |
+| 396c5a2_1 | fail | fail |
+| 3ab5b8b_1 | fail | fail |
+| 4ec8de5_1 | fail | fail |
+| 4fab96f_1 | fail | fail |
+| | 2/8 | 4/8 |
+
+## What each one puts in front of the model
+
+Terminal-Bench sees a verdict and a clock. It cannot see what either harness
+sent, so this column used to be bluecollar's self-report against pi's silence.
+`prompt-meter` sits in front of the endpoint both harnesses already reach over
+HTTP, forwards every request untouched, and records the counts the provider
+returned. One listener per harness, so a call is attributed by the port it
+arrived on and neither harness is told it is being measured.
+
+| harness | model calls | median prompt tokens per call | total prompt tokens |
+|---|---|---|---|
+| bluecollar | 154 | 10,046 | 1,526,696 |
+| pi | 133 | 6,306 | 1,286,208 |
+
+Nearly the same fuel, half the distance. On the four tasks both harnesses fail,
+bluecollar spends 668,382 prompt tokens against pi's 434,557 to arrive at the
+same place.
+
+Where the extra weight goes is measured rather than guessed: bluecollar's own
+ledger puts the median prompt at 47,687 bytes, of which the action schema is
+13%. The rest is the observation history, and 79% of the tool output in that
+history is `--help` the agent had already read — 32 distinct documents, 110
+reads, none of them byte-identical to another because the model varies the
+pipeline every time.
+
 The bluecollar column was re-swept after the fixes below merged, because the
 row it replaced measured code that no longer runs. It went from 4 of 17 to 7:
 383cbac_1, 530b157_1, 50e1ac9_1 and 57c3486_1 gained, 0d8a4ee_2 lost. pi's
