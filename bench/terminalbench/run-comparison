@@ -14,19 +14,28 @@ attempts="${BENCH_ATTEMPTS:-1}"
 harnessFilter="${BENCH_HARNESS:-}"
 agentTimeoutSecond="${BENCH_AGENT_TIMEOUT:-3600}"
 testTimeoutSecond="${BENCH_TEST_TIMEOUT:-600}"
+rateLimitAttempts="${BENCH_RATE_LIMIT_ATTEMPTS:-10}"
+rateLimitWaitSecond="${BENCH_RATE_LIMIT_WAIT:-60}"
 taskArguments=()
 for taskID in "$@"; do taskArguments+=(--task-id "$taskID"); done
 
+# A model the endpoint does not have is a typo and the run should stop. A shared pool that is
+# busy is neither, and treating the two the same throws away an invocation for a wait.
 refuseUnknownModel() {
-  local responseFile status
+  local responseFile status attempt
   responseFile="$(mktemp)"
   trap 'rm -f "$responseFile"' RETURN
-  status="$(curl -s -o "$responseFile" -w '%{http_code}' --max-time 30 \
-    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
-    -H 'Content-Type: application/json' \
-    -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}],\"max_tokens\":1}" \
-    "$endpoint/chat/completions")"
-  if [ "$status" = "200" ]; then return 0; fi
+  for attempt in $(seq 1 "$rateLimitAttempts"); do
+    status="$(curl -s -o "$responseFile" -w '%{http_code}' --max-time 30 \
+      -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+      -H 'Content-Type: application/json' \
+      -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}],\"max_tokens\":1}" \
+      "$endpoint/chat/completions")"
+    if [ "$status" = "200" ]; then return 0; fi
+    if [ "$status" != "429" ]; then break; fi
+    echo "$model is rate limited; waiting ${rateLimitWaitSecond}s (attempt $attempt of $rateLimitAttempts)" >&2
+    sleep "$rateLimitWaitSecond"
+  done
   echo "the endpoint refused $model with HTTP $status before any task ran:" >&2
   cat "$responseFile" >&2
   exit 2
@@ -47,12 +56,14 @@ removeAbandonedTaskContainers() {
 promptMeterLedger="$outputRoot/prompt-meter.jsonl"
 bluecollarMeterPort=8317
 piMeterPort=8318
+codexMeterPort=8319
 
 startPromptMeters() {
   mkdir -p "$outputRoot"
   rm -f "$promptMeterLedger"
   PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" serve bluecollar "$bluecollarMeterPort" &
   PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" serve pi "$piMeterPort" &
+  PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" serve codex "$codexMeterPort" &
   sleep 1
 }
 
@@ -80,6 +91,9 @@ runHarness() {
   PI_BASE_URL="http://host.docker.internal:$piMeterPort/api/v1" \
   PI_MODEL_ID="$model" \
   PI_API_KEY="$OPENROUTER_API_KEY" \
+  CODEX_BASE_URL="http://host.docker.internal:$codexMeterPort/api/v1" \
+  CODEX_MODEL_ID="$model" \
+  CODEX_API_KEY="$OPENROUTER_API_KEY" \
     uvx --from terminal-bench --with 'litellm==1.77.0' tb run \
       --dataset "$dataset" \
       --agent-import-path "$importPath" \
@@ -94,6 +108,7 @@ runHarness() {
 
 runHarness bluecollar bench.terminalbench.bluecollar_agent:BluecollarAgent
 runHarness pi bench.terminalbench.pi_agent:PiAgent
+runHarness codex bench.terminalbench.codex_agent:CodexAgent
 
 python3 "$(dirname "$0")/summarize-comparison" "$outputRoot" "$dataset" "$model"
 PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" report
