@@ -771,10 +771,9 @@ func TestTheTopLevelHasNothingToBeRaisedTo(t *testing.T) {
 func TestAGrantRaisesTheClockWithTheCounts(t *testing.T) {
 	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
 	services := newTurnRunnerTestServices(nil, TurnOptions{
-		MaxToolCallCount:     mediumProfile.MaxToolCallCount,
-		MaxIterationCount:    mediumProfile.MaxIterationCount,
-		MaxElapsedSecond:     451,
-		ElapsedSecondCeiling: 900,
+		MaxToolCallCount:  mediumProfile.MaxToolCallCount,
+		MaxIterationCount: mediumProfile.MaxIterationCount,
+		MaxElapsedSecond:  451,
 	})
 	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}}
 
@@ -783,9 +782,6 @@ func TestAGrantRaisesTheClockWithTheCounts(t *testing.T) {
 	}
 	if services.runner.options.MaxElapsedSecond <= 451 {
 		t.Fatalf("a turn granted more calls and more steps has to be given the time to spend them, got %d", services.runner.options.MaxElapsedSecond)
-	}
-	if services.runner.options.MaxElapsedSecond > 900 {
-		t.Fatalf("a grant may not plan past the deadline the caller allowed, got %d", services.runner.options.MaxElapsedSecond)
 	}
 }
 

@@ -118,15 +118,28 @@ func TestTheGrantedClockSurvivesTheNextIteration(t *testing.T) {
 	}
 }
 
-func TestTheRefreshedClockStaysUnderTheHostDeadline(t *testing.T) {
+func TestACallersDeadlineIsNotRedrawnFromMeasuredCost(t *testing.T) {
 	runner, _ := runnerWithLevel(TaskLevelMedium)
 	runner.noteModelInUse("a/model")
-	runner.options.ElapsedSecondCeiling = 90
+	runner.options.DeadlineSecond = 900
+	runner.options.MaxElapsedSecond = 900
 	runner.recordIterationCost(time.Now().Add(-40 * time.Second))
 
 	runner.refreshElapsedBudget(TaskLevelMedium)
 
-	if runner.options.MaxElapsedSecond > 90 {
-		t.Fatalf("a budget recomputed from measured cost still cannot outlast the deadline the host gave, got %d against 90", runner.options.MaxElapsedSecond)
+	if runner.options.MaxElapsedSecond != 900 {
+		t.Fatalf("the clock a caller set is the clock, and a level profile does not get to redraw it, got %d against 900", runner.options.MaxElapsedSecond)
+	}
+}
+
+func TestTheGrantOnlyExistsForACallerThatSetNoDeadline(t *testing.T) {
+	runner, state := runnerWithLevel(TaskLevelLow)
+	runner.options.DeadlineSecond = 900
+
+	if runner.levelIsTheWall() {
+		t.Fatalf("a caller that gave a deadline gave the only wall the turn needs")
+	}
+	if runner.extendBudgetOneLevelOnce("task-1", state) {
+		t.Fatalf("there is nothing to extend when the level was never the wall")
 	}
 }
