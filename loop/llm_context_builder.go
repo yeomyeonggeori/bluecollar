@@ -10,38 +10,39 @@ import (
 type LLMContextBuilder struct{}
 
 type LLMContextInput struct {
-	ResponseLanguage      string
-	RequesterPersonID     string
-	RequesterName         string
-	RequesterCallingName  string
-	RequesterEmail        string
-	Company               CompanyContext
-	UserPrompt            string
-	InputParts            []AgentPart
-	TurnStartedAt         time.Time
-	EnvironmentNow        time.Time
-	InstructionPrompt     string
-	ToolDescription       string
-	AdditionalToolNames   []string
-	WorkspaceContext      WorkspaceContext
-	VisibleContext        VisibleContext
-	MemoryFacts           []MemoryFact
-	MemoryContext         string
-	ActiveGoal            ActiveGoal
-	PriorTask             PriorTaskContext
-	ScheduledRun          ScheduledRunContext
-	ActiveTask            ActiveTaskContext
-	PendingInput          PendingInputContext
-	StepBudgetContext     string
-	ArtifactManifest      []ArtifactManifestEntry
-	Observations          []turnObservation
-	ExecutionState        ExecutionState
-	FailureFacts          failureReportFacts
-	Attachments           []toolcontract.FileAttachment
-	ToolSet               *toolcontract.ToolSet
-	RequiredEvidenceTools []string
-	OutcomeContract       OutcomeContract
-	ExtraSections         []string
+	ResponseLanguage           string
+	RequesterPersonID          string
+	RequesterName              string
+	RequesterCallingName       string
+	RequesterEmail             string
+	Company                    CompanyContext
+	UserPrompt                 string
+	InputParts                 []AgentPart
+	TurnStartedAt              time.Time
+	EnvironmentNow             time.Time
+	InstructionPrompt          string
+	ToolDescription            string
+	AdditionalToolNames        []string
+	WorkspaceContext           WorkspaceContext
+	VisibleContext             VisibleContext
+	MemoryFacts                []MemoryFact
+	MemoryContext              string
+	ActiveGoal                 ActiveGoal
+	PriorTask                  PriorTaskContext
+	ScheduledRun               ScheduledRunContext
+	ActiveTask                 ActiveTaskContext
+	PendingInput               PendingInputContext
+	StepBudgetContext          string
+	ArtifactManifest           []ArtifactManifestEntry
+	Observations               []turnObservation
+	ExecutionState             ExecutionState
+	ToolResultsCarriedNatively bool
+	FailureFacts               failureReportFacts
+	Attachments                []toolcontract.FileAttachment
+	ToolSet                    *toolcontract.ToolSet
+	RequiredEvidenceTools      []string
+	OutcomeContract            OutcomeContract
+	ExtraSections              []string
 }
 
 type WorkspaceContext struct {
@@ -82,12 +83,21 @@ func (builder LLMContextBuilder) BuildChangingContext(input LLMContextInput) str
 		builder.observedResultProjectionContext(input),
 		builder.knownFileContext(input),
 		buildExecutionStateContext(input.ExecutionState, input.Observations),
-		toolResultContextText(input.Observations),
-		buildObservationContext(input.Observations),
+		builder.toolResultContext(input),
+		buildObservationContext(input.Observations, input.ToolResultsCarriedNatively),
 		builder.failureContext(input),
 		builder.attachmentContext(input.Attachments),
 		strings.Join(nonEmptyStrings(input.ExtraSections), "\n\n"),
 	}), "\n\n")
+}
+
+// A native transcript carries every result on the call that produced it, so repeating them here
+// would send each one twice.
+func (builder LLMContextBuilder) toolResultContext(input LLMContextInput) string {
+	if input.ToolResultsCarriedNatively {
+		return ""
+	}
+	return toolResultContextText(input.Observations)
 }
 
 const additionalToolsContextPageSize = 15
@@ -340,7 +350,7 @@ func (builder LLMContextBuilder) progressContext(input LLMContextInput) string {
 	if len(input.Observations) == 0 {
 		return ""
 	}
-	return buildProgressContext(agentTurnRequestForContext(input), input.Observations)
+	return buildProgressContext(agentTurnRequestForContext(input), input.Observations, input.ToolResultsCarriedNatively)
 }
 
 func (builder LLMContextBuilder) knownFileContext(input LLMContextInput) string {

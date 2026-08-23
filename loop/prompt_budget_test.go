@@ -44,7 +44,7 @@ func TestTheAssembledPromptStaysWithinItsBudget(t *testing.T) {
 }
 
 func measureAssembledPrompt(state agentTaskState) promptSizeParts {
-	request := buildAgentActionRequest(state, true)
+	request := buildAgentActionRequest(state, true, false)
 	messageBytes := 0
 	for _, message := range request.Messages {
 		messageBytes += len(message.Content)

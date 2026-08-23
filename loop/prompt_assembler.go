@@ -20,6 +20,8 @@ type InjectedContextInput struct {
 	MemoryContext     string
 	Observations      []turnObservation
 	ExecutionState    ExecutionState
+
+	ToolResultsCarriedNatively bool
 }
 
 func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
@@ -42,20 +44,21 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 			DefaultPath:       input.RuntimeRequest.WorkspaceDefaultPath,
 			RequesterPersonID: input.RuntimeRequest.RequesterPersonID,
 		},
-		VisibleContext:        input.RuntimeRequest.VisibleContext,
-		MemoryContext:         input.MemoryContext,
-		ActiveGoal:            input.RuntimeRequest.ActiveGoal,
-		PriorTask:             input.RuntimeRequest.PriorTask,
-		ScheduledRun:          input.RuntimeRequest.ScheduledRun,
-		StepBudgetContext:     input.RuntimeRequest.StepBudgetContext,
-		ArtifactManifest:      input.RuntimeRequest.ArtifactManifest,
-		Observations:          input.Observations,
-		ExecutionState:        input.ExecutionState,
-		FailureFacts:          buildFailureReportFacts(input.Observations, defaultRecoveryBudget()),
-		Attachments:           attachmentsFromObservations(input.Observations),
-		ToolSet:               input.RuntimeRequest.ToolSet,
-		RequiredEvidenceTools: append([]string{}, input.RuntimeRequest.RequiredEvidenceTools...),
-		OutcomeContract:       input.RuntimeRequest.OutcomeContract,
+		VisibleContext:             input.RuntimeRequest.VisibleContext,
+		MemoryContext:              input.MemoryContext,
+		ActiveGoal:                 input.RuntimeRequest.ActiveGoal,
+		PriorTask:                  input.RuntimeRequest.PriorTask,
+		ScheduledRun:               input.RuntimeRequest.ScheduledRun,
+		StepBudgetContext:          input.RuntimeRequest.StepBudgetContext,
+		ArtifactManifest:           input.RuntimeRequest.ArtifactManifest,
+		Observations:               input.Observations,
+		ExecutionState:             input.ExecutionState,
+		ToolResultsCarriedNatively: input.ToolResultsCarriedNatively,
+		FailureFacts:               buildFailureReportFacts(input.Observations, defaultRecoveryBudget()),
+		Attachments:                attachmentsFromObservations(input.Observations),
+		ToolSet:                    input.RuntimeRequest.ToolSet,
+		RequiredEvidenceTools:      append([]string{}, input.RuntimeRequest.RequiredEvidenceTools...),
+		OutcomeContract:            input.RuntimeRequest.OutcomeContract,
 	}
 	contextBuilder := LLMContextBuilder{}
 	return compactMessages([]model.Message{
@@ -67,6 +70,10 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 }
 
 func (promptAssembler PromptAssembler) BuildTurnMessages(request AgentTurnRequest, observations []turnObservation, baseInstruction string, toolDescription string, executionStates ...ExecutionState) []model.Message {
+	return promptAssembler.buildTurnMessages(request, observations, baseInstruction, toolDescription, false, executionStates...)
+}
+
+func (promptAssembler PromptAssembler) buildTurnMessages(request AgentTurnRequest, observations []turnObservation, baseInstruction string, toolDescription string, toolResultsCarriedNatively bool, executionStates ...ExecutionState) []model.Message {
 	executionState := ExecutionState{}
 	if len(executionStates) > 0 {
 		executionState = executionStates[0]
@@ -81,6 +88,8 @@ func (promptAssembler PromptAssembler) BuildTurnMessages(request AgentTurnReques
 		MemoryContext:     buildMemoryContext(request.MemoryFacts),
 		Observations:      observations,
 		ExecutionState:    executionState,
+
+		ToolResultsCarriedNatively: toolResultsCarriedNatively,
 	})
 	messages = append(messages, userMessageFromPromptAndParts(request.Prompt, request.InputParts))
 	return messages
@@ -184,21 +193,38 @@ func defaultTurnLocation() *time.Location {
 	return location
 }
 
-func buildObservationContext(observations []turnObservation) string {
+func buildObservationContext(observations []turnObservation, toolResultsCarriedNatively bool) string {
 	if len(observations) == 0 {
 		return ""
 	}
-	body := marshalEventBody(recentProgressObservations(observations))
+	ledger := recentProgressObservations(observations)
+	if toolResultsCarriedNatively {
+		ledger = withoutSummaries(ledger)
+	}
+	body := marshalEventBody(ledger)
 	if len(body) > progressMessageLimit {
 		body = body[:progressMessageLimit] + "\n[trimmed]"
 	}
 	return "Relevant observation ledger so far. Use observationID/toolName/attachmentIndex when citing completionEvidence:\n" + body
 }
 
-func buildProgressContext(request AgentTurnRequest, observations []turnObservation) string {
+func withoutSummaries(observations []ProgressObservation) []ProgressObservation {
+	stripped := make([]ProgressObservation, 0, len(observations))
+	for _, observation := range observations {
+		observation.Summary = ""
+		stripped = append(stripped, observation)
+	}
+	return stripped
+}
+
+func buildProgressContext(request AgentTurnRequest, observations []turnObservation, toolResultsCarriedNatively bool) string {
 	progress := buildTurnProgress(request, observations)
 	if len(observations) == 0 {
 		progress.RemainingWork = "No tool work has been attempted yet."
+	}
+	if toolResultsCarriedNatively {
+		progress.CompletedSteps = withoutSummaries(progress.CompletedSteps)
+		progress.FailedOrBlockedSteps = withoutSummaries(progress.FailedOrBlockedSteps)
 	}
 	body := marshalEventBody(progress)
 	if len(body) > progressMessageLimit {

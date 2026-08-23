@@ -408,10 +408,14 @@ func nextCompletionAttachmentPaths(state CompletionState) []string {
 }
 
 func BuildAgentActionRequest(state agentTaskState) model.StructuredResponseRequest {
-	return buildAgentActionRequest(state, true)
+	return buildAgentActionRequest(state, true, false)
 }
 
-func buildAgentActionRequest(state agentTaskState, includeToolDescription bool) model.StructuredResponseRequest {
+func buildAgentActionRequestCarryingToolResultsNatively(state agentTaskState) model.StructuredResponseRequest {
+	return buildAgentActionRequest(state, false, true)
+}
+
+func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, toolResultsCarriedNatively bool) model.StructuredResponseRequest {
 	allowQualityCriteria := len(state.QualityCriteria) == 0
 	requirements := state.Requirements
 	if requirements == nil {
@@ -427,11 +431,12 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool) 
 	if includeToolDescription {
 		toolDescription = buildAgentToolDescription(modelToolSet)
 	}
-	messages := (PromptAssembler{}).BuildTurnMessages(
+	messages := (PromptAssembler{}).buildTurnMessages(
 		state.Request,
 		state.Observations,
 		systemInstructionFor(state.Options, state.Request).Text(),
 		toolDescription,
+		toolResultsCarriedNatively,
 		state.ExecutionState,
 	)
 	if hasFailureDebt {
@@ -757,8 +762,8 @@ func evidenceReferencesFromIDs(values []string) []completionEvidenceReference {
 
 func DecideAgentAction(ctx context.Context, languageModel model.LanguageModelProvider, state agentTaskState) (agentAction, error) {
 	if chatCompleter, isAvailable := model.ResolveTextChatCompleter(languageModel); isAvailable {
-		chatRequestSource := buildAgentActionRequest(state, false)
-		if chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(chatRequestSource); isRepresentable {
+		chatRequestSource := buildAgentActionRequestCarryingToolResultsNatively(state)
+		if chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(chatRequestSource, state.Observations); isRepresentable {
 			return decideAgentActionWithChat(ctx, chatCompleter, chatRequest, state)
 		}
 	}
@@ -938,8 +943,8 @@ func agentActionCorrectionMessage(correction model.StructuredOutputCorrection) s
 	return strings.Join(messageParts, " ")
 }
 
-func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredResponseRequest) (model.ChatCompletionRequest, bool) {
-	messages := make([]model.ChatCompletionMessage, 0, len(structuredRequest.Messages))
+func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredResponseRequest, observations []turnObservation) (model.ChatCompletionRequest, bool) {
+	messages := make([]model.ChatCompletionMessage, 0, len(structuredRequest.Messages)+2*len(observations))
 	for _, message := range structuredRequest.Messages {
 		messages = append(messages, model.ChatCompletionMessage{
 			Role:    message.Role,
@@ -947,6 +952,7 @@ func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredRes
 			Parts:   append([]model.MessagePart{}, message.Parts...),
 		})
 	}
+	messages = append(messages, toolCallTranscript(observations)...)
 	tools, errorValue := nativeAgentActionTools(structuredRequest.StructuredOutputSchema.Document)
 	if errorValue != nil || len(tools) == 0 {
 		return model.ChatCompletionRequest{}, false
@@ -959,6 +965,44 @@ func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredRes
 		ParallelToolCalls: true,
 		GenerationOptions: structuredRequest.GenerationOptions,
 	}, true
+}
+
+// A result the model reads as loose text says nothing about where it came from.
+func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMessage {
+	transcript := []model.ChatCompletionMessage{}
+	for _, observation := range observations {
+		toolName := strings.TrimSpace(observation.Tool)
+		summary := strings.TrimSpace(observation.Summary)
+		if toolName == "" || summary == "" {
+			continue
+		}
+		transcript = append(transcript,
+			model.ChatCompletionMessage{
+				Role: "assistant",
+				ToolCalls: []model.ChatCompletionToolCall{{
+					ID:   observation.ObservationID,
+					Type: "function",
+					Function: model.ChatCompletionToolCallFunction{
+						Name:      toolName,
+						Arguments: toolCallArguments(observation.ToolInput),
+					},
+				}},
+			},
+			model.ChatCompletionMessage{
+				Role:       "tool",
+				ToolCallID: observation.ObservationID,
+				Content:    summary,
+			},
+		)
+	}
+	return transcript
+}
+
+func toolCallArguments(toolInput json.RawMessage) string {
+	if len(toolInput) == 0 {
+		return "{}"
+	}
+	return string(toolInput)
 }
 
 func nativeAgentActionTools(schemaDocument string) ([]model.ChatCompletionTool, error) {

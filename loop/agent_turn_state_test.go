@@ -92,7 +92,7 @@ func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *tes
 		MaxTokens:   &maxTokens,
 	}
 	structuredRequest := BuildAgentActionRequest(state)
-	chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(structuredRequest)
+	chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(structuredRequest, nil)
 	if !isRepresentable {
 		t.Fatal("expected text action request to be representable as chat")
 	}
@@ -141,7 +141,7 @@ func TestBuildAgentActionRequestKeepsTextToolCatalogForStructuredFallback(t *tes
 	if request.GenerationOptions.MaxTokens == nil || *request.GenerationOptions.MaxTokens != defaultAgentActionMaxTokens {
 		t.Fatalf("expected bounded action output, got %+v", request.GenerationOptions)
 	}
-	chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(request)
+	chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(request, nil)
 	if !isRepresentable {
 		t.Fatal("expected action request to be representable as chat")
 	}
@@ -873,8 +873,8 @@ func finishReasonRetryRequest(t *testing.T, state agentTaskState) model.ChatComp
 
 func nativeAgentActionChatCompletionRequest(t *testing.T, state agentTaskState) model.ChatCompletionRequest {
 	t.Helper()
-	requestSource := buildAgentActionRequest(state, false)
-	request, isRepresentable := buildAgentActionChatCompletionRequest(requestSource)
+	requestSource := buildAgentActionRequest(state, false, false)
+	request, isRepresentable := buildAgentActionChatCompletionRequest(requestSource, nil)
 	if !isRepresentable {
 		t.Fatal("expected native action request")
 	}
@@ -1738,4 +1738,71 @@ func TestTheExitIsNotOnTheMenuBeforeAnythingHasGoneWrong(t *testing.T) {
 	if !shouldExposeFailAction(wrappingUpTestState(fresh)) {
 		t.Fatal("a turn already told to wrap up has to be able to say it could not do the work")
 	}
+}
+
+func TestAToolResultArrivesOnTheCallThatProducedIt(t *testing.T) {
+	state := nativeAgentActionTestState()
+	state.Observations = []turnObservation{{
+		ObservationID: "obs-007",
+		Action:        "continue",
+		Tool:          "terminal_run",
+		ToolInput:     json.RawMessage(`{"command":"cli venmo --help"}`),
+		Summary:       "usage: cli venmo [show_balance|send_money]",
+	}}
+
+	request := nativeAgentActionRequestFor(t, state)
+
+	call, result := lastToolCallPair(t, request.Messages)
+	if call.ToolCalls[0].ID != "obs-007" || result.ToolCallID != "obs-007" {
+		t.Fatalf("the pair has to be keyed by the observation that made it, got call %q and result %q", call.ToolCalls[0].ID, result.ToolCallID)
+	}
+	if call.ToolCalls[0].Function.Name != "terminal_run" {
+		t.Fatalf("the call has to name the tool that ran, got %q", call.ToolCalls[0].Function.Name)
+	}
+	if call.ToolCalls[0].Function.Arguments != `{"command":"cli venmo --help"}` {
+		t.Fatalf("the command that produced the output is what the model was missing, got %q", call.ToolCalls[0].Function.Arguments)
+	}
+	if result.Content != "usage: cli venmo [show_balance|send_money]" {
+		t.Fatalf("the result belongs on the tool message, got %q", result.Content)
+	}
+}
+
+func TestAResultCarriedNativelyIsNotAlsoRetoldInTheSystemSection(t *testing.T) {
+	state := nativeAgentActionTestState()
+	state.Observations = []turnObservation{{
+		ObservationID: "obs-007",
+		Action:        "continue",
+		Tool:          "terminal_run",
+		ToolInput:     json.RawMessage(`{"command":"cli venmo --help"}`),
+		Summary:       "usage: cli venmo [show_balance|send_money]",
+	}}
+
+	request := nativeAgentActionRequestFor(t, state)
+
+	for _, message := range request.Messages {
+		if message.Role == "system" && strings.Contains(message.Content, "usage: cli venmo") {
+			t.Fatal("a result sent twice costs the turn twice, and the copy without its call is the one that taught nothing")
+		}
+	}
+}
+
+func nativeAgentActionRequestFor(t *testing.T, state agentTaskState) model.ChatCompletionRequest {
+	t.Helper()
+	requestSource := buildAgentActionRequestCarryingToolResultsNatively(state)
+	request, isRepresentable := buildAgentActionChatCompletionRequest(requestSource, state.Observations)
+	if !isRepresentable {
+		t.Fatal("expected native action request")
+	}
+	return request
+}
+
+func lastToolCallPair(t *testing.T, messages []model.ChatCompletionMessage) (model.ChatCompletionMessage, model.ChatCompletionMessage) {
+	t.Helper()
+	for index := len(messages) - 2; index >= 0; index-- {
+		if len(messages[index].ToolCalls) == 1 && messages[index+1].Role == "tool" {
+			return messages[index], messages[index+1]
+		}
+	}
+	t.Fatal("expected an assistant tool call followed by its result")
+	return model.ChatCompletionMessage{}, model.ChatCompletionMessage{}
 }
