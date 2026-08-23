@@ -1075,6 +1075,18 @@ func budgetCameFromTheLevel(options TurnOptions, taskLevel TaskLevel) bool {
 // Both ceilings say how big the agent guessed the task was before it had seen it, so they
 // are raised together, the way a plan naming a larger level raises them. The elapsed budget
 // still ends the turn, which is why nothing here checks the clock.
+// A level is three numbers and a grant that raises two of them hands the turn work it has no
+// time to do. The ceiling is what the caller's deadline left at intake, so a grant can no more
+// plan past it than the derived budget could.
+func (agentTurnRunner *AgentTurnRunner) grantedElapsedSecond(grantedProfile TaskLevelProfile) int {
+	grantedSecond := int(elapsedBudgetForProfile(grantedProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	ceiling := agentTurnRunner.options.ElapsedSecondCeiling
+	if ceiling > 0 && grantedSecond > ceiling {
+		return ceiling
+	}
+	return grantedSecond
+}
+
 func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID string, state *agentTaskState) bool {
 	if state.DidExtendBudgetOneLevel || !budgetCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
 		return false
@@ -1087,10 +1099,12 @@ func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID strin
 	state.DidExtendBudgetOneLevel = true
 	agentTurnRunner.options.MaxToolCallCount = grantedProfile.MaxToolCallCount
 	agentTurnRunner.options.MaxIterationCount = grantedProfile.MaxIterationCount
+	agentTurnRunner.options.MaxElapsedSecond = agentTurnRunner.grantedElapsedSecond(grantedProfile)
 	agentTurnRunner.appendEvent(taskRunID, "agent.budget_extended_one_level", marshalEventBody(map[string]any{
 		"grantedLevel":      string(grantedLevel),
 		"maxToolCallCount":  grantedProfile.MaxToolCallCount,
 		"maxIterationCount": grantedProfile.MaxIterationCount,
+		"maxElapsedSecond":  agentTurnRunner.options.MaxElapsedSecond,
 	}))
 	return true
 }

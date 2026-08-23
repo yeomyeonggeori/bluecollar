@@ -854,10 +854,13 @@ func withElapsedBudgetInsideDeadline(ctx context.Context, turnOptions TurnOption
 		return turnOptions
 	}
 	remainingSecond := int(time.Until(deadline).Seconds())
-	if remainingSecond <= 0 || turnOptions.MaxElapsedSecond <= remainingSecond {
+	if remainingSecond <= 0 {
 		return turnOptions
 	}
-	turnOptions.MaxElapsedSecond = remainingSecond
+	turnOptions.ElapsedSecondCeiling = remainingSecond
+	if turnOptions.MaxElapsedSecond > remainingSecond {
+		turnOptions.MaxElapsedSecond = remainingSecond
+	}
 	return turnOptions
 }
 
