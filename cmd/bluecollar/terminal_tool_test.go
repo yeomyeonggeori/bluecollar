@@ -75,6 +75,20 @@ func TestAFailingCommandReportsItsExitCodeRatherThanVanishing(t *testing.T) {
 	if !strings.Contains(output.Output, "to stderr") {
 		t.Fatalf("expected stderr captured alongside stdout, got %+v", output)
 	}
+	if result.Failure == nil {
+		t.Fatal("a command the shell said failed has to reach the loop as a failure, or nothing that reacts to failure ever runs")
+	}
+	if !strings.Contains(result.Output.Content, "to stderr") {
+		t.Fatalf("the shell already said what went wrong and the model needs to read it, got %q", result.Output.Content)
+	}
+}
+
+func TestASucceedingCommandIsNotAFailure(t *testing.T) {
+	result := invokeTerminalRun(t, t.TempDir(), `{"command":"echo fine"}`)
+
+	if result.Failure != nil {
+		t.Fatalf("exit zero is the shell saying it worked: %+v", result.Failure)
+	}
 }
 
 func TestACommandThatNeverEndsIsStoppedAndSaidSo(t *testing.T) {

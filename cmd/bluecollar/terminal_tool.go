@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -168,7 +169,24 @@ func terminalRunResult(ctx context.Context, runningShell shell, exitCode int, ou
 	if runError != nil && exitCode == 0 {
 		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "terminal_run", runError.Error())
 	}
+	if exitCode != 0 {
+		return exitedNonZeroResult(exitCode, truncatedOutput, document)
+	}
 	return toolcontract.ToolSuccessData(truncatedOutput, document)
+}
+
+// The failure helpers put their summary where the output goes, and the output is what the model
+// needs most here: the shell already said what went wrong, on the stream this captured.
+func exitedNonZeroResult(exitCode int, output string, document json.RawMessage) toolcontract.ToolResult {
+	result := toolcontract.ToolFailureWithOutput(
+		toolcontract.FailureUnknown,
+		toolcontract.FailureCodes.OperationFailed,
+		"terminal_run",
+		"the command exited "+strconv.Itoa(exitCode),
+		document,
+	)
+	result.Output.Content = output
+	return result
 }
 
 func (runningShell shell) spilledOutputPath(ctx context.Context, output string) string {
