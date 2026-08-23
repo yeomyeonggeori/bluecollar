@@ -5,8 +5,14 @@ import (
 	"time"
 )
 
-func BuildTemporalContextDescription(turnStartedAt time.Time) string {
+// A host that knows its environment keeps its own clock states it, and that is the clock the
+// work happens on: a simulated world, a replayed dataset, a device in another timezone. The
+// turn's own start time still drives the budget, which is measured against the machine.
+func BuildTemporalContextDescription(turnStartedAt time.Time, environmentNow time.Time) string {
 	currentTime := turnStartedAt
+	if !environmentNow.IsZero() {
+		currentTime = environmentNow
+	}
 	if currentTime.IsZero() {
 		currentTime = time.Now()
 	}

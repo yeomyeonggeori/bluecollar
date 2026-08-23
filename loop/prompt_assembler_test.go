@@ -113,7 +113,7 @@ func TestBuildTemporalContextDescriptionAnchorsWeeksAcrossCalendarBoundaries(t *
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			description := buildTemporalContextDescription(testCase.startedAt)
+			description := buildTemporalContextDescription(testCase.startedAt, time.Time{})
 			if !strings.Contains(description, testCase.expected) {
 				t.Fatalf("expected week anchors %q, got %s", testCase.expected, description)
 			}

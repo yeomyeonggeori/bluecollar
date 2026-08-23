@@ -19,6 +19,7 @@ type LLMContextInput struct {
 	UserPrompt            string
 	InputParts            []AgentPart
 	TurnStartedAt         time.Time
+	EnvironmentNow        time.Time
 	InstructionPrompt     string
 	ToolDescription       string
 	AdditionalToolNames   []string
@@ -192,7 +193,7 @@ func (builder LLMContextBuilder) runtimeContext(input LLMContextInput) string {
 	return strings.Join([]string{
 		"Runtime:",
 		"Response language: " + ResolveResponseLanguage(input.ResponseLanguage),
-		strings.TrimPrefix(buildTemporalContextDescription(startedAt), "Runtime temporal context:\n"),
+		strings.TrimPrefix(buildTemporalContextDescription(startedAt, input.EnvironmentNow), "Runtime temporal context:\n"),
 	}, "\n")
 }
 

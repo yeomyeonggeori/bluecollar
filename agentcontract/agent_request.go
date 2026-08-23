@@ -51,6 +51,7 @@ type AgentRequest struct {
 	SkipSkillSelection         bool
 	TaskLevel                  TaskLevel
 	TurnStartedAt              time.Time
+	EnvironmentNow             time.Time
 	CarriedOutCalls            []CarriedOutCall
 	CheckpointSender           AgentCheckpointSender
 }
@@ -161,6 +162,7 @@ type AgentTurnRequest struct {
 	TaskShape                    TaskShape
 	TaskLevel                    TaskLevel
 	TurnStartedAt                time.Time
+	EnvironmentNow               time.Time
 	EffortStartedAt              time.Time
 	TurnAnchorClamped            bool
 	OriginalTurnStartedAt        time.Time
