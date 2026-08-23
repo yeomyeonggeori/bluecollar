@@ -2164,6 +2164,23 @@ func TestFinishHiddenAfterEvidenceMissingRejectionWithoutToolEvidence(t *testing
 	}
 }
 
+func TestASecondRefusalTheAgentDidNothingAboutWithdrawsFinish(t *testing.T) {
+	successfulSend := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run"}
+	refusal := func(index int) turnObservation {
+		return completionGateObservation(index, completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}, []turnObservation{successfulSend})
+	}
+
+	if finishKeepsBeingRefusedWithNothingDoneBetween([]turnObservation{successfulSend, refusal(2)}) {
+		t.Fatal("one refusal is the gate telling the agent what to go do, and taking finish away there answers it before the agent has")
+	}
+	if !finishKeepsBeingRefusedWithNothingDoneBetween([]turnObservation{successfulSend, refusal(2), refusal(3)}) {
+		t.Fatal("a refusal the agent answered with the same finish has to stop being answerable that way")
+	}
+	if finishKeepsBeingRefusedWithNothingDoneBetween([]turnObservation{refusal(1), refusal(2), successfulSend}) {
+		t.Fatal("an agent that went and did something has finish back")
+	}
+}
+
 func TestFinishHiddenAfterAttachmentRejectionDespiteToolEvidence(t *testing.T) {
 	successfulRead := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "file_read"}
 	rejection := completionGateObservation(2, completionGateResult{Message: "attach the artifact", EvidenceKind: "attachment_missing"}, []turnObservation{successfulRead})
