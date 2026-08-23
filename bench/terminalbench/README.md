@@ -235,6 +235,22 @@ column extra attempts on exactly its own failures, which is the bias #79 and
 The sweep also found two tasks bluecollar resolves and pi does not, which the
 assembled table had recorded as failures for both.
 
+Six of those tasks were then run three times each, because one attempt per task
+cannot tell a task bluecollar loses from one it wins a third of the time:
+
+| task | bluecollar | pi |
+|---|---|---|
+| 0d8a4ee_1 | 0/3 | 2/2 |
+| 23cf851_1 | 0/3 | 2/3 |
+| 37a8675_1 | 0/3 | 1/2 |
+| 383cbac_1 | 1/3 | 3/3 |
+| 396c5a2_1 | 2/3 | not run |
+| 50e1ac9_1 | 0/3 | not run |
+
+The single sweep had recorded `396c5a2_1` as a loss and `383cbac_1` as a loss;
+at three attempts they are 2 of 3 and 1 of 3. That spread is what made the
+assembled row wander, and it is why the row above is worth its cost.
+
 The losses named their own causes in the ledger:
 
 - The completion judge refused a finish three times, the third time naming the
@@ -283,6 +299,19 @@ the agent took the exit while pi printed the answer. Holding the exit until the
 turn is wrapping up flipped `530b157_1` and `6171bbc_1` here, `37a8675_1` on
 the second model, and roughly doubled the work every remaining loss does before
 it stops.
+
+One of those causes was found by asking what bluecollar does not do rather than
+what it does wrong. On `0d8a4ee_1`, "message the family members who have no
+venmo account", it called `cli venmo` zero times across three trials and
+messaged the family: three sends, then twelve, then fourteen. Fourteen is what
+no filter looks like, and the completion judge accepted every one.
+
+The judge was not wrong by its own rules, which require evidence for values the
+instruction names and for worked examples it supplies. A set chosen by a
+condition names no value. The rule added for that shape asks the ledger to show
+the attribute being read, and the same three trials then made 6, 18 and 6 venmo
+lookups with one resolving. `50e1ac9_1`, the same shape, went from 0 of 3 to 1
+of 2. `23cf851_1` and `37a8675_1` did not move.
 
 The gap is open and its remaining cause is not visible in the ledger, which is
 a statement about what the ledger shows and not about where the cause lives:
