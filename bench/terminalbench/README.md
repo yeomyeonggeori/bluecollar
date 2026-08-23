@@ -245,6 +245,42 @@ tasks got through before the run was stopped:
 | 4fab96f_1 | fail | fail |
 | | 2/8 | 4/8 |
 
+## What the transcript fixes moved
+
+Both harnesses were swept again on the same eight tasks after #146 and #149,
+which put every tool result back on the call that produced it and then put the
+tool's own output on that result instead of the ledger's description of it.
+
+| task | bluecollar before | bluecollar after | pi |
+|---|---|---|---|
+| 0d8a4ee_1 | resolved | resolved | resolved |
+| 23cf851_1 | fail | resolved | resolved |
+| 37a8675_1 | resolved | resolved | resolved |
+| 383cbac_1 | fail | resolved | resolved |
+| 396c5a2_1 | fail | resolved | fail |
+| 3ab5b8b_1 | fail | fail | fail |
+| 4ec8de5_1 | fail | fail | fail |
+| 4fab96f_1 | fail | resolved | fail |
+| | 2/8 | 6/8 | 4/8 |
+
+One attempt per task per column, which this file has already said cannot tell a
+task a harness loses from one it wins a third of the time. The two bluecollar
+now takes that pi does not were rerun: `396c5a2_1` resolved on both attempts
+that started, `4fab96f_1` on the one that did. pi has not had the same reruns —
+`stealth/ox-alpha` began answering 429 before they could start — so read the
+right-hand column as one attempt and the sixes as three.
+
+What moved underneath is measured rather than inferred:
+
+| | before | after |
+|---|---|---|
+| terminal calls per task | 15.6 | 11.2 |
+| reads per distinct help topic | 3.4 | 1.6 |
+| help share of tool output bytes | 79% | 54% |
+
+The agent had been reading seventeen help documents fifty-eight times. It now
+reads about nine of them about once each.
+
 ## What each one puts in front of the model
 
 Terminal-Bench sees a verdict and a clock. It cannot see what either harness
