@@ -211,19 +211,19 @@ each, at the point where terminal-bench-core had stopped saying anything:
 | 4ec8de5_1 | fail | fail |
 | 4fab96f_1 | fail | fail |
 | 50e1ac9_1 | fail | resolved |
-| 530b157_1 | fail | resolved |
+| 530b157_1 | resolved | resolved |
 | 57c3486_1 | resolved | resolved |
-| 6171bbc_1 | fail | resolved |
+| 6171bbc_1 | resolved | resolved |
 | 68ee2c9_1 | fail | fail |
 | 6bdbc26_1 | resolved | resolved |
 | 6c2c621_1 | fail | fail |
 | 0d8a4ee_2 | fail | fail |
 | 23cf851_2 | fail | fail |
-| | 3/17 | 10/17 |
+| | 5/17 | 10/17 |
 
 A hundred trials a harness on terminal-bench-core separated nothing. Seventeen
-AppWorld tasks separate them by seven at one attempt each, and the losses
-named their own causes in the ledger:
+AppWorld tasks separate them by five at one attempt each, and the losses named
+their own causes in the ledger:
 
 - The completion judge refused a finish three times, the third time naming the
   gap exactly. The agent called no tool and finished again. The fourth verdict
@@ -260,6 +260,17 @@ tasks:
 
 Two independent models, six trials a harness, the same split. Whatever costs
 bluecollar these tasks travels with the harness rather than with the model.
+
+One fix moved the row, and it was the seventh. Six before it changed nothing
+here, because all six came from reading what the ledger recorded as failed. The
+seventh lived in the opposite place: the runtime offered the give-up action
+whenever it had seen nothing fail, and an error raised inside a tool call that
+succeeded never becomes failure debt. On the task that exposed it the ledger
+read `failedToolCalls: 0`, `recoveryAttempts: 0`, `recovery_guidance: 0`, and
+the agent took the exit while pi printed the answer. Holding the exit until the
+turn is wrapping up flipped `530b157_1` and `6171bbc_1` here, `37a8675_1` on
+the second model, and roughly doubled the work every remaining loss does before
+it stops.
 
 The gap is open and its remaining cause is not visible in the ledger, which is
 a statement about what the ledger shows and not about where the cause lives:
