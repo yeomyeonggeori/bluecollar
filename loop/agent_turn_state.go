@@ -21,6 +21,8 @@ const maximumAgentActionCorrectionCount = 2
 
 const refusalsThatWithdrawFinish = 2
 
+const transcriptResultLimit = 8192
+
 type agentAction = turnActionDocument
 
 type agentTaskState struct {
@@ -972,8 +974,8 @@ func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMe
 	transcript := []model.ChatCompletionMessage{}
 	for _, observation := range observations {
 		toolName := strings.TrimSpace(observation.Tool)
-		summary := strings.TrimSpace(observation.Summary)
-		if toolName == "" || summary == "" {
+		result := toolResultForTranscript(observation)
+		if toolName == "" || result == "" {
 			continue
 		}
 		transcript = append(transcript,
@@ -991,11 +993,19 @@ func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMe
 			model.ChatCompletionMessage{
 				Role:       "tool",
 				ToolCallID: observation.ObservationID,
-				Content:    summary,
+				Content:    result,
 			},
 		)
 	}
 	return transcript
+}
+
+// Summary describes the call for a compact ledger; a tool message is the answer itself.
+func toolResultForTranscript(observation turnObservation) string {
+	if content := strings.TrimSpace(observation.ContentText()); content != "" {
+		return withMiddleElided(content, transcriptResultLimit)
+	}
+	return strings.TrimSpace(observation.Summary)
 }
 
 func toolCallArguments(toolInput json.RawMessage) string {

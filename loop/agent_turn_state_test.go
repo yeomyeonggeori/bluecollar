@@ -1767,6 +1767,29 @@ func TestAToolResultArrivesOnTheCallThatProducedIt(t *testing.T) {
 	}
 }
 
+func TestTheToolMessageCarriesWhatTheToolReturned(t *testing.T) {
+	state := nativeAgentActionTestState()
+	observation := turnObservation{
+		ObservationID: "obs-011",
+		Action:        "continue",
+		Tool:          "file_read",
+		ToolInput:     json.RawMessage(`{"path":"venmo-help.txt"}`),
+		Summary:       "path=venmo-help.txt; range=1-6; totalLines=6; sizeBytes=125",
+	}
+	observation.Output.Content = "Usage: cli venmo [OPTIONS] COMMAND\n\nCommands:\n  send_money    Send money\n"
+	state.Observations = []turnObservation{observation}
+
+	request := nativeAgentActionRequestFor(t, state)
+
+	_, result := lastToolCallPair(t, request.Messages)
+	if !strings.Contains(result.Content, "send_money") {
+		t.Fatalf("a model handed a description of the read instead of the read goes back and asks again, got %q", result.Content)
+	}
+	if strings.Contains(result.Content, "totalLines=6") {
+		t.Fatalf("the ledger's description of the call is not the call's answer, got %q", result.Content)
+	}
+}
+
 func TestAResultCarriedNativelyIsNotAlsoRetoldInTheSystemSection(t *testing.T) {
 	state := nativeAgentActionTestState()
 	state.Observations = []turnObservation{{
