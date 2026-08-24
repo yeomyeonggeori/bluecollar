@@ -767,13 +767,13 @@ func canWaiveRequirementWithNoToolFallback(requirement toolUseRequirement, faile
 	return !requirement.RequiresSideEffectEvidence
 }
 
-func completionGateObservation(index int, result completionGateResult, priorObservations []turnObservation) turnObservation {
+func completionGateObservation(index int, result completionGateResult, toolSet *toolcontract.ToolSet, priorObservations []turnObservation) turnObservation {
 	message := strings.TrimSpace(result.Message)
 	evidenceKind := strings.TrimSpace(result.EvidenceKind)
 	if evidenceKind == "" {
 		return newFailureObservation(nextObservationID(index), "policy", "", message, toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "completion_gate")
 	}
-	content := evidenceMissingGuidance(evidenceKind, message) + observedRealityStatement(priorObservations)
+	content := evidenceMissingGuidance(evidenceKind, message) + observedRealityStatement(toolSet, priorObservations)
 	observation := newFailureObservation(nextObservationID(index), "evidence_missing", "", message, toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, evidenceKind)
 	observation = withObservationContent(observation, content)
 	observation.Summary = content
@@ -784,17 +784,27 @@ func completionGateObservation(index int, result completionGateResult, priorObse
 	return observation
 }
 
-func observedRealityStatement(observations []turnObservation) string {
+func observedRealityStatement(toolSet *toolcontract.ToolSet, observations []turnObservation) string {
 	successfulToolCount := 0
+	recordedEffects := []string{}
 	for _, observation := range observations {
-		if !observation.Failed() && strings.TrimSpace(observation.Tool) != "" {
-			successfulToolCount++
+		if observation.Failed() || strings.TrimSpace(observation.Tool) == "" {
+			continue
+		}
+		successfulToolCount++
+		if isSideEffectObservation(toolSet, observation) {
+			recordedEffects = appendUniqueStrings(recordedEffects, observation.ObservationID+" "+strings.TrimSpace(observation.Tool))
 		}
 	}
-	if successfulToolCount > 0 {
+	if successfulToolCount == 0 {
+		return " Recorded reality: this task has ZERO successful tool observations, so nothing has been created or modified. Any completion claim is false. Your next action must be the required tool call, not finish."
+	}
+	if len(recordedEffects) == 0 {
 		return ""
 	}
-	return " Recorded reality: this task has ZERO successful tool observations, so nothing has been created or modified. Any completion claim is false. Your next action must be the required tool call, not finish."
+	return " Recorded reality: these calls already changed something and are not undone by this refusal: " +
+		strings.Join(recordedEffects, ", ") +
+		". Repeating one of them makes the change twice. What is missing is the evidence, not the work."
 }
 
 func invalidValidityPaths(state ValidityState) []string {
