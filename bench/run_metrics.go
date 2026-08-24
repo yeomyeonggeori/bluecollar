@@ -24,6 +24,9 @@ type RunMetrics struct {
 	TerminalStatus string `json:"terminalStatus,omitempty"`
 	ReachedEnd     bool   `json:"reachedEnd"`
 
+	ContextWindowTokens int  `json:"contextWindowTokens"`
+	WindowWasDeclared   bool `json:"windowWasDeclared"`
+
 	Turns              int `json:"turns"`
 	ToolCalls          int `json:"toolCalls"`
 	FailedToolCalls    int `json:"failedToolCalls"`
@@ -78,11 +81,25 @@ func countTaskEvent(metrics *RunMetrics, taskEvent taskstate.TaskEvent) {
 		metrics.RecoveryAttempts++
 	case taskEvent.Name == "llm.call":
 		countLanguageModelCall(metrics, taskEvent.Body)
+	case taskEvent.Name == "agent.conversation_budget":
+		readConversationBudget(metrics, taskEvent.Body)
 	case isToolRequestedEvent(taskEvent.Name):
 		metrics.ToolCalls++
 	case isToolResultEvent(taskEvent.Name):
 		countToolResult(metrics, taskEvent.Body)
 	}
+}
+
+func readConversationBudget(metrics *RunMetrics, body string) {
+	budget := struct {
+		ContextWindowTokens int  `json:"contextWindowTokens"`
+		WindowWasDeclared   bool `json:"windowWasDeclared"`
+	}{}
+	if json.Unmarshal([]byte(body), &budget) != nil {
+		return
+	}
+	metrics.ContextWindowTokens = budget.ContextWindowTokens
+	metrics.WindowWasDeclared = budget.WindowWasDeclared
 }
 
 func countLanguageModelCall(metrics *RunMetrics, body string) {
