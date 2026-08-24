@@ -265,3 +265,26 @@ func TestRecordedEffectsContextEmptyWithoutEffects(t *testing.T) {
 		t.Fatalf("expected empty context without effects, got %q", context)
 	}
 }
+
+func TestTheRequestIsNotLabelledTwiceWhenTheGoalCarriesIt(t *testing.T) {
+	instruction := "Read venmo.txt and tell me which command sends money"
+	withGoal := (LLMContextBuilder{}).taskContext(LLMContextInput{
+		UserPrompt: instruction,
+		ActiveGoal: ActiveGoal{GoalID: "goal-1", OriginalInstruction: instruction},
+	})
+
+	if strings.Contains(withGoal, "Original user request:") {
+		t.Fatalf("the goal already carries it and the user message is it: %s", withGoal)
+	}
+	if !strings.Contains(withGoal, "Active conversation goal:") {
+		t.Fatalf("the goal itself still has to reach the model: %s", withGoal)
+	}
+}
+
+func TestARequestWithNoGoalIsStillLabelled(t *testing.T) {
+	context := (LLMContextBuilder{}).taskContext(LLMContextInput{UserPrompt: "do the thing"})
+
+	if !strings.Contains(context, "Original user request:") {
+		t.Fatalf("with no goal carrying it this is the only labelled copy: %s", context)
+	}
+}
