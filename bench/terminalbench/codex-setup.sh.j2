@@ -1,0 +1,28 @@
+#!/bin/bash
+
+apt-get update
+apt-get install -y curl
+
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.2/install.sh | bash
+
+source "$HOME/.nvm/nvm.sh"
+
+nvm install 22
+
+npm i -g @openai/codex@{{ version }}
+
+mkdir -p "$HOME/.codex"
+cat > "$HOME/.codex/config.toml" <<TOML
+model = "${CODEX_MODEL_ID:-gemma}"
+model_provider = "bench"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+web_search = "disabled"
+model_reasoning_effort = "${CODEX_REASONING_EFFORT:-medium}"
+
+[model_providers.bench]
+name = "bench"
+base_url = "${CODEX_BASE_URL:-http://host.docker.internal:8099/api/v1}"
+env_key = "CODEX_API_KEY"
+wire_api = "responses"
+TOML
