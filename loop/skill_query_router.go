@@ -58,7 +58,7 @@ func (skillSearchQueryRouter SkillSearchQueryRouter) buildMessages(request Agent
 		},
 		{
 			Role:    "system",
-			Content: buildTemporalContextDescription(request.TurnStartedAt, request.EnvironmentNow),
+			Content: buildTemporalContextDescription(request.EnvironmentNow),
 		},
 	}
 	if contextDescription := buildVisibleContextDescription(request.VisibleContext); contextDescription != "" {

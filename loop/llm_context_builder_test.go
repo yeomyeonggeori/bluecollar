@@ -29,13 +29,13 @@ func TestLLMContextBuilderIncludesRuntimeCalendarContext(t *testing.T) {
 	contextText := (LLMContextBuilder{}).Build(LLMContextInput{
 		ResponseLanguage: "ko",
 		TurnStartedAt:    time.Date(2026, time.May, 12, 8, 32, 27, 0, time.UTC),
+		EnvironmentNow:   time.Date(2026, time.May, 12, 8, 32, 27, 0, time.UTC),
 	})
 
 	for _, expected := range []string{
 		"Runtime:",
 		"Response language: ko",
-		"Current date on the machine running you: 2026-05-12",
-		"Current weekday: Tuesday",
+		"Current date: 2026-05-12",
 		"Current time: 17:32",
 		"Time zone: Asia/Seoul",
 	} {

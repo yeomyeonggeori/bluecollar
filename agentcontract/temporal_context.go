@@ -5,23 +5,20 @@ import (
 	"time"
 )
 
-// A host that knows its environment keeps its own clock states it, and that is the clock the
-// work happens on: a simulated world, a replayed dataset, a device in another timezone. The
-// turn's own start time still drives the budget, which is measured against the machine.
-func BuildTemporalContextDescription(turnStartedAt time.Time, environmentNow time.Time) string {
-	currentTime := turnStartedAt
-	environmentStatedItsClock := !environmentNow.IsZero()
-	if environmentStatedItsClock {
-		currentTime = environmentNow
-	}
-	if currentTime.IsZero() {
-		currentTime = time.Now()
+// The date comes from outside. A host that knows the clock of the world being worked on states
+// it — a simulated world, a replayed dataset, a device in another timezone — and where none has,
+// the runtime does not know it. Naming the machine's clock instead is a claim about that world
+// which the runtime is not entitled to make.
+func BuildTemporalContextDescription(environmentNow time.Time) string {
+	if environmentNow.IsZero() {
+		return unknownDateContext()
 	}
 	location := TemporalContextLocation()
+	currentTime := environmentNow
 	localTime := currentTime.In(location)
 	return strings.Join([]string{
 		"Runtime temporal context:",
-		currentDateLine(localTime, environmentStatedItsClock),
+		"Current date: " + localTime.Format("2006-01-02"),
 		"Current weekday: " + localTime.Weekday().String(),
 		"Current time: " + localTime.Format("15:04"),
 		"Time zone: " + location.String(),
@@ -30,15 +27,11 @@ func BuildTemporalContextDescription(turnStartedAt time.Time, environmentNow tim
 	}, "\n")
 }
 
-// Unattributed, this reads as the date of the world being worked on, and the runtime has no way
-// to know that. A system the agent operates through can keep its own clock, and an agent that
-// filtered on the wrong year has no way to notice.
-func currentDateLine(localTime time.Time, environmentStatedItsClock bool) string {
-	if environmentStatedItsClock {
-		return "Current date: " + localTime.Format("2006-01-02")
-	}
-	return "Current date on the machine running you: " + localTime.Format("2006-01-02") +
-		". A system you operate through may keep its own clock; when a request turns on its dates, read them from that system."
+func unknownDateContext() string {
+	return strings.Join([]string{
+		"Runtime temporal context:",
+		"This runtime was not told the current date. Read it from the system you are operating before answering anything that turns on a date; the machine you run on may keep a different one.",
+	}, "\n")
 }
 
 func buildCurrentWeekDescription(localTime time.Time) string {

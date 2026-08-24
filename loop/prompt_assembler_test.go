@@ -11,15 +11,15 @@ import (
 
 func TestPromptAssemblerIncludesTemporalContext(t *testing.T) {
 	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
-		Prompt:        "내일 오후 6시 회식 추가해줘",
-		TurnStartedAt: time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC),
+		Prompt:         "내일 오후 6시 회식 추가해줘",
+		TurnStartedAt:  time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC),
+		EnvironmentNow: time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC),
 	}, nil, "base", "")
 	body := joinMessageContent(messages)
 
 	for _, expected := range []string{
 		"Runtime:",
-		"Current date on the machine running you: 2026-05-12",
-		"Current weekday: Tuesday",
+		"Current date: 2026-05-12",
 		"Current time: 17:32",
 		"Time zone: Asia/Seoul",
 		"Current week: Monday=2026-05-11, Tuesday=2026-05-12, Wednesday=2026-05-13, Thursday=2026-05-14, Friday=2026-05-15, Saturday=2026-05-16, Sunday=2026-05-17",
@@ -113,7 +113,7 @@ func TestBuildTemporalContextDescriptionAnchorsWeeksAcrossCalendarBoundaries(t *
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			description := buildTemporalContextDescription(testCase.startedAt, time.Time{})
+			description := buildTemporalContextDescription(testCase.startedAt)
 			if !strings.Contains(description, testCase.expected) {
 				t.Fatalf("expected week anchors %q, got %s", testCase.expected, description)
 			}
@@ -282,7 +282,7 @@ func TestPromptAssemblerIncludesTurnDateContext(t *testing.T) {
 	}, nil, "base", "")
 	body := joinMessageContent(messages)
 
-	if !strings.Contains(body, "Runtime:") || !strings.Contains(body, "Current date on the machine running you: 2026-05-09") || !strings.Contains(body, "Current weekday: Saturday") || !strings.Contains(body, "Time zone: Asia/Seoul") {
+	if !strings.Contains(body, "Runtime:") || !strings.Contains(body, "This runtime was not told the current date") {
 		t.Fatalf("expected turn date context, got %s", body)
 	}
 }

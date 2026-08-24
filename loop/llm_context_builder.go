@@ -203,7 +203,7 @@ func (builder LLMContextBuilder) runtimeContext(input LLMContextInput) string {
 	return strings.Join([]string{
 		"Runtime:",
 		"Response language: " + ResolveResponseLanguage(input.ResponseLanguage),
-		strings.TrimPrefix(buildTemporalContextDescription(startedAt, input.EnvironmentNow), "Runtime temporal context:\n"),
+		strings.TrimPrefix(buildTemporalContextDescription(input.EnvironmentNow), "Runtime temporal context:\n"),
 	}, "\n")
 }
 
