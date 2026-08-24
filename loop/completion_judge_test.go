@@ -348,3 +348,29 @@ func TestTheResultAFinishCitesIsNotCutToThreeHundredBytes(t *testing.T) {
 		t.Fatal("a cited result the judge cannot see whole is a fact it is asked to certify and cannot")
 	}
 }
+
+func TestTheJudgeIsNotToldThatReplyingIsOneOfTheResults(t *testing.T) {
+	results := []ExpectedResult{
+		{ID: "send_reminders", Type: ExpectedResultTypeMessage, Description: "reminders sent to every roommate", Required: true},
+		{ID: finalMessageExpectedResultID, Type: ExpectedResultTypeMessage, Description: "A final reply explaining the outcome of this task to the user", Required: true},
+	}
+
+	description := completionJudgeExpectedResultsDescription(results)
+
+	if strings.Contains(description, finalMessageExpectedResultID) {
+		t.Fatalf("a turn that did no work and explained why clearly satisfies this one, and it sits beside the results the instruction asks for: %s", description)
+	}
+	if !strings.Contains(description, "send_reminders") {
+		t.Fatalf("the results the instruction does ask for still have to reach the judge: %s", description)
+	}
+}
+
+func TestATaskWhoseOnlyResultIsTheReplyTellsTheJudgeNothing(t *testing.T) {
+	results := []ExpectedResult{
+		{ID: finalMessageExpectedResultID, Type: ExpectedResultTypeMessage, Description: "A final reply explaining the outcome of this task to the user", Required: true},
+	}
+
+	if description := completionJudgeExpectedResultsDescription(results); description != "" {
+		t.Fatalf("with nothing else expected there is no result list worth sending, got %s", description)
+	}
+}

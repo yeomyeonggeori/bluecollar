@@ -536,13 +536,15 @@ func expectedResultsForRequest(intakeDecision IntakeDecision, executionPlan Exec
 		return nil
 	}
 	results = append(results, ExpectedResult{
-		ID:          "final-message",
+		ID:          finalMessageExpectedResultID,
 		Type:        ExpectedResultTypeMessage,
 		Description: "A final reply explaining the outcome of this task to the user",
 		Required:    true,
 	})
 	return normalizeExpectedResults(results)
 }
+
+const finalMessageExpectedResultID = "final-message"
 
 func appendExpectedResults(results []ExpectedResult, additionalResults ...ExpectedResult) []ExpectedResult {
 	nextResults := append([]ExpectedResult{}, results...)
