@@ -377,24 +377,29 @@ The whole shell transcript of a `23cf851_1` run that failed with all three
 fixes in:
 
 ```
- 6 FAIL  cli venmo show_transactions <token>      the CLI printed its parameter list
- 7 FAIL  import apis.venmo                        ModuleNotFoundError
- 8 FAIL  python3 -c "import requests"             ModuleNotFoundError
- 9 ok    /opt/venv/bin/python … http://server:8000/execute
-10-15 ok  the same direct call, six more times
-17 ok    cli supervisor complete_task --answer "0"
+obs-008  ok    cli venmo show_transactions …   "Total sent txs fetched: 0 []"
+obs-009  FAIL  the same call again              the CLI printed its parameter list
+obs-011  FAIL  import apis.venmo                ModuleNotFoundError
+obs-014  FAIL  python3 -c "import requests"     ModuleNotFoundError
+obs-016  ok    /opt/venv/bin/python …           "Execution failed. Traceback:"
+obs-017  ok    the same route, corrected        27,958 bytes of transactions
+obs-018  ok                                     "Total transactions: 242"
+obs-020  ok                                     "2023-05-18 12:00:00"
+obs-024  ok    cli supervisor complete_task     answer='0'
 ```
 
 Recovery did what it is built to do: the agent found a Python that has
-`requests`. What it recovered *to* was leaving the CLI it was given and calling
-the backing server by hand, and then answering `0`. pi answered `11`.
+`requests`, and every one of its eighteen shell results is different from the
+others, so it was working rather than repeating. It ended holding 242
+transactions and the current date, and answered `0`. pi answered `11`.
 
-Steps 9 through 15 exit zero and return nothing useful, so nothing after step 8
-looks like a failure to the runtime. Reading those as failures means judging
-what a command printed, which is the one thing this repository does not let
-deterministic code decide. The direction an agent takes once it knows something
-broke is the model's, and the runtime's part is to hand it the facts — which it
-now does, and did not before.
+Two things in that list are worth separating. `obs-016` reports `Execution
+failed` and exits zero, so #157 does not see it: a tool that reports failure in
+its output rather than its exit status is still invisible, and reading it means
+judging what the command printed. And the last step had the data it needed.
+Neither of those is a budget or a ledger or a missing fact. The direction an
+agent takes once it knows something broke is the model's, and the runtime's part
+is to hand it the facts, which it now does and did not before.
 
 ## What each one puts in front of the model
 
