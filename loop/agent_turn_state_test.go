@@ -111,8 +111,8 @@ func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *tes
 	if strings.Contains(string(finishTool.Function.Parameters), `"action"`) {
 		t.Fatalf("expected terminal control schema without redundant action discriminator, got %s", finishTool.Function.Parameters)
 	}
-	if string(chatRequest.ToolChoice) != `"required"` {
-		t.Fatalf("expected required native tool choice, got %s", chatRequest.ToolChoice)
+	if string(chatRequest.ToolChoice) != `"auto"` {
+		t.Fatalf("the first sample may think in text before acting; forcing a call suppresses the thought entirely, got %s", chatRequest.ToolChoice)
 	}
 	if !chatRequest.ParallelToolCalls {
 		t.Fatal("expected parallel native tool calls to be enabled")
@@ -311,8 +311,8 @@ func TestDecideAgentActionNativeChatRetryRequiresSinglePendingContractTool(t *te
 			if errorValue != nil {
 				t.Fatalf("expected corrected native action: %v", errorValue)
 			}
-			if string(provider.chatRequests[0].ToolChoice) != `"required"` {
-				t.Fatalf("expected initial model choice to remain required, got %s", provider.chatRequests[0].ToolChoice)
+			if string(provider.chatRequests[0].ToolChoice) != `"auto"` {
+				t.Fatalf("expected the thinking-allowed first choice, got %s", provider.chatRequests[0].ToolChoice)
 			}
 			retryRequest := provider.chatRequests[1]
 			if len(retryRequest.Tools) != 1 || retryRequest.Tools[0].Function.Name != testCase.expectedToolName {
@@ -487,7 +487,7 @@ func TestDecideAgentActionNativeChatRetryPreservesModelChoiceOutsidePendingContr
 				t.Fatalf("expected corrected native action: %v", errorValue)
 			}
 			retryRequest := provider.chatRequests[1]
-			if string(retryRequest.ToolChoice) != `"required"` || len(retryRequest.Tools) <= 1 {
+			if len(retryRequest.Tools) <= 1 {
 				t.Fatalf("expected model choice to remain open, got choice=%s tools=%+v", retryRequest.ToolChoice, retryRequest.Tools)
 			}
 		})
@@ -1925,5 +1925,45 @@ func TestReasoningIsCarriedAndStrippedFromTheToolInput(t *testing.T) {
 	}
 	if strings.Contains(string(action.ToolInput), "reasoning") {
 		t.Fatalf("the tool's own input schema does not declare the slot, so leaving it in fails validation: %s", action.ToolInput)
+	}
+}
+
+type thinkThenActLanguageModel struct {
+	chatRequests []model.ChatCompletionRequest
+}
+
+func (languageModel *thinkThenActLanguageModel) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	languageModel.chatRequests = append(languageModel.chatRequests, request)
+	if len(languageModel.chatRequests) == 1 {
+		return model.ChatCompletionResponse{FinishReason: "stop", Message: model.ChatCompletionMessage{Role: "assistant", Content: "The contacts list has no venmo field, so I will cross-reference the venmo accounts."}}, nil
+	}
+	return model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{
+		Role:      "assistant",
+		ToolCalls: []model.ChatCompletionToolCall{{ID: "call-1", Type: "function", Function: model.ChatCompletionToolCallFunction{Name: toolcontract.TerminalRunToolName, Arguments: `{"command":"ls"}`}}},
+	}}, nil
+}
+
+func TestAModelThatThinksFirstThenActsCompletesOneStep(t *testing.T) {
+	languageModel := &thinkThenActLanguageModel{}
+	request := model.ChatCompletionRequest{
+		Tools:      []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.TerminalRunToolName}}},
+		ToolChoice: json.RawMessage(`"auto"`),
+	}
+
+	action, errorValue := decideAgentActionWithChat(context.Background(), languageModel, request, agentTaskState{})
+
+	if errorValue != nil || action.ToolName != toolcontract.TerminalRunToolName {
+		t.Fatalf("a text-only response is the model thinking, and treating it as a malformed action threw the thought away: %v %+v", errorValue, action)
+	}
+	if len(languageModel.chatRequests) != 2 {
+		t.Fatalf("expected think then act in two calls, got %d", len(languageModel.chatRequests))
+	}
+	secondRequest := languageModel.chatRequests[1]
+	lastMessage := secondRequest.Messages[len(secondRequest.Messages)-1]
+	if lastMessage.Role != "assistant" || !strings.Contains(lastMessage.Content, "cross-reference the venmo accounts") {
+		t.Fatalf("the thought has to be in front of the model when it acts: %+v", lastMessage)
+	}
+	if string(secondRequest.ToolChoice) != `"required"` {
+		t.Fatalf("after thinking, the second sample acts: %s", secondRequest.ToolChoice)
 	}
 }

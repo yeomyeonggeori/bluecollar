@@ -811,6 +811,10 @@ func decideAgentActionWithChat(ctx context.Context, chatCompleter model.ChatComp
 	for correctionCount := 0; ; correctionCount++ {
 		response, errorValue := chatCompleter.GenerateChatCompletion(ctx, currentRequest)
 		if errorValue == nil {
+			if thoughtRequest, isThought := requestAfterThinkingAloud(currentRequest, response, correctionCount); isThought {
+				currentRequest = thoughtRequest
+				continue
+			}
 			action, parseError := parseNativeAgentActionResponse(response, currentRequest.Tools)
 			if parseError == nil {
 				return action, nil
@@ -992,7 +996,7 @@ func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredRes
 		SchemaName:        agentActionSchemaName,
 		Messages:          messages,
 		Tools:             tools,
-		ToolChoice:        json.RawMessage(`"required"`),
+		ToolChoice:        json.RawMessage(`"auto"`),
 		ParallelToolCalls: true,
 		GenerationOptions: structuredRequest.GenerationOptions,
 	}, true
@@ -1170,6 +1174,20 @@ func nativeTerminalActionParameters(document map[string]json.RawMessage) (json.R
 	}
 	document["required"] = requiredDocument
 	return json.Marshal(document)
+}
+
+func requestAfterThinkingAloud(currentRequest model.ChatCompletionRequest, response model.ChatCompletionResponse, correctionCount int) (model.ChatCompletionRequest, bool) {
+	if correctionCount >= maximumAgentActionCorrectionCount {
+		return model.ChatCompletionRequest{}, false
+	}
+	thought := strings.TrimSpace(response.Message.Content)
+	if len(response.Message.ToolCalls) > 0 || thought == "" {
+		return model.ChatCompletionRequest{}, false
+	}
+	thoughtRequest := currentRequest
+	thoughtRequest.Messages = append(append([]model.ChatCompletionMessage{}, currentRequest.Messages...), model.ChatCompletionMessage{Role: "assistant", Content: thought})
+	thoughtRequest.ToolChoice = json.RawMessage(`"required"`)
+	return thoughtRequest, true
 }
 
 func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools []model.ChatCompletionTool) (agentAction, error) {
