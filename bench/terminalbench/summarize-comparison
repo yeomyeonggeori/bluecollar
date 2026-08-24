@@ -10,6 +10,7 @@ guessed from the outside.
 """
 
 import glob
+import math
 import json
 import os
 import statistics
@@ -54,6 +55,19 @@ def median_of(metrics, field):
     return statistics.median(values) if values else None
 
 
+# Eight tasks at three attempts is about 24 trials, and two rows that differ by five points
+# there are the same row. Printing the interval next to the rate is what stops a reader — or the
+# person who wrote the fix — reading a sweep-to-sweep wobble as an effect.
+def resolved_with_interval(resolved, trials):
+    if trials == 0:
+        return "0/0"
+    rate = resolved / trials
+    spread = 1.96 * math.sqrt(rate * (1 - rate) / trials)
+    low = max(0.0, rate - spread)
+    high = min(1.0, rate + spread)
+    return f"{resolved}/{trials} ({100 * low:.0f}-{100 * high:.0f}%)"
+
+
 def formatted(value, digits=0):
     if value is None:
         return "not reported"
@@ -85,7 +99,7 @@ def harness_row(harness_name, harness_root):
     return {
         "harness": harness_name,
         "tasks": len(task_identifiers),
-        "resolved": f"{resolved}/{len(verdicts)}",
+        "resolved": resolved_with_interval(resolved, len(verdicts)),
         "reachedEnd": f"{len(reached_end)}/{len(measured_end)}" if measured_end else "not reported",
         "turns": formatted(median_of(metrics, "turns")),
         "languageModelCalls": formatted(median_of(metrics, "languageModelCalls")),
