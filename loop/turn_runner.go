@@ -457,12 +457,12 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			if errorValue != nil || !shouldContinue {
 				return result, errorValue
 			}
-			refreshWorkContext()
 		}
 		state.Observations = agentTurnRunner.applyPendingSteeringEvents(taskRun.TaskRunID, state.Observations, appliedSteerEventIDs)
 		state.IterationCount = iteration - 1
 		if state.didExtendBudgetOneLevel() && !warningsRetiredByGrant {
 			warningsRetiredByGrant = true
+			refreshWorkContext()
 			limitPressureWarnings = map[string]bool{}
 			grantedBudget := grantedBudgetObservation(state.Observations, agentTurnRunner.options)
 			state.Observations = append(state.Observations, grantedBudget)
