@@ -418,3 +418,18 @@ func TestTheJudgeSeesWhatDidNotWork(t *testing.T) {
 		t.Fatalf("the judge has to be able to tell an attempt from an accomplishment: %s", document)
 	}
 }
+
+func TestTheJudgeSeesBothEndsOfATruncatedResult(t *testing.T) {
+	echoedCall := "Calling:\nprint(apis.example.search_users(**{'access_token': '" + strings.Repeat("x", 220) + "', 'query': 'Sam Example'}))"
+	dataRows := `[{"first_name": "Sam", "last_name": "Example", "email": "sam@example.com", "registered_at": "2022-07-03"}]`
+	observation := newContentObservation("obs-003", "continue", toolcontract.TerminalRunToolName, echoedCall+"\n"+dataRows)
+
+	ledger := completionJudgeLedger(nil, []turnObservation{observation}, map[string]bool{})
+
+	if len(ledger) != 1 {
+		t.Fatalf("expected one entry, got %d", len(ledger))
+	}
+	if !strings.Contains(ledger[0].Result, "registered_at") {
+		t.Fatalf("the echoed call fills the head of every result, so a head-only cut shows the judge no data at all and it certifies from what it cannot see: %q", ledger[0].Result)
+	}
+}

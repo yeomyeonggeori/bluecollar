@@ -207,7 +207,7 @@ func completionJudgeInstruction() string {
 		"When the instruction states an explicit deadline, date, time, quantity, title, or recipient, that value must appear in at least one successful recorded operation input; if a stated value appears nowhere and no relevant entry is display-truncated, mark unsatisfied and name exactly that value in missingWork.",
 		"When the instruction selects its target by a condition on an attribute — who has no account, which ones are over a count, what was sent this month — a successful recorded operation must show that attribute being read for the candidates. Acting on the unfiltered set is unfinished work: mark unsatisfied and name the condition that was never evaluated. A condition the instruction does not state is not a requirement, and an attribute already visible in a recorded result needs no separate lookup.",
 		"When the instruction supplies worked examples — sample inputs with their expected outputs — every one of them must appear in a successful recorded operation, not just the first. Checking one example and generalising from it is unfinished work: mark unsatisfied and name the examples that were never run.",
-		"A ledger entry ending with a display-truncated marker was cut for this display only; the full content was recorded and executed. Content that would lie beyond the cut is unknown, not missing: never cite display truncation as missing work, an incomplete file, or cut-off content.",
+		"A ledger entry carrying a display-truncated marker was cut for this display only; the full content was recorded and executed. Content that was cut is unknown in both directions: never cite display truncation as missing work, and never treat it as confirming that something was checked, matched, or absent. Judge only from the parts that are visible.",
 		"Resolve relative dates such as today, tomorrow, 오늘, and 내일 only from the runtime temporal context below. Never guess the current date from ledger values.",
 		"Judge state changes by the recorded operation results. Items that merely appear inside another result's diagnostic fields, such as candidate lists in a search result, are not additional requirements unless the instruction itself names them.",
 		"Do not invent requirements the instruction does not state. Wording, formatting, phrasing, and which list or table a record appears in are not failures. If the right operations ran and every explicitly stated value appears in some recorded input, mark satisfied.",
@@ -338,7 +338,10 @@ func truncateForLedger(value string, maxLength int) string {
 	if len(trimmedValue) <= maxLength {
 		return trimmedValue
 	}
-	return trimmedValue[:maxLength] + " …[display truncated; full " + strconv.Itoa(len(trimmedValue)) + " bytes were recorded and executed]"
+	headLength := maxLength / 2
+	head := strings.ToValidUTF8(trimmedValue[:headLength], "")
+	tail := strings.ToValidUTF8(trimmedValue[len(trimmedValue)-(maxLength-headLength):], "")
+	return head + " …[display truncated; full " + strconv.Itoa(len(trimmedValue)) + " bytes were recorded and executed]… " + tail
 }
 
 func completionJudgeSchema() string {
