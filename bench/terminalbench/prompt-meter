@@ -19,6 +19,7 @@ has to be told it is being measured.
     bench/terminalbench/prompt-meter report
 """
 
+import collections
 import http.server
 import json
 import os
@@ -34,6 +35,8 @@ from collections import defaultdict
 UPSTREAM_ORIGIN = os.environ.get("PROMPT_METER_UPSTREAM", "https://openrouter.ai")
 LEDGER_PATH = os.environ.get("PROMPT_METER_LEDGER", "/tmp/prompt-meter.jsonl")
 BODY_DIRECTORY = os.environ.get("PROMPT_METER_BODY_DIRECTORY", "")
+body_counter = collections.Counter()
+body_counter_lock = threading.Lock()
 
 ledger_lock = threading.Lock()
 
@@ -59,8 +62,9 @@ def keep_body(harness_name, body):
     if not BODY_DIRECTORY:
         return
     os.makedirs(BODY_DIRECTORY, exist_ok=True)
-    with ledger_lock:
-        index = len(os.listdir(BODY_DIRECTORY))
+    with body_counter_lock:
+        body_counter[harness_name] += 1
+        index = body_counter[harness_name]
     pathlib.Path(BODY_DIRECTORY, f"{harness_name}-{index:04d}.json").write_bytes(body)
 
 
