@@ -12,7 +12,7 @@ func TestAnUnstatedClockIsNotInvented(t *testing.T) {
 	if strings.Contains(description, "Current date: ") {
 		t.Fatalf("the runtime was not told the date and stating one is a claim about the world it cannot make: %q", description)
 	}
-	if !strings.Contains(description, "Read it from the system you are operating") {
+	if !strings.Contains(description, "the operated system's clock decides") {
 		t.Fatalf("the agent has to be sent to where the date actually is: %q", description)
 	}
 }
