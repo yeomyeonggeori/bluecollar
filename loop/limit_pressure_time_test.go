@@ -885,3 +885,19 @@ func TestTheStepBudgetLineQuotesTheHeldBudgetOnceTheGrantIsSpent(t *testing.T) {
 		t.Fatalf("with nothing left to grant, the ceiling it holds is the one to quote: %s", line)
 	}
 }
+
+func TestARefreshNeverLowersTheWallMidRun(t *testing.T) {
+	runner := mediumLevelRunner()
+	runner.options.MaxElapsedSecond = 900
+	runner.iterationCostObserver = NewIterationCostObserver()
+	runner.modelInUse = "deepseek/deepseek-v4-flash"
+	for sampleIndex := 0; sampleIndex < 6; sampleIndex++ {
+		runner.iterationCostObserver.Record(runner.modelInUse, time.Second)
+	}
+
+	runner.refreshElapsedBudget(TaskLevelMedium)
+
+	if runner.options.MaxElapsedSecond < 900 {
+		t.Fatalf("a median built from the cheapest steps so far shrank the wall to %ds of a 900s budget and the clock killed calls the level meant to allow", runner.options.MaxElapsedSecond)
+	}
+}
