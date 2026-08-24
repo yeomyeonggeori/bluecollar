@@ -45,12 +45,24 @@ func outcomeContractHasSideEffectEvidence(toolSet *toolcontract.ToolSet, contrac
 	return false
 }
 
+// What there is to grade is named by the contract; delivering the reply is asked of every task
+// and grades no work.
+func contractAsksForSomethingToJudge(contract OutcomeContract) bool {
+	for _, result := range contract.ExpectedResults {
+		if result.Required && strings.TrimSpace(result.ID) != finalMessageExpectedResultID {
+			return true
+		}
+	}
+	return false
+}
+
 func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithJudge(ctx context.Context, taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
 	completionGateResult := validateCompletionGateForRequestWithExpectedResults(request, requirements, observations, attachments, criteria, actionDocument, agentTurnRunner.options.RecoveryBudget)
 	if !completionGateResult.IsSatisfied || ctx.Err() != nil {
 		return completionGateResult
 	}
-	if !outcomeContractHasSideEffectEvidence(request.ToolSet, request.OutcomeContract) &&
+	if !contractAsksForSomethingToJudge(request.OutcomeContract) &&
+		!outcomeContractHasSideEffectEvidence(request.ToolSet, request.OutcomeContract) &&
 		!observationsIncludeSideEffect(request.ToolSet, observations) {
 		return completionGateResult
 	}
