@@ -15,7 +15,8 @@ func (agentTurnRunner *AgentTurnRunner) prepareRecoveryAttempt(ctx context.Conte
 	}
 	effectiveToolName := effectiveObservationToolName(actionDocument.ToolName, actionDocument.ToolInput)
 	recoveryStep := classifyRecoveryStep(request.ToolSet, failureDebt, effectiveToolName, actionDocument.ToolInput)
-	if !recoveryBudgetAllowsStep(state.Observations, agentTurnRunner.options.RecoveryBudget, recoveryStep) {
+	attemptKey := canonicalToolCallKey(actionDocument.ToolName, actionDocument.ToolInput)
+	if !recoveryBudgetAllowsStep(state.Observations, agentTurnRunner.options.RecoveryBudget, recoveryStep, attemptKey) {
 		observation := recoveryBudgetExhaustedObservation(request.ToolSet, len(state.Observations)+1, failureDebt.LatestFailure, recoveryStep, effectiveToolName, firstNonEmptyString(request.ActiveGoal.OriginalInstruction, request.Prompt))
 		state.Observations = append(state.Observations, observation)
 		agentTurnRunner.appendEvent(taskRunID, "agent.recovery_budget_exhausted", marshalEventBody(observation))

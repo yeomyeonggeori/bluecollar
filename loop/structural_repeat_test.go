@@ -57,3 +57,36 @@ func TestFailuresASuccessAlreadyClearedAreNotStillRecurring(t *testing.T) {
 		t.Fatalf("terminal_run gives every shell failure one signature, so counting across the turn calls three unrelated errors a structural repeat: %s", signature)
 	}
 }
+
+func failedCorrectedRetry(observationID string, command string, attemptKey string) turnObservation {
+	observation := failedShellObservation(observationID, command)
+	observation.RecoveryStep = recoveryStepCorrectedRetry
+	observation.RecoveryAttemptSpent = true
+	observation.RecoveryAttemptKey = attemptKey
+	return observation
+}
+
+func TestCorrectingTheSameBrokenCallTwiceSpendsTheBudget(t *testing.T) {
+	observations := []turnObservation{
+		failedShellObservation("obs-001", "cli venmo login --email a"),
+		failedCorrectedRetry("obs-002", "cli venmo login --email b", "terminal_run|login"),
+	}
+
+	if recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "terminal_run|login") {
+		t.Fatal("correcting the same call again is the retry loop this budget exists to stop")
+	}
+}
+
+func TestCorrectingADifferentBrokenCallHasItsOwnBudget(t *testing.T) {
+	observations := []turnObservation{
+		failedShellObservation("obs-001", "cli venmo login --email a"),
+		failedCorrectedRetry("obs-002", "cli venmo login --email b", "terminal_run|login"),
+	}
+
+	if !recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "terminal_run|import") {
+		t.Fatal("a different broken command is a different problem, and the last correction did not spend its budget")
+	}
+	if recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "") {
+		t.Fatal("counting every correction together is what refused the second problem its first attempt")
+	}
+}

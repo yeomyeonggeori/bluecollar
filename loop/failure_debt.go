@@ -331,11 +331,11 @@ func recoveryToolNamespace(toolSet *toolcontract.ToolSet, toolName string) strin
 	return strings.TrimSpace(definition.Namespace)
 }
 
-func recoveryBudgetAllowsStep(observations []turnObservation, budget RecoveryBudget, recoveryStep string) bool {
+func recoveryBudgetAllowsStep(observations []turnObservation, budget RecoveryBudget, recoveryStep string, attemptKey string) bool {
 	budget = normalizeRecoveryBudget(budget)
 	switch recoveryStep {
 	case recoveryStepCorrectedRetry:
-		return recoveryStepUseCount(observations, recoveryStepCorrectedRetry) < budget.CorrectedRetry
+		return correctedRetryUseCount(observations, attemptKey) < budget.CorrectedRetry
 	case recoveryStepAlternateRoute:
 		return recoveryStepUseCount(observations, recoveryStepAlternateRoute) < budget.AlternateRoute
 	case recoveryStepAdjacentTool:
@@ -345,6 +345,22 @@ func recoveryBudgetAllowsStep(observations []turnObservation, budget RecoveryBud
 	default:
 		return false
 	}
+}
+
+// A correction is spent against the call it corrected. Counting every correction in the episode
+// together spends the budget of the next broken command on the last one, and terminal_run runs
+// into several unrelated walls in a row often enough that this was the common case.
+func correctedRetryUseCount(observations []turnObservation, attemptKey string) int {
+	count := 0
+	for _, observation := range recoveryEpisodeObservations(observations) {
+		if !observation.RecoveryAttemptSpent || strings.TrimSpace(observation.RecoveryStep) != recoveryStepCorrectedRetry {
+			continue
+		}
+		if attemptKey == "" || strings.TrimSpace(observation.RecoveryAttemptKey) == attemptKey {
+			count++
+		}
+	}
+	return count
 }
 
 func recoveryStepUseCount(observations []turnObservation, recoveryStep string) int {

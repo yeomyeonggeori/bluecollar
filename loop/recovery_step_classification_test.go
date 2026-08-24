@@ -37,7 +37,7 @@ func TestInspectionAfterAFailedMutationIsNotRationed(t *testing.T) {
 		{ObservationID: "obs-002", RecoveryStep: recoveryStepInspection, RecoveryAttemptSpent: true},
 		{ObservationID: "obs-003", RecoveryStep: recoveryStepInspection, RecoveryAttemptSpent: true},
 	}
-	if !recoveryBudgetAllowsStep(observations, budget, recoveryStepInspection) {
+	if !recoveryBudgetAllowsStep(observations, budget, recoveryStepInspection, "") {
 		t.Fatal("inspection must stay available so the agent can keep searching for the target it could not resolve")
 	}
 }

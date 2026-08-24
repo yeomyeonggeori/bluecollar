@@ -72,7 +72,7 @@ func TestIndependentWorkIsNeverRefused(t *testing.T) {
 		{ObservationID: "obs-003", RecoveryStep: recoveryStepIndependentWork},
 		{ObservationID: "obs-004", RecoveryStep: recoveryStepIndependentWork},
 	}
-	if !recoveryBudgetAllowsStep(observations, exhaustedRecoveryBudgetForTest(), recoveryStepIndependentWork) {
+	if !recoveryBudgetAllowsStep(observations, exhaustedRecoveryBudgetForTest(), recoveryStepIndependentWork, "") {
 		t.Fatal("work on another object must stay available after the failed call's budget is gone")
 	}
 }
