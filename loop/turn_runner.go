@@ -497,10 +497,6 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			"step":     iteration,
 			"exposure": iterationRequest.ToolExposure,
 		}))
-		agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.tool_palette.built", marshalEventBody(map[string]any{
-			"step":     iteration,
-			"exposure": iterationRequest.ToolExposure,
-		}))
 		allowQualityCriteria := len(state.QualityCriteria) == 0 && outcomeContractNeedsQualityCriteria(iterationRequest.ToolSet, iterationRequest.OutcomeContract)
 		actionDocument, isBatched := takeBatchedAction(&state)
 		var actionError error
