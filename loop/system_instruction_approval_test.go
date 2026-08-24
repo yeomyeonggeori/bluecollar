@@ -25,7 +25,7 @@ func TestAWorkspaceTaskIsNotToldAboutMessengersItHasNone(t *testing.T) {
 			t.Fatalf("a container with a shell and no conversation was carrying %q: the instruction ran to 12,753 bytes against a 136 byte task, and every byte of it competes with the work", absent)
 		}
 	}
-	if !strings.Contains(workspaceOnly, "Failure recovery:") {
-		t.Fatal("what applies to every task stays")
+	if strings.Contains(workspaceOnly, "Failure recovery:") {
+		t.Fatal("the failure loop is carried by recovery guidance at the moment a call fails and by the gate that refuses a finish over unresolved failures, not by standing prose")
 	}
 }

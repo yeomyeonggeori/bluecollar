@@ -801,7 +801,7 @@ func (agentTurnRunner *AgentTurnRunner) applyPendingSteeringEvents(taskRunID str
 		if instruction == "" {
 			continue
 		}
-		observation := newContentObservation(nextObservationIDForObservations(observations), "steer", "", marshalEventBody(map[string]string{
+		observation := newContentObservation(nextObservationIDForObservations(observations), "steer", "", "This is the latest user correction for the current task; update the plan before continuing.\n"+marshalEventBody(map[string]string{
 			"instruction": instruction,
 			"reason":      strings.TrimSpace(document.Reason),
 			"messageID":   strings.TrimSpace(document.MessageID),

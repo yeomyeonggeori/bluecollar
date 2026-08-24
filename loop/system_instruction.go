@@ -37,14 +37,10 @@ func buildAgentSystemInstruction(request AgentTurnRequest, options TurnOptions) 
 	systemInstruction = systemInstruction.Append("tool_calling",
 		"Tool calling: The action schema contains the exact tools callable in this step. Call domain operations directly by name with their typed parameters. Do not request hidden tools, wait for the palette to expand, or run an agent tool name as a shell command. The runtime injects requester identity, approval, and delivery — never pass requester identity in input."+
 			" When the next piece of work needs several tools that do not depend on each other — reading the files a request names, checking several paths, running independent commands — request them together in one response: they run in order and stop at the first failure. Ask for a call on its own only when its input depends on what an earlier call returns."+
-			" When an observation carries sameOutputAs, its output is byte-identical to that earlier observation: the call told you nothing new, so re-running it in another form will not either. Act on what that output already says, or do something different."+
 			" When an image is in front of you, write what it shows into executionStateUpdate.knownFacts on that same call, in enough detail to work from later. The image is shown once; the note is what you will still have."+
-			" If a steer observation appears, treat it as the latest user correction for the current task and update the plan before continuing."+
 			" Never repeat an add or create operation for a record a successful observation in this task already created: one user request creates at most one record, and anything wrong or missing on it is fixed with the matching update operation, using the record's exact current title or ID as the hint.")
 	systemInstruction = systemInstruction.Append("delegation", delegationInstructionBody(options))
 	systemInstruction = systemInstruction.Append("skills", skillsInstructionBody(request))
-	systemInstruction = systemInstruction.Append("failure_recovery",
-		"Failure recovery: If a tool call fails, it creates FailureDebt. Do not give up after one failed attempt. Do not finish until every failure is resolved, recovered, or reported: a finish that ignores an unresolved failure is wrong even when the rest of the work succeeded.")
 	systemInstruction = systemInstruction.Append("required_artifacts", requiredArtifactsInstructionBody(request))
 	return systemInstruction.Append("host", request.HostInstruction)
 }
