@@ -103,8 +103,9 @@ func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *tes
 	if tool.Type != "function" {
 		t.Fatalf("expected function tool, got %+v", tool)
 	}
-	if string(tool.Function.Parameters) != `{"additionalProperties":false,"properties":{"command":{"type":"string"}},"required":["command"],"type":"object"}` {
-		t.Fatalf("expected direct tool parameters to preserve the callable input schema, got %s", tool.Function.Parameters)
+	parameters := string(tool.Function.Parameters)
+	if !strings.Contains(parameters, `"command":{"type":"string"}`) || !strings.Contains(parameters, `"required":["command","reasoning"]`) {
+		t.Fatalf("expected the callable input schema plus the reasoning slot, got %s", parameters)
 	}
 	finishTool := nativeChatTool(t, chatRequest.Tools, "finish")
 	if strings.Contains(string(finishTool.Function.Parameters), `"action"`) {
@@ -1886,5 +1887,43 @@ func TestATranscriptEntryWithNoReasoningCarriesNone(t *testing.T) {
 
 	if len(transcript) == 0 || transcript[0].Content != "" {
 		t.Fatalf("nothing was reasoned and nothing should be invented: %+v", transcript)
+	}
+}
+
+func TestEveryNativeActionCarriesAReasoningSlot(t *testing.T) {
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
+	schemaDocument := ActionSchemaForToolSet(toolSet, false, nil, false)
+	tools, errorValue := nativeAgentActionTools(schemaDocument)
+	if errorValue != nil || len(tools) == 0 {
+		t.Fatalf("tools: %v (%d)", errorValue, len(tools))
+	}
+	for _, tool := range tools {
+		parameters, _ := json.Marshal(tool.Function.Parameters)
+		if !strings.Contains(string(parameters), `"reasoning"`) {
+			t.Fatalf("under a forced tool call the model acts without ever thinking, and %q gives it nowhere to: %s", tool.Function.Name, string(parameters)[:300])
+		}
+	}
+}
+
+func TestReasoningIsCarriedAndStrippedFromTheToolInput(t *testing.T) {
+	tools := []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.TerminalRunToolName}}}
+	toolCall := model.ChatCompletionToolCall{
+		ID: "call-1", Type: "function",
+		Function: model.ChatCompletionToolCallFunction{
+			Name:      toolcontract.TerminalRunToolName,
+			Arguments: `{"command":"ls","reasoning":"the contacts list had no venmo field, so I check the venmo accounts instead"}`,
+		},
+	}
+
+	action, errorValue := nativeAgentActionFromToolCall(toolCall, tools)
+
+	if errorValue != nil {
+		t.Fatalf("parse: %v", errorValue)
+	}
+	if !strings.Contains(action.AssistantText, "venmo accounts instead") {
+		t.Fatalf("the thought was written and went nowhere: %+v", action)
+	}
+	if strings.Contains(string(action.ToolInput), "reasoning") {
+		t.Fatalf("the tool's own input schema does not declare the slot, so leaving it in fails validation: %s", action.ToolInput)
 	}
 }
