@@ -34,7 +34,7 @@ func TestLLMContextBuilderIncludesRuntimeCalendarContext(t *testing.T) {
 	for _, expected := range []string{
 		"Runtime:",
 		"Response language: ko",
-		"Current date: 2026-05-12",
+		"Current date on the machine running you: 2026-05-12",
 		"Current weekday: Tuesday",
 		"Current time: 17:32",
 		"Time zone: Asia/Seoul",

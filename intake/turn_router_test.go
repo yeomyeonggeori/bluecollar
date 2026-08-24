@@ -1249,7 +1249,7 @@ func TestTaskIntakePlannerIncludesTemporalContext(t *testing.T) {
 		t.Fatalf("expected one intake request, got %d", len(languageModel.requests))
 	}
 	body := joinMessageContent(languageModel.requests[0].Messages)
-	if !strings.Contains(body, "Runtime temporal context") || !strings.Contains(body, "Current date: 2026-05-17") || !strings.Contains(body, "Current weekday: Sunday") {
+	if !strings.Contains(body, "Runtime temporal context") || !strings.Contains(body, "Current date on the machine running you: 2026-05-17") || !strings.Contains(body, "Current weekday: Sunday") {
 		t.Fatalf("expected intake temporal context, got %s", body)
 	}
 }
