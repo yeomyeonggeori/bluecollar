@@ -847,8 +847,10 @@ func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(ctx context.Context
 	return withElapsedBudgetFromDeadline(ctx, baseOptions)
 }
 
-// The level a classifier reads off the instruction sizes how a turn paces itself. What ends
-// it is the deadline the caller gave, which is the only bound that knows what the work is worth.
+// The budget is the level's step count at what a step measurably costs on this model, floored so
+// a fast model still gets a usable one and capped by the level's tier. The caller's deadline is a
+// ceiling on that, never the value: a number someone typed says what may be spent, not how long
+// the work takes.
 func withElapsedBudgetFromDeadline(ctx context.Context, turnOptions TurnOptions) TurnOptions {
 	deadline, hasDeadline := ctx.Deadline()
 	if !hasDeadline {
@@ -859,7 +861,9 @@ func withElapsedBudgetFromDeadline(ctx context.Context, turnOptions TurnOptions)
 		return turnOptions
 	}
 	turnOptions.DeadlineSecond = remainingSecond
-	turnOptions.MaxElapsedSecond = remainingSecond
+	if turnOptions.MaxElapsedSecond > remainingSecond {
+		turnOptions.MaxElapsedSecond = remainingSecond
+	}
 	return turnOptions
 }
 
