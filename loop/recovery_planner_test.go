@@ -71,3 +71,46 @@ func TestRecoveryPacketKeepsTypedHintTools(t *testing.T) {
 		t.Fatalf("expected typed recovery hint tools to remain available, got %+v", packet.AllowedTools)
 	}
 }
+
+func TestRecoveryIsToldWhatTheCommandPrinted(t *testing.T) {
+	observation := turnObservation{
+		ObservationID: "obs-009",
+		Action:        "continue",
+		Tool:          "terminal_run",
+		Failure: &toolcontract.ToolFailure{
+			Kind:            toolcontract.FailureUnknown,
+			Code:            toolcontract.FailureCodes.OperationFailed.String(),
+			Stage:           "terminal_run",
+			UserSafeSummary: "the command exited 1",
+		},
+	}
+	observation.Output.Content = "ModuleNotFoundError: No module named 'requests'"
+
+	packet := buildRecoveryPacket(observation)
+
+	if !strings.Contains(packet.WhyLikely, "ModuleNotFoundError") {
+		t.Fatalf("the shell already said why and recovery was handed an exit status instead: %q", packet.WhyLikely)
+	}
+	if !strings.Contains(packet.WhyLikely, "the command exited 1") {
+		t.Fatalf("the summary labels the failure and belongs alongside what it printed: %q", packet.WhyLikely)
+	}
+}
+
+func TestASummaryThatIsAlreadyTheOutputIsNotRepeated(t *testing.T) {
+	observation := turnObservation{
+		ObservationID: "obs-010",
+		Action:        "continue",
+		Tool:          "task_add",
+		Failure: &toolcontract.ToolFailure{
+			Kind:            toolcontract.FailureInvalidInput,
+			Code:            toolcontract.FailureCodes.InvalidInput.String(),
+			Stage:           "task_add",
+			UserSafeSummary: "a title is required",
+		},
+	}
+	observation.Output.Content = "a title is required"
+
+	if why := buildRecoveryPacket(observation).WhyLikely; why != "a title is required" {
+		t.Fatalf("a tool whose output is its summary says it once, got %q", why)
+	}
+}
