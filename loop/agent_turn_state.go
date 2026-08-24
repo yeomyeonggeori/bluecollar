@@ -23,8 +23,6 @@ const refusalsThatWithdrawFinish = 2
 
 const refusalsThatOfferTheExit = 3
 
-const transcriptResultLimit = 8192
-
 type agentAction = turnActionDocument
 
 type agentTaskState struct {
@@ -1021,7 +1019,7 @@ func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMe
 // Summary describes the call for a compact ledger; a tool message is the answer itself.
 func toolResultForTranscript(observation turnObservation) string {
 	if content := strings.TrimSpace(observation.ContentText()); content != "" {
-		return withMiddleElided(content, transcriptResultLimit)
+		return content
 	}
 	return strings.TrimSpace(observation.Summary)
 }

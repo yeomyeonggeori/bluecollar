@@ -1850,3 +1850,15 @@ func TestAnAgentToldThreeTimesItHasNotDoneTheTaskCanSaySoItCannot(t *testing.T) 
 		t.Fatal("recovery being possible is not the same as the task being possible, and without this the exit is never on the menu")
 	}
 }
+
+func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T) {
+	stored := strings.Repeat("endpoint: send_money\n", 1600)
+	observation := turnObservation{ObservationID: "obs-009", Tool: "terminal_run"}
+	observation.Output.Content = stored
+
+	carried := toolResultForTranscript(observation)
+
+	if carried != strings.TrimSpace(stored) {
+		t.Fatalf("saveToolObservation already elided this to one observation's share of the conversation budget, and cutting it again is pure loss: %d of %d characters carried", len(carried), len(stored))
+	}
+}
