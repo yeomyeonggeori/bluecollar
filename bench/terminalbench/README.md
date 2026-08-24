@@ -353,6 +353,49 @@ The first six runs after the fix:
 `23cf851_1` went from 0 of 3 to 1 of 3. The recovery path is running for the
 first time, so how good it is becomes a question that can now be asked.
 
+Asking it took two more fixes. The structural-repeat guard counted a signature
+across the whole turn, and `terminal_run` gives every shell failure the same
+signature, so three unrelated errors read as one route failing three times. The
+corrected-retry budget was one per episode and counted across it, so the second
+broken command was refused its first correction because the first had spent it.
+
+With all three in, every failure gets a recovery attempt and none is refused:
+
+| | before | after |
+|---|---|---|
+| failedToolCalls per run | 0 | 3, 3, 4, 3, 1, 3 |
+| recovery_budget_exhausted per run | — | 0, 0, 0, 0, 0, 0 |
+| median tool calls | 15 | 21 |
+
+The eight tasks swept again on the same three attempts: **15 of 24 against the
+14 of 23 before**. One point, which is noise. Two tasks up, three down, three
+level. pi is unchanged at 20 of 21.
+
+## Where the remaining distance is
+
+The whole shell transcript of a `23cf851_1` run that failed with all three
+fixes in:
+
+```
+ 6 FAIL  cli venmo show_transactions <token>      the CLI printed its parameter list
+ 7 FAIL  import apis.venmo                        ModuleNotFoundError
+ 8 FAIL  python3 -c "import requests"             ModuleNotFoundError
+ 9 ok    /opt/venv/bin/python … http://server:8000/execute
+10-15 ok  the same direct call, six more times
+17 ok    cli supervisor complete_task --answer "0"
+```
+
+Recovery did what it is built to do: the agent found a Python that has
+`requests`. What it recovered *to* was leaving the CLI it was given and calling
+the backing server by hand, and then answering `0`. pi answered `11`.
+
+Steps 9 through 15 exit zero and return nothing useful, so nothing after step 8
+looks like a failure to the runtime. Reading those as failures means judging
+what a command printed, which is the one thing this repository does not let
+deterministic code decide. The direction an agent takes once it knows something
+broke is the model's, and the runtime's part is to hand it the facts — which it
+now does, and did not before.
+
 ## What each one puts in front of the model
 
 Terminal-Bench sees a verdict and a clock. It cannot see what either harness
