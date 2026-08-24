@@ -28,6 +28,7 @@ func buildRecoveryPacket(observation turnObservation) RecoveryPacket {
 	failureClass := failureClassForObservation(observation)
 	packet := RecoveryPacket{
 		WhatFailed:          recoveryWhatFailed(observation),
+		InputThatFailed:     withMiddleElided(strings.TrimSpace(string(observation.ToolInput)), recoveryPrintedOutputLimit),
 		WhyLikely:           recoveryWhyLikely(observation, failureClass),
 		FailureClass:        failureClass,
 		RetryPolicy:         retryPolicyForObservation(observation),

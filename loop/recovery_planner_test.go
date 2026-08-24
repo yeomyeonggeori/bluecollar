@@ -1,6 +1,8 @@
 package loop
 
 import (
+	"encoding/json"
+
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
@@ -112,5 +114,25 @@ func TestASummaryThatIsAlreadyTheOutputIsNotRepeated(t *testing.T) {
 
 	if why := buildRecoveryPacket(observation).WhyLikely; why != "a title is required" {
 		t.Fatalf("a tool whose output is its summary says it once, got %q", why)
+	}
+}
+
+func TestRecoveryShowsTheInputItAsksToChange(t *testing.T) {
+	observation := turnObservation{
+		ObservationID: "obs-011",
+		Action:        "continue",
+		Tool:          "terminal_run",
+		ToolInput:     json.RawMessage(`{"command":"python3 -c \"print(card['card_id'])\""}`),
+		Failure: &toolcontract.ToolFailure{
+			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
+			Stage: "terminal_run", UserSafeSummary: "the command exited 1",
+		},
+	}
+	observation.Output.Content = "KeyError: 'card_id'"
+
+	packet := buildRecoveryPacket(observation)
+
+	if !strings.Contains(packet.InputThatFailed, "card_id") {
+		t.Fatalf("mustDoNext asks for the input to change and the packet did not carry it: %+v", packet)
 	}
 }
