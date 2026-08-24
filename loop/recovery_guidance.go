@@ -56,8 +56,8 @@ func recoveryGuidanceObservation(toolSet *toolcontract.ToolSet, index int, obser
 
 func recoveryGuidanceContent(toolSet *toolcontract.ToolSet, observation turnObservation, originalInstruction string) string {
 	parts := []string{"Analyze the latest failed tool result before responding."}
-	if instruction := strings.TrimSpace(originalInstruction); instruction != "" {
-		parts = append(parts, "The user's original request is still: \""+instruction+"\". Recover toward that request; do not drift into an unrelated question or topic because of this failure.")
+	if strings.TrimSpace(originalInstruction) != "" {
+		parts = append(parts, "Recover toward the request in this turn's user message; do not drift into an unrelated question or topic because of this failure.")
 	}
 	if observation.FailureCode() != "" {
 		parts = append(parts, "errorCode="+observation.FailureCode())

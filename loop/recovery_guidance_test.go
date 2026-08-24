@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"strings"
 	"testing"
 )
 
@@ -259,5 +260,29 @@ func TestTheRefusalNamesTheToolItRefused(t *testing.T) {
 
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.recovery_budget_exhausted", `"tool":"calendar_update"`) {
 		t.Fatal("the refusal must name the call it refused, not the call that failed")
+	}
+}
+
+func TestRecoveryGuidanceDoesNotCopyTheRequestBackIn(t *testing.T) {
+	instruction := "How many likes did all Venmo transactions, I sent this month, have in total?"
+	observation := turnObservation{
+		ObservationID: "obs-004",
+		Action:        "continue",
+		Tool:          "terminal_run",
+		Failure: &toolcontract.ToolFailure{
+			Kind:            toolcontract.FailureUnknown,
+			Code:            toolcontract.FailureCodes.OperationFailed.String(),
+			Stage:           "terminal_run",
+			UserSafeSummary: "the command exited 1",
+		},
+	}
+
+	guidance := recoveryGuidanceObservation(nil, 5, observation, instruction)
+
+	if strings.Contains(guidance.ContentText(), instruction) {
+		t.Fatal("the request is already this turn's user message, and every recovery keeping its own copy rides in every prompt after it")
+	}
+	if !strings.Contains(guidance.ContentText(), "do not drift") {
+		t.Fatalf("the reminder not to drift is what the copy was carrying: %q", guidance.ContentText())
 	}
 }
