@@ -128,10 +128,10 @@ def main():
         print("no runs to summarise")
         return
     print(f"\n== {dataset} with {model} ==")
-    print("| harness | tasks | resolved | reached end | median turns | median model calls | median prompt tokens/turn | median wall clock |")
-    print("|---|---|---|---|---|---|---|---|")
+    print("| harness | tasks | resolved | context window | reached end | median turns | median model calls | median prompt tokens/turn | median wall clock |")
+    print("|---|---|---|---|---|---|---|---|---|")
     for row in rows:
-        print(f"| {row['harness']} | {row['tasks']} | {row['resolved']} | {row['reachedEnd']} | "
+        print(f"| {row['harness']} | {row['tasks']} | {row['resolved']} | {row['contextWindow']} | {row['reachedEnd']} | "
               f"{row['turns']} | {row['languageModelCalls']} | {row['promptTokensPerTurn']} | {row['wallClockSecond']} |")
     for row in rows:
         if row["neverRan"]:
