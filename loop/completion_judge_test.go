@@ -115,7 +115,7 @@ func TestCompletionJudgeLedgerBudgetsBytesAndNamesDroppedEntries(t *testing.T) {
 	if len(ledger) >= observationCount {
 		t.Fatalf("expected the byte budget to drop early entries, got %d of %d", len(ledger), observationCount)
 	}
-	if ledger[0].Tool != "earlier_operations" || !strings.Contains(ledger[0].Result, "not shown here") {
+	if ledger[0].Tool != "earlier_operations" || !strings.Contains(ledger[0].Result, "dropped from this display") {
 		t.Fatalf("expected a marker naming the dropped entries, got %+v", ledger[0])
 	}
 	if !strings.Contains(ledger[len(ledger)-1].Input, `{"page":`+strconv.Itoa(observationCount-1)) {
@@ -431,5 +431,25 @@ func TestTheJudgeSeesBothEndsOfATruncatedResult(t *testing.T) {
 	}
 	if !strings.Contains(ledger[0].Result, "registered_at") {
 		t.Fatalf("the echoed call fills the head of every result, so a head-only cut shows the judge no data at all and it certifies from what it cannot see: %q", ledger[0].Result)
+	}
+}
+
+func TestDroppedOperationsAreNotEvidence(t *testing.T) {
+	ledger := []completionLedgerEntry{}
+	for index := 0; index < 40; index++ {
+		ledger = append(ledger, completionLedgerEntry{Tool: "terminal_run", Input: strings.Repeat("a", 900), Result: strings.Repeat("b", 900)})
+	}
+
+	bounded := newestLedgerEntriesWithinBudget(ledger, 24000)
+
+	marker := bounded[0]
+	if marker.Tool != "earlier_operations" {
+		t.Fatalf("expected the dropped-prefix marker first, got %+v", marker)
+	}
+	if !strings.Contains(marker.Result, "unknown in both directions") {
+		t.Fatalf("a judge told only that operations were recorded certifies them as done, which is how a run that never sent the money was passed: %q", marker.Result)
+	}
+	if !strings.Contains(marker.Result, "terminal_run x") {
+		t.Fatalf("the tool tally is the one deterministic fact the dropped prefix can still state: %q", marker.Result)
 	}
 }

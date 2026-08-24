@@ -207,7 +207,7 @@ func completionJudgeInstruction() string {
 		"When the instruction states an explicit deadline, date, time, quantity, title, or recipient, that value must appear in at least one successful recorded operation input; if a stated value appears nowhere and no relevant entry is display-truncated, mark unsatisfied and name exactly that value in missingWork.",
 		"When the instruction selects its target by a condition on an attribute — who has no account, which ones are over a count, what was sent this month — a successful recorded operation must show that attribute being read for the candidates. Acting on the unfiltered set is unfinished work: mark unsatisfied and name the condition that was never evaluated. A condition the instruction does not state is not a requirement, and an attribute already visible in a recorded result needs no separate lookup.",
 		"When the instruction supplies worked examples — sample inputs with their expected outputs — every one of them must appear in a successful recorded operation, not just the first. Checking one example and generalising from it is unfinished work: mark unsatisfied and name the examples that were never run.",
-		"A ledger entry carrying a display-truncated marker was cut for this display only; the full content was recorded and executed. Content that was cut is unknown in both directions: never cite display truncation as missing work, and never treat it as confirming that something was checked, matched, or absent. Judge only from the parts that are visible.",
+		"A ledger entry carrying a display-truncated marker was cut for this display only, and earlier operations may be dropped from the top of the display the same way; everything cut or dropped was still recorded and executed. Such content is unknown in both directions: never cite it as missing work, and never treat it as confirming that something was checked, matched, sent, or absent. Judge only from the parts that are visible.",
 		"Resolve relative dates such as today, tomorrow, 오늘, and 내일 only from the runtime temporal context below. Never guess the current date from ledger values.",
 		"Judge state changes by the recorded operation results. Items that merely appear inside another result's diagnostic fields, such as candidate lists in a search result, are not additional requirements unless the instruction itself names them.",
 		"Do not invent requirements the instruction does not state. Wording, formatting, phrasing, and which list or table a record appears in are not failures. If the right operations ran and every explicitly stated value appears in some recorded input, mark satisfied.",
@@ -302,6 +302,22 @@ func completionJudgeLedger(toolSet *toolcontract.ToolSet, observations []turnObs
 	return newestLedgerEntriesWithinBudget(ledger, completionJudgeLedgerByteBudget)
 }
 
+func toolTally(entries []completionLedgerEntry) string {
+	counts := map[string]int{}
+	order := []string{}
+	for _, entry := range entries {
+		if counts[entry.Tool] == 0 {
+			order = append(order, entry.Tool)
+		}
+		counts[entry.Tool]++
+	}
+	parts := []string{}
+	for _, toolName := range order {
+		parts = append(parts, toolName+" x"+strconv.Itoa(counts[toolName]))
+	}
+	return strings.Join(parts, ", ")
+}
+
 func newestLedgerEntriesWithinBudget(ledger []completionLedgerEntry, byteBudget int) []completionLedgerEntry {
 	usedBytes := 0
 	keptFromIndex := len(ledger)
@@ -320,7 +336,7 @@ func newestLedgerEntriesWithinBudget(ledger []completionLedgerEntry, byteBudget 
 	kept := ledger[keptFromIndex:]
 	marker := completionLedgerEntry{
 		Tool:   "earlier_operations",
-		Result: "…" + strconv.Itoa(keptFromIndex) + " earlier operations were recorded but are not shown here.",
+		Result: "…" + strconv.Itoa(keptFromIndex) + " earlier operations (" + toolTally(ledger[:keptFromIndex]) + ") were dropped from this display. What they did is unknown in both directions: do not treat them as having satisfied anything, and do not treat something as never done merely because it is not visible here.",
 	}
 	return append([]completionLedgerEntry{marker}, kept...)
 }
