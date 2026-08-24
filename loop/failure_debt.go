@@ -27,6 +27,7 @@ type FailureDebt struct {
 
 type RecoveryPacket struct {
 	WhatFailed          string                            `json:"whatFailed"`
+	InputThatFailed     string                            `json:"inputThatFailed,omitempty"`
 	WhyLikely           string                            `json:"whyLikely,omitempty"`
 	MustDoNext          []string                          `json:"mustDoNext,omitempty"`
 	AllowedTools        []string                          `json:"allowedTools,omitempty"`
