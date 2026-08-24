@@ -894,3 +894,33 @@ own, so it wants a design decision rather than another patch.
 
 pi still reports only its wall clock, so the middle columns of every row above
 are bluecollar's alone.
+
+
+## The model was never allowed to think
+
+Every row above 13% in this table was taken after one change. With
+`tool_choice` forced to `required`, deepseek returns two bytes of content
+beside every action call: the harness demanded an act on every sample and
+got acts unpreceded by thought, forty-five to a hundred novel commands
+where a passing run needs twenty-three. pi's transcript on the same model
+carries a sentence of intent before every batch of calls.
+
+The transport now allows what pi allows. The first sample asks with
+`tool_choice: auto`; a text-only response is the model thinking, and the
+runtime appends it as the model's own assistant turn and asks again with
+`required`, inside the same step. What lands is still a typed action, and
+the budgets, gates and judge are untouched.
+
+| row | resolved |
+|---|---|
+| seven rows before the change | 20/157 |
+| the change, first row | 9/24 |
+| the change, replication | 8/24 |
+| pi, same model and tasks | 13/24 |
+
+Ten repairs preceded this — escalation that could not fire, a judge
+certifying from invisible rows, a budget shrunk by its own fast failures
+— and each fixed something real that the ledgers verify, and none moved
+this number. The lesson the row order teaches: the mechanism fixes were
+necessary for the runs to be judged honestly, and the pass rate was
+waiting on the one thing the format forbade.
