@@ -1098,11 +1098,41 @@ func nativeAgentActionTool(variant json.RawMessage) (model.ChatCompletionTool, e
 	if len(parameters) == 0 {
 		return model.ChatCompletionTool{}, errors.New("native agent action parameters are empty")
 	}
+	parameters, errorValue = parametersWithReasoningSlot(parameters)
+	if errorValue != nil {
+		return model.ChatCompletionTool{}, errorValue
+	}
 	var description string
 	_ = json.Unmarshal(document["description"], &description)
 	return model.ChatCompletionTool{Type: "function", Function: model.ChatCompletionFunction{
 		Name: toolName, Description: description, Parameters: parameters,
 	}}, nil
+}
+
+const reasoningSlotName = "reasoning"
+
+func parametersWithReasoningSlot(parameters json.RawMessage) (json.RawMessage, error) {
+	var document map[string]json.RawMessage
+	if errorValue := json.Unmarshal(parameters, &document); errorValue != nil {
+		return nil, errorValue
+	}
+	var properties map[string]json.RawMessage
+	if json.Unmarshal(document["properties"], &properties) != nil || properties == nil {
+		properties = map[string]json.RawMessage{}
+	}
+	properties[reasoningSlotName], _ = json.Marshal(map[string]string{
+		"type":        "string",
+		"description": "Think here before acting: what the last results showed and why this call is next. Carried into your next step. One or two sentences.",
+	})
+	propertiesDocument, errorValue := json.Marshal(properties)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	document["properties"] = propertiesDocument
+	var requiredFields []string
+	_ = json.Unmarshal(document["required"], &requiredFields)
+	document["required"], _ = json.Marshal(append(requiredFields, reasoningSlotName))
+	return json.Marshal(document)
 }
 
 func singleSchemaEnumValue(document json.RawMessage) (string, error) {
@@ -1153,7 +1183,7 @@ func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools
 		return turnActionDocument{}, errors.New("native agent action chat expected at least one tool call")
 	}
 	firstAction, errorValue := nativeAgentActionFromToolCall(response.Message.ToolCalls[0], tools)
-	firstAction.AssistantText = strings.TrimSpace(response.Message.Content)
+	firstAction.AssistantText = firstNonEmptyString(firstAction.AssistantText, strings.TrimSpace(response.Message.Content))
 	if errorValue != nil || firstAction.Action != "continue" {
 		return firstAction, errorValue
 	}
@@ -1200,15 +1230,26 @@ func nativeAgentActionFromToolCall(toolCall model.ChatCompletionToolCall, tools 
 	if json.Unmarshal(input, &inputDocument) != nil || inputDocument == nil {
 		return turnActionDocument{}, unreadableModelActionError{reason: fmt.Sprintf("native agent action tool %q arguments must be an object, and this call sent %s", toolCall.Function.Name, truncateForLedger(string(input), 200))}
 	}
+	reasoning := ""
+	if rawReasoning, hasReasoning := inputDocument[reasoningSlotName]; hasReasoning {
+		_ = json.Unmarshal(rawReasoning, &reasoning)
+		delete(inputDocument, reasoningSlotName)
+	}
+	strippedInput, errorValue := json.Marshal(inputDocument)
+	if errorValue != nil {
+		return turnActionDocument{}, errorValue
+	}
 	if !isNativeTerminalAction(toolCall.Function.Name) {
-		return turnActionDocument{Action: "continue", ToolName: toolCall.Function.Name, ToolInput: input}, nil
+		return turnActionDocument{Action: "continue", ToolName: toolCall.Function.Name, ToolInput: strippedInput, AssistantText: strings.TrimSpace(reasoning)}, nil
 	}
 	inputDocument["action"], _ = json.Marshal(toolCall.Function.Name)
 	normalizedInput, errorValue := json.Marshal(inputDocument)
 	if errorValue != nil {
 		return turnActionDocument{}, errorValue
 	}
-	return ParseAgentActionResponse(model.StructuredResponse{Content: string(normalizedInput)})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: string(normalizedInput)})
+	action.AssistantText = strings.TrimSpace(reasoning)
+	return action, errorValue
 }
 
 func containsNativeAgentTool(tools []model.ChatCompletionTool, toolName string) bool {
