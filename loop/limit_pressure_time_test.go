@@ -857,3 +857,27 @@ func TestARunWhoseGrantIsSpentIsToldToWrapUp(t *testing.T) {
 		t.Fatalf("with nothing left to grant, the ceiling it holds is the one it runs out against: got %q", stage)
 	}
 }
+
+func TestTheStepBudgetLineQuotesTheBudgetTheRunCanReach(t *testing.T) {
+	runner := mediumLevelRunner()
+	state := agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}, ToolCallCount: 21}
+	highProfile := TaskLevelProfileForLevel(TaskLevelHigh)
+
+	line := runner.stepBudgetContext(state)
+
+	if !strings.Contains(line, strconv.Itoa(highProfile.MaxToolCallCount)) {
+		t.Fatalf("the runtime no longer treats this run as under pressure, and telling it five calls remain contradicts that: %s", line)
+	}
+}
+
+func TestTheStepBudgetLineQuotesTheHeldBudgetOnceTheGrantIsSpent(t *testing.T) {
+	runner := mediumLevelRunner()
+	state := agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}, GrantedTaskLevel: TaskLevelHigh, ToolCallCount: 21}
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+
+	line := runner.stepBudgetContext(state)
+
+	if !strings.Contains(line, strconv.Itoa(mediumProfile.MaxToolCallCount)) {
+		t.Fatalf("with nothing left to grant, the ceiling it holds is the one to quote: %s", line)
+	}
+}

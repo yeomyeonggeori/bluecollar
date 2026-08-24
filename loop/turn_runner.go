@@ -1151,12 +1151,13 @@ func unreadableActionObservation(observations []turnObservation, actionError err
 }
 
 func (agentTurnRunner *AgentTurnRunner) stepBudgetContext(state agentTaskState) string {
-	maxToolCallCount := maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations)
+	limits := agentTurnRunner.reachableLimits(state)
+	maxToolCallCount := limits.MaxToolCallCount
 	remainingToolCallCount := maxToolCallCount - state.ToolCallCount
 	if remainingToolCallCount < 0 {
 		remainingToolCallCount = 0
 	}
-	maxIterationCount := agentTurnRunner.options.MaxIterationCount
+	maxIterationCount := limits.MaxIterationCount
 	remainingIterationCount := maxIterationCount - state.IterationCount
 	if remainingIterationCount < 0 {
 		remainingIterationCount = 0
