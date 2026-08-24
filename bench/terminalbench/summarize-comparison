@@ -85,6 +85,17 @@ def median_agent_second(verdicts):
     return f"{statistics.median(spans):,.1f}s"
 
 
+# A harness whose endpoint would not name the window runs against a default an order of magnitude
+# smaller, and the row it produces is not comparable to one that had the real number.
+def context_window_column(metrics):
+    declared = {entry.get("contextWindowTokens") for entry in metrics if entry.get("windowWasDeclared")}
+    if not declared:
+        return "defaulted" if metrics else "not reported"
+    if len(declared) > 1:
+        return "mixed " + ",".join(str(tokens) for tokens in sorted(declared))
+    return str(declared.pop())
+
+
 def harness_row(harness_name, harness_root):
     run_directory = latest_run_directory(harness_root)
     if run_directory is None:
@@ -101,6 +112,7 @@ def harness_row(harness_name, harness_root):
         "tasks": len(task_identifiers),
         "resolved": resolved_with_interval(resolved, len(verdicts)),
         "reachedEnd": f"{len(reached_end)}/{len(measured_end)}" if measured_end else "not reported",
+        "contextWindow": context_window_column(metrics),
         "turns": formatted(median_of(metrics, "turns")),
         "languageModelCalls": formatted(median_of(metrics, "languageModelCalls")),
         "promptTokensPerTurn": formatted(median_of(metrics, "promptTokensPerTurn")),

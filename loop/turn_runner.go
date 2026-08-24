@@ -362,6 +362,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		}))
 	}
 	agentTurnRunner.appendTaskSourceEvent(taskRun.TaskRunID, request.SourceReference)
+	agentTurnRunner.appendConversationBudgetEvent(taskRun.TaskRunID, agentTurnRunner.options.ContextWindowTokens)
 	observeRecord := agentTurnRunner.llmCallObserverForTaskRun(taskRun.TaskRunID)
 	agentTurnRunner.languageModel = observeLanguageModel(agentTurnRunner.languageModel, observeRecord)
 	if agentTurnRunner.recoveryLanguageModel == nil {
@@ -837,6 +838,17 @@ func (agentTurnRunner *AgentTurnRunner) taskRunForRequest(request AgentTurnReque
 		ReplyTargetID:  request.OriginReplyTargetID,
 		IsThread:       request.OriginIsThread,
 	}, request.Prompt)
+}
+
+// The window comes from the endpoint, and one that will not name it leaves every fitting decision
+// derived from a default an order of magnitude smaller.
+func (agentTurnRunner *AgentTurnRunner) appendConversationBudgetEvent(taskRunID string, contextWindowTokens int) {
+	agentTurnRunner.appendEvent(taskRunID, "agent.conversation_budget", marshalEventBody(map[string]any{
+		"contextWindowTokens":        contextWindowTokens,
+		"windowWasDeclared":          contextWindowTokens > 0,
+		"compactionTriggerTokens":    compactionTriggerTokenThreshold(contextWindowTokens),
+		"observationShareCharacters": compactionTriggerTokenThreshold(contextWindowTokens) * charactersPerToken / maxProgressObservations,
+	}))
 }
 
 func (agentTurnRunner *AgentTurnRunner) appendTaskSourceEvent(taskRunID string, sourceReference string) {

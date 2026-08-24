@@ -136,3 +136,30 @@ func TestAnUnfinishedRunIsNotReportedAsHavingReachedTheEnd(t *testing.T) {
 		t.Fatalf("a paused run has not finished, got %+v", metrics)
 	}
 }
+
+func TestARowSaysWhichWindowItWasFittedInto(t *testing.T) {
+	ledger := []taskstate.TaskEvent{
+		taskEventAt(0, "task.created", "count the likes"),
+		taskEventAt(1, "agent.conversation_budget", `{"contextWindowTokens":1048576,"windowWasDeclared":true,"compactionTriggerTokens":629145}`),
+		taskEventAt(2, "agent.action", `{"action":"finish"}`),
+	}
+
+	metrics := MeasureTaskRun("run-1", ledger)
+
+	if metrics.ContextWindowTokens != 1048576 || !metrics.WindowWasDeclared {
+		t.Fatalf("two harnesses fitted into windows an order of magnitude apart produce rows that are not comparable, and nothing said so: %+v", metrics)
+	}
+}
+
+func TestARunGivenNoWindowSaysItWasNotDeclared(t *testing.T) {
+	ledger := []taskstate.TaskEvent{
+		taskEventAt(0, "task.created", "count the likes"),
+		taskEventAt(1, "agent.conversation_budget", `{"contextWindowTokens":0,"windowWasDeclared":false,"compactionTriggerTokens":96000}`),
+	}
+
+	metrics := MeasureTaskRun("run-2", ledger)
+
+	if metrics.WindowWasDeclared {
+		t.Fatalf("an endpoint that would not name the window is the case worth seeing, not the one to hide: %+v", metrics)
+	}
+}
