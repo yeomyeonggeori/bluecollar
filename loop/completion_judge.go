@@ -31,6 +31,7 @@ type completionLedgerEntry struct {
 	Tool   string `json:"tool"`
 	Input  string `json:"input"`
 	Result string `json:"result"`
+	Failed bool   `json:"failed,omitempty"`
 }
 
 func outcomeContractHasSideEffectEvidence(toolSet *toolcontract.ToolSet, contract OutcomeContract) bool {
@@ -167,7 +168,7 @@ func completionJudgeMessages(request AgentTurnRequest, observations []turnObserv
 		messages = append(messages, model.Message{Role: "system", Content: planContext})
 	}
 	messages = append(messages, model.Message{Role: "system", Content: completionJudgeAttachmentDescription(attachments)})
-	messages = append(messages, model.Message{Role: "user", Content: "Recorded successful operations this turn, reads and state changes alike:\n" + completionJudgeLedgerDocument(request.ToolSet, observations, citedObservationIDs(actionDocument))})
+	messages = append(messages, model.Message{Role: "user", Content: "Recorded operations this turn, reads and state changes alike. An entry with failed=true did not do what it attempted:\n" + completionJudgeLedgerDocument(request.ToolSet, observations, citedObservationIDs(actionDocument))})
 	return messages
 }
 
@@ -199,7 +200,7 @@ func deliveredCompletionAttachments(observations []turnObservation, actionDocume
 
 func completionJudgeInstruction() string {
 	return strings.Join([]string{
-		"Judge whether the recorded successful operations actually accomplish the user's original instruction.",
+		"Judge whether the recorded operations actually accomplish the user's original instruction. An operation marked failed=true attempted something and did not do it, so it is not evidence the thing was done.",
 		"Judge only from the recorded ledger facts below. The executor's own completion claims are not evidence.",
 		"Accepting this completion delivers the finish reply to the user as the task's answer. Content the finish reply itself carries, such as links, results, and answers, is thereby delivered; never require a separate send or delivery operation for it. The reply's claims about operations it performed remain non-evidence and must match the ledger.",
 		"Mark unsatisfied when the recorded operations do not plausibly accomplish the instruction: wrong target, wrong values, or a missing step.",
@@ -288,13 +289,14 @@ func completionJudgeResultLimit(observation turnObservation, citedObservationIDs
 func completionJudgeLedger(toolSet *toolcontract.ToolSet, observations []turnObservation, citedObservationIDs map[string]bool) []completionLedgerEntry {
 	ledger := []completionLedgerEntry{}
 	for _, observation := range observations {
-		if observation.Action != "continue" || observation.Failed() || strings.TrimSpace(observation.Tool) == "" {
+		if observation.Action != "continue" || strings.TrimSpace(observation.Tool) == "" {
 			continue
 		}
 		ledger = append(ledger, completionLedgerEntry{
 			Tool:   strings.TrimSpace(observation.Tool),
 			Input:  truncateForLedger(string(observation.ToolInput), completionJudgeInputMaxLength),
 			Result: truncateForLedger(observation.ContentText(), completionJudgeResultLimit(observation, citedObservationIDs)),
+			Failed: observation.Failed(),
 		})
 	}
 	return newestLedgerEntriesWithinBudget(ledger, completionJudgeLedgerByteBudget)
@@ -318,7 +320,7 @@ func newestLedgerEntriesWithinBudget(ledger []completionLedgerEntry, byteBudget 
 	kept := ledger[keptFromIndex:]
 	marker := completionLedgerEntry{
 		Tool:   "earlier_operations",
-		Result: "…" + strconv.Itoa(keptFromIndex) + " earlier successful operations were recorded and executed but are not shown here.",
+		Result: "…" + strconv.Itoa(keptFromIndex) + " earlier operations were recorded but are not shown here.",
 	}
 	return append([]completionLedgerEntry{marker}, kept...)
 }
