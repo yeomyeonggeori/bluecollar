@@ -296,6 +296,63 @@ What moved underneath is measured rather than inferred:
 The agent had been reading seventeen help documents fifty-eight times. It now
 reads about nine of them about once each.
 
+## Both columns, three attempts each, nobody favoured
+
+`google/gemini-3.7-flash`, eight tasks, three attempts per harness per task, one
+sitting. This is the row the earlier ones were trying to be.
+
+| task | bluecollar | pi |
+|---|---|---|
+| 0d8a4ee_1 | 1/3 | 2/2 |
+| 23cf851_1 | 0/3 | 3/3 |
+| 37a8675_1 | 3/3 | 2/2 |
+| 383cbac_1 | 2/2 | 3/3 |
+| 396c5a2_1 | 3/3 | 3/3 |
+| 3ab5b8b_1 | 1/3 | 2/2 |
+| 4ec8de5_1 | 2/3 | 3/3 |
+| 4fab96f_1 | 2/3 | 2/3 |
+| | 14/23 | 20/21 |
+
+The gap is reproducibility. bluecollar solves seven of the eight tasks at least
+once and two of them every time; pi solves six of eight every time. A harness
+that can do the work and then cannot do it again on the same input is not short
+of capability.
+
+On `stealth/ox-alpha` the same eight come out roughly even. The gap opens as the
+model weakens, which is what pointed at the cause.
+
+## Nothing was ever recorded as failing
+
+`terminal_run` returned a success for every command that ran. A non-zero exit
+was a success with the exit code inside the payload, so `observation.Failed()`
+was false for
+
+```
+cli spotify ...  →  "Error │ No such command"
+python3 -c ...   →  ModuleNotFoundError: No module named 'apis'
+```
+
+and the failure debt, the recovery guidance and the alternate-route budget that
+hang off it never ran. `failedToolCalls` reads 0 in every metrics file this
+benchmark produced before that was fixed, which reads as "nothing was in the
+agent's way" and means "nothing in the agent's way is visible".
+
+Noticing a failure was therefore the model's job alone, done by reading text.
+That is the model-strength dependence above, in one line. On the run this came
+from, the agent hit two missing-module errors, abandoned the CLI it was given
+for the backing HTTP server, and finished without running the task's completion
+step, with the runtime registering nothing.
+
+The first six runs after the fix:
+
+| | before | after |
+|---|---|---|
+| failedToolCalls | 0 | 4, 4, 3, 2, 0, 1 |
+| recoveryAttempts | 0 | 4, 5, 4, 2, 0, 1 |
+
+`23cf851_1` went from 0 of 3 to 1 of 3. The recovery path is running for the
+first time, so how good it is becomes a question that can now be asked.
+
 ## What each one puts in front of the model
 
 Terminal-Bench sees a verdict and a clock. It cannot see what either harness
