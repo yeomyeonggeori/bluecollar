@@ -288,7 +288,11 @@ func (agentTurnRunner *AgentTurnRunner) refreshElapsedBudget(taskLevel TaskLevel
 	if agentTurnRunner.iterationCostObserver.CostOfModelInUse().CostPerIteration <= 0 {
 		return
 	}
+	budgetBeforeRefresh := agentTurnRunner.options.MaxElapsedSecond
 	agentTurnRunner.setElapsedBudgetFromProfile(TaskLevelProfileForLevel(taskLevel))
+	if budgetBeforeRefresh > 0 && agentTurnRunner.options.MaxElapsedSecond < budgetBeforeRefresh {
+		agentTurnRunner.options.MaxElapsedSecond = budgetBeforeRefresh
+	}
 }
 
 func normalizeTurnOptions(options TurnOptions) TurnOptions {
@@ -434,11 +438,15 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		return result, isBlocked
 	}
 	iterationStartedAt := time.Now()
+	iterationSpentModelCall := false
 	for iteration := 1; ; iteration++ {
 		if iteration > 1 {
-			agentTurnRunner.recordIterationCost(iterationStartedAt)
-			agentTurnRunner.refreshElapsedBudget(state.budgetTaskLevel())
+			if iterationSpentModelCall {
+				agentTurnRunner.recordIterationCost(iterationStartedAt)
+				agentTurnRunner.refreshElapsedBudget(state.budgetTaskLevel())
+			}
 			iterationStartedAt = time.Now()
+			iterationSpentModelCall = false
 		}
 		if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
 			return cancelledResult, nil
@@ -501,6 +509,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		}))
 		allowQualityCriteria := len(state.QualityCriteria) == 0 && outcomeContractNeedsQualityCriteria(iterationRequest.ToolSet, iterationRequest.OutcomeContract)
 		actionDocument, isBatched := takeBatchedAction(&state)
+		iterationSpentModelCall = !isBatched
 		var actionError error
 		if !isBatched {
 			actionDocument, actionError = agentTurnRunner.nextAction(workContext, taskRun.TaskRunID, iterationRequest, toolUseRequirements, state.Observations, state.ExecutionState, state.ContextSummary, allowQualityCriteria)
