@@ -71,13 +71,13 @@ func evaluateRecoveryAllowance(observations []turnObservation, budget RecoveryBu
 	if signature := repeatedFailureSignature(observations, failureDebt); signature != "" {
 		return recoveryAllowance{CanRecover: false, Reason: "structural failure keeps recurring, not retrying: " + signature}
 	}
-	if recoveryBudgetAllowsStep(observations, budget, recoveryStepCorrectedRetry) {
+	if recoveryBudgetAllowsStep(observations, budget, recoveryStepCorrectedRetry, "") {
 		return recoveryAllowance{CanRecover: true, Reason: "corrected retry budget remains for " + failureDebt.LatestFailure.Tool}
 	}
-	if recoveryBudgetAllowsStep(observations, budget, recoveryStepAlternateRoute) {
+	if recoveryBudgetAllowsStep(observations, budget, recoveryStepAlternateRoute, "") {
 		return recoveryAllowance{CanRecover: true, Reason: "alternate route budget remains"}
 	}
-	if recoveryBudgetAllowsStep(observations, budget, recoveryStepAdjacentTool) {
+	if recoveryBudgetAllowsStep(observations, budget, recoveryStepAdjacentTool, "") {
 		return recoveryAllowance{CanRecover: true, Reason: "adjacent tool budget remains"}
 	}
 	return recoveryAllowance{CanRecover: false, Reason: "tool recovery budget exhausted"}

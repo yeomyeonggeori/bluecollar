@@ -109,7 +109,7 @@ func TestBudgetSpentRecoveringAnEarlierFailureDoesNotRefuseTheNextOne(t *testing
 		},
 	}
 
-	if !recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepAlternateRoute) {
+	if !recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepAlternateRoute, "") {
 		t.Fatal("a budget spent recovering an earlier failure must not refuse the first recovery of the next one")
 	}
 }
