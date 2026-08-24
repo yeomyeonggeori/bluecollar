@@ -374,3 +374,24 @@ func TestATaskWhoseOnlyResultIsTheReplyTellsTheJudgeNothing(t *testing.T) {
 		t.Fatalf("with nothing else expected there is no result list worth sending, got %s", description)
 	}
 }
+
+func TestATurnThatDidNothingStillGetsJudged(t *testing.T) {
+	contract := OutcomeContract{ExpectedResults: []ExpectedResult{
+		{ID: "send_reminders", Type: ExpectedResultTypeMessage, Description: "reminders sent", Required: true},
+		{ID: finalMessageExpectedResultID, Type: ExpectedResultTypeMessage, Description: "a final reply", Required: true},
+	}}
+
+	if !contractAsksForSomethingToJudge(contract) {
+		t.Fatal("asked to do something and having done nothing is the turn most worth judging, and no side effect is what it leaves behind")
+	}
+}
+
+func TestATaskAskingOnlyForAReplyHasNothingToJudge(t *testing.T) {
+	contract := OutcomeContract{ExpectedResults: []ExpectedResult{
+		{ID: finalMessageExpectedResultID, Type: ExpectedResultTypeMessage, Description: "a final reply", Required: true},
+	}}
+
+	if contractAsksForSomethingToJudge(contract) {
+		t.Fatal("delivering the reply is asked of every task and is not something to grade the work against")
+	}
+}
