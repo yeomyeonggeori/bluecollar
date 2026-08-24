@@ -36,7 +36,7 @@ func TestTheWholeOutputIsSavedWhereTheAgentCanReadItBack(t *testing.T) {
 	services.runner.UseToolResultSpillStore(store)
 	content := oversizedToolResult(services.runner)
 
-	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "terminal_run", "tool-1",
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "terminal_run", "tool-1",
 		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
 		true, "/workspace", time.Time{}, 12)
 
@@ -59,7 +59,7 @@ func TestASaveThatFailsLeavesTheCallSuccessful(t *testing.T) {
 	services.runner.UseToolResultSpillStore(&recordingSpillStore{failureText: "no space left on device"})
 	content := oversizedToolResult(services.runner)
 
-	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "terminal_run", "tool-1",
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "terminal_run", "tool-1",
 		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
 		true, "/workspace", time.Time{}, 12)
 
@@ -75,7 +75,7 @@ func TestAHostWithNoSpillStoreKeepsTheNarrowerAskAdvice(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{textResponses: []string{"the build failed"}}, TurnOptions{})
 	content := oversizedToolResult(services.runner)
 
-	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "terminal_run", "tool-1",
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "terminal_run", "tool-1",
 		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
 		true, "/workspace", time.Time{}, 12)
 
@@ -96,4 +96,17 @@ func TestAFailedSaveIsRecordedSoTheGapIsExplainable(t *testing.T) {
 		}
 	}
 	t.Fatal("an output that silently went missing is not diagnosable later")
+}
+
+func TestTheSavedObservationKeepsTheReasoningThatChoseIt(t *testing.T) {
+	services := newTurnRunnerTestServices(nil, TurnOptions{})
+	reasoning := "The contacts list has no venmo field, so I cross-reference the venmo accounts instead."
+
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", reasoning, "terminal_run", "tool-1",
+		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "ok"}},
+		true, "/workspace", time.Time{}, 12)
+
+	if observation.AssistantText != reasoning {
+		t.Fatalf("the next turn rebuilds its observations from the ledger, so reasoning set after the save is gone by the time the transcript is built: %q", observation.AssistantText)
+	}
 }

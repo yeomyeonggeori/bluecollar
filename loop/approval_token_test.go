@@ -128,7 +128,7 @@ func TestACrashedToolLeavesItsStackInTheLedgerAndNotInTheTurn(t *testing.T) {
 	})
 
 	observation := services.runner.invokeTool(context.Background(), toolSet, taskRun.TaskRunID, "obs-1", "crashing_tool",
-		json.RawMessage(`{}`), "", time.Time{}, "ko", "")
+		json.RawMessage(`{}`), "", time.Time{}, "ko", "", "")
 
 	if !observation.Failed() {
 		t.Fatalf("a crashed tool is a failed call: %+v", observation)

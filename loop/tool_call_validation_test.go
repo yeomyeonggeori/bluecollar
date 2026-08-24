@@ -881,7 +881,7 @@ func TestALongEditResultStillSaysWhichFileItChanged(t *testing.T) {
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "fix the test")
 	document, _ := json.Marshal(map[string]any{"path": "src/main.go", "diff": strings.Repeat("x", 40000)})
 
-	observation := services.runner.saveToolObservation(context.Background(), taskRun.TaskRunID, "obs-1",
+	observation := services.runner.saveToolObservation(context.Background(), taskRun.TaskRunID, "obs-1", "",
 		toolcontract.FileEditToolName, "", json.RawMessage(`{}`), toolcontract.FileEditToolName, "",
 		toolcontract.ToolSuccessData(string(document), json.RawMessage(document)), false, "", time.Time{}, 0)
 
