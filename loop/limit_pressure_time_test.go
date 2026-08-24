@@ -734,12 +734,16 @@ func TestALowLevelGuessGetsOneGrantOfTheNextLevel(t *testing.T) {
 		MaxIterationCount: mediumProfile.MaxIterationCount,
 	})
 	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}}
+	beforeElapsedSecond := services.runner.options.MaxElapsedSecond
 
 	if !services.runner.extendBudgetOneLevelOnce("task-1", state) {
 		t.Fatal("a task that ran out of budget with work left is reporting a guess, not an answer")
 	}
 	if services.runner.options.MaxToolCallCount != highProfile.MaxToolCallCount || services.runner.options.MaxIterationCount != highProfile.MaxIterationCount {
 		t.Fatalf("both ceilings describe one guess and have to move together, got %d calls and %d steps", services.runner.options.MaxToolCallCount, services.runner.options.MaxIterationCount)
+	}
+	if services.runner.options.MaxElapsedSecond <= beforeElapsedSecond {
+		t.Fatalf("a level is three numbers, and raising two of them hands the turn work it has no time to do: %d seconds then %d", beforeElapsedSecond, services.runner.options.MaxElapsedSecond)
 	}
 	if services.runner.extendBudgetOneLevelOnce("task-1", state) {
 		t.Fatal("a ceiling any agent can raise twice is not a ceiling")
