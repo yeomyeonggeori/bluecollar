@@ -139,10 +139,7 @@ func observationsShowingTheirImages(observations []turnObservation) []turnObserv
 }
 
 func toolResultImageContextMessage(observations []turnObservation) model.Message {
-	message := model.Message{
-		Role:    "user",
-		Content: "Tool result images for the next answer. Inspect these image parts directly; do not infer visual details from filenames or progress text.",
-	}
+	message := model.Message{Role: "user"}
 	for _, observation := range observationsShowingTheirImages(observations) {
 		for index, attachment := range observation.Attachments {
 			if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(attachment.ContentType)), "image/") || strings.TrimSpace(attachment.ContentBase64) == "" {
@@ -156,6 +153,10 @@ func toolResultImageContextMessage(observations []turnObservation) model.Message
 			})
 		}
 	}
+	if len(message.Parts) == 0 {
+		return model.Message{}
+	}
+	message.Content = "Tool result images for the next answer. Inspect these image parts directly; do not infer visual details from filenames or progress text."
 	return message
 }
 
