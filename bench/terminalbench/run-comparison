@@ -58,7 +58,21 @@ bluecollarMeterPort=8317
 piMeterPort=8318
 codexMeterPort=8319
 
+# stopPromptMeters only reaches this shell's own jobs, so an invocation that is killed leaves its
+# meters holding the ports and the next run dies on bind before it starts a task.
+removeAbandonedPromptMeters() {
+  local holder port
+  for port in "$bluecollarMeterPort" "$piMeterPort" "$codexMeterPort"; do
+    holder="$(lsof -ti "tcp:$port" || true)"
+    if [ -n "$holder" ]; then
+      echo "port $port was still held by a previous run; releasing it" >&2
+      printf '%s\n' "$holder" | xargs kill
+    fi
+  done
+}
+
 startPromptMeters() {
+  removeAbandonedPromptMeters
   mkdir -p "$outputRoot"
   rm -f "$promptMeterLedger"
   PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" serve bluecollar "$bluecollarMeterPort" &
