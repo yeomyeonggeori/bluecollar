@@ -35,6 +35,7 @@ type TaskLevelLanguageModelResolver func(TaskLevel) model.LanguageModelProvider
 type turnActionDocument struct {
 	Action                string                        `json:"action"`
 	Message               string                        `json:"message"`
+	AssistantText         string                        `json:"assistantText,omitempty"`
 	ReplyParts            []AgentPart                   `json:"replyParts,omitempty"`
 	CompletionSummary     string                        `json:"completionSummary,omitempty"`
 	ToolName              string                        `json:"toolName"`
@@ -95,6 +96,7 @@ type turnObservation struct {
 	ToolInputKey         string                        `json:"toolInputKey,omitempty"`
 	AttemptFingerprint   string                        `json:"attemptFingerprint,omitempty"`
 	RecoveryAttemptKey   string                        `json:"recoveryAttemptKey,omitempty"`
+	AssistantText        string                        `json:"assistantText,omitempty"`
 	RecoveryStep         string                        `json:"recoveryStep,omitempty"`
 	ToolIsReadOnly       bool                          `json:"toolIsReadOnly,omitempty"`
 	RecoveryAttemptSpent bool                          `json:"recoveryAttemptSpent,omitempty"`
@@ -730,6 +732,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
 	observation := agentTurnRunner.invokeTool(effortContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message)
+	observation.AssistantText = actionDocument.AssistantText
 	observation = agentTurnRunner.resolveCalendarDuplicate(effortContext, taskRunID, observationID, request, actionDocument, observation)
 	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, state.Attachments); isCancelled {
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}

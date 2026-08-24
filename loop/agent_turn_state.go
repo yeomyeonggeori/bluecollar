@@ -1009,7 +1009,8 @@ func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMe
 		}
 		transcript = append(transcript,
 			model.ChatCompletionMessage{
-				Role: "assistant",
+				Role:    "assistant",
+				Content: observation.AssistantText,
 				ToolCalls: []model.ChatCompletionToolCall{{
 					ID:   observation.ObservationID,
 					Type: "function",
@@ -1152,6 +1153,7 @@ func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools
 		return turnActionDocument{}, errors.New("native agent action chat expected at least one tool call")
 	}
 	firstAction, errorValue := nativeAgentActionFromToolCall(response.Message.ToolCalls[0], tools)
+	firstAction.AssistantText = strings.TrimSpace(response.Message.Content)
 	if errorValue != nil || firstAction.Action != "continue" {
 		return firstAction, errorValue
 	}
