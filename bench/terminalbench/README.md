@@ -301,6 +301,18 @@ reads about nine of them about once each.
 `google/gemini-3.7-flash`, eight tasks, three attempts per harness per task, one
 sitting. This is the row the earlier ones were trying to be.
 
+**One column was handicapped and this row cannot settle anything.** bluecollar
+asks the endpoint for the model's context length before its first turn. The
+prompt-meter every row here was measured through implemented `do_POST` only, so
+that `GET /models` was answered `501`, `ContextWindowTokens` returned `0`, and
+the run fell back to a default 96,000-token conversation budget. The model
+reports `context_length: 1048576`. pi asks nothing and kept the real window.
+Compaction, pruning and per-result truncation all derive from that number, so
+bluecollar ran every row on one eleventh of the budget its opponent had. The
+meter answers the catalogue now, and a row records which window it was fitted
+into, printed as the summary's `context window` column: a row that reads
+`defaulted` is one of these.
+
 | task | bluecollar | pi |
 |---|---|---|
 | 0d8a4ee_1 | 1/3 | 2/2 |
