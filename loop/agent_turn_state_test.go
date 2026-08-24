@@ -1829,3 +1829,24 @@ func lastToolCallPair(t *testing.T, messages []model.ChatCompletionMessage) (mod
 	t.Fatal("expected an assistant tool call followed by its result")
 	return model.ChatCompletionMessage{}, model.ChatCompletionMessage{}
 }
+
+func refusalObservation(observationID string) turnObservation {
+	return turnObservation{ObservationID: observationID, Action: "evidence_missing", Tool: "terminal_run"}
+}
+
+func TestAnAgentToldThreeTimesItHasNotDoneTheTaskCanSaySoItCannot(t *testing.T) {
+	state := nativeAgentActionTestState()
+	state.Options.MaxIterationCount = 100
+	state.Options.MaxToolCallCount = 100
+	state.Observations = []turnObservation{refusalObservation("obs-001"), refusalObservation("obs-002")}
+
+	if shouldExposeFailAction(state) {
+		t.Fatal("two refusals is the gate telling the agent what is missing, and the exit there answers it before the agent has")
+	}
+
+	state.Observations = append(state.Observations, refusalObservation("obs-003"))
+
+	if !shouldExposeFailAction(state) {
+		t.Fatal("recovery being possible is not the same as the task being possible, and without this the exit is never on the menu")
+	}
+}
