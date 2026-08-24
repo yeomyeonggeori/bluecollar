@@ -468,7 +468,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			state.Observations = append(state.Observations, grantedBudget)
 			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.budget_update_sent", marshalEventBody(grantedBudget))
 		}
-		if warning := agentTurnRunner.nextLimitPressureWarning(iteration-1, state.ToolCallCount, agentTurnRunner.turnElapsed(request.EffortStartedAt), len(state.Observations)+1, limitPressureWarnings); warning != nil {
+		if warning := agentTurnRunner.nextLimitPressureWarning(state, iteration-1, state.ToolCallCount, agentTurnRunner.turnElapsed(request.EffortStartedAt), len(state.Observations)+1, limitPressureWarnings); warning != nil {
 			if warning.Observation != nil {
 				state.Observations = append(state.Observations, *warning.Observation)
 			}
@@ -1070,7 +1070,7 @@ func (agentTurnRunner *AgentTurnRunner) requestForStep(_ context.Context, reques
 		state.Observations,
 	)
 	elapsed := agentTurnRunner.turnElapsed(request.EffortStartedAt)
-	if agentTurnRunner.limitPressureLevel(state.IterationCount, state.ToolCallCount, elapsed) == limitPressureStageNarrowPalette {
+	if limitPressureStageFor(state.IterationCount, state.ToolCallCount, elapsed, agentTurnRunner.reachableLimits(state)) == limitPressureStageNarrowPalette {
 		filteredToolSet = filteredToolSet.WithAllowedToolNames(wrapUpDeliveryToolNames(plannedRequest))
 	}
 	iterationRequest := plannedRequest
@@ -1629,19 +1629,20 @@ type limitPressureWarning struct {
 	EventBody   map[string]any
 }
 
-func (agentTurnRunner *AgentTurnRunner) nextLimitPressureWarning(usedIterationCount int, usedToolCallCount int, elapsed time.Duration, observationIndex int, sentWarnings map[string]bool) *limitPressureWarning {
+func (agentTurnRunner *AgentTurnRunner) nextLimitPressureWarning(state agentTaskState, usedIterationCount int, usedToolCallCount int, elapsed time.Duration, observationIndex int, sentWarnings map[string]bool) *limitPressureWarning {
 	if sentWarnings[limitPressureStageNarrowPalette] {
 		return nil
 	}
 	if agentTurnRunner.options.MaxIterationCount < 10 && agentTurnRunner.options.MaxToolCallCount < 5 {
 		return nil
 	}
-	stage := agentTurnRunner.limitPressureLevel(usedIterationCount, usedToolCallCount, elapsed)
+	limits := agentTurnRunner.reachableLimits(state)
+	stage := limitPressureStageFor(usedIterationCount, usedToolCallCount, elapsed, limits)
 	if stage == "" || sentWarnings[stage] {
 		return nil
 	}
-	maxToolCallCount := maxToolCallCountWithRecovery(agentTurnRunner.options, nil)
-	maximumWorkDuration := agentTurnRunner.maximumWorkDuration()
+	maxToolCallCount := limits.MaxToolCallCount
+	maximumWorkDuration := limits.MaxWorkDuration
 	remainingCallEstimate := estimateRemainingToolCallCount(elapsed, maximumWorkDuration, usedToolCallCount)
 	warning := &limitPressureWarning{
 		Stage: stage,
@@ -1651,7 +1652,7 @@ func (agentTurnRunner *AgentTurnRunner) nextLimitPressureWarning(usedIterationCo
 			"taskLevel":             agentTurnRunner.options.TaskLevel,
 			"usedIterationCount":    usedIterationCount,
 			"usedToolCallCount":     usedToolCallCount,
-			"maxIterationCount":     agentTurnRunner.options.MaxIterationCount,
+			"maxIterationCount":     limits.MaxIterationCount,
 			"maxToolCallCount":      maxToolCallCount,
 			"elapsedSeconds":        int(elapsed.Seconds()),
 			"maxElapsedSeconds":     agentTurnRunner.options.MaxElapsedSecond,
@@ -1666,12 +1667,48 @@ func (agentTurnRunner *AgentTurnRunner) nextLimitPressureWarning(usedIterationCo
 	return warning
 }
 
-func (agentTurnRunner *AgentTurnRunner) limitPressureLevel(usedIterationCount int, usedToolCallCount int, elapsed time.Duration) string {
-	maxElapsed := agentTurnRunner.maximumWorkDuration()
-	if limitUsageReached(usedIterationCount, agentTurnRunner.options.MaxIterationCount, narrowPaletteThresholdPercent) || limitUsageReached(usedToolCallCount, agentTurnRunner.options.MaxToolCallCount, narrowPaletteThresholdPercent) || elapsedUsageReached(elapsed, maxElapsed, narrowPaletteThresholdPercent) {
+type reachableLimits struct {
+	MaxIterationCount int
+	MaxToolCallCount  int
+	MaxWorkDuration   time.Duration
+}
+
+// A run whose one-level grant is unspent stops at the granted level's ceilings, not the ones it
+// currently holds, and pressure measured against the smaller pair ends it before the grant fires.
+func (agentTurnRunner *AgentTurnRunner) reachableLimits(state agentTaskState) reachableLimits {
+	held := reachableLimits{
+		MaxIterationCount: agentTurnRunner.options.MaxIterationCount,
+		MaxToolCallCount:  maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations),
+		MaxWorkDuration:   agentTurnRunner.maximumWorkDuration(),
+	}
+	if state.didExtendBudgetOneLevel() || !budgetCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
+		return held
+	}
+	grantedLevel, hasNextLevel := nextTaskLevel(state.Request.TaskLevel)
+	if !hasNextLevel {
+		return held
+	}
+	grantedProfile := TaskLevelProfileForLevel(grantedLevel)
+	return reachableLimits{
+		MaxIterationCount: grantedProfile.MaxIterationCount,
+		MaxToolCallCount:  grantedProfile.MaxToolCallCount,
+		MaxWorkDuration:   agentTurnRunner.workDurationForProfile(grantedProfile),
+	}
+}
+
+func (agentTurnRunner *AgentTurnRunner) workDurationForProfile(taskLevelProfile TaskLevelProfile) time.Duration {
+	budgetSecond := int(elapsedBudgetForProfile(taskLevelProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	if deadlineSecond := agentTurnRunner.options.DeadlineSecond; deadlineSecond > 0 && budgetSecond > deadlineSecond {
+		budgetSecond = deadlineSecond
+	}
+	return workDurationWithinTotal(time.Duration(budgetSecond) * time.Second)
+}
+
+func limitPressureStageFor(usedIterationCount int, usedToolCallCount int, elapsed time.Duration, limits reachableLimits) string {
+	if limitUsageReached(usedIterationCount, limits.MaxIterationCount, narrowPaletteThresholdPercent) || limitUsageReached(usedToolCallCount, limits.MaxToolCallCount, narrowPaletteThresholdPercent) || elapsedUsageReached(elapsed, limits.MaxWorkDuration, narrowPaletteThresholdPercent) {
 		return limitPressureStageNarrowPalette
 	}
-	if limitUsageReached(usedIterationCount, agentTurnRunner.options.MaxIterationCount, wrapUpThresholdPercent) || limitUsageReached(usedToolCallCount, agentTurnRunner.options.MaxToolCallCount, wrapUpThresholdPercent) || elapsedUsageReached(elapsed, maxElapsed, wrapUpThresholdPercent) {
+	if limitUsageReached(usedIterationCount, limits.MaxIterationCount, wrapUpThresholdPercent) || limitUsageReached(usedToolCallCount, limits.MaxToolCallCount, wrapUpThresholdPercent) || elapsedUsageReached(elapsed, limits.MaxWorkDuration, wrapUpThresholdPercent) {
 		return limitPressureStageWrapUp
 	}
 	return ""

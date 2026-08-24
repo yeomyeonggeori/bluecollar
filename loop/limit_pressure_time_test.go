@@ -41,7 +41,7 @@ func TestLimitPressureLevelRisesWithElapsedWhileStepsAreLow(t *testing.T) {
 		{elapsed: time.Duration(float64(maxElapsed) * 0.95), want: limitPressureStageNarrowPalette},
 	}
 	for _, testCase := range cases {
-		level := runner.limitPressureLevel(1, 0, testCase.elapsed)
+		level := limitPressureStageFor(1, 0, testCase.elapsed, runner.reachableLimits(agentTaskState{}))
 		if level != testCase.want {
 			t.Fatalf("elapsed %s: expected level %q, got %q", testCase.elapsed, testCase.want, level)
 		}
@@ -50,10 +50,10 @@ func TestLimitPressureLevelRisesWithElapsedWhileStepsAreLow(t *testing.T) {
 
 func TestLimitPressureLevelUsesMaxOfStepAndTime(t *testing.T) {
 	runner := newTimePressureRunner()
-	if level := runner.limitPressureLevel(68, 28, 0); level != limitPressureStageNarrowPalette {
+	if level := limitPressureStageFor(68, 28, 0, runner.reachableLimits(agentTaskState{})); level != limitPressureStageNarrowPalette {
 		t.Fatalf("expected step pressure to still drive narrow_palette, got %q", level)
 	}
-	if level := runner.limitPressureLevel(1, 0, 38*time.Minute); level != limitPressureStageNarrowPalette {
+	if level := limitPressureStageFor(1, 0, 38*time.Minute, runner.reachableLimits(agentTaskState{})); level != limitPressureStageNarrowPalette {
 		t.Fatalf("expected elapsed pressure to drive narrow_palette, got %q", level)
 	}
 }
@@ -636,12 +636,12 @@ func TestLimitPressureWarningInjectsSingleWrapUpMessageAtEightyPercent(t *testin
 	}}
 	sentWarnings := map[string]bool{}
 
-	belowThreshold := runner.nextLimitPressureWarning(1, 5, 30*time.Minute, 1, sentWarnings)
+	belowThreshold := runner.nextLimitPressureWarning(agentTaskState{}, 1, 5, 30*time.Minute, 1, sentWarnings)
 	if belowThreshold != nil {
 		t.Fatalf("expected no warning below 80%% elapsed, got %+v", belowThreshold)
 	}
 
-	warning := runner.nextLimitPressureWarning(1, 10, 34*time.Minute, 1, sentWarnings)
+	warning := runner.nextLimitPressureWarning(agentTaskState{}, 1, 10, 34*time.Minute, 1, sentWarnings)
 	if warning == nil || warning.Stage != limitPressureStageWrapUp {
 		t.Fatalf("expected wrap_up warning at 80%% elapsed, got %+v", warning)
 	}
@@ -653,7 +653,7 @@ func TestLimitPressureWarningInjectsSingleWrapUpMessageAtEightyPercent(t *testin
 	}
 	sentWarnings[warning.Stage] = true
 
-	repeat := runner.nextLimitPressureWarning(1, 11, 35*time.Minute, 1, sentWarnings)
+	repeat := runner.nextLimitPressureWarning(agentTaskState{}, 1, 11, 35*time.Minute, 1, sentWarnings)
 	if repeat != nil {
 		t.Fatalf("expected the wrap_up warning to fire only once, got %+v", repeat)
 	}
@@ -667,7 +667,7 @@ func TestLimitPressureWarningNarrowsPaletteWithoutTextAtNinetyTwoPercent(t *test
 	}}
 	sentWarnings := map[string]bool{limitPressureStageWrapUp: true}
 
-	warning := runner.nextLimitPressureWarning(1, 12, 38*time.Minute, 1, sentWarnings)
+	warning := runner.nextLimitPressureWarning(agentTaskState{}, 1, 12, 38*time.Minute, 1, sentWarnings)
 	if warning == nil || warning.Stage != limitPressureStageNarrowPalette {
 		t.Fatalf("expected narrow_palette warning at 92%% elapsed, got %+v", warning)
 	}
@@ -817,5 +817,43 @@ func TestAGrantTellsTheAgentItsBudgetChanged(t *testing.T) {
 	}
 	if !strings.Contains(granted.Output.Content, "no longer applies") {
 		t.Fatalf("an earlier budget check told the agent to stop exploring and has to be retired by name, got %q", granted.Output.Content)
+	}
+}
+
+func mediumLevelRunner() *AgentTurnRunner {
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	return &AgentTurnRunner{
+		options: TurnOptions{
+			TaskLevel:         TaskLevelMedium,
+			MaxIterationCount: mediumProfile.MaxIterationCount,
+			MaxToolCallCount:  mediumProfile.MaxToolCallCount,
+			MaxElapsedSecond:  int((15 * time.Minute).Seconds()),
+		},
+	}
+}
+
+func TestARunWithAnUnspentLevelGrantIsNotToldToWrapUp(t *testing.T) {
+	runner := mediumLevelRunner()
+	state := agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}}
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	atTheWrapUpMark := (mediumProfile.MaxToolCallCount*wrapUpThresholdPercent + 99) / 100
+
+	stage := limitPressureStageFor(1, atTheWrapUpMark, 0, runner.reachableLimits(state))
+
+	if stage == limitPressureStageWrapUp {
+		t.Fatalf("the grant fires only when the count passes the ceiling, so telling the run to stop short of it means a task guessed too small never reaches the level it needed: %d of %d calls", atTheWrapUpMark, mediumProfile.MaxToolCallCount)
+	}
+}
+
+func TestARunWhoseGrantIsSpentIsToldToWrapUp(t *testing.T) {
+	runner := mediumLevelRunner()
+	state := agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium}, GrantedTaskLevel: TaskLevelHigh}
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	atTheWrapUpMark := (mediumProfile.MaxToolCallCount*wrapUpThresholdPercent + 99) / 100
+
+	stage := limitPressureStageFor(1, atTheWrapUpMark, 0, runner.reachableLimits(state))
+
+	if stage != limitPressureStageWrapUp {
+		t.Fatalf("with nothing left to grant, the ceiling it holds is the one it runs out against: got %q", stage)
 	}
 }
