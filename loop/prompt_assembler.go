@@ -209,6 +209,13 @@ func buildObservationContext(observations []turnObservation, toolResultsCarriedN
 	return "Relevant observation ledger so far. Use observationID/toolName/attachmentIndex when citing completionEvidence:\n" + body
 }
 
+func progressLedgerHeading(toolResultsCarriedNatively bool) string {
+	if toolResultsCarriedNatively {
+		return "Progress ledger. This indexes what has already happened by observationID; each result is on the call that produced it:\n"
+	}
+	return "Progress ledger. This is the compact source of truth for what has already happened; raw tool output is intentionally omitted:\n"
+}
+
 func withoutSummaries(observations []ProgressObservation) []ProgressObservation {
 	stripped := make([]ProgressObservation, 0, len(observations))
 	for _, observation := range observations {
@@ -231,5 +238,5 @@ func buildProgressContext(request AgentTurnRequest, observations []turnObservati
 	if len(body) > progressMessageLimit {
 		body = body[:progressMessageLimit] + "\n[trimmed]"
 	}
-	return "Progress ledger. This is the compact source of truth for what has already happened; raw tool output is intentionally omitted:\n" + body
+	return progressLedgerHeading(toolResultsCarriedNatively) + body
 }
