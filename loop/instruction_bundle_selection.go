@@ -441,7 +441,13 @@ func compactSkillIndexLine(skillInstruction SkillInstruction) string {
 }
 
 func buildSelectedSkillInstructionPrompt(skillInstructions []SkillInstruction) string {
-	if len(skillInstructions) == 0 {
+	skills := []string{}
+	for _, skillInstruction := range skillInstructions {
+		if strings.TrimSpace(skillInstruction.Prompt) != "" {
+			skills = append(skills, selectedSkillInstructionPrompt(skillInstruction))
+		}
+	}
+	if len(skills) == 0 {
 		return ""
 	}
 	parts := []string{
@@ -449,12 +455,7 @@ func buildSelectedSkillInstructionPrompt(skillInstructions []SkillInstruction) s
 		"These skills/tools are available if they fit the user's current goal. They are not mandatory. Do not change the requested output type to match a skill.",
 		"Multiple skills may be selected at once, but only use the ones this specific request actually needs. Mentioning a topic (e.g. email, calendar, browsing) is not the same as being asked to act on it — ignore skills whose subject matter is not the actual task.",
 	}
-	for _, skillInstruction := range skillInstructions {
-		if strings.TrimSpace(skillInstruction.Prompt) != "" {
-			parts = append(parts, selectedSkillInstructionPrompt(skillInstruction))
-		}
-	}
-	return strings.Join(parts, "\n\n")
+	return strings.Join(append(parts, skills...), "\n\n")
 }
 
 func selectedSkillInstructionPrompt(skillInstruction SkillInstruction) string {

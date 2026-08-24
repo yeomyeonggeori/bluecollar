@@ -2,6 +2,7 @@ package loop
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -104,5 +105,24 @@ func TestInstructionBundleWithToolOwningSkillsSelectsMissedOwner(t *testing.T) {
 	unchangedBundle := instructionBundleWithToolOwningSkills(instructionBundle, AgentRequest{}, []string{"web_search"})
 	if selectedSkillNames(unchangedBundle.SkillDecisions)["website"] {
 		t.Fatalf("expected no owner selection without a suggested tool match, got %+v", unchangedBundle.SkillDecisions)
+	}
+}
+
+func TestSkillsWithNothingToSayCarryNoGuidance(t *testing.T) {
+	prompt := buildSelectedSkillInstructionPrompt([]SkillInstruction{{Name: "presentation"}, {Name: "paperwork"}})
+
+	if prompt != "" {
+		t.Fatalf("three paragraphs about how to use skills, and no skills: %q", prompt)
+	}
+}
+
+func TestASkillWithSomethingToSayCarriesTheGuidance(t *testing.T) {
+	prompt := buildSelectedSkillInstructionPrompt([]SkillInstruction{{Name: "presentation"}, {Name: "paperwork", Prompt: "fill the form"}})
+
+	if !strings.Contains(prompt, "Available skill references:") || !strings.Contains(prompt, "fill the form") {
+		t.Fatalf("the skill that has something to say still brings its guidance: %q", prompt)
+	}
+	if strings.Contains(prompt, "Skill: presentation") {
+		t.Fatalf("a skill with an empty prompt has nothing to contribute: %q", prompt)
 	}
 }
