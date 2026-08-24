@@ -353,6 +353,54 @@ The first six runs after the fix:
 `23cf851_1` went from 0 of 3 to 1 of 3. The recovery path is running for the
 first time, so how good it is becomes a question that can now be asked.
 
+Asking it took two more fixes. The structural-repeat guard counted a signature
+across the whole turn, and `terminal_run` gives every shell failure the same
+signature, so three unrelated errors read as one route failing three times. The
+corrected-retry budget was one per episode and counted across it, so the second
+broken command was refused its first correction because the first had spent it.
+
+With all three in, every failure gets a recovery attempt and none is refused:
+
+| | before | after |
+|---|---|---|
+| failedToolCalls per run | 0 | 3, 3, 4, 3, 1, 3 |
+| recovery_budget_exhausted per run | — | 0, 0, 0, 0, 0, 0 |
+| median tool calls | 15 | 21 |
+
+The eight tasks swept again on the same three attempts: **15 of 24 against the
+14 of 23 before**. One point, which is noise. Two tasks up, three down, three
+level. pi is unchanged at 20 of 21.
+
+## Where the remaining distance is
+
+The whole shell transcript of a `23cf851_1` run that failed with all three
+fixes in:
+
+```
+obs-008  ok    cli venmo show_transactions …   "Total sent txs fetched: 0 []"
+obs-009  FAIL  the same call again              the CLI printed its parameter list
+obs-011  FAIL  import apis.venmo                ModuleNotFoundError
+obs-014  FAIL  python3 -c "import requests"     ModuleNotFoundError
+obs-016  ok    /opt/venv/bin/python …           "Execution failed. Traceback:"
+obs-017  ok    the same route, corrected        27,958 bytes of transactions
+obs-018  ok                                     "Total transactions: 242"
+obs-020  ok                                     "2023-05-18 12:00:00"
+obs-024  ok    cli supervisor complete_task     answer='0'
+```
+
+Recovery did what it is built to do: the agent found a Python that has
+`requests`, and every one of its eighteen shell results is different from the
+others, so it was working rather than repeating. It ended holding 242
+transactions and the current date, and answered `0`. pi answered `11`.
+
+Two things in that list are worth separating. `obs-016` reports `Execution
+failed` and exits zero, so #157 does not see it: a tool that reports failure in
+its output rather than its exit status is still invisible, and reading it means
+judging what the command printed. And the last step had the data it needed.
+Neither of those is a budget or a ledger or a missing fact. The direction an
+agent takes once it knows something broke is the model's, and the runtime's part
+is to hand it the facts, which it now does and did not before.
+
 ## What each one puts in front of the model
 
 Terminal-Bench sees a verdict and a clock. It cannot see what either harness
