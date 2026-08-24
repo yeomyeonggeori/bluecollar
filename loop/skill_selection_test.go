@@ -1114,7 +1114,7 @@ func TestSkillQueryRouterMessagesPrioritizeLatestRequest(t *testing.T) {
 	if !strings.Contains(messages[0].Content, "do not carry forward stale subjects") {
 		t.Fatalf("expected stale-context instruction, got %q", messages[0].Content)
 	}
-	if !strings.Contains(joinMessageContent(messages), "Current date: 2026-05-17") {
+	if !strings.Contains(joinMessageContent(messages), "Current date on the machine running you: 2026-05-17") {
 		t.Fatalf("expected skill query temporal context, got %+v", messages)
 	}
 	if messages[len(messages)-1].Role != "user" || !strings.Contains(messages[len(messages)-1].Content, "김인턴") {
