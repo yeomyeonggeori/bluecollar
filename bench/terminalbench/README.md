@@ -401,6 +401,28 @@ Neither of those is a budget or a ledger or a missing fact. The direction an
 agent takes once it knows something broke is the model's, and the runtime's part
 is to hand it the facts, which it now does and did not before.
 
+## The one bluecollar wins
+
+Across every recorded sweep, counting the runs the grader failed and how many
+the harness itself reported as a problem instead of reporting success:
+
+| harness | grader-failed runs | said it could not do it |
+|---|---|---|
+| bluecollar | 188 | 91 (48%) |
+| pi | 30 | 0 (0%) |
+
+pi ends thirty failed runs by stating an answer: "Done", "so **0** songs
+qualify", "Written the best move to `/app/move.txt`". Not once does it say it
+could not do the thing, because there is nothing in its loop that could — the
+model stops calling tools and the run is over.
+
+bluecollar has a completion gate, a completion judge and a failure report, and
+they are what this column measures. On the most recent sweep it is 4 of 7.
+
+A harness that fails and says so costs a retry. A harness that fails and reports
+success costs the wrong answer, acted on. That is the difference this table is
+about, and it is not one the pass rate can see.
+
 ## Judged on whether it says so when it fails
 
 The pass rate is one axis and the only one this benchmark scores. bluecollar's own
