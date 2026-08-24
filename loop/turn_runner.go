@@ -272,16 +272,14 @@ func (agentTurnRunner *AgentTurnRunner) recordIterationCost(startedAt time.Time)
 	agentTurnRunner.iterationCostObserver.Record(agentTurnRunner.modelInUse, time.Since(startedAt))
 }
 
-func (agentTurnRunner *AgentTurnRunner) levelIsTheWall() bool {
-	return agentTurnRunner.options.DeadlineSecond <= 0
-}
-
 // Every clock a level profile draws goes through here.
 func (agentTurnRunner *AgentTurnRunner) setElapsedBudgetFromProfile(taskLevelProfile TaskLevelProfile) {
-	if !agentTurnRunner.levelIsTheWall() {
-		return
+	budgetSecond := int(elapsedBudgetForProfile(taskLevelProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	deadlineSecond := agentTurnRunner.options.DeadlineSecond
+	if deadlineSecond > 0 && budgetSecond > deadlineSecond {
+		budgetSecond = deadlineSecond
 	}
-	agentTurnRunner.options.MaxElapsedSecond = int(elapsedBudgetForProfile(taskLevelProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
+	agentTurnRunner.options.MaxElapsedSecond = budgetSecond
 }
 
 func (agentTurnRunner *AgentTurnRunner) refreshElapsedBudget(taskLevel TaskLevel) {
@@ -448,7 +446,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration-1); isElapsed {
 			return result, errorValue
 		}
-		if agentTurnRunner.levelIsTheWall() && iteration > agentTurnRunner.options.MaxIterationCount && !agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
+		if iteration > agentTurnRunner.options.MaxIterationCount && !agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
 			result, shouldContinue, errorValue := agentTurnRunner.finalizeEscalateOrStopForLimit(workContext, taskRun.TaskRunID, request, "max_iterations", toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, state.ExecutionState, iteration-1, state.ToolCallCount)
 			if result.TaskRun.Status != taskstate.TaskStatusCompleted {
 				if elapsedResult, isElapsed, elapsedError := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration-1); isElapsed {
@@ -722,7 +720,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 	}
 	agentTurnRunner.notePlanMissingBeforeStateChange(taskRunID, request, state, actionDocument)
 	state.ToolCallCount++
-	if agentTurnRunner.levelIsTheWall() && state.ToolCallCount > maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations) && !agentTurnRunner.extendBudgetOneLevelOnce(taskRunID, state) {
+	if state.ToolCallCount > maxToolCallCountWithRecovery(agentTurnRunner.options, state.Observations) && !agentTurnRunner.extendBudgetOneLevelOnce(taskRunID, state) {
 		result, shouldContinue, errorValue := agentTurnRunner.finalizeEscalateOrStopForLimit(ctx, taskRunID, request, "max_tool_calls", requirements, state.Observations, state.Attachments, state.QualityCriteria, state.ExecutionState, iteration, state.ToolCallCount)
 		if errorValue != nil || !shouldContinue {
 			agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusBlocked, "limit stop", "max_tool_calls")
@@ -1111,7 +1109,7 @@ func grantedBudgetObservation(observations []turnObservation, options TurnOption
 }
 
 func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID string, state *agentTaskState) bool {
-	if !agentTurnRunner.levelIsTheWall() || state.didExtendBudgetOneLevel() || !budgetCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
+	if state.didExtendBudgetOneLevel() || !budgetCameFromTheLevel(agentTurnRunner.options, state.Request.TaskLevel) {
 		return false
 	}
 	grantedLevel, hasNextLevel := nextTaskLevel(state.Request.TaskLevel)

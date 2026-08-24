@@ -118,42 +118,39 @@ func TestTheGrantedClockSurvivesTheNextIteration(t *testing.T) {
 	}
 }
 
-func TestACallersDeadlineIsNotRedrawnFromMeasuredCost(t *testing.T) {
+func TestTheClockIsRedrawnFromWhatIterationsMeasurablyCost(t *testing.T) {
 	runner, _ := runnerWithLevel(TaskLevelMedium)
 	runner.noteModelInUse("a/model")
-	runner.options.DeadlineSecond = 900
-	runner.options.MaxElapsedSecond = 900
+	runner.options.DeadlineSecond = 100000
+	runner.options.MaxElapsedSecond = 60
 	runner.recordIterationCost(time.Now().Add(-40 * time.Second))
 
 	runner.refreshElapsedBudget(TaskLevelMedium)
 
-	if runner.options.MaxElapsedSecond != 900 {
-		t.Fatalf("the clock a caller set is the clock, and a level profile does not get to redraw it, got %d against 900", runner.options.MaxElapsedSecond)
+	if runner.options.MaxElapsedSecond <= 60 {
+		t.Fatalf("the budget is this level's steps at what a step turned out to cost, got %d", runner.options.MaxElapsedSecond)
 	}
 }
 
-func TestTheGrantOnlyExistsForACallerThatSetNoDeadline(t *testing.T) {
+func TestTheGrantIsThereWhateverDeadlineTheCallerSet(t *testing.T) {
 	runner, state := runnerWithLevel(TaskLevelLow)
 	runner.options.DeadlineSecond = 900
 
-	if runner.levelIsTheWall() {
-		t.Fatalf("a caller that gave a deadline gave the only wall the turn needs")
-	}
-	if runner.extendBudgetOneLevelOnce("task-1", state) {
-		t.Fatalf("there is nothing to extend when the level was never the wall")
+	if !runner.extendBudgetOneLevelOnce("task-1", state) {
+		t.Fatal("a task sized from its level has one level of extension to give, and what the caller will spend does not change what the work costs")
 	}
 }
 
-func TestAPlanForABiggerTaskDoesNotShortenTheCallersDeadline(t *testing.T) {
+func TestAPlanForABiggerTaskStaysUnderTheCallersCeiling(t *testing.T) {
 	runner, state := runnerWithLevel(TaskLevelLow)
 	runner.noteModelInUse("a/model")
-	runner.options.DeadlineSecond = 891
-	runner.options.MaxElapsedSecond = 891
+	runner.options.DeadlineSecond = 60
+	runner.options.MaxElapsedSecond = 60
 
 	runner.widenPaceForPlannedLevel("task-1", state, TaskLevelMedium)
 
-	if runner.options.MaxElapsedSecond != 891 {
-		t.Fatalf("a plan that names a bigger task cannot come back with a shorter clock than the caller gave, got %d against 891", runner.options.MaxElapsedSecond)
+	if runner.options.MaxElapsedSecond > 60 {
+		t.Fatalf("a bigger plan may cost more than the caller will spend, and what they will spend is the ceiling, got %d against 60", runner.options.MaxElapsedSecond)
 	}
 	if runner.options.MaxToolCallCount != TaskLevelProfileForLevel(TaskLevelMedium).MaxToolCallCount {
 		t.Fatalf("the counts still pace the turn and still follow the plan, got %d", runner.options.MaxToolCallCount)

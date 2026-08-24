@@ -1021,14 +1021,17 @@ func TestABudgetNeverOutlastsTheDeadlineItRunsUnder(t *testing.T) {
 	}
 }
 
-func TestABudgetSmallerThanTheDeadlineGrowsToMeetIt(t *testing.T) {
+func TestABudgetSmallerThanTheDeadlineIsLeftAtWhatTheWorkCosts(t *testing.T) {
 	deadlineContext, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	bounded := withElapsedBudgetFromDeadline(deadlineContext, TurnOptions{MaxElapsedSecond: 220})
 
-	if bounded.MaxElapsedSecond < 870 {
-		t.Fatalf("a level's guess must not end a turn the caller was willing to run four times longer, got %d of about 900", bounded.MaxElapsedSecond)
+	if bounded.MaxElapsedSecond != 220 {
+		t.Fatalf("the budget is the step count at what a step measurably costs, and a number someone typed says what may be spent rather than how long the work takes, got %d", bounded.MaxElapsedSecond)
+	}
+	if bounded.DeadlineSecond < 870 {
+		t.Fatalf("the caller's deadline is still recorded as the ceiling, got %d", bounded.DeadlineSecond)
 	}
 }
 
