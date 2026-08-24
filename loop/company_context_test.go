@@ -29,11 +29,20 @@ func TestCompanyContextRendersIdentityAndSelfUpdateRule(t *testing.T) {
 	}
 }
 
-func TestCompanyContextEmptyStateAdvertisesSchemaAndProactiveAsk(t *testing.T) {
+func TestCompanyContextEmptyStateSaysSoAndAsksRatherThanInventing(t *testing.T) {
 	contextText := (LLMContextBuilder{}).Build(LLMContextInput{})
-	for _, expected := range []string{"Our company:", "Not registered yet", "company_info_set", "proactively ask"} {
+	for _, expected := range []string{"Our company:", "Not registered yet", "ask once"} {
 		if !strings.Contains(contextText, expected) {
 			t.Fatalf("empty company state missing %q in:\n%s", expected, contextText)
+		}
+	}
+}
+
+func TestCompanyContextNamesNoToolThatDoesNotExist(t *testing.T) {
+	contextText := (LLMContextBuilder{}).Build(LLMContextInput{})
+	for _, absent := range []string{"company_info_set", "company_metric_record", "company.record.add"} {
+		if strings.Contains(contextText, absent) {
+			t.Fatalf("no such tool is registered anywhere, so every call carried an instruction the model could not follow: %q", absent)
 		}
 	}
 }
