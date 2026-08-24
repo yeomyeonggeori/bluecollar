@@ -395,3 +395,26 @@ func TestATaskAskingOnlyForAReplyHasNothingToJudge(t *testing.T) {
 		t.Fatal("delivering the reply is asked of every task and is not something to grade the work against")
 	}
 }
+
+func TestTheJudgeSeesWhatDidNotWork(t *testing.T) {
+	failed := turnObservation{
+		ObservationID: "obs-004",
+		Action:        "continue",
+		Tool:          "terminal_run",
+		ToolInput:     json.RawMessage(`{"command":"cli venmo send_money 91"}`),
+		Failure: &toolcontract.ToolFailure{
+			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
+			Stage: "terminal_run", UserSafeSummary: "the command exited 1",
+		},
+	}
+	failed.Output.Content = "insufficient balance"
+
+	document := completionJudgeLedgerDocument(nil, []turnObservation{failed}, nil)
+
+	if !strings.Contains(document, "insufficient balance") {
+		t.Fatalf("a run that tried and failed looks identical to one that never tried when this is filtered out: %s", document)
+	}
+	if !strings.Contains(document, `"failed":true`) {
+		t.Fatalf("the judge has to be able to tell an attempt from an accomplishment: %s", document)
+	}
+}
