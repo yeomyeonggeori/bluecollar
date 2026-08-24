@@ -457,3 +457,20 @@ func TestATurnWithNoImagesIsNotToldToInspectThem(t *testing.T) {
 		t.Fatalf("a turn that produced no images carries an instruction about image parts that are not there: %q", message.Content)
 	}
 }
+
+func TestTheProgressLedgerDoesNotClaimResultsItNoLongerCarries(t *testing.T) {
+	observation := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run", Summary: "ran and printed a page of output"}
+
+	native := buildProgressContext(AgentTurnRequest{Prompt: "do it"}, []turnObservation{observation}, true)
+	flattened := buildProgressContext(AgentTurnRequest{Prompt: "do it"}, []turnObservation{observation}, false)
+
+	if strings.Contains(native, "source of truth") {
+		t.Fatalf("with the results on their own calls this ledger is an index, and claiming otherwise sends the model here for them: %s", native)
+	}
+	if strings.Contains(native, `"summary":""`) {
+		t.Fatalf("a stripped summary should not leave the key behind: %s", native)
+	}
+	if !strings.Contains(flattened, "source of truth") {
+		t.Fatalf("the path that does carry the results still says so: %s", flattened)
+	}
+}

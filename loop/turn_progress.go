@@ -38,7 +38,7 @@ type ProgressObservation struct {
 	ObservationID      string               `json:"observationID"`
 	ToolName           string               `json:"toolName,omitempty"`
 	Status             string               `json:"status"`
-	Summary            string               `json:"summary"`
+	Summary            string               `json:"summary,omitempty"`
 	AttachmentRefs     []ProgressAttachment `json:"attachmentRefs,omitempty"`
 	ImageRefs          []ToolResultImageRef `json:"imageRefs,omitempty"`
 	AttemptFingerprint string               `json:"attemptFingerprint,omitempty"`
