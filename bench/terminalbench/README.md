@@ -401,6 +401,41 @@ Neither of those is a budget or a ledger or a missing fact. The direction an
 agent takes once it knows something broke is the model's, and the runtime's part
 is to hand it the facts, which it now does and did not before.
 
+## Judged on whether it says so when it fails
+
+The pass rate is one axis and the only one this benchmark scores. bluecollar's own
+machinery is somewhere else: pi has no completion gate, no approval protocol and no recovery
+budget, so a comparison that only counts passes never touches them.
+
+Counting the other axis on the same runs — of the runs the grader failed, how
+many did the harness itself report as a problem instead of reporting success:
+
+| | before | after |
+|---|---|---|
+| pass rate | 14/23 (41-81%) | 15/22 (49-88%) |
+| runs the grader failed | 12 | 7 |
+| of those, reported as complete | 8 | 3 |
+| silently wrong | 67% | 43% |
+
+The pass rates are the same row and this file's own interval column says so. The
+silent-failure count is not a rate estimated from coin flips; it is counted from
+ledgers, and it halved.
+
+Six changes did that, and none of them removed anything the harness had. The
+runtime stopped asserting a date it cannot know, the completion judge started
+grading the work rather than the reply, it started running on turns that did
+nothing rather than skipping them, it started seeing the operations that failed,
+an agent that cannot finish gained a way to say so, and a budget that had been
+replaced by a caller's flag went back to being derived.
+
+The one that matters structurally is the judge seeing failures. pi has no
+ratification step at all: the model that did the work decides it is done with
+the whole transcript in front of it. bluecollar ratifies with a second call
+against a filtered ledger, and the filter dropped every failed operation — so a
+run that tried and failed looked exactly like a run that never tried. The
+ratification step is the advantage over pi; it was being fed a view that made it
+useless.
+
 ## What each one puts in front of the model
 
 Terminal-Bench sees a verdict and a clock. It cannot see what either harness
