@@ -1862,3 +1862,29 @@ func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T)
 		t.Fatalf("saveToolObservation already elided this to one observation's share of the conversation budget, and cutting it again is pure loss: %d of %d characters carried", len(carried), len(stored))
 	}
 }
+
+func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
+	observation := turnObservation{
+		ObservationID: "obs-004",
+		Tool:          toolcontract.TerminalRunToolName,
+		AssistantText: "The contacts list has no venmo field, so I have to cross-reference the venmo account list instead.",
+	}
+	observation.Output.Content = "ok"
+
+	transcript := toolCallTranscript([]turnObservation{observation})
+
+	if len(transcript) == 0 || transcript[0].Content != observation.AssistantText {
+		t.Fatalf("the model worked this out and the next step starts without it, so it works it out again: %+v", transcript)
+	}
+}
+
+func TestATranscriptEntryWithNoReasoningCarriesNone(t *testing.T) {
+	observation := turnObservation{ObservationID: "obs-005", Tool: toolcontract.TerminalRunToolName}
+	observation.Output.Content = "ok"
+
+	transcript := toolCallTranscript([]turnObservation{observation})
+
+	if len(transcript) == 0 || transcript[0].Content != "" {
+		t.Fatalf("nothing was reasoned and nothing should be invented: %+v", transcript)
+	}
+}
