@@ -41,12 +41,17 @@ refuseUnknownModel() {
   exit 2
 }
 
+# A compose project leaves a network behind as well as its containers, and docker refuses to
+# create any network once its address pools are subnetted: "all predefined address pools have
+# been fully subnetted". Every trial then dies at up -d before its agent starts, so the prune
+# cannot be conditional on containers still being there to find.
 removeAbandonedTaskContainers() {
   local abandoned
   abandoned="$(docker ps -a --format '{{.Names}}' | grep -E -- '-[0-9]+-of-[0-9]+-[0-9]{4}-[0-9]{2}-[0-9]{2}__' || true)"
-  if [ -z "$abandoned" ]; then return 0; fi
-  echo "removing $(printf '%s\n' "$abandoned" | wc -l | tr -d ' ') task containers a previous run left behind" >&2
-  printf '%s\n' "$abandoned" | xargs docker rm -f > /dev/null
+  if [ -n "$abandoned" ]; then
+    echo "removing $(printf '%s\n' "$abandoned" | wc -l | tr -d ' ') task containers a previous run left behind" >&2
+    printf '%s\n' "$abandoned" | xargs docker rm -f > /dev/null
+  fi
   docker network prune -f > /dev/null
 }
 
