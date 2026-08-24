@@ -61,6 +61,7 @@ removeAbandonedTaskContainers() {
 # of the model, so that column is measured here instead: one listener per harness in front of
 # the same endpoint, and a call is attributed by the port it arrived on.
 promptMeterLedger="$outputRoot/prompt-meter.jsonl"
+privateDatasetPath="$outputRoot/dataset"
 bluecollarMeterPort="${BENCH_METER_PORT_BLUECOLLAR:-8317}"
 piMeterPort="${BENCH_METER_PORT_PI:-8318}"
 codexMeterPort="${BENCH_METER_PORT_CODEX:-8319}"
@@ -97,7 +98,19 @@ removeAbandonedTaskContainers
 
 go build -o /tmp/bluecollar ./cmd/bluecollar
 
+# terminal-bench refreshes ~/.cache/terminal-bench/<dataset> when it starts, deleting task
+# directories another invocation is reading, so a concurrent run dies partway through on a
+# missing task.yaml. A private copy is what keeps two of them apart.
+copyDatasetForThisRun() {
+  local sharedTask
+  sharedTask="$(find "$HOME/.cache/terminal-bench" -type f -name task.yaml -print -quit 2> /dev/null)"
+  if [ -z "$sharedTask" ]; then return 0; fi
+  mkdir -p "$privateDatasetPath"
+  cp -R "$(dirname "$(dirname "$sharedTask")")/." "$privateDatasetPath/"
+}
+
 startPromptMeters
+copyDatasetForThisRun
 trap stopPromptMeters EXIT
 
 runHarness() {
@@ -116,7 +129,7 @@ runHarness() {
   CODEX_MODEL_ID="$model" \
   CODEX_API_KEY="$OPENROUTER_API_KEY" \
     uvx --from terminal-bench --with 'litellm==1.77.0' tb run \
-      --dataset "$dataset" \
+      ${datasetArguments[@]+"${datasetArguments[@]}"} \
       --agent-import-path "$importPath" \
       --model "$model" \
       --n-concurrent "$concurrency" \
@@ -126,6 +139,9 @@ runHarness() {
       ${taskArguments[@]+"${taskArguments[@]}"} \
       --output-path "$outputRoot/$harnessName"
 }
+
+datasetArguments=(--dataset "$dataset")
+if [ -d "$privateDatasetPath" ]; then datasetArguments=(--dataset-path "$privateDatasetPath"); fi
 
 runHarness bluecollar bench.terminalbench.bluecollar_agent:BluecollarAgent
 runHarness pi bench.terminalbench.pi_agent:PiAgent
