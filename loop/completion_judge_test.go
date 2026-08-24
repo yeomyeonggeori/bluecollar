@@ -53,7 +53,7 @@ func completionJudgeFinishActionDocument() turnActionDocument {
 
 func TestCompletionJudgeMessagesCarryTheFinishReplyAsDelivered(t *testing.T) {
 	actionDocument := turnActionDocument{Action: "finish", Message: "deploy complete: https://sites.example/launch"}
-	joined := joinedMessageContent(completionJudgeMessages(AgentTurnRequest{Prompt: "publish the site and give me the link"}, nil, nil, actionDocument))
+	joined := joinedMessageContent(completionJudgeMessages(AgentTurnRequest{Prompt: "publish the site and give me the link"}, nil, nil, actionDocument, nil))
 	if !strings.Contains(joined, "https://sites.example/launch") {
 		t.Fatalf("expected the finish reply text in the judge prompt, got %s", joined)
 	}
@@ -149,7 +149,7 @@ func TestCompletionJudgeMessagesIncludeOriginalInstructionAndExpectedResults(t *
 		OutcomeContract: OutcomeContract{ExpectedResults: []ExpectedResult{{Type: ExpectedResultTypeMessage, Description: "completion check", Required: true}}},
 	}
 
-	messages := completionJudgeMessages(request, nil, nil, completionJudgeFinishActionDocument())
+	messages := completionJudgeMessages(request, nil, nil, completionJudgeFinishActionDocument(), nil)
 	joined := joinedMessageContent(messages)
 
 	if !strings.Contains(joined, "add a task to check the missing quarterly settlement") {
@@ -164,7 +164,7 @@ func TestCompletionJudgeMessagesIncludeTemporalContext(t *testing.T) {
 	turnStartedAt := time.Date(2026, 7, 23, 1, 43, 0, 0, time.UTC)
 	request := AgentTurnRequest{Prompt: "move tomorrow's schedule", TurnStartedAt: turnStartedAt}
 
-	joined := joinedMessageContent(completionJudgeMessages(request, nil, nil, completionJudgeFinishActionDocument()))
+	joined := joinedMessageContent(completionJudgeMessages(request, nil, nil, completionJudgeFinishActionDocument(), nil))
 
 	if !strings.Contains(joined, "Runtime temporal context:") {
 		t.Fatalf("expected temporal context in judge prompt, got %s", joined)
@@ -451,5 +451,60 @@ func TestDroppedOperationsAreNotEvidence(t *testing.T) {
 	}
 	if !strings.Contains(marker.Result, "terminal_run x") {
 		t.Fatalf("the tool tally is the one deterministic fact the dropped prefix can still state: %q", marker.Result)
+	}
+}
+
+type askingJudgeLanguageModel struct {
+	responses []model.StructuredResponse
+	requests  []model.StructuredResponseRequest
+}
+
+func (languageModel *askingJudgeLanguageModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (languageModel *askingJudgeLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	languageModel.requests = append(languageModel.requests, request)
+	return languageModel.responses[len(languageModel.requests)-1], nil
+}
+
+func TestTheJudgeAsksForWhatItCannotSeeAndDecidesFromTheFullEntry(t *testing.T) {
+	languageModel := &askingJudgeLanguageModel{responses: []model.StructuredResponse{
+		{Content: `{"satisfied":true,"missingWork":[],"reason":"cannot see the search rows","needObservationIDs":["obs-002"]}`},
+		{Content: `{"satisfied":false,"missingWork":["the account holder was messaged despite being registered"],"reason":"the full entry shows a registered account","needObservationIDs":[]}`},
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	echoedCall := "Calling: search_users(access_token=" + strings.Repeat("x", 260) + ")"
+	observation := newContentObservation("obs-002", "continue", toolcontract.TerminalRunToolName, echoedCall+`[{"name":"Sam Example","registered_at":"2022-07-03"}]`)
+	request := AgentTurnRequest{Prompt: "message only the relatives without an account", OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"task_add"}}}
+
+	result := services.runner.evaluateCompletionJudge(context.Background(), "task-judge-ask", request, []turnObservation{observation}, nil, completionJudgeFinishActionDocument())
+
+	if result.IsSatisfied {
+		t.Fatal("the first verdict was a guess over invisible rows, and the runtime handed the judge the rows it asked for exactly so that the guess would not stand")
+	}
+	if len(languageModel.requests) != 2 {
+		t.Fatalf("expected one expansion pass, got %d calls", len(languageModel.requests))
+	}
+	secondLedger := languageModel.requests[1].Messages[len(languageModel.requests[1].Messages)-1].Content
+	if !strings.Contains(secondLedger, "registered_at") {
+		t.Fatalf("the requested entry must reach the second pass in full: %s", secondLedger[:200])
+	}
+	if !taskEventsContain(services.taskEventService.ListTaskEvent("task-judge-ask"), "completion_judge.expanded", "obs-002") {
+		t.Fatal("the expansion is a routing decision and belongs in the ledger")
+	}
+}
+
+func TestAJudgeAskingForUnknownIDsGetsNoSecondPass(t *testing.T) {
+	languageModel := &askingJudgeLanguageModel{responses: []model.StructuredResponse{
+		{Content: `{"satisfied":true,"missingWork":[],"reason":"done","needObservationIDs":["obs-404"]}`},
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := AgentTurnRequest{Prompt: "task", OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"task_add"}}}
+
+	result := services.runner.evaluateCompletionJudge(context.Background(), "task-judge-unknown", request, nil, nil, completionJudgeFinishActionDocument())
+
+	if !result.IsSatisfied || len(languageModel.requests) != 1 {
+		t.Fatalf("an ID that matches no recorded observation resolves to nothing, and a second pass over the same display would be the same guess: calls=%d result=%+v", len(languageModel.requests), result)
 	}
 }

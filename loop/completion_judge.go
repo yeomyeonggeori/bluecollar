@@ -11,20 +11,22 @@ import (
 )
 
 const (
-	completionJudgeSchemaName           = "bluecollar_completion_judge"
-	completionJudgeMaxMissingWork       = 5
-	completionJudgeMissingWorkMaxLength = 200
-	completionJudgeReasonMaxLength      = 400
-	completionJudgeInputMaxLength       = 2000
-	completionJudgeResultMaxLength      = 300
-	completionJudgeCitedResultMaxLength = 6000
-	completionJudgeLedgerByteBudget     = 24000
+	completionJudgeSchemaName               = "bluecollar_completion_judge"
+	completionJudgeMaxRequestedObservations = 8
+	completionJudgeMaxMissingWork           = 5
+	completionJudgeMissingWorkMaxLength     = 200
+	completionJudgeReasonMaxLength          = 400
+	completionJudgeInputMaxLength           = 2000
+	completionJudgeResultMaxLength          = 300
+	completionJudgeCitedResultMaxLength     = 6000
+	completionJudgeLedgerByteBudget         = 24000
 )
 
 type completionJudgeVerdict struct {
-	Satisfied   bool     `json:"satisfied"`
-	MissingWork []string `json:"missingWork"`
-	Reason      string   `json:"reason"`
+	Satisfied          bool     `json:"satisfied"`
+	MissingWork        []string `json:"missingWork"`
+	Reason             string   `json:"reason"`
+	NeedObservationIDs []string `json:"needObservationIDs"`
 }
 
 type completionLedgerEntry struct {
@@ -99,17 +101,16 @@ func (agentTurnRunner *AgentTurnRunner) evaluateCompletionJudge(ctx context.Cont
 		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": "completion judge language model was not configured"}))
 		return completionGateResult{IsSatisfied: true}
 	}
-	response, errorValue := agentTurnRunner.languageModel.GenerateStructuredResponse(ctx, completionJudgeRequest(request, observations, attachments, actionDocument))
-	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": errorValue.Error()}))
+	verdict, isUsable := agentTurnRunner.completionJudgeVerdictFor(ctx, taskRunID, request, observations, attachments, actionDocument, nil)
+	if !isUsable {
 		return completionGateResult{IsSatisfied: true}
 	}
-	verdict, errorValue := parseCompletionJudgeVerdict(response.Content)
-	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": errorValue.Error()}))
-		return completionGateResult{IsSatisfied: true}
+	if requestedIDs := knownObservationIDs(observations, verdict.NeedObservationIDs); len(requestedIDs) > 0 {
+		agentTurnRunner.appendEvent(taskRunID, "completion_judge.expanded", marshalEventBody(map[string]any{"observationIDs": requestedIDs}))
+		if expandedVerdict, isExpandedUsable := agentTurnRunner.completionJudgeVerdictFor(ctx, taskRunID, request, observations, attachments, actionDocument, requestedIDs); isExpandedUsable {
+			verdict = expandedVerdict
+		}
 	}
-	agentTurnRunner.appendEvent(taskRunID, "completion_judge.verdict", marshalEventBody(verdict))
 	if verdict.Satisfied {
 		return completionGateResult{IsSatisfied: true}
 	}
@@ -118,6 +119,38 @@ func (agentTurnRunner *AgentTurnRunner) evaluateCompletionJudge(ctx context.Cont
 		EvidenceKind:   evidenceKindExpectedResult,
 		IsJudgeVerdict: true,
 	}
+}
+
+func (agentTurnRunner *AgentTurnRunner) completionJudgeVerdictFor(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument, expandedObservationIDs []string) (completionJudgeVerdict, bool) {
+	response, errorValue := agentTurnRunner.languageModel.GenerateStructuredResponse(ctx, completionJudgeRequest(request, observations, attachments, actionDocument, expandedObservationIDs))
+	if errorValue != nil {
+		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": errorValue.Error()}))
+		return completionJudgeVerdict{}, false
+	}
+	verdict, errorValue := parseCompletionJudgeVerdict(response.Content)
+	if errorValue != nil {
+		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": errorValue.Error()}))
+		return completionJudgeVerdict{}, false
+	}
+	agentTurnRunner.appendEvent(taskRunID, "completion_judge.verdict", marshalEventBody(verdict))
+	return verdict, true
+}
+
+func knownObservationIDs(observations []turnObservation, requestedObservationIDs []string) []string {
+	recordedIDs := map[string]bool{}
+	for _, observation := range observations {
+		recordedIDs[strings.TrimSpace(observation.ObservationID)] = true
+	}
+	knownIDs := []string{}
+	for _, observationID := range requestedObservationIDs {
+		if len(knownIDs) == completionJudgeMaxRequestedObservations {
+			break
+		}
+		if trimmedID := strings.TrimSpace(observationID); recordedIDs[trimmedID] {
+			knownIDs = append(knownIDs, trimmedID)
+		}
+	}
+	return knownIDs
 }
 
 func parseCompletionJudgeVerdict(content string) (completionJudgeVerdict, error) {
@@ -140,9 +173,9 @@ func completionJudgeUnsatisfiedMessage(verdict completionJudgeVerdict) string {
 	return reason + " Missing: " + missingWorkText
 }
 
-func completionJudgeRequest(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) model.StructuredResponseRequest {
+func completionJudgeRequest(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument, expandedObservationIDs []string) model.StructuredResponseRequest {
 	return model.StructuredResponseRequest{
-		Messages: completionJudgeMessages(request, observations, attachments, actionDocument),
+		Messages: completionJudgeMessages(request, observations, attachments, actionDocument, expandedObservationIDs),
 		StructuredOutputSchema: model.StructuredOutputSchema{
 			Name:               completionJudgeSchemaName,
 			Document:           completionJudgeSchema(),
@@ -152,7 +185,7 @@ func completionJudgeRequest(request AgentTurnRequest, observations []turnObserva
 	}
 }
 
-func completionJudgeMessages(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) []model.Message {
+func completionJudgeMessages(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument, expandedObservationIDs []string) []model.Message {
 	messages := []model.Message{
 		{Role: "system", Content: completionJudgeInstruction()},
 		{Role: "system", Content: buildTemporalContextDescription(request.EnvironmentNow)},
@@ -168,7 +201,7 @@ func completionJudgeMessages(request AgentTurnRequest, observations []turnObserv
 		messages = append(messages, model.Message{Role: "system", Content: planContext})
 	}
 	messages = append(messages, model.Message{Role: "system", Content: completionJudgeAttachmentDescription(attachments)})
-	messages = append(messages, model.Message{Role: "user", Content: "Recorded operations this turn, reads and state changes alike. An entry with failed=true did not do what it attempted:\n" + completionJudgeLedgerDocument(request.ToolSet, observations, citedObservationIDs(actionDocument))})
+	messages = append(messages, model.Message{Role: "user", Content: "Recorded operations this turn, reads and state changes alike. An entry with failed=true did not do what it attempted:\n" + completionJudgeLedgerDocument(request.ToolSet, observations, fullyShownObservationIDs(actionDocument, expandedObservationIDs))})
 	return messages
 }
 
@@ -208,6 +241,7 @@ func completionJudgeInstruction() string {
 		"When the instruction selects its target by a condition on an attribute — who has no account, which ones are over a count, what was sent this month — a successful recorded operation must show that attribute being read for the candidates. Acting on the unfiltered set is unfinished work: mark unsatisfied and name the condition that was never evaluated. A condition the instruction does not state is not a requirement, and an attribute already visible in a recorded result needs no separate lookup.",
 		"When the instruction supplies worked examples — sample inputs with their expected outputs — every one of them must appear in a successful recorded operation, not just the first. Checking one example and generalising from it is unfinished work: mark unsatisfied and name the examples that were never run.",
 		"A ledger entry carrying a display-truncated marker was cut for this display only, and earlier operations may be dropped from the top of the display the same way; everything cut or dropped was still recorded and executed. Such content is unknown in both directions: never cite it as missing work, and never treat it as confirming that something was checked, matched, sent, or absent. Judge only from the parts that are visible.",
+		"When the verdict turns on content that is cut, dropped, or otherwise not visible, list those entries' observationIDs in needObservationIDs and decide from what is visible for now; they will be shown to you in full exactly once. Leave needObservationIDs empty when the visible parts already decide the verdict.",
 		"Resolve relative dates such as today, tomorrow, 오늘, and 내일 only from the runtime temporal context below. Never guess the current date from ledger values.",
 		"Judge state changes by the recorded operation results. Items that merely appear inside another result's diagnostic fields, such as candidate lists in a search result, are not additional requirements unless the instruction itself names them.",
 		"Do not invent requirements the instruction does not state. Wording, formatting, phrasing, and which list or table a record appears in are not failures. If the right operations ran and every explicitly stated value appears in some recorded input, mark satisfied.",
@@ -265,6 +299,16 @@ func observationsIncludeSideEffect(toolSet *toolcontract.ToolSet, observations [
 		}
 	}
 	return false
+}
+
+func fullyShownObservationIDs(actionDocument turnActionDocument, expandedObservationIDs []string) map[string]bool {
+	shownIDs := citedObservationIDs(actionDocument)
+	for _, observationID := range expandedObservationIDs {
+		if trimmedID := strings.TrimSpace(observationID); trimmedID != "" {
+			shownIDs[trimmedID] = true
+		}
+	}
+	return shownIDs
 }
 
 func citedObservationIDs(actionDocument turnActionDocument) map[string]bool {
@@ -364,7 +408,7 @@ func completionJudgeSchema() string {
 	document := map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
-		"required":             []string{"satisfied", "missingWork", "reason"},
+		"required":             []string{"satisfied", "missingWork", "reason", "needObservationIDs"},
 		"properties": map[string]any{
 			"satisfied": map[string]any{"type": "boolean"},
 			"missingWork": map[string]any{
@@ -373,6 +417,11 @@ func completionJudgeSchema() string {
 				"items":    map[string]any{"type": "string", "maxLength": completionJudgeMissingWorkMaxLength},
 			},
 			"reason": map[string]any{"type": "string", "maxLength": completionJudgeReasonMaxLength},
+			"needObservationIDs": map[string]any{
+				"type":     "array",
+				"maxItems": completionJudgeMaxRequestedObservations,
+				"items":    map[string]any{"type": "string", "maxLength": 64},
+			},
 		},
 	}
 	encodedDocument, _ := json.Marshal(document)
