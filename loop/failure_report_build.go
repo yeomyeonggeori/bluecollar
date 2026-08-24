@@ -63,17 +63,27 @@ func latestFailedOperation(observations []turnObservation) string {
 	return ""
 }
 
+// The summary labels the failure and terminal_run labels every one of them with its exit status.
+// A report that reaches the user saying the command exited 1 tells them nothing they can act on.
+func failureLineForUser(observation turnObservation) string {
+	summary := strings.TrimSpace(observation.FailureSummary())
+	printed := strings.TrimSpace(observation.ContentText())
+	if summary == "" {
+		return firstNonEmptyString(printed, strings.TrimSpace(summarizeObservationContent(observation)))
+	}
+	if printed == "" || printed == summary {
+		return summary
+	}
+	return summary + ": " + printed
+}
+
 func latestSafeFailureSummary(observations []turnObservation, fallback string) string {
 	for index := len(observations) - 1; index >= 0; index-- {
 		observation := observations[index]
 		if !observation.Failed() {
 			continue
 		}
-		summary := strings.TrimSpace(observation.FailureSummary())
-		if summary == "" {
-			summary = strings.TrimSpace(summarizeObservationContent(observation))
-		}
-		if summary != "" {
+		if summary := failureLineForUser(observation); summary != "" {
 			return truncateText(compactWhitespace(redactUnsafeText(summary)), 360)
 		}
 	}
