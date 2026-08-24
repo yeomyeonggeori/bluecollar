@@ -217,8 +217,16 @@ func completionJudgeOriginalInstruction(request AgentTurnRequest) string {
 	return firstNonEmptyString(request.ActiveGoal.OriginalInstruction, request.Prompt)
 }
 
+// Delivering a reply is required of every task and accomplishes none of them; listed beside the
+// results the instruction asks for, it reads as one of them.
 func completionJudgeExpectedResultsDescription(expectedResults []ExpectedResult) string {
-	normalizedResults := normalizeExpectedResults(expectedResults)
+	normalizedResults := []ExpectedResult{}
+	for _, result := range normalizeExpectedResults(expectedResults) {
+		if strings.TrimSpace(result.ID) == finalMessageExpectedResultID {
+			continue
+		}
+		normalizedResults = append(normalizedResults, result)
+	}
 	if len(normalizedResults) == 0 {
 		return ""
 	}
