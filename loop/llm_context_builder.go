@@ -239,7 +239,7 @@ func (builder LLMContextBuilder) taskContext(input LLMContextInput) string {
 	if scheduledRun := builder.scheduledRunContext(input.ScheduledRun); scheduledRun != "" {
 		sections = append(sections, scheduledRun)
 	}
-	if prompt := strings.TrimSpace(input.UserPrompt); prompt != "" {
+	if prompt := strings.TrimSpace(input.UserPrompt); prompt != "" && !activeGoalAlreadyCarries(input.ActiveGoal, prompt) {
 		sections = append(sections, builder.userPromptContext(input.ScheduledRun, prompt))
 	}
 	if activeGoal := activeGoalDescription(input.ActiveGoal); activeGoal != "" {
@@ -279,6 +279,10 @@ func recordedEffectsContext(observations []turnObservation) string {
 		return ""
 	}
 	return "State changes already recorded this task. These records exist; fix or extend them instead of creating them again:\n" + strings.Join(lines, "\n")
+}
+
+func activeGoalAlreadyCarries(activeGoal ActiveGoal, prompt string) bool {
+	return strings.TrimSpace(activeGoal.OriginalInstruction) == prompt
 }
 
 func (builder LLMContextBuilder) userPromptContext(scheduledRun ScheduledRunContext, prompt string) string {
