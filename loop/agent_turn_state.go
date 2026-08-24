@@ -21,6 +21,8 @@ const maximumAgentActionCorrectionCount = 2
 
 const refusalsThatWithdrawFinish = 2
 
+const refusalsThatOfferTheExit = 3
+
 const transcriptResultLimit = 8192
 
 type agentAction = turnActionDocument
@@ -484,6 +486,9 @@ func modelCallableToolSet(toolSet *toolcontract.ToolSet, restrictToTerminalActio
 }
 
 func shouldExposeFailAction(state agentTaskState) bool {
+	if completionRefusalCount(state.Observations) >= refusalsThatOfferTheExit {
+		return true
+	}
 	if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt {
 		return !evaluateRecoveryAllowance(state.Observations, state.Options.RecoveryBudget).CanRecover
 	}
@@ -497,6 +502,19 @@ func shouldExposeFailAction(state agentTaskState) bool {
 // raised inside a tool call that succeeded never becomes failure debt, which is exactly the
 // state in which the exit used to be the one thing on offer. It comes back when the turn is
 // already being told to wrap up.
+// Told this many times that what it did is not the task, an agent needs to be able to say it
+// cannot do the task. Recovery being possible is not the same as the task being possible, and
+// while it is possible the exit is otherwise never on the menu.
+func completionRefusalCount(observations []turnObservation) int {
+	count := 0
+	for _, observation := range observations {
+		if observation.Action == "evidence_missing" {
+			count++
+		}
+	}
+	return count
+}
+
 func turnIsAlreadyWrappingUp(state agentTaskState) bool {
 	return limitUsageReached(state.IterationCount, state.Options.MaxIterationCount, wrapUpThresholdPercent) ||
 		limitUsageReached(state.ToolCallCount, state.Options.MaxToolCallCount, wrapUpThresholdPercent)
