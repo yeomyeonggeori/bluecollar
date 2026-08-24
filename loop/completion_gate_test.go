@@ -260,7 +260,7 @@ func TestCompletionGateRejectsExternalSendFinishWithoutSendEvidence(t *testing.T
 	if len(result.SuggestedNextTools) != 1 || result.SuggestedNextTools[0] != "mail_message_send" {
 		t.Fatalf("expected suggested send tool, got %+v", result.SuggestedNextTools)
 	}
-	observation := withCompletionGateRecoveryPacket(completionGateObservation(1, result, nil), result)
+	observation := withCompletionGateRecoveryPacket(completionGateObservation(1, result, nil, nil), result)
 	if observation.RecoveryPacket == nil {
 		t.Fatal("expected recovery packet")
 	}
@@ -2136,19 +2136,19 @@ func TestAgentTurnRunnerDoesNotBlockTerminalBeforeRequiredFileWrite(t *testing.T
 
 func TestCompletionGateObservationStatesZeroToolRealityForFirstTurnFinish(t *testing.T) {
 	result := completionGateResult{Message: "completionEvidence references an unknown observation", EvidenceKind: "evidence_reference_invalid"}
-	observation := completionGateObservation(1, result, nil)
+	observation := completionGateObservation(1, result, nil, nil)
 	if !strings.Contains(observation.ContentText(), "ZERO successful tool observations") {
 		t.Fatalf("expected recorded-reality statement, got: %s", observation.ContentText())
 	}
 	successfulObservation := turnObservation{ObservationID: "obs-001", Action: "tool", Tool: "task_add"}
-	observationAfterTool := completionGateObservation(2, result, []turnObservation{successfulObservation})
+	observationAfterTool := completionGateObservation(2, result, nil, []turnObservation{successfulObservation})
 	if strings.Contains(observationAfterTool.ContentText(), "ZERO successful tool observations") {
 		t.Fatalf("did not expect recorded-reality statement after a successful tool observation")
 	}
 }
 
 func TestFinishHiddenAfterEvidenceMissingRejectionWithoutToolEvidence(t *testing.T) {
-	rejection := completionGateObservation(1, completionGateResult{Message: "no evidence", EvidenceKind: "evidence_reference_invalid"}, nil)
+	rejection := completionGateObservation(1, completionGateResult{Message: "no evidence", EvidenceKind: "evidence_reference_invalid"}, nil, nil)
 	if !finishWasRejectedWithoutAnyToolEvidence([]turnObservation{rejection}) {
 		t.Fatalf("expected finish hidden after gate rejection with zero tool evidence")
 	}
@@ -2167,7 +2167,7 @@ func TestFinishHiddenAfterEvidenceMissingRejectionWithoutToolEvidence(t *testing
 func TestASecondRefusalTheAgentDidNothingAboutWithdrawsFinish(t *testing.T) {
 	successfulSend := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run"}
 	refusal := func(index int) turnObservation {
-		return completionGateObservation(index, completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}, []turnObservation{successfulSend})
+		return completionGateObservation(index, completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}, nil, []turnObservation{successfulSend})
 	}
 
 	if finishKeepsBeingRefusedWithNothingDoneBetween([]turnObservation{successfulSend, refusal(2)}) {
@@ -2183,7 +2183,7 @@ func TestASecondRefusalTheAgentDidNothingAboutWithdrawsFinish(t *testing.T) {
 
 func TestFinishHiddenAfterAttachmentRejectionDespiteToolEvidence(t *testing.T) {
 	successfulRead := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "file_read"}
-	rejection := completionGateObservation(2, completionGateResult{Message: "attach the artifact", EvidenceKind: "attachment_missing"}, []turnObservation{successfulRead})
+	rejection := completionGateObservation(2, completionGateResult{Message: "attach the artifact", EvidenceKind: "attachment_missing"}, nil, []turnObservation{successfulRead})
 	if !finishWasRejectedWithoutAnyToolEvidence([]turnObservation{successfulRead, rejection}) {
 		t.Fatalf("expected finish hidden after attachment rejection even with prior tool evidence")
 	}
@@ -2288,5 +2288,41 @@ func TestCitedEvidenceIsResolvedWhetherOrNotTheTurnHasRequirements(t *testing.T)
 		if _, errorValue := validateCompletionEvidence(toolSet, requirements, observations, citesNothingReal); errorValue == nil {
 			t.Errorf("a finish citing an observation the task never made is not evidence, and a turn with %d requirements checked it less than one with none", len(requirements))
 		}
+	}
+}
+
+func TestARefusalNamesWhatAlreadyChangedSomething(t *testing.T) {
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
+		Name:            "money_send",
+		InputSchema:     json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		SideEffectClass: toolcontract.ToolSideEffectExternalSend,
+	}})
+	sent := turnObservation{ObservationID: "obs-004", Action: "continue", Tool: "money_send"}
+	result := completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}
+
+	refusal := completionGateObservation(5, result, toolSet, []turnObservation{sent})
+
+	content := refusal.ContentText()
+	if !strings.Contains(content, "obs-004 money_send") {
+		t.Fatalf("an agent told only that its evidence is missing does the work again, and the second send is not undone by the refusal: %s", content)
+	}
+	if !strings.Contains(content, "Repeating one of them makes the change twice") {
+		t.Fatalf("naming the call is not enough without saying what repeating it costs: %s", content)
+	}
+}
+
+func TestARefusalWithNothingChangedNamesNothing(t *testing.T) {
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
+		Name:            toolcontract.TerminalRunToolName,
+		InputSchema:     json.RawMessage(`{"type":"object","additionalProperties":false}`),
+		SideEffectClass: toolcontract.ToolSideEffectRead,
+	}})
+	read := turnObservation{ObservationID: "obs-002", Action: "continue", Tool: toolcontract.TerminalRunToolName}
+	result := completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}
+
+	refusal := completionGateObservation(5, result, toolSet, []turnObservation{read})
+
+	if strings.Contains(refusal.ContentText(), "already changed something") {
+		t.Fatalf("a shell read changed nothing and warning about repeating it argues against the work the gate is asking for: %s", refusal.ContentText())
 	}
 }

@@ -302,7 +302,7 @@ func TestAFinishThatAddedNothingGetsTheVerdictItAlreadyGot(t *testing.T) {
 		Message:        "Filter the contacts to those without an account before sending.",
 		EvidenceKind:   evidenceKindExpectedResult,
 		IsJudgeVerdict: true,
-	}, nil)
+	}, nil, nil)
 	observations := []turnObservation{
 		newContentObservation("obs-001", "continue", toolcontract.TerminalRunToolName, "sent to everyone"),
 		rejection,
@@ -322,7 +322,7 @@ func TestAFinishThatDidMoreWorkIsJudgedAgain(t *testing.T) {
 	rejection := completionGateObservation(3, completionGateResult{
 		Message:      "Filter the contacts to those without an account before sending.",
 		EvidenceKind: evidenceKindExpectedResult,
-	}, nil)
+	}, nil, nil)
 	observations := []turnObservation{
 		rejection,
 		newContentObservation("obs-004", "continue", toolcontract.TerminalRunToolName, "re-sent to the filtered list"),

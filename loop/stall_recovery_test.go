@@ -129,7 +129,7 @@ func TestObservedSuggestedNextToolIgnoresUntrustedResultFields(t *testing.T) {
 }
 
 func TestObservedSuggestedNextToolReadsRecoveryPacketAllowedTools(t *testing.T) {
-	observation := completionGateObservation(1, completionGateResult{Message: "finish is not backed by observed results", EvidenceKind: evidenceKindExpectedResult}, nil)
+	observation := completionGateObservation(1, completionGateResult{Message: "finish is not backed by observed results", EvidenceKind: evidenceKindExpectedResult}, nil, nil)
 	observation.RecoveryPacket = &RecoveryPacket{
 		AllowedTools: []string{"file_write", "site.build"},
 	}
