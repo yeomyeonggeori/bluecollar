@@ -508,3 +508,27 @@ func TestAJudgeAskingForUnknownIDsGetsNoSecondPass(t *testing.T) {
 		t.Fatalf("an ID that matches no recorded observation resolves to nothing, and a second pass over the same display would be the same guess: calls=%d result=%+v", len(languageModel.requests), result)
 	}
 }
+
+func TestTheJudgeSeesItsOwnPriorRejections(t *testing.T) {
+	rejection := completionGateObservation(3, completionGateResult{
+		Message:      "the venmo filter was never applied to the recipients",
+		EvidenceKind: evidenceKindExpectedResult,
+	}, nil, nil)
+	messages := completionJudgeMessages(AgentTurnRequest{Prompt: "message the relatives without venmo"}, []turnObservation{rejection}, nil, completionJudgeFinishActionDocument(), nil)
+
+	joined := joinedMessageContent(messages)
+	if !strings.Contains(joined, "venmo filter was never applied") {
+		t.Fatalf("each judge call was memoryless, so an agent re-finishing the same state farmed fresh samples until one passed — verdict runs of seven rejections then one approval: %s", joined[:300])
+	}
+	if !strings.Contains(joined, "not permanent vetoes") {
+		t.Fatalf("a lone must-check makes a weak judge treat old reasons as forever: %s", joined[:200])
+	}
+}
+
+func TestAFirstFinishCarriesNoRejectionContext(t *testing.T) {
+	messages := completionJudgeMessages(AgentTurnRequest{Prompt: "task"}, nil, nil, completionJudgeFinishActionDocument(), nil)
+
+	if strings.Contains(joinedMessageContent(messages), "Earlier finishes of this task were rejected") {
+		t.Fatal("nothing was rejected and nothing should be claimed")
+	}
+}

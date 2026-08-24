@@ -200,6 +200,9 @@ func completionJudgeMessages(request AgentTurnRequest, observations []turnObserv
 	if planContext := completionJudgePlanContext(observations); planContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: planContext})
 	}
+	if rejectionContext := completionJudgePriorRejections(observations); rejectionContext != "" {
+		messages = append(messages, model.Message{Role: "system", Content: rejectionContext})
+	}
 	messages = append(messages, model.Message{Role: "system", Content: completionJudgeAttachmentDescription(attachments)})
 	messages = append(messages, model.Message{Role: "user", Content: "Recorded operations this turn, reads and state changes alike. An entry with failed=true did not do what it attempted:\n" + completionJudgeLedgerDocument(request.ToolSet, observations, fullyShownObservationIDs(actionDocument, expandedObservationIDs))})
 	return messages
@@ -245,6 +248,26 @@ func completionJudgeInstruction() string {
 		"Resolve relative dates such as today, tomorrow, 오늘, and 내일 only from the runtime temporal context below. Never guess the current date from ledger values.",
 		"Judge state changes by the recorded operation results. Items that merely appear inside another result's diagnostic fields, such as candidate lists in a search result, are not additional requirements unless the instruction itself names them.",
 		"Do not invent requirements the instruction does not state. Wording, formatting, phrasing, and which list or table a record appears in are not failures. If the right operations ran and every explicitly stated value appears in some recorded input, mark satisfied.",
+	}, "\n")
+}
+
+func completionJudgePriorRejections(observations []turnObservation) string {
+	rejectionReasons := []string{}
+	for _, observation := range observations {
+		if observation.Action != "evidence_missing" || observation.PolicyCode != evidenceKindExpectedResult || observation.Failure == nil {
+			continue
+		}
+		if reason := strings.TrimSpace(observation.Failure.UserSafeSummary); reason != "" {
+			rejectionReasons = appendUniqueStrings(rejectionReasons, truncateForLedger(reason, completionJudgeInputMaxLength))
+		}
+	}
+	if len(rejectionReasons) == 0 {
+		return ""
+	}
+	return strings.Join([]string{
+		"Earlier finishes of this task were rejected for these reasons:",
+		strings.Join(rejectionReasons, "\n"),
+		"Each of these is an open gap. Mark satisfied only when visible ledger entries recorded after the rejection close every one of them; the same state that earned a rejection earns the same rejection again. A gap that later evidence genuinely closes is closed — these reasons are not permanent vetoes.",
 	}, "\n")
 }
 
