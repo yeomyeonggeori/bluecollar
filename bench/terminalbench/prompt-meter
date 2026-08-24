@@ -93,6 +93,21 @@ def forwarding_handler_for(harness_name):
         def log_message(self, *_):
             return
 
+        # A harness asks the endpoint for the model's context length before its first turn. Answering
+        # 501 here makes it fall back to a default window, so it compacts and truncates against a
+        # budget the model does not have while a harness that never asks keeps the real one.
+        def do_GET(self):
+            upstream_request = urllib.request.Request(
+                UPSTREAM_ORIGIN + self.path,
+                method="GET",
+                headers={"Authorization": self.headers.get("Authorization", "")},
+            )
+            try:
+                with urllib.request.urlopen(upstream_request, timeout=60) as upstream_response:
+                    self.relay(upstream_response)
+            except urllib.error.HTTPError as refusal:
+                self.relay(refusal)
+
         def do_POST(self):
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
             upstream_request = urllib.request.Request(
