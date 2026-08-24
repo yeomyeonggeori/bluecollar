@@ -731,8 +731,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		state.LastModelMessage = ""
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
-	observation := agentTurnRunner.invokeTool(effortContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message)
-	observation.AssistantText = actionDocument.AssistantText
+	observation := agentTurnRunner.invokeTool(effortContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText)
 	observation = agentTurnRunner.resolveCalendarDuplicate(effortContext, taskRunID, observationID, request, actionDocument, observation)
 	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, state.Attachments); isCancelled {
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}
@@ -2438,7 +2437,7 @@ func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Contex
 			"input":         json.RawMessage(carriedOutCall.ToolInput),
 		}))
 		observation := agentTurnRunner.saveToolObservation(
-			ctx, taskRunID, observationID, toolName, "", carriedOutCall.ToolInput, toolName,
+			ctx, taskRunID, observationID, "", toolName, "", carriedOutCall.ToolInput, toolName,
 			canonicalToolInput(carriedOutCall.ToolInput), carriedOutCall.Result,
 			false, request.WorkspaceRootPath, time.Time{}, 0,
 		)
