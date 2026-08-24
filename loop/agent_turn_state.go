@@ -487,6 +487,9 @@ func shouldExposeFailAction(state agentTaskState) bool {
 	if completionRefusalCount(state.Observations) >= refusalsThatOfferTheExit {
 		return true
 	}
+	if declinedToClaimSuccess(state.Observations) {
+		return true
+	}
 	if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt {
 		return !evaluateRecoveryAllowance(state.Observations, state.Options.RecoveryBudget).CanRecover
 	}
@@ -503,6 +506,16 @@ func shouldExposeFailAction(state agentTaskState) bool {
 // Told this many times that what it did is not the task, an agent needs to be able to say it
 // cannot do the task. Recovery being possible is not the same as the task being possible, and
 // while it is possible the exit is otherwise never on the menu.
+// This refusal is not evidence_missing, so it never reaches the count above.
+func declinedToClaimSuccess(observations []turnObservation) bool {
+	for _, observation := range observations {
+		if observation.PolicyCode == policyCodeGoalNotClaimedSatisfied {
+			return true
+		}
+	}
+	return false
+}
+
 func completionRefusalCount(observations []turnObservation) int {
 	count := 0
 	for _, observation := range observations {

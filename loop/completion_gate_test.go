@@ -2326,3 +2326,23 @@ func TestARefusalWithNothingChangedNamesNothing(t *testing.T) {
 		t.Fatalf("a shell read changed nothing and warning about repeating it argues against the work the gate is asking for: %s", refusal.ContentText())
 	}
 }
+
+func TestDecliningToClaimSuccessPutsTheExitOnTheMenu(t *testing.T) {
+	goalNotSatisfied := false
+	result := validateCompletionGate(nil, nil, nil, nil, turnActionDocument{Action: "finish", GoalSatisfied: &goalNotSatisfied})
+	refusal := completionGateObservation(2, result, nil, nil)
+
+	if !shouldExposeFailAction(agentTaskState{Observations: []turnObservation{refusal}}) {
+		t.Fatal("an agent that has decided it cannot do the task, and said so in the typed field, is left with claiming it did as the only way to reply")
+	}
+}
+
+func TestAFinishClaimingSuccessLeavesTheExitOffTheMenu(t *testing.T) {
+	goalSatisfied := true
+	result := validateCompletionGate(nil, nil, nil, nil, turnActionDocument{Action: "finish", GoalSatisfied: &goalSatisfied})
+	refusal := completionGateObservation(2, result, nil, nil)
+
+	if shouldExposeFailAction(agentTaskState{Observations: []turnObservation{refusal}}) {
+		t.Fatal("a finish refused for missing evidence is a reason to do the work, not to give up on it")
+	}
+}

@@ -39,7 +39,10 @@ type completionGateResult struct {
 	ValidityState      ValidityState
 	SuggestedNextTools []string
 	IsJudgeVerdict     bool
+	PolicyCode         string
 }
+
+const policyCodeGoalNotClaimedSatisfied = "goal_not_claimed_satisfied"
 
 const (
 	evidenceKindExpectedResult   = "expected_result_missing"
@@ -360,7 +363,7 @@ func completionRequirementsHaveEvidence(toolSet *toolcontract.ToolSet, requireme
 func validateCompletionGate(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
 	_ = criteria
 	if actionDocument.GoalSatisfied == nil || !*actionDocument.GoalSatisfied {
-		return completionGateResult{Message: "finish requires goalSatisfied=true"}
+		return completionGateResult{Message: "finish requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
 	}
 	if strings.TrimSpace(actionDocument.GoalStatus) != "" && strings.TrimSpace(actionDocument.GoalStatus) != "satisfied" {
 		return completionGateResult{Message: "finish requires goalStatus=satisfied"}
@@ -511,7 +514,7 @@ func contractRequiresAttachment(contract OutcomeContract) bool {
 func validateExpectedResultCompletionGate(request AgentTurnRequest, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument, recoveryBudget RecoveryBudget) completionGateResult {
 	_ = criteria
 	if actionDocument.GoalSatisfied == nil || !*actionDocument.GoalSatisfied {
-		return completionGateResult{Message: "finish requires goalSatisfied=true"}
+		return completionGateResult{Message: "finish requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
 	}
 	if strings.TrimSpace(actionDocument.GoalStatus) != "" && strings.TrimSpace(actionDocument.GoalStatus) != "satisfied" {
 		return completionGateResult{Message: "finish requires goalStatus=satisfied"}
@@ -771,7 +774,9 @@ func completionGateObservation(index int, result completionGateResult, toolSet *
 	message := strings.TrimSpace(result.Message)
 	evidenceKind := strings.TrimSpace(result.EvidenceKind)
 	if evidenceKind == "" {
-		return newFailureObservation(nextObservationID(index), "policy", "", message, toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "completion_gate")
+		policyObservation := newFailureObservation(nextObservationID(index), "policy", "", message, toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "completion_gate")
+		policyObservation.PolicyCode = strings.TrimSpace(result.PolicyCode)
+		return policyObservation
 	}
 	content := evidenceMissingGuidance(evidenceKind, message) + observedRealityStatement(toolSet, priorObservations)
 	observation := newFailureObservation(nextObservationID(index), "evidence_missing", "", message, toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, evidenceKind)
