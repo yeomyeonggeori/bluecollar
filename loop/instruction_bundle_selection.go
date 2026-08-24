@@ -94,8 +94,8 @@ func selectInstructionBundleForRequestWithRetrieverAndRouter(ctx context.Context
 	requiredNextTools := validatedContractNextTools(contractArbitration, selectedSkillInstructions, request)
 	requiredEvidenceTools := validatedContractEvidenceTools(contractArbitration, selectedSkillInstructions, request)
 	prompts = append(prompts, buildCompactSkillIndexPrompt(candidateInstructions))
-	prompts = append(prompts, buildSelectedSkillInstructionPrompt(defaultSkillInstructions))
-	prompts = append(prompts, buildSelectedSkillInstructionPrompt(selectedSkillInstructions))
+	prompts = append(prompts, buildSelectedSkillInstructionPrompt(skillInstructionsWhoseToolsAreCallable(request.ToolSet, defaultSkillInstructions)))
+	prompts = append(prompts, buildSelectedSkillInstructionPrompt(skillInstructionsWhoseToolsAreCallable(request.ToolSet, selectedSkillInstructions)))
 	return InstructionBundle{
 		Prompt:                         strings.Join(nonEmptyStrings(prompts), "\n\n"),
 		Sources:                        sources,
@@ -438,6 +438,28 @@ func compactSkillIndexLine(skillInstruction SkillInstruction) string {
 		parts = append(parts, strings.TrimSpace(text))
 	}
 	return strings.Join(parts, ": ")
+}
+
+func skillInstructionsWhoseToolsAreCallable(toolSet *toolcontract.ToolSet, skillInstructions []SkillInstruction) []SkillInstruction {
+	callable := []SkillInstruction{}
+	for _, skillInstruction := range skillInstructions {
+		if len(skillInstruction.ToolReferences) == 0 || anyToolIsRegistered(toolSet, skillInstruction.ToolReferences) {
+			callable = append(callable, skillInstruction)
+		}
+	}
+	return callable
+}
+
+func anyToolIsRegistered(toolSet *toolcontract.ToolSet, toolNames []string) bool {
+	if toolSet == nil {
+		return false
+	}
+	for _, toolName := range toolNames {
+		if _, isRegistered := toolSet.ToolDefinition(strings.TrimSpace(toolName)); isRegistered {
+			return true
+		}
+	}
+	return false
 }
 
 func buildSelectedSkillInstructionPrompt(skillInstructions []SkillInstruction) string {

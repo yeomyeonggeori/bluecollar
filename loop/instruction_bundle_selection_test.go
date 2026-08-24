@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"reflect"
 	"strings"
 	"testing"
@@ -124,5 +125,17 @@ func TestASkillWithSomethingToSayCarriesTheGuidance(t *testing.T) {
 	}
 	if strings.Contains(prompt, "Skill: presentation") {
 		t.Fatalf("a skill with an empty prompt has nothing to contribute: %q", prompt)
+	}
+}
+
+func TestASkillBodyRidesOnlyWithItsTools(t *testing.T) {
+	shellOnly := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
+	memorySkill := SkillInstruction{Name: "memory", Prompt: "Call memory_search before answering.", ToolReferences: []string{"memory_search", "memory_remember"}}
+	workflowSkill := SkillInstruction{Name: "handbook", Prompt: "Follow the escalation order."}
+
+	kept := skillInstructionsWhoseToolsAreCallable(shellOnly, []SkillInstruction{memorySkill, workflowSkill})
+
+	if len(kept) != 1 || kept[0].Name != "handbook" {
+		t.Fatalf("a body ordering calls to tools the palette does not hold rides on every request as weight the model cannot act on: %+v", kept)
 	}
 }

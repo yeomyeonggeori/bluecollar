@@ -23,7 +23,7 @@ Remember only what stays useful across future conversations, such as names, pref
 Do not remember secrets, one-off requests, temporary details, small talk, or facts that are not useful beyond the current conversation.
 The runtime decides whether durable memory belongs to person memory or active circle memory from the current conversation scope.
 `),
-		ToolReferences: nil,
+		ToolReferences: []string{"memory_search", "memory_remember"},
 		Source: InstructionSource{
 			Path:      "builtin:memory",
 			SkillName: "memory",
