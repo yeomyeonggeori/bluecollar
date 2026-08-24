@@ -85,44 +85,13 @@ stopPromptMeters() {
   jobs -p | xargs kill 2> /dev/null || true
 }
 
-releaseRunResources() {
-  stopPromptMeters
-  removeWarmedTaskImages
-}
-
-# terminal-bench tags a task's images tb__<task>__<service>, without the compose project name it
-# gives each trial, so concurrent attempts of one task race to export the same tag and the loser
-# dies as unknown_agent_error. Building each task once lets the run go with --no-rebuild.
-warmTaskImages() {
-  local taskID composeFile
-  for taskID in "$@"; do
-    composeFile="$(find "$HOME/.cache/terminal-bench" -type f -path "*/$taskID/docker-compose.yaml" -print -quit 2> /dev/null)"
-    if [ -z "$composeFile" ]; then
-      echo "no compose file cached for $taskID yet; its first attempts may collide on image export" >&2
-      continue
-    fi
-    docker compose -p "warm-$taskID" -f "$composeFile" build > /dev/null
-    warmedTaskCount=$((warmedTaskCount + 1))
-  done
-}
-
-removeWarmedTaskImages() {
-  local warmed
-  warmed="$(docker images --format '{{.Repository}}:{{.Tag}}' | grep '^tb__' || true)"
-  if [ -n "$warmed" ]; then printf '%s\n' "$warmed" | xargs docker rmi -f > /dev/null 2>&1 || true; fi
-}
-
 refuseUnknownModel
 removeAbandonedTaskContainers
-warmedTaskCount=0
-prebuiltImageArguments=""
-warmTaskImages "$@"
-if [ "$warmedTaskCount" -gt 0 ]; then prebuiltImageArguments="--no-rebuild --no-cleanup"; fi
 
 go build -o /tmp/bluecollar ./cmd/bluecollar
 
 startPromptMeters
-trap releaseRunResources EXIT
+trap stopPromptMeters EXIT
 
 runHarness() {
   local harnessName="$1" importPath="$2"
@@ -145,7 +114,6 @@ runHarness() {
       --model "$model" \
       --n-concurrent "$concurrency" \
       --n-attempts "$attempts" \
-      $prebuiltImageArguments \
       --global-agent-timeout-sec "$agentTimeoutSecond" \
       --global-test-timeout-sec "$testTimeoutSecond" \
       ${taskArguments[@]+"${taskArguments[@]}"} \
