@@ -2,18 +2,18 @@
   "maximumTotalBytes": 16384,
   "fixtures": {
     "conversation task with skills": {
-      "totalBytes": 12146,
+      "totalBytes": 11799,
       "instructionBytes": 5079,
       "toolCatalogBytes": 290,
       "actionSchemaBytes": 5175,
-      "messageBytes": 6971
+      "messageBytes": 6624
     },
     "workspace task": {
-      "totalBytes": 10861,
+      "totalBytes": 10514,
       "instructionBytes": 4231,
       "toolCatalogBytes": 288,
       "actionSchemaBytes": 5173,
-      "messageBytes": 5688
+      "messageBytes": 5341
     }
   }
 }

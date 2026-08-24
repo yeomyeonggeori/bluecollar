@@ -169,7 +169,7 @@ func TestCompletionJudgeMessagesIncludeTemporalContext(t *testing.T) {
 	if !strings.Contains(joined, "Runtime temporal context:") {
 		t.Fatalf("expected temporal context in judge prompt, got %s", joined)
 	}
-	if !strings.Contains(joined, buildTemporalContextDescription(turnStartedAt, time.Time{})) {
+	if !strings.Contains(joined, buildTemporalContextDescription(time.Time{})) {
 		t.Fatalf("expected turn-start temporal description in judge prompt, got %s", joined)
 	}
 }
