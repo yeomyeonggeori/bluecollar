@@ -1042,3 +1042,16 @@ func TestACallerWithNoDeadlineImposesNoBudget(t *testing.T) {
 		t.Fatalf("an embedding that sets no deadline keeps the derived budget as its only bound, got %d seconds against a deadline of %d", bounded.MaxElapsedSecond, bounded.DeadlineSecond)
 	}
 }
+
+func TestALevelDerivedElapsedBudgetIsNotMistakenForTheHosts(t *testing.T) {
+	agentKernel, _ := newKernelTestServices()
+
+	turnOptions := agentKernel.turnOptionsForIntakeDecision(context.Background(), IntakeDecision{TaskLevel: TaskLevelLow})
+
+	if turnOptions.MaxElapsedSecond <= 0 {
+		t.Fatalf("the intake path derives the elapsed budget from the level, got %d", turnOptions.MaxElapsedSecond)
+	}
+	if turnOptions.ElapsedCameFromTheCaller {
+		t.Fatal("a budget the kernel derived from the level is not the host's number, and marking it so blocks every elapsed-side grant")
+	}
+}
