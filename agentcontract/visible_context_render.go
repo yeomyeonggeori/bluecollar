@@ -23,11 +23,19 @@ func ContextRenderLocation() *time.Location {
 
 func BuildVisibleContextDescription(visibleContext VisibleContext) string {
 	contextLines := []string{}
+	// Several exchanges can share one place. Flattened into a list they read as
+	// one conversation, and a request from one gets answered with the subject of
+	// another. Each line says which exchange it belongs to, so what belongs
+	// together is the reader's to see rather than this function's to decide.
+	threadLabels := labelThreadsInOrder(visibleContext.Messages)
 	for _, message := range visibleContext.Messages {
 		speaker := formatSpeakerLabel(message.SpeakerCallingName, message.SpeakerHandle, message.Speaker)
 		prefix := "- "
 		if stamp := FormatContextTimestamp(message.SentAt); stamp != "" {
 			prefix = "- [" + stamp + "] "
+		}
+		if label := threadLabels[strings.TrimSpace(message.ThreadRootID)]; label != "" {
+			prefix += label + " "
 		}
 		text := strings.TrimSpace(message.Text)
 		if text != "" {
@@ -169,4 +177,29 @@ func visibleContextMaterialLooksLikeImage(material VisibleContextMaterial) bool 
 		strings.HasSuffix(filename, ".jpeg") ||
 		strings.HasSuffix(filename, ".gif") ||
 		strings.HasSuffix(filename, ".webp")
+}
+
+
+// A place that holds one exchange needs no labels; the label is only there to
+// separate exchanges that would otherwise read as one, and it is the position
+// in this window rather than any identifier the platform uses.
+func labelThreadsInOrder(messages []VisibleContextMessage) map[string]string {
+	order := []string{}
+	seen := map[string]bool{}
+	for _, message := range messages {
+		threadRootID := strings.TrimSpace(message.ThreadRootID)
+		if threadRootID == "" || seen[threadRootID] {
+			continue
+		}
+		seen[threadRootID] = true
+		order = append(order, threadRootID)
+	}
+	if len(order) < 2 {
+		return map[string]string{}
+	}
+	labels := map[string]string{}
+	for index, threadRootID := range order {
+		labels[threadRootID] = fmt.Sprintf("(exchange %d)", index+1)
+	}
+	return labels
 }

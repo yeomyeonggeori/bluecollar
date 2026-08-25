@@ -17,7 +17,11 @@ type VisibleContextMessage struct {
 	SpeakerHandle      string
 	Text               string
 	SentAt             time.Time
-	Materials          []VisibleContextMaterial
+	// ThreadRootID says which exchange a message belongs to. Context that spans
+	// several of them reads as one conversation without it, and a request from
+	// one exchange gets answered with the subject of another.
+	ThreadRootID string
+	Materials    []VisibleContextMaterial
 }
 
 type VisibleContextMaterial struct {
