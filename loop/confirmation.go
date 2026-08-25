@@ -100,7 +100,7 @@ func (agentKernel *AgentKernel) generateConfirmationUserMessage(responseContext 
 	structuredResponse, errorValue := agentKernel.languageModel.GenerateStructuredResponse(
 		responseContext,
 		model.StructuredResponseRequest{
-			Messages: []model.Message{
+			Messages: withoutEmptyMessages([]model.Message{
 				{Role: "system", Content: "Write one concise user-facing message. Do not expose JSON, task IDs, or internal tool names."},
 				{Role: "system", Content: responseLanguageInstruction(request.ResponseLanguage)},
 				{Role: "system", Content: buildTemporalContextDescription(request.EnvironmentNow)},
@@ -111,7 +111,7 @@ func (agentKernel *AgentKernel) generateConfirmationUserMessage(responseContext 
 					"Execution plan: " + string(planDocument),
 					"Policy decision: " + string(decisionDocument),
 				}, "\n")},
-			},
+			}),
 			StructuredOutputSchema: model.StructuredOutputSchema{
 				Name:               "bluecollar_confirmation_message",
 				Document:           `{"type":"object","properties":{"reply":{"type":"string"}},"required":["reply"],"additionalProperties":false}`,
@@ -271,4 +271,15 @@ func trimNonEmptyConfirmationStrings(values []string) []string {
 		}
 	}
 	return trimmedValues
+}
+
+func withoutEmptyMessages(messages []model.Message) []model.Message {
+	kept := make([]model.Message, 0, len(messages))
+	for _, message := range messages {
+		if strings.TrimSpace(message.Content) == "" {
+			continue
+		}
+		kept = append(kept, message)
+	}
+	return kept
 }

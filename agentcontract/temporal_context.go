@@ -5,13 +5,9 @@ import (
 	"time"
 )
 
-// The date comes from outside. A host that knows the clock of the world being worked on states
-// it — a simulated world, a replayed dataset, a device in another timezone — and where none has,
-// the runtime does not know it. Naming the machine's clock instead is a claim about that world
-// which the runtime is not entitled to make.
 func BuildTemporalContextDescription(environmentNow time.Time) string {
 	if environmentNow.IsZero() {
-		return unknownDateContext()
+		return ""
 	}
 	location := TemporalContextLocation()
 	currentTime := environmentNow
@@ -20,12 +16,6 @@ func BuildTemporalContextDescription(environmentNow time.Time) string {
 		"Now: " + localTime.Format("2006-01-02 (Mon) 15:04 -07:00") + " " + location.String(),
 		buildCurrentWeekDescription(localTime),
 		"Resolve relative dates (오늘, 내일, 다음 주, next Friday) from this.",
-	}, "\n")
-}
-
-func unknownDateContext() string {
-	return strings.Join([]string{
-		"Now: not known to this runtime. Before answering anything that turns on a date, take today from the system you are operating — its own clock, apps, or records — never from this shell's clock, which can belong to a different machine than the one whose data you are reading.",
 	}, "\n")
 }
 

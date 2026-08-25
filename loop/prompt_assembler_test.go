@@ -280,8 +280,8 @@ func TestPromptAssemblerIncludesTurnDateContext(t *testing.T) {
 	}, nil, "base", "")
 	body := joinMessageContent(messages)
 
-	if !strings.Contains(body, "Runtime:") || !strings.Contains(body, "Now: not known to this runtime") {
-		t.Fatalf("expected turn date context, got %s", body)
+	if !strings.Contains(body, "Runtime:") || strings.Contains(body, "Now:") {
+		t.Fatalf("an unknown clock says nothing: naming it at all is what sends the model to the shell's wrong one, got %s", body)
 	}
 }
 
