@@ -20,8 +20,10 @@ func BuildTemporalContextDescription(environmentNow time.Time) string {
 		"Runtime temporal context:",
 		"Current date: " + localTime.Format("2006-01-02"),
 		"Current weekday: " + localTime.Weekday().String(),
-		"Current time: " + localTime.Format("15:04"),
-		"Time zone: " + location.String(),
+		"Current time: " + localTime.Format("15:04") + " (" + localTime.Format(time.RFC3339) + ")",
+		// The name alone leaves the offset to be recalled rather than read, and a
+		// small model recalls it wrong.
+		"Time zone: " + location.String() + " (UTC" + localTime.Format("-07:00") + ")",
 		buildCurrentWeekDescription(localTime),
 		"Resolve relative dates such as today, tomorrow, next Friday, 오늘, 내일, and 다음 주 from this context before choosing tool inputs.",
 	}, "\n")
