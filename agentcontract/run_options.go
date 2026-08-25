@@ -12,15 +12,16 @@ type RecoveryBudget struct {
 }
 
 type TurnOptions struct {
-	MaxIterationCount    int
-	MaxToolCallCount     int
-	MaxElapsedSecond     int
-	DeadlineSecond       int
-	ContextWindowTokens  int
-	RecoveryAttemptLimit int
-	RecoveryBudget       RecoveryBudget
-	TaskLevel            TaskLevel
-	GenerationOptions    model.GenerationOptions
+	MaxIterationCount        int
+	MaxToolCallCount         int
+	MaxElapsedSecond         int
+	ElapsedCameFromTheCaller bool
+	DeadlineSecond           int
+	ContextWindowTokens      int
+	RecoveryAttemptLimit     int
+	RecoveryBudget           RecoveryBudget
+	TaskLevel                TaskLevel
+	GenerationOptions        model.GenerationOptions
 	// Zero keeps delegation off, and off costs a turn nothing: the delegate action is
 	// absent from the schema and the instruction says nothing about it.
 	DelegationLimit int

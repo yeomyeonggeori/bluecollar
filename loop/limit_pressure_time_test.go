@@ -901,3 +901,29 @@ func TestARefreshNeverLowersTheWallMidRun(t *testing.T) {
 		t.Fatalf("a median built from the cheapest steps so far shrank the wall to %ds of a 900s budget and the clock killed calls the level meant to allow", runner.options.MaxElapsedSecond)
 	}
 }
+
+func TestAnElapsedWallGrantsTheSameOneLevelTheIterationWallDoes(t *testing.T) {
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	services := newTurnRunnerTestServices(nil, TurnOptions{
+		MaxToolCallCount:  mediumProfile.MaxToolCallCount,
+		MaxIterationCount: mediumProfile.MaxIterationCount,
+	})
+	spentTheWholeBudget := time.Now().Add(-time.Duration(services.runner.options.MaxElapsedSecond) * time.Second)
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelMedium, EffortStartedAt: spentTheWholeBudget}}
+
+	_, isElapsed, errorValue := services.runner.stopForElapsedLimitIfReached(context.Background(), "task-1", state.Request, state, 3)
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if isElapsed {
+		t.Fatal("a slow model exhausts the clock before the step ceiling, and a wall only the step path can raise kills every run on that model")
+	}
+	if !state.didExtendBudgetOneLevel() {
+		t.Fatal("expected the elapsed wall to spend the same single grant the iteration wall spends")
+	}
+	_, isElapsedAfterGrant, _ := services.runner.stopForElapsedLimitIfReached(context.Background(), "task-1", state.Request, state, 3)
+	if isElapsedAfterGrant {
+		t.Fatal("the granted level's clock has to cover more than the level it replaced, or the grant bought nothing")
+	}
+}
