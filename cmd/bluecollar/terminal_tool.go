@@ -169,10 +169,24 @@ func terminalRunResult(ctx context.Context, runningShell shell, exitCode int, ou
 	if runError != nil && exitCode == 0 {
 		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "terminal_run", runError.Error())
 	}
-	if exitCode != 0 {
-		return exitedNonZeroResult(exitCode, truncatedOutput, document)
+	contentText := truncatedOutput
+	if wasTruncated {
+		contentText += truncationFooter(len(output), outputPath)
 	}
-	return toolcontract.ToolSuccessData(truncatedOutput, document)
+	if exitCode != 0 {
+		return exitedNonZeroResult(exitCode, contentText, document)
+	}
+	return toolcontract.ToolSuccessData(contentText, document)
+}
+
+// The tail alone reads as the whole output; the footer is what tells the model
+// the head exists and where the untruncated copy can be read back from.
+func truncationFooter(totalBytes int, outputPath string) string {
+	footer := "\n\n[output truncated: showing the last " + strconv.Itoa(maximumCapturedOutput) + " of " + strconv.Itoa(totalBytes) + " bytes"
+	if outputPath != "" {
+		footer += "; the full output is in " + outputPath
+	}
+	return footer + "]"
 }
 
 // The failure helpers put their summary where the output goes, and the output is what the model

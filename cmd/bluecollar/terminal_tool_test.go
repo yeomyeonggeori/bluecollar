@@ -374,3 +374,26 @@ func TestSpilledOutputLandsWhereThisPersonMayWrite(t *testing.T) {
 		t.Fatalf("a host that gives each person their own tmp expects the spill to land there, and a shared /tmp lets one person read another's output: %q", output.OutputPath)
 	}
 }
+
+func TestTruncatedOutputTellsTheModelWhereTheFullCopyIs(t *testing.T) {
+	result := invokeTerminalRun(t, t.TempDir(), `{"command":"head -c 40000 /dev/zero | tr '\\0' 'a'; echo THEEND"}`)
+
+	content := result.Output.Content
+	if !strings.Contains(content, "[output truncated: showing the last") {
+		t.Fatal("a silently cut tail reads as the whole output, and the model never learns the head existed")
+	}
+	output := decodedOutput(t, result)
+	if output.OutputPath == "" {
+		t.Fatal("expected the full output spilled to a path the model can read back")
+	}
+	if !strings.Contains(content, output.OutputPath) {
+		t.Fatal("a path recorded only in the structured document never reaches the model, which reads the content text")
+	}
+	spilled, readError := os.ReadFile(output.OutputPath)
+	if readError != nil {
+		t.Fatalf("expected the spilled copy readable: %v", readError)
+	}
+	if len(spilled) <= maximumCapturedOutput || !strings.Contains(string(spilled), "THEEND") {
+		t.Fatalf("expected the spilled copy to hold the whole output, got %d bytes", len(spilled))
+	}
+}
