@@ -533,6 +533,10 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				if !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 					return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "llm action failed: "+actionError.Error(), &state, iteration)
 				}
+				if !agentTurnRunner.options.ElapsedCameFromTheCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
+					refreshWorkContext()
+					continue
+				}
 				completionRequirements := elapsedCompletionRequirements(toolUseRequirements, state.Observations, state.CompletionIntentToolName, request.ToolSet)
 				return agentTurnRunner.stopForElapsedLimit(taskContext, taskRun.TaskRunID, request, completionRequirements, state.Observations, state.Attachments, state.ExecutionState, iteration-1, state.ToolCallCount)
 			}

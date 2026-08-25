@@ -21,6 +21,9 @@ func DurationForIterationCount(iterationCount int, iterationCost IterationCost, 
 	if costPerIteration <= 0 {
 		costPerIteration = unmeasuredCostPerIteration()
 	}
+	if costPerIteration > slowestPlausibleCostPerCall {
+		costPerIteration = slowestPlausibleCostPerCall
+	}
 	measured := time.Duration(iterationCount) * costPerIteration * durationMargin
 	shortest := time.Duration(iterationCount) * fastestPlausibleCostPerCall * durationMargin
 	return min(max(measured, shortest), ceiling)
