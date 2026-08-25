@@ -82,6 +82,8 @@ type (
 
 const (
 	ActiveGoalStatusActive           = agentcontract.ActiveGoalStatusActive
+	ElapsedBudgetFromCaller          = agentcontract.ElapsedBudgetFromCaller
+	ElapsedBudgetFromLevel           = agentcontract.ElapsedBudgetFromLevel
 	ActiveGoalStatusBlocked          = agentcontract.ActiveGoalStatusBlocked
 	ActiveGoalStatusCompleted        = agentcontract.ActiveGoalStatusCompleted
 	ActiveGoalStatusWaitingApproval  = agentcontract.ActiveGoalStatusWaitingApproval

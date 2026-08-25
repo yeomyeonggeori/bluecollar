@@ -311,8 +311,9 @@ func normalizeTurnOptions(options TurnOptions) TurnOptions {
 	}
 	if options.MaxElapsedSecond <= 0 {
 		options.MaxElapsedSecond = int(taskLevelProfile.Duration.Seconds())
-	} else {
-		options.ElapsedCameFromTheCaller = true
+		options.ElapsedBudgetSource = ElapsedBudgetFromLevel
+	} else if options.ElapsedBudgetSource == "" {
+		options.ElapsedBudgetSource = ElapsedBudgetFromCaller
 	}
 	if recoveryBudgetIsUnset(options.RecoveryBudget) {
 		options.RecoveryBudget = defaultRecoveryBudget()
@@ -533,7 +534,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				if !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 					return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "llm action failed: "+actionError.Error(), &state, iteration)
 				}
-				if !agentTurnRunner.options.ElapsedCameFromTheCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
+				if agentTurnRunner.options.ElapsedBudgetSource != ElapsedBudgetFromCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
 					refreshWorkContext()
 					continue
 				}
@@ -1877,7 +1878,7 @@ func (agentTurnRunner *AgentTurnRunner) stopForElapsedLimitIfReached(ctx context
 	if ctx.Err() != nil || !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 		return AgentTurnResult{}, false, nil
 	}
-	if !agentTurnRunner.options.ElapsedCameFromTheCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRunID, state) {
+	if agentTurnRunner.options.ElapsedBudgetSource != ElapsedBudgetFromCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRunID, state) {
 		return AgentTurnResult{}, false, nil
 	}
 	completionRequirements := elapsedCompletionRequirements(state.Requirements, state.Observations, state.CompletionIntentToolName, request.ToolSet)

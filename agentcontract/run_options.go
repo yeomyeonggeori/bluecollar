@@ -11,12 +11,17 @@ type RecoveryBudget struct {
 	NoToolFallback int
 }
 
+const (
+	ElapsedBudgetFromCaller = "caller"
+	ElapsedBudgetFromLevel  = "level"
+)
+
 type TurnOptions struct {
-	MaxIterationCount        int
-	MaxToolCallCount         int
-	MaxElapsedSecond         int
-	ElapsedCameFromTheCaller bool
-	DeadlineSecond           int
+	MaxIterationCount   int
+	MaxToolCallCount    int
+	MaxElapsedSecond    int
+	ElapsedBudgetSource string
+	DeadlineSecond      int
 	ContextWindowTokens      int
 	RecoveryAttemptLimit     int
 	RecoveryBudget           RecoveryBudget
