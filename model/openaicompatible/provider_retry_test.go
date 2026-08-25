@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func retryTestProvider(serverURL string) *Provider {
@@ -108,5 +110,40 @@ func TestRetryDelayHonoursTheEndpointsRequestedWaitWithinTheCeiling(t *testing.T
 	}
 	if delay := retryDelay(time.Second, 2, 0); delay != 4*time.Second {
 		t.Fatalf("expected exponential backoff, got %v", delay)
+	}
+}
+
+func TestAGenerationTheEndpointAbortedIsRetried(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requestCount++
+		if requestCount <= 2 {
+			writer.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":""},"finish_reason":"error"}]}`))
+			return
+		}
+		writer.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`))
+	}))
+	defer server.Close()
+
+	response, errorValue := retryTestProvider(server.URL).GenerateChatCompletion(context.Background(), model.ChatCompletionRequest{})
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if response.FinishReason != "tool_calls" || requestCount != 3 {
+		t.Fatalf("finish_reason error is the endpoint failing mid-generation, not the model misformatting, and the correction loop cannot fix an upstream outage: %s after %d requests", response.FinishReason, requestCount)
+	}
+}
+
+func TestAnEmptyFinishReasonWithToolCallsIsAToolCall(t *testing.T) {
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]}}]}`)
+
+	response, errorValue := decodeChatCompletion(responseBody, "any/model")
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if response.FinishReason != "tool_calls" {
+		t.Fatalf("an endpoint that omits finish_reason still delivered the calls, and refusing them wastes the whole response: %q", response.FinishReason)
 	}
 }

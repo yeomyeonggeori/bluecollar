@@ -54,11 +54,22 @@ func (provider *Provider) GenerateChatCompletion(ctx context.Context, request mo
 	if errorValue != nil {
 		return model.ChatCompletionResponse{}, errorValue
 	}
-	responseBody, errorValue := provider.post(ctx, body)
-	if errorValue != nil {
-		return model.ChatCompletionResponse{}, errorValue
+	for attempt := 0; ; attempt++ {
+		responseBody, postError := provider.post(ctx, body)
+		if postError != nil {
+			return model.ChatCompletionResponse{}, postError
+		}
+		response, decodeError := decodeChatCompletion(responseBody, provider.modelName)
+		if decodeError != nil {
+			return model.ChatCompletionResponse{}, decodeError
+		}
+		if response.FinishReason != "error" || attempt >= transientRetryCount || ctx.Err() != nil {
+			return response, nil
+		}
+		if waitBeforeRetry(ctx, retryDelay(provider.retryBaseDelay, attempt, 0)) != nil {
+			return response, nil
+		}
 	}
-	return decodeChatCompletion(responseBody, provider.modelName)
 }
 
 func (provider *Provider) GenerateRecoveryChatCompletion(ctx context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
@@ -158,11 +169,15 @@ func decodeChatCompletion(responseBody []byte, modelName string) (model.ChatComp
 	if reasoning == "" {
 		reasoningField = ""
 	}
+	finishReason := decoded.Choices[0].FinishReason
+	if finishReason == "" && len(decoded.Choices[0].Message.ToolCalls) > 0 {
+		finishReason = "tool_calls"
+	}
 	return model.ChatCompletionResponse{
 		Transport:    "http",
 		ProviderName: "openai-compatible",
 		ModelName:    modelName,
-		FinishReason: decoded.Choices[0].FinishReason,
+		FinishReason: finishReason,
 		Message: model.ChatCompletionMessage{
 			Role:           decoded.Choices[0].Message.Role,
 			Content:        decoded.Choices[0].Message.Content,
