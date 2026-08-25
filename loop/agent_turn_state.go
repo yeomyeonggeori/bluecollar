@@ -1192,8 +1192,6 @@ func requestAfterThinkingAloud(currentRequest model.ChatCompletionRequest, respo
 	return thoughtRequest, thought, true
 }
 
-// A thought sampled before the forced call lives only in that one request's messages;
-// carrying it on the action is what lets later transcripts replay it.
 func actionCarryingThought(action agentAction, thought string) agentAction {
 	if thought == "" {
 		return action
