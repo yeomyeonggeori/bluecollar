@@ -715,7 +715,7 @@ func (agentTurnRunner *AgentTurnRunner) recordUnavailableToolRequest(taskRunID s
 		"toolName":      trimmedToolName,
 		"input":         json.RawMessage(toolInput),
 	}))
-	return agentTurnRunner.saveToolObservation(context.Background(), taskRunID, observationID, "", trimmedToolName, "", toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolcontract.ToolFailureResult(toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "tool_availability", "tool is not allowed"), false, workspaceRootPath, minimumModifiedAt, 0)
+	return agentTurnRunner.saveToolObservation(context.Background(), taskRunID, observationID, "", "", "", trimmedToolName, "", toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolcontract.ToolFailureResult(toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "tool_availability", "tool is not allowed"), false, workspaceRootPath, minimumModifiedAt, 0)
 }
 
 func stringValue(value any) string {

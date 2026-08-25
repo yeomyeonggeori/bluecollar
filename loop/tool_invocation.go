@@ -69,7 +69,7 @@ func (agentTurnRunner *AgentTurnRunner) recordToolObservation(taskRunID string, 
 	successfulToolCalls[canonicalToolCallKey(actionDocument.ToolName, actionDocument.ToolInput)] = observation
 }
 
-func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegistry *toolcontract.ToolSet, taskRunID string, observationID string, toolName string, toolInput json.RawMessage, workspaceRootPath string, minimumModifiedAt time.Time, responseLanguage string, userFacingMessage string, assistantText string) turnObservation {
+func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegistry *toolcontract.ToolSet, taskRunID string, observationID string, toolName string, toolInput json.RawMessage, workspaceRootPath string, minimumModifiedAt time.Time, responseLanguage string, userFacingMessage string, assistantText string, modelReasoning string, modelReasoningField string) turnObservation {
 	trimmedToolName := strings.TrimSpace(toolName)
 	toolInputKey := canonicalToolCallKey(trimmedToolName, toolInput)
 	if toolRegistry == nil {
@@ -94,7 +94,7 @@ func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegi
 		toolResult = toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, trimmedToolName, errorValue.Error())
 	}
 	agentTurnRunner.recordToolCrash(taskRunID, observationID, trimmedToolName, toolResult)
-	observation := agentTurnRunner.saveToolObservation(ctx, taskRunID, observationID, assistantText, trimmedToolName, toolDefinition.ID, toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolResult, !toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition), workspaceRootPath, minimumModifiedAt, time.Since(invocationStartedAt).Milliseconds())
+	observation := agentTurnRunner.saveToolObservation(ctx, taskRunID, observationID, assistantText, modelReasoning, modelReasoningField, trimmedToolName, toolDefinition.ID, toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolResult, !toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition), workspaceRootPath, minimumModifiedAt, time.Since(invocationStartedAt).Milliseconds())
 	return observation
 }
 
@@ -106,7 +106,7 @@ func toolFailureObservation(observationID string, toolName string, message strin
 	return newFailureObservation(observationID, "continue", toolName, message, toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, firstNonEmptyString(toolName, "tool"))
 }
 
-func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context, taskRunID string, observationID string, assistantText string, toolName string, toolID string, toolInput json.RawMessage, observationToolName string, toolInputKey string, toolResult toolcontract.ToolResult, toolIsReadOnly bool, workspaceRootPath string, minimumModifiedAt time.Time, durationMS int64) turnObservation {
+func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context, taskRunID string, observationID string, assistantText string, modelReasoning string, modelReasoningField string, toolName string, toolID string, toolInput json.RawMessage, observationToolName string, toolInputKey string, toolResult toolcontract.ToolResult, toolIsReadOnly bool, workspaceRootPath string, minimumModifiedAt time.Time, durationMS int64) turnObservation {
 	toolResult = normalizeToolFailureResult(toolName, toolResult)
 	content := toolResult.ContentText()
 	originalContent := content
@@ -149,6 +149,8 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	}
 	observation.Output.Content = content
 	observation.AssistantText = strings.TrimSpace(assistantText)
+	observation.ModelReasoning = modelReasoning
+	observation.ModelReasoningField = modelReasoningField
 	observation.ImageRefs = toolResultImageRefs(observationID, attachments)
 	observation.Summary = agentTurnRunner.buildToolResultSummary(ctx, taskRunID, toolName, originalContent, isError, attachments, artifactID, spillRef, toolResult)
 	observation.ToolInputKey = toolInputKey

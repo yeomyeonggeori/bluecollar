@@ -62,3 +62,35 @@ func TestThePromptTokensTheEndpointServedFromCacheAreRecorded(t *testing.T) {
 		t.Fatalf("a run that reports no cached tokens reads as a run that caches nothing, got %v", response.Usage.CachedPromptTokens)
 	}
 }
+
+func TestTheModelsOwnReasoningSurvivesDecoding(t *testing.T) {
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","reasoning_content":"the contacts list has no venmo field, so I will cross-reference","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`)
+
+	response, errorValue := decodeChatCompletion(responseBody, "any/model")
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if response.Message.Reasoning == "" || response.Message.ReasoningField != "reasoning_content" {
+		t.Fatalf("a reasoning model's thinking is most of its work, and dropping the field discards it every step: %+v", response.Message)
+	}
+}
+
+func TestReplayedReasoningGoesBackIntoTheFieldItCameFrom(t *testing.T) {
+	messages := chatCompletionMessages([]model.ChatCompletionMessage{{
+		Role:           "assistant",
+		Content:        "checking the accounts",
+		Reasoning:      "the contacts list has no venmo field",
+		ReasoningField: "reasoning_content",
+	}, {
+		Role:    "user",
+		Content: "continue",
+	}})
+
+	if messages[0]["reasoning_content"] != "the contacts list has no venmo field" {
+		t.Fatalf("a model trained on reasoning round-trips loses its working memory when the replay omits the field: %+v", messages[0])
+	}
+	if _, hasReasoning := messages[1]["reasoning_content"]; hasReasoning {
+		t.Fatal("only the assistant's own messages carry its reasoning")
+	}
+}

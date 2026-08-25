@@ -36,6 +36,8 @@ type turnActionDocument struct {
 	Action                string                        `json:"action"`
 	Message               string                        `json:"message"`
 	AssistantText         string                        `json:"assistantText,omitempty"`
+	ModelReasoning        string                        `json:"modelReasoning,omitempty"`
+	ModelReasoningField   string                        `json:"modelReasoningField,omitempty"`
 	ReplyParts            []AgentPart                   `json:"replyParts,omitempty"`
 	CompletionSummary     string                        `json:"completionSummary,omitempty"`
 	ToolName              string                        `json:"toolName"`
@@ -97,6 +99,8 @@ type turnObservation struct {
 	AttemptFingerprint   string                        `json:"attemptFingerprint,omitempty"`
 	RecoveryAttemptKey   string                        `json:"recoveryAttemptKey,omitempty"`
 	AssistantText        string                        `json:"assistantText,omitempty"`
+	ModelReasoning       string                        `json:"modelReasoning,omitempty"`
+	ModelReasoningField  string                        `json:"modelReasoningField,omitempty"`
 	RecoveryStep         string                        `json:"recoveryStep,omitempty"`
 	ToolIsReadOnly       bool                          `json:"toolIsReadOnly,omitempty"`
 	RecoveryAttemptSpent bool                          `json:"recoveryAttemptSpent,omitempty"`
@@ -752,7 +756,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		state.LastModelMessage = ""
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
-	observation := agentTurnRunner.invokeTool(effortContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText)
+	observation := agentTurnRunner.invokeTool(effortContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	observation = agentTurnRunner.resolveCalendarDuplicate(effortContext, taskRunID, observationID, request, actionDocument, observation)
 	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, state.Attachments); isCancelled {
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}
@@ -2451,7 +2455,7 @@ func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Contex
 			"input":         json.RawMessage(carriedOutCall.ToolInput),
 		}))
 		observation := agentTurnRunner.saveToolObservation(
-			ctx, taskRunID, observationID, "", toolName, "", carriedOutCall.ToolInput, toolName,
+			ctx, taskRunID, observationID, "", "", "", toolName, "", carriedOutCall.ToolInput, toolName,
 			canonicalToolInput(carriedOutCall.ToolInput), carriedOutCall.Result,
 			false, request.WorkspaceRootPath, time.Time{}, 0,
 		)

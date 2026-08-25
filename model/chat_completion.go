@@ -32,11 +32,13 @@ type ChatCompletionResponse struct {
 }
 
 type ChatCompletionMessage struct {
-	Role       string                   `json:"role"`
-	Content    string                   `json:"content,omitempty"`
-	Parts      []MessagePart            `json:"parts,omitempty"`
-	ToolCallID string                   `json:"toolCallId,omitempty"`
-	ToolCalls  []ChatCompletionToolCall `json:"toolCalls,omitempty"`
+	Role           string                   `json:"role"`
+	Content        string                   `json:"content,omitempty"`
+	Reasoning      string                   `json:"reasoning,omitempty"`
+	ReasoningField string                   `json:"reasoningField,omitempty"`
+	Parts          []MessagePart            `json:"parts,omitempty"`
+	ToolCallID     string                   `json:"toolCallId,omitempty"`
+	ToolCalls      []ChatCompletionToolCall `json:"toolCalls,omitempty"`
 }
 
 type ChatCompletionTool struct {
