@@ -463,8 +463,10 @@ func TestTurnRouterBuildMessagesKeepsStablePrefixClockInvariantAndOrdersVolatile
 	}
 	earlyRequest := baseRequest
 	earlyRequest.TurnStartedAt = time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC)
+	earlyRequest.EnvironmentNow = earlyRequest.TurnStartedAt
 	lateRequest := baseRequest
 	lateRequest.TurnStartedAt = time.Date(2026, 5, 12, 21, 5, 59, 0, time.UTC)
+	lateRequest.EnvironmentNow = lateRequest.TurnStartedAt
 
 	earlyMessages := turnRouter.buildMessages(earlyRequest)
 	lateMessages := turnRouter.buildMessages(lateRequest)
@@ -1249,7 +1251,7 @@ func TestTaskIntakePlannerIncludesTemporalContext(t *testing.T) {
 		t.Fatalf("expected one intake request, got %d", len(languageModel.requests))
 	}
 	body := joinMessageContent(languageModel.requests[0].Messages)
-	if !strings.Contains(body, "Now: not known to this runtime") {
+	if strings.Contains(body, "Now:") {
 		t.Fatalf("expected intake temporal context, got %s", body)
 	}
 }

@@ -199,11 +199,14 @@ func (builder LLMContextBuilder) runtimeContext(input LLMContextInput) string {
 	if startedAt.IsZero() {
 		startedAt = time.Now()
 	}
-	return strings.Join([]string{
+	lines := []string{
 		"Runtime:",
 		"Response language: " + ResolveResponseLanguage(input.ResponseLanguage),
-		strings.TrimPrefix(buildTemporalContextDescription(input.EnvironmentNow), "Runtime temporal context:\n"),
-	}, "\n")
+	}
+	if temporalContext := buildTemporalContextDescription(input.EnvironmentNow); temporalContext != "" {
+		lines = append(lines, temporalContext)
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (builder LLMContextBuilder) workspaceContext(workspaceContext WorkspaceContext) string {

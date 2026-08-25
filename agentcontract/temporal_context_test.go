@@ -9,11 +9,8 @@ import (
 func TestAnUnstatedClockIsNotInvented(t *testing.T) {
 	description := BuildTemporalContextDescription(time.Time{})
 
-	if strings.Contains(description, "Now: 2") {
-		t.Fatalf("the runtime was not told the date and stating one is a claim about the world it cannot make: %q", description)
-	}
-	if !strings.Contains(description, "never from this shell's clock") {
-		t.Fatalf("the agent has to be sent to where the date actually is, and away from the one clock that is reliably wrong: %q", description)
+	if description != "" {
+		t.Fatalf("an unknown clock says nothing: any sentence about dates is what sends the model to the shell's wrong one, got %q", description)
 	}
 }
 
