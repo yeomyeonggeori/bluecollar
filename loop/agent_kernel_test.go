@@ -1051,7 +1051,10 @@ func TestALevelDerivedElapsedBudgetIsNotMistakenForTheHosts(t *testing.T) {
 	if turnOptions.MaxElapsedSecond <= 0 {
 		t.Fatalf("the intake path derives the elapsed budget from the level, got %d", turnOptions.MaxElapsedSecond)
 	}
-	if turnOptions.ElapsedCameFromTheCaller {
+	if turnOptions.ElapsedBudgetSource == ElapsedBudgetFromCaller {
 		t.Fatal("a budget the kernel derived from the level is not the host's number, and marking it so blocks every elapsed-side grant")
+	}
+	if normalizeTurnOptions(normalizeTurnOptions(turnOptions)).ElapsedBudgetSource == ElapsedBudgetFromCaller {
+		t.Fatal("normalization has to be idempotent: a derived budget renormalized is still derived, not the host's")
 	}
 }

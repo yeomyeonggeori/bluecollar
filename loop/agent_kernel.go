@@ -844,7 +844,7 @@ func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(ctx context.Context
 	baseOptions.MaxIterationCount = taskLevelProfile.MaxIterationCount
 	baseOptions.MaxToolCallCount = taskLevelProfile.MaxToolCallCount
 	baseOptions.MaxElapsedSecond = int(elapsedBudgetForProfile(taskLevelProfile, agentKernel.iterationCostObserver.CostOfModelInUse()).Seconds())
-	baseOptions.ElapsedCameFromTheCaller = false
+	baseOptions.ElapsedBudgetSource = ElapsedBudgetFromLevel
 	return withElapsedBudgetFromDeadline(ctx, baseOptions)
 }
 
