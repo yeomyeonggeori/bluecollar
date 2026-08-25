@@ -28,6 +28,7 @@ import socketserver
 import statistics
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from collections import defaultdict
@@ -127,11 +128,20 @@ def forwarding_handler_for(harness_name):
                 method="POST",
                 headers=forwarded_headers,
             )
-            try:
-                with urllib.request.urlopen(upstream_request, timeout=900) as upstream_response:
-                    payload = self.relay(upstream_response)
-            except urllib.error.HTTPError as refusal:
-                payload = self.relay(refusal)
+            payload = None
+            for wait_before_retry in (2, 4, 8, None):
+                try:
+                    with urllib.request.urlopen(upstream_request, timeout=900) as upstream_response:
+                        payload = self.relay(upstream_response)
+                    break
+                except urllib.error.HTTPError as refusal:
+                    payload = self.relay(refusal)
+                    break
+                except urllib.error.URLError:
+                    if wait_before_retry is None:
+                        self.send_error(502, "upstream unreachable after retries")
+                        return
+                    time.sleep(wait_before_retry)
 
             record_call(harness_name, len(body), usage_from_payload(payload), b'"tool_call_id"' in body)
             keep_body(harness_name, body)
