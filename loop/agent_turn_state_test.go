@@ -1966,4 +1966,7 @@ func TestAModelThatThinksFirstThenActsCompletesOneStep(t *testing.T) {
 	if string(secondRequest.ToolChoice) != `"required"` {
 		t.Fatalf("after thinking, the second sample acts: %s", secondRequest.ToolChoice)
 	}
+	if !strings.Contains(action.AssistantText, "cross-reference the venmo accounts") {
+		t.Fatalf("a thought that lives only in one request's messages is gone from every later transcript: %+v", action)
+	}
 }

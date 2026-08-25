@@ -808,16 +808,18 @@ func DecideAgentAction(ctx context.Context, languageModel model.LanguageModelPro
 
 func decideAgentActionWithChat(ctx context.Context, chatCompleter model.ChatCompleter, request model.ChatCompletionRequest, state agentTaskState) (agentAction, error) {
 	currentRequest := request
+	thoughtSoFar := ""
 	for correctionCount := 0; ; correctionCount++ {
 		response, errorValue := chatCompleter.GenerateChatCompletion(ctx, currentRequest)
 		if errorValue == nil {
-			if thoughtRequest, isThought := requestAfterThinkingAloud(currentRequest, response, correctionCount); isThought {
+			if thoughtRequest, thought, isThought := requestAfterThinkingAloud(currentRequest, response, correctionCount); isThought {
 				currentRequest = thoughtRequest
+				thoughtSoFar = joinedAssistantText(thoughtSoFar, thought)
 				continue
 			}
 			action, parseError := parseNativeAgentActionResponse(response, currentRequest.Tools)
 			if parseError == nil {
-				return action, nil
+				return actionCarryingThought(action, thoughtSoFar), nil
 			}
 			retryRequest, canRetry := correctedAgentActionRequest(currentRequest, nativeActionParseCorrection(parseError), state, correctionCount)
 			if !canRetry {
@@ -1176,18 +1178,38 @@ func nativeTerminalActionParameters(document map[string]json.RawMessage) (json.R
 	return json.Marshal(document)
 }
 
-func requestAfterThinkingAloud(currentRequest model.ChatCompletionRequest, response model.ChatCompletionResponse, correctionCount int) (model.ChatCompletionRequest, bool) {
+func requestAfterThinkingAloud(currentRequest model.ChatCompletionRequest, response model.ChatCompletionResponse, correctionCount int) (model.ChatCompletionRequest, string, bool) {
 	if correctionCount >= maximumAgentActionCorrectionCount {
-		return model.ChatCompletionRequest{}, false
+		return model.ChatCompletionRequest{}, "", false
 	}
 	thought := strings.TrimSpace(response.Message.Content)
 	if len(response.Message.ToolCalls) > 0 || thought == "" {
-		return model.ChatCompletionRequest{}, false
+		return model.ChatCompletionRequest{}, "", false
 	}
 	thoughtRequest := currentRequest
 	thoughtRequest.Messages = append(append([]model.ChatCompletionMessage{}, currentRequest.Messages...), model.ChatCompletionMessage{Role: "assistant", Content: thought})
 	thoughtRequest.ToolChoice = json.RawMessage(`"required"`)
-	return thoughtRequest, true
+	return thoughtRequest, thought, true
+}
+
+// A thought sampled before the forced call lives only in that one request's messages;
+// carrying it on the action is what lets later transcripts replay it.
+func actionCarryingThought(action agentAction, thought string) agentAction {
+	if thought == "" {
+		return action
+	}
+	action.AssistantText = joinedAssistantText(thought, action.AssistantText)
+	return action
+}
+
+func joinedAssistantText(first string, second string) string {
+	if strings.TrimSpace(first) == "" {
+		return strings.TrimSpace(second)
+	}
+	if strings.TrimSpace(second) == "" {
+		return strings.TrimSpace(first)
+	}
+	return strings.TrimSpace(first) + "\n\n" + strings.TrimSpace(second)
 }
 
 func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools []model.ChatCompletionTool) (agentAction, error) {
