@@ -25,7 +25,7 @@ func BuildTemporalContextDescription(environmentNow time.Time) string {
 
 func unknownDateContext() string {
 	return strings.Join([]string{
-		"Now: not known to this runtime. Read the clock of the system you are operating before answering anything that turns on a date; the shell's date command reports the machine's clock, and where the operated system reports its own, that one decides.",
+		"Now: not known to this runtime. Before answering anything that turns on a date, take today from the system you are operating — its own clock, apps, or records — never from this shell's clock, which can belong to a different machine than the one whose data you are reading.",
 	}, "\n")
 }
 
