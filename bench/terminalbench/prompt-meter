@@ -114,14 +114,18 @@ def forwarding_handler_for(harness_name):
 
         def do_POST(self):
             body = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+            forwarded_headers = {
+                "Content-Type": "application/json",
+                "Authorization": self.headers.get("Authorization", ""),
+            }
+            for attribution_header in ("HTTP-Referer", "X-Title"):
+                if self.headers.get(attribution_header):
+                    forwarded_headers[attribution_header] = self.headers[attribution_header]
             upstream_request = urllib.request.Request(
                 UPSTREAM_ORIGIN + self.path,
                 data=body,
                 method="POST",
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": self.headers.get("Authorization", ""),
-                },
+                headers=forwarded_headers,
             )
             try:
                 with urllib.request.urlopen(upstream_request, timeout=900) as upstream_response:
