@@ -446,7 +446,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if iteration > 1 {
 			if iterationSpentModelCall {
 				agentTurnRunner.recordIterationCost(iterationStartedAt)
+				budgetBeforeRefresh := agentTurnRunner.options.MaxElapsedSecond
 				agentTurnRunner.refreshElapsedBudget(state.budgetTaskLevel())
+				if agentTurnRunner.options.MaxElapsedSecond > budgetBeforeRefresh {
+					refreshWorkContext()
+				}
 			}
 			iterationStartedAt = time.Now()
 			iterationSpentModelCall = false
@@ -532,7 +536,8 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 					return agentTurnRunner.cancelledTaskResultOrCurrent(taskRun.TaskRunID, state.Attachments), nil
 				}
 				if !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
-					return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "llm action failed: "+actionError.Error(), &state, iteration)
+					refreshWorkContext()
+					continue
 				}
 				if agentTurnRunner.options.ElapsedBudgetSource != ElapsedBudgetFromCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
 					refreshWorkContext()
