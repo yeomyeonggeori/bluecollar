@@ -225,7 +225,7 @@ func (turnRouter TurnRouter) buildMessages(request agentcontract.AgentRequest) [
 	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
 	}
-	if goalDescription := agentcontract.ActiveGoalDescription(request.ActiveGoal); goalDescription != "" {
+	if goalDescription := agentcontract.ActiveGoalDescriptionForPrompt(request.ActiveGoal, request.Prompt); goalDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: goalDescription})
 	}
 	if priorTaskDescription := agentcontract.PriorTaskContextDescription(request.PriorTask); priorTaskDescription != "" {

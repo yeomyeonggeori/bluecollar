@@ -245,7 +245,7 @@ func contractSkillArbitrationMessages(request AgentRequest, candidates []SkillIn
 		Role:    "system",
 		Content: "Outcome contract: " + outcomeContractJSON(request.ActiveGoal.OutcomeContract),
 	}}
-	if goalDescription := activeGoalDescription(request.ActiveGoal); goalDescription != "" {
+	if goalDescription := activeGoalDescriptionForPrompt(request.ActiveGoal, request.Prompt); goalDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: goalDescription})
 	}
 	if contextDescription := buildVisibleContextDescription(request.VisibleContext); contextDescription != "" {
