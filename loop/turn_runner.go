@@ -762,7 +762,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		return toolCallActionOutcome{Result: pausedResult, ShouldReturn: true, WasHandled: true}
 	}
 	agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusCompleted, "continue "+actionDocument.ToolName, observation.ContentText())
-	if !observation.Failed() && isInspectionProgressTool(observation.Tool) && hasPendingObservedSuggestedNextTool(state.Observations) {
+	if !observation.Failed() && observation.RepeatsObservationID != "" && hasPendingObservedSuggestedNextTool(state.Observations) {
 		result, shouldStop := stopForNoProgress(stepID)
 		return noProgressToolCallActionOutcome(result, shouldStop)
 	}

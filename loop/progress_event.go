@@ -23,7 +23,7 @@ func progressEvents(observations []turnObservation) []progressEvent {
 		if observation.Action == "set_quality_criteria" {
 			recordSuccess(progressEvent{Kind: "quality_criteria", Key: observation.ObservationID})
 		}
-		if observation.Action == "continue" && !observation.Failed() && !isInspectionProgressTool(observation.Tool) {
+		if observation.Action == "continue" && !observation.Failed() && observation.RepeatsObservationID == "" {
 			recordSuccess(progressEvent{Kind: "tool_success", Key: observation.ObservationID + ":" + observation.Tool})
 		}
 		if observation.Failed() && strings.TrimSpace(observation.AttemptFingerprint) != "" && !seenFailures[observation.AttemptFingerprint] {
@@ -47,13 +47,4 @@ func progressEvents(observations []turnObservation) []progressEvent {
 
 func progressEventCount(observations []turnObservation) int {
 	return len(progressEvents(observations))
-}
-
-func isInspectionProgressTool(toolName string) bool {
-	switch strings.TrimSpace(toolName) {
-	case "file_read", "memory_search", "site_list", "conversation_history":
-		return true
-	default:
-		return false
-	}
 }
