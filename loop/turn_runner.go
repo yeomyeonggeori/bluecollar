@@ -311,6 +311,8 @@ func normalizeTurnOptions(options TurnOptions) TurnOptions {
 	}
 	if options.MaxElapsedSecond <= 0 {
 		options.MaxElapsedSecond = int(taskLevelProfile.Duration.Seconds())
+	} else {
+		options.ElapsedCameFromTheCaller = true
 	}
 	if recoveryBudgetIsUnset(options.RecoveryBudget) {
 		options.RecoveryBudget = defaultRecoveryBudget()
@@ -454,13 +456,13 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if ctx.Err() != nil {
 			return agentTurnRunner.cancelledTaskResultOrCurrent(taskRun.TaskRunID, state.Attachments), nil
 		}
-		if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration-1); isElapsed {
+		if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration-1); isElapsed {
 			return result, errorValue
 		}
 		if iteration > agentTurnRunner.options.MaxIterationCount && !agentTurnRunner.extendBudgetOneLevelOnce(taskRun.TaskRunID, &state) {
 			result, shouldContinue, errorValue := agentTurnRunner.finalizeEscalateOrStopForLimit(workContext, taskRun.TaskRunID, request, "max_iterations", toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, state.ExecutionState, iteration-1, state.ToolCallCount)
 			if result.TaskRun.Status != taskstate.TaskStatusCompleted {
-				if elapsedResult, isElapsed, elapsedError := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration-1); isElapsed {
+				if elapsedResult, isElapsed, elapsedError := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration-1); isElapsed {
 					return elapsedResult, elapsedError
 				}
 			}
@@ -583,7 +585,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				}
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, observation.Action, observation.ContentText())
 				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
-					if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration); isElapsed {
+					if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
 						return elapsedResult, errorValue
 					}
 					return result, nil
@@ -600,7 +602,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
 				return cancelledResult, nil
 			}
-			if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration); isElapsed {
+			if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
 				return result, errorValue
 			}
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "finish", reply)
@@ -613,7 +615,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			outcome := agentTurnRunner.handleToolCallAction(workContext, taskRun.TaskRunID, stepID, iteration, iterationRequest, toolUseRequirements, &state, actionDocument, successfulToolCalls, stopForNoProgress)
 			if outcome.ShouldReturn {
 				if outcome.CanYieldToElapsed {
-					if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration); isElapsed {
+					if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
 						return result, errorValue
 					}
 				}
@@ -632,7 +634,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.completion_required", marshalEventBody(observation))
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "recoverable_fail_rejected", observation.ContentText())
 				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
-					if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration); isElapsed {
+					if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
 						return elapsedResult, errorValue
 					}
 					return result, nil
@@ -648,7 +650,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 					agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.failure_report_rejected", marshalEventBody(observation))
 					agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "failure_report_rejected", observation.ContentText())
 					if result, shouldStop := stopForNoProgress(stepID); shouldStop {
-						if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration); isElapsed {
+						if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
 							return elapsedResult, errorValue
 						}
 						return result, nil
@@ -665,7 +667,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			state.Observations = append(state.Observations, observation)
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "invalid_action", observation.ContentText())
 			if result, shouldStop := stopForNoProgress(stepID); shouldStop {
-				if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, state, iteration); isElapsed {
+				if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
 					return elapsedResult, errorValue
 				}
 				return result, nil
@@ -1108,16 +1110,6 @@ func budgetCameFromTheLevel(options TurnOptions, taskLevel TaskLevel) bool {
 	return options.MaxToolCallCount == levelProfile.MaxToolCallCount && options.MaxIterationCount == levelProfile.MaxIterationCount
 }
 
-// Both ceilings say how big the agent guessed the task was before it had seen it, so they
-// are raised together, the way a plan naming a larger level raises them. The elapsed budget
-// still ends the turn, which is why nothing here checks the clock.
-// A level is three numbers and a grant that raises two of them hands the turn work it has no
-// time to do. The ceiling is what the caller's deadline left at intake, so a grant can no more
-// plan past it than the derived budget could.
-// The budget check the agent was given quoted the budget of the moment, and a grant makes that
-// number wrong in the one direction that stops work: it told the agent to stop exploring. The
-// correction has to reach the model, because clearing the runtime's own bookkeeping does not
-// remove what the model already read.
 func grantedBudgetObservation(observations []turnObservation, options TurnOptions) turnObservation {
 	return newContentObservation(
 		nextObservationIDForObservations(observations),
@@ -1877,8 +1869,11 @@ func (agentTurnRunner *AgentTurnRunner) currentEffortElapsed(turnStartedAt time.
 	return time.Since(turnStartedAt) >= agentTurnRunner.maximumWorkDuration()
 }
 
-func (agentTurnRunner *AgentTurnRunner) stopForElapsedLimitIfReached(ctx context.Context, taskRunID string, request AgentTurnRequest, state agentTaskState, usedIterationCount int) (AgentTurnResult, bool, error) {
+func (agentTurnRunner *AgentTurnRunner) stopForElapsedLimitIfReached(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, usedIterationCount int) (AgentTurnResult, bool, error) {
 	if ctx.Err() != nil || !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
+		return AgentTurnResult{}, false, nil
+	}
+	if !agentTurnRunner.options.ElapsedCameFromTheCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRunID, state) {
 		return AgentTurnResult{}, false, nil
 	}
 	completionRequirements := elapsedCompletionRequirements(state.Requirements, state.Observations, state.CompletionIntentToolName, request.ToolSet)
