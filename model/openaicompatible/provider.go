@@ -8,24 +8,28 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 type Provider struct {
-	endpointURL string
-	apiKey      string
-	modelName   string
-	httpClient  *http.Client
+	endpointURL    string
+	apiKey         string
+	modelName      string
+	httpClient     *http.Client
+	retryBaseDelay time.Duration
 }
 
 func NewProvider(endpointURL string, apiKey string, modelName string) *Provider {
 	return &Provider{
-		endpointURL: strings.TrimSuffix(strings.TrimSpace(endpointURL), "/"),
-		apiKey:      strings.TrimSpace(apiKey),
-		modelName:   strings.TrimSpace(modelName),
-		httpClient:  http.DefaultClient,
+		endpointURL:    strings.TrimSuffix(strings.TrimSpace(endpointURL), "/"),
+		apiKey:         strings.TrimSpace(apiKey),
+		modelName:      strings.TrimSpace(modelName),
+		httpClient:     http.DefaultClient,
+		retryBaseDelay: transientRetryBaseDelay,
 	}
 }
 
@@ -159,10 +163,36 @@ func (provider *Provider) complete(ctx context.Context, messages []model.Message
 	return decodeCompletion(responseBody, provider.modelName)
 }
 
+const (
+	transientRetryCount        = 3
+	transientRetryBaseDelay    = time.Second
+	transientRetryDelayCeiling = 30 * time.Second
+)
+
 func (provider *Provider) post(ctx context.Context, body []byte) ([]byte, error) {
+	for attempt := 0; ; attempt++ {
+		responseBody, attemptOutcome, errorValue := provider.postOnce(ctx, body)
+		if errorValue == nil {
+			return responseBody, nil
+		}
+		if attempt >= transientRetryCount || !attemptOutcome.isTransient || ctx.Err() != nil {
+			return nil, errorValue
+		}
+		if waitError := waitBeforeRetry(ctx, retryDelay(provider.retryBaseDelay, attempt, attemptOutcome.retryAfter)); waitError != nil {
+			return nil, errorValue
+		}
+	}
+}
+
+type postAttemptOutcome struct {
+	isTransient bool
+	retryAfter  time.Duration
+}
+
+func (provider *Provider) postOnce(ctx context.Context, body []byte) ([]byte, postAttemptOutcome, error) {
 	httpRequest, errorValue := http.NewRequestWithContext(ctx, http.MethodPost, provider.endpointURL+"/chat/completions", bytes.NewReader(body))
 	if errorValue != nil {
-		return nil, errorValue
+		return nil, postAttemptOutcome{}, errorValue
 	}
 	httpRequest.Header.Set("Content-Type", "application/json")
 	if provider.apiKey != "" {
@@ -171,18 +201,57 @@ func (provider *Provider) post(ctx context.Context, body []byte) ([]byte, error)
 
 	httpResponse, errorValue := provider.httpClient.Do(httpRequest)
 	if errorValue != nil {
-		return nil, errorValue
+		return nil, postAttemptOutcome{isTransient: ctx.Err() == nil}, errorValue
 	}
 	defer httpResponse.Body.Close()
 
 	responseBody, errorValue := io.ReadAll(httpResponse.Body)
 	if errorValue != nil {
-		return nil, errorValue
+		return nil, postAttemptOutcome{isTransient: ctx.Err() == nil}, errorValue
 	}
 	if httpResponse.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("model endpoint returned %d: %s", httpResponse.StatusCode, truncated(string(responseBody)))
+		return nil, postAttemptOutcome{
+			isTransient: isTransientStatus(httpResponse.StatusCode),
+			retryAfter:  retryAfterHeaderDelay(httpResponse.Header.Get("Retry-After")),
+		}, fmt.Errorf("model endpoint returned %d: %s", httpResponse.StatusCode, truncated(string(responseBody)))
 	}
-	return responseBody, nil
+	return responseBody, postAttemptOutcome{}, nil
+}
+
+func isTransientStatus(statusCode int) bool {
+	return statusCode == http.StatusRequestTimeout ||
+		statusCode == http.StatusTooManyRequests ||
+		statusCode >= http.StatusInternalServerError
+}
+
+func retryAfterHeaderDelay(headerValue string) time.Duration {
+	seconds, errorValue := strconv.Atoi(strings.TrimSpace(headerValue))
+	if errorValue != nil || seconds <= 0 {
+		return 0
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+func retryDelay(baseDelay time.Duration, attempt int, retryAfter time.Duration) time.Duration {
+	delay := baseDelay << attempt
+	if retryAfter > delay {
+		delay = retryAfter
+	}
+	if delay > transientRetryDelayCeiling {
+		delay = transientRetryDelayCeiling
+	}
+	return delay
+}
+
+func waitBeforeRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func completionRequest(modelName string, messages []model.Message, schema *model.StructuredOutputSchema) map[string]any {
