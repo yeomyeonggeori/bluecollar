@@ -179,8 +179,6 @@ func terminalRunResult(ctx context.Context, runningShell shell, exitCode int, ou
 	return toolcontract.ToolSuccessData(contentText, document)
 }
 
-// The tail alone reads as the whole output; the footer is what tells the model
-// the head exists and where the untruncated copy can be read back from.
 func truncationFooter(totalBytes int, outputPath string) string {
 	footer := "\n\n[output truncated: showing the last " + strconv.Itoa(maximumCapturedOutput) + " of " + strconv.Itoa(totalBytes) + " bytes"
 	if outputPath != "" {

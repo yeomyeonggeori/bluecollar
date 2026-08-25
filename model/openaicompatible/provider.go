@@ -219,8 +219,6 @@ func (provider *Provider) postOnce(ctx context.Context, body []byte) ([]byte, po
 	return responseBody, postAttemptOutcome{}, nil
 }
 
-// OpenRouter shows callers that send no attribution headers as Unknown in its
-// dashboard; other openai-compatible endpoints ignore both headers.
 func setAttributionHeaders(httpRequest *http.Request) {
 	httpRequest.Header.Set("HTTP-Referer", "https://github.com/yeomyeonggeori/bluecollar")
 	httpRequest.Header.Set("X-Title", "bluecollar")
