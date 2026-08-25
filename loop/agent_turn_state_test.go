@@ -1165,7 +1165,7 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 	if strings.Contains(request.StructuredOutputSchema.Document, "require_capabilities") {
 		t.Fatalf("expected model-facing schema to omit require_capabilities, got %s", request.StructuredOutputSchema.Document)
 	}
-	if !messagesContain(request.Messages, "Recent visible conversation context") {
+	if !messagesContain(request.Messages, "This conversation so far") {
 		t.Fatalf("expected visible context in model messages, got %+v", request.Messages)
 	}
 }

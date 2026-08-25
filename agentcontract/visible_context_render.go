@@ -23,19 +23,11 @@ func ContextRenderLocation() *time.Location {
 
 func BuildVisibleContextDescription(visibleContext VisibleContext) string {
 	contextLines := []string{}
-	// Several exchanges can share one place. Flattened into a list they read as
-	// one conversation, and a request from one gets answered with the subject of
-	// another. Each line says which exchange it belongs to, so what belongs
-	// together is the reader's to see rather than this function's to decide.
-	threadLabels := labelThreadsInOrder(visibleContext.Messages)
 	for _, message := range visibleContext.Messages {
 		speaker := formatSpeakerLabel(message.SpeakerCallingName, message.SpeakerHandle, message.Speaker)
 		prefix := "- "
 		if stamp := FormatContextTimestamp(message.SentAt); stamp != "" {
 			prefix = "- [" + stamp + "] "
-		}
-		if label := threadLabels[strings.TrimSpace(message.ThreadRootID)]; label != "" {
-			prefix += label + " "
 		}
 		text := strings.TrimSpace(message.Text)
 		if text != "" {
@@ -70,7 +62,7 @@ func BuildVisibleContextDescription(visibleContext VisibleContext) string {
 	}
 
 	if len(contextLines) == 0 && len(currentMaterialLines) == 0 && len(materialLines) == 0 {
-		return "Recent visible conversation context:\n" + historyLine
+		return visibleContextHeading(visibleContext) + "\n" + historyLine
 	}
 
 	sections := []string{}
@@ -84,7 +76,7 @@ func BuildVisibleContextDescription(visibleContext VisibleContext) string {
 		sections = append(sections, "Previous attachments:\nUse the listed fileHint exactly with file_preview, file_read, image_read, or file.materialize when older conversation context is relevant.\n"+strings.Join(materialLines, "\n"))
 	}
 	sections = append(sections, historyLine)
-	return "Recent visible conversation context:\n" + strings.Join(sections, "\n")
+	return visibleContextHeading(visibleContext) + "\n" + strings.Join(sections, "\n")
 }
 
 func formatVisibleContextMaterial(material VisibleContextMaterial) string {
@@ -179,27 +171,11 @@ func visibleContextMaterialLooksLikeImage(material VisibleContextMaterial) bool 
 		strings.HasSuffix(filename, ".webp")
 }
 
-
-// A place that holds one exchange needs no labels; the label is only there to
-// separate exchanges that would otherwise read as one, and it is the position
-// in this window rather than any identifier the platform uses.
-func labelThreadsInOrder(messages []VisibleContextMessage) map[string]string {
-	order := []string{}
-	seen := map[string]bool{}
-	for _, message := range messages {
-		threadRootID := strings.TrimSpace(message.ThreadRootID)
-		if threadRootID == "" || seen[threadRootID] {
-			continue
-		}
-		seen[threadRootID] = true
-		order = append(order, threadRootID)
+// What the messages are decides how they should be read, and the same heading
+// over both had one exchange's subject answer another's request.
+func visibleContextHeading(visibleContext VisibleContext) string {
+	if visibleContext.MessagesOpenOtherExchanges {
+		return "Other conversations in the same place, each shown as it was opened. They are separate from what is being asked now and may have nothing to do with it; decide for yourself whether any bears on it."
 	}
-	if len(order) < 2 {
-		return map[string]string{}
-	}
-	labels := map[string]string{}
-	for index, threadRootID := range order {
-		labels[threadRootID] = fmt.Sprintf("(exchange %d)", index+1)
-	}
-	return labels
+	return "This conversation so far, from what opened it:"
 }

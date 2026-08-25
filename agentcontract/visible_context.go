@@ -3,12 +3,18 @@ package agentcontract
 import "time"
 
 type VisibleContext struct {
-	Messages         []VisibleContextMessage
-	CurrentMaterials []VisibleContextMaterial
-	Materials        []VisibleContextMaterial
-	HasMoreBefore    bool
-	HistoryCursor    string
-	ResponseLanguage string
+	Messages []VisibleContextMessage
+	// MessagesOpenOtherExchanges says what the messages are. A message written
+	// under a root continues one exchange, and what it carries is that exchange.
+	// A message that starts its own carries what the other exchanges in the same
+	// place opened with, and those may have nothing to do with it. The reader is
+	// told which it is holding rather than left to guess from the messages.
+	MessagesOpenOtherExchanges bool
+	CurrentMaterials           []VisibleContextMaterial
+	Materials                  []VisibleContextMaterial
+	HasMoreBefore              bool
+	HistoryCursor              string
+	ResponseLanguage           string
 }
 
 type VisibleContextMessage struct {
@@ -17,11 +23,7 @@ type VisibleContextMessage struct {
 	SpeakerHandle      string
 	Text               string
 	SentAt             time.Time
-	// ThreadRootID says which exchange a message belongs to. Context that spans
-	// several of them reads as one conversation without it, and a request from
-	// one exchange gets answered with the subject of another.
-	ThreadRootID string
-	Materials    []VisibleContextMaterial
+	Materials          []VisibleContextMaterial
 }
 
 type VisibleContextMaterial struct {
