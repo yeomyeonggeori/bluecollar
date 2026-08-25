@@ -22,13 +22,14 @@ const (
 	measuredOutputTokensPerModelCall = 205
 	localCostPerModelCall            = 200 * time.Millisecond
 	durationMargin                   = 2
-	firstTierCostCeiling             = 15 * time.Minute
 	answerWithoutToolsCostCeiling    = 2 * time.Minute
 	fastestPlausibleCostPerCall      = time.Second
+	slowestPlausibleCostPerCall      = 2 * time.Minute
 )
 
 func costCeilingForDoublings(doublings int) time.Duration {
-	return firstTierCostCeiling << doublings
+	iterationCount := escalatedFrom(measuredSuccessfulIterationPercentile95, doublings)
+	return time.Duration(iterationCount) * slowestPlausibleCostPerCall * durationMargin
 }
 
 func escalatedFrom(firstTierBudget int, doublings int) int {

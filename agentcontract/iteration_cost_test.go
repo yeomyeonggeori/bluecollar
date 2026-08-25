@@ -124,3 +124,35 @@ func TestAnIterationSpentInToolsCountsTowardTheClock(t *testing.T) {
 		t.Fatalf("a task that spends 78%% of its time running commands needs more clock than one that does not, got %s against %s", toolBoundClock, modelBoundClock)
 	}
 }
+
+func TestAMeasuredSlowIterationIsNotHeldToAFastModelsWall(t *testing.T) {
+	observer := NewIterationCostObserver()
+	recordIterations(observer, "thinking/model", 73*time.Second, 73*time.Second, 73*time.Second)
+
+	budget := DurationForIterationCount(20, observer.CostForModel("thinking/model"), costCeilingForDoublings(0))
+
+	needed := 20 * 73 * time.Second * durationMargin
+	if budget < needed {
+		t.Fatalf("the tier promises twenty iterations and the measured cost says what they take, so a wall below that breaks the tier's own promise: %s < %s", budget, needed)
+	}
+}
+
+func TestTheCeilingScalesWithTheTiersOwnIterationCount(t *testing.T) {
+	if costCeilingForDoublings(0) != 20*slowestPlausibleCostPerCall*durationMargin {
+		t.Fatalf("the cap has to bound per-iteration cost, not total wall clock, or a slow model can never spend the iterations it was promised: %s", costCeilingForDoublings(0))
+	}
+	if costCeilingForDoublings(1) != 2*costCeilingForDoublings(0) {
+		t.Fatalf("a doubled tier doubles its iterations, so its cap doubles with them: %s", costCeilingForDoublings(1))
+	}
+}
+
+func TestAPoisonedMedianIsCappedPerIterationNotBelievedOutright(t *testing.T) {
+	observer := NewIterationCostObserver()
+	recordIterations(observer, "hung/model", time.Hour, time.Hour, time.Hour)
+
+	budget := DurationForIterationCount(20, observer.CostForModel("hung/model"), costCeilingForDoublings(0))
+
+	if budget != 20*slowestPlausibleCostPerCall*durationMargin {
+		t.Fatalf("an hour-per-call sample is a hang, not a speed, and the budget must not scale to it: %s", budget)
+	}
+}
