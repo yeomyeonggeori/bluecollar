@@ -107,7 +107,7 @@ func (agentTurnRunner *AgentTurnRunner) attachCompletionArtifacts(ctx context.Co
 
 func (agentTurnRunner *AgentTurnRunner) attachCompletionArtifactsFromEffect(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, state CompletionState, invocation toolcontract.ToolInvocation) completionTransition {
 	agentTurnRunner.appendValidityReview(taskRunID, "pre_attach", state.ValidityState)
-	observation := agentTurnRunner.invokeTool(ctx, request.ToolSet, taskRunID, nextObservationIDForObservations(observations), invocation.ToolName, invocation.Input, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, "", "")
+	observation := agentTurnRunner.invokeTool(ctx, request.ToolSet, taskRunID, nextObservationIDForObservations(observations), invocation.ToolName, invocation.Input, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, "", "", "", "")
 	if observation.Failed() {
 		observation = withObservationContent(observation, completionAttachmentFailureContent(observation.ContentText(), state.AttachmentPaths))
 		observation.RelatedPaths = appendUniqueStrings(state.AttachmentPaths)

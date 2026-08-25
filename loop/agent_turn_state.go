@@ -1187,7 +1187,12 @@ func requestAfterThinkingAloud(currentRequest model.ChatCompletionRequest, respo
 		return model.ChatCompletionRequest{}, "", false
 	}
 	thoughtRequest := currentRequest
-	thoughtRequest.Messages = append(append([]model.ChatCompletionMessage{}, currentRequest.Messages...), model.ChatCompletionMessage{Role: "assistant", Content: thought})
+	thoughtRequest.Messages = append(append([]model.ChatCompletionMessage{}, currentRequest.Messages...), model.ChatCompletionMessage{
+		Role:           "assistant",
+		Content:        thought,
+		Reasoning:      response.Message.Reasoning,
+		ReasoningField: response.Message.ReasoningField,
+	})
 	thoughtRequest.ToolChoice = json.RawMessage(`"required"`)
 	return thoughtRequest, thought, true
 }
@@ -1222,6 +1227,8 @@ func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools
 	}
 	firstAction, errorValue := nativeAgentActionFromToolCall(response.Message.ToolCalls[0], tools)
 	firstAction.AssistantText = firstNonEmptyString(firstAction.AssistantText, strings.TrimSpace(response.Message.Content))
+	firstAction.ModelReasoning = response.Message.Reasoning
+	firstAction.ModelReasoningField = response.Message.ReasoningField
 	if errorValue != nil || firstAction.Action != "continue" {
 		return firstAction, errorValue
 	}

@@ -88,6 +88,9 @@ func chatCompletionMessages(messages []model.ChatCompletionMessage) []map[string
 	chat := make([]map[string]any, 0, len(messages))
 	for _, message := range messages {
 		entry := map[string]any{"role": message.Role, "content": chatCompletionContent(message.Content, message.Parts)}
+		if message.Role == "assistant" && message.Reasoning != "" {
+			entry[reasoningFieldName(message.ReasoningField)] = message.Reasoning
+		}
 		if message.ToolCallID != "" {
 			entry["tool_call_id"] = message.ToolCallID
 		}
@@ -97,6 +100,15 @@ func chatCompletionMessages(messages []model.ChatCompletionMessage) []map[string
 		chat = append(chat, entry)
 	}
 	return chat
+}
+
+func reasoningFieldName(fieldName string) string {
+	switch fieldName {
+	case "reasoning", "reasoning_content":
+		return fieldName
+	default:
+		return "reasoning_content"
+	}
 }
 
 type reportedUsage struct {
@@ -123,9 +135,11 @@ func decodeChatCompletion(responseBody []byte, modelName string) (model.ChatComp
 	var decoded struct {
 		Choices []struct {
 			Message struct {
-				Role      string     `json:"role"`
-				Content   string     `json:"content"`
-				ToolCalls []toolCall `json:"tool_calls"`
+				Role             string     `json:"role"`
+				Content          string     `json:"content"`
+				Reasoning        string     `json:"reasoning"`
+				ReasoningContent string     `json:"reasoning_content"`
+				ToolCalls        []toolCall `json:"tool_calls"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
@@ -137,15 +151,24 @@ func decodeChatCompletion(responseBody []byte, modelName string) (model.ChatComp
 	if len(decoded.Choices) == 0 {
 		return model.ChatCompletionResponse{}, errors.New("model endpoint returned no choices")
 	}
+	reasoning, reasoningField := decoded.Choices[0].Message.ReasoningContent, "reasoning_content"
+	if reasoning == "" {
+		reasoning, reasoningField = decoded.Choices[0].Message.Reasoning, "reasoning"
+	}
+	if reasoning == "" {
+		reasoningField = ""
+	}
 	return model.ChatCompletionResponse{
 		Transport:    "http",
 		ProviderName: "openai-compatible",
 		ModelName:    modelName,
 		FinishReason: decoded.Choices[0].FinishReason,
 		Message: model.ChatCompletionMessage{
-			Role:      decoded.Choices[0].Message.Role,
-			Content:   decoded.Choices[0].Message.Content,
-			ToolCalls: chatCompletionToolCalls(decoded.Choices[0].Message.ToolCalls),
+			Role:           decoded.Choices[0].Message.Role,
+			Content:        decoded.Choices[0].Message.Content,
+			Reasoning:      reasoning,
+			ReasoningField: reasoningField,
+			ToolCalls:      chatCompletionToolCalls(decoded.Choices[0].Message.ToolCalls),
 		},
 		Usage: decoded.Usage.measured(),
 	}, nil
