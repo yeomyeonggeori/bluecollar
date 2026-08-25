@@ -6,11 +6,18 @@ import (
 )
 
 func ActiveGoalDescription(activeGoal ActiveGoal) string {
+	return ActiveGoalDescriptionForPrompt(activeGoal, "")
+}
+
+func ActiveGoalDescriptionForPrompt(activeGoal ActiveGoal, currentPrompt string) string {
 	if strings.TrimSpace(activeGoal.GoalID) == "" &&
 		strings.TrimSpace(activeGoal.TaskRunID) == "" &&
 		strings.TrimSpace(activeGoal.OriginalInstruction) == "" &&
 		strings.TrimSpace(activeGoal.CurrentObjective) == "" {
 		return ""
+	}
+	if strings.TrimSpace(currentPrompt) != "" && strings.TrimSpace(activeGoal.OriginalInstruction) == strings.TrimSpace(currentPrompt) {
+		activeGoal.OriginalInstruction = "the current user message, verbatim"
 	}
 	document, errorValue := json.Marshal(activeGoal)
 	if errorValue != nil {

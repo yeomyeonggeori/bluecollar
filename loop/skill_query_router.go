@@ -63,7 +63,7 @@ func (skillSearchQueryRouter SkillSearchQueryRouter) buildMessages(request Agent
 	if contextDescription := buildVisibleContextDescription(request.VisibleContext); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
 	}
-	if goalDescription := activeGoalDescription(request.ActiveGoal); goalDescription != "" {
+	if goalDescription := activeGoalDescriptionForPrompt(request.ActiveGoal, request.Prompt); goalDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: goalDescription})
 	}
 	messages = append(messages, model.Message{Role: "user", Content: request.Prompt})

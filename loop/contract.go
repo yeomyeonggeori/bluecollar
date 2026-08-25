@@ -259,7 +259,8 @@ var (
 )
 
 var (
-	activeGoalDescription = agentcontract.ActiveGoalDescription
+	activeGoalDescription          = agentcontract.ActiveGoalDescription
+	activeGoalDescriptionForPrompt = agentcontract.ActiveGoalDescriptionForPrompt
 )
 
 var (

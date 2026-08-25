@@ -244,7 +244,7 @@ func (builder LLMContextBuilder) taskContext(input LLMContextInput) string {
 	if prompt := strings.TrimSpace(input.UserPrompt); prompt != "" && !activeGoalAlreadyCarries(input.ActiveGoal, prompt) {
 		sections = append(sections, builder.userPromptContext(input.ScheduledRun, prompt))
 	}
-	if activeGoal := activeGoalDescription(input.ActiveGoal); activeGoal != "" {
+	if activeGoal := activeGoalDescriptionForPrompt(input.ActiveGoal, input.UserPrompt); activeGoal != "" {
 		sections = append(sections, activeGoal)
 	}
 	if priorTask := priorTaskContextDescription(input.PriorTask); priorTask != "" {
