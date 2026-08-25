@@ -109,16 +109,41 @@ func TestActionProgressTrackerResetsWhenProgressAppears(t *testing.T) {
 	}
 }
 
-func TestInspectionToolSuccessDoesNotCountAsLoopProgress(t *testing.T) {
+func TestARepeatedOutputDoesNotCountAsLoopProgress(t *testing.T) {
 	observations := []turnObservation{{
 		ObservationID: "obs-001",
 		Action:        "continue",
 		Tool:          "site_list",
 		Output:        toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
+	}, {
+		ObservationID:        "obs-002",
+		Action:               "continue",
+		Tool:                 "site_list",
+		Output:               toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
+		RepeatsObservationID: "obs-001",
+	}, {
+		ObservationID:        "obs-003",
+		Action:               "continue",
+		Tool:                 "calendar_list",
+		Output:               toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
+		RepeatsObservationID: "obs-001",
 	}}
 
-	if progressEventCount(observations) != 0 {
-		t.Fatalf("expected inspection tool to not count as loop progress, got %+v", progressEvents(observations))
+	if progressEventCount(observations) != 1 {
+		t.Fatalf("a call whose output the agent has already read told it nothing new, and counting it as progress keeps the stall watchdog at zero forever: %+v", progressEvents(observations))
+	}
+}
+
+func TestAFreshReadCountsAsLoopProgress(t *testing.T) {
+	observations := []turnObservation{{
+		ObservationID: "obs-001",
+		Action:        "continue",
+		Tool:          "file_read",
+		Output:        toolcontract.ToolOutput{Content: "the report body"},
+	}}
+
+	if progressEventCount(observations) != 1 {
+		t.Fatalf("the first read of a file moves the task and the tracker has to see it, got %+v", progressEvents(observations))
 	}
 }
 
