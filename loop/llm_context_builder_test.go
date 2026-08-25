@@ -35,9 +35,7 @@ func TestLLMContextBuilderIncludesRuntimeCalendarContext(t *testing.T) {
 	for _, expected := range []string{
 		"Runtime:",
 		"Response language: ko",
-		"Current date: 2026-05-12",
-		"Current time: 17:32",
-		"Time zone: Asia/Seoul",
+		"Now: 2026-05-12",
 	} {
 		if !strings.Contains(contextText, expected) {
 			t.Fatalf("expected runtime context %q, got %s", expected, contextText)

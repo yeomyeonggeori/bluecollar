@@ -57,7 +57,7 @@ func TestConfirmationPlanMessagesIncludeTemporalContextAndScheduleGuard(t *testi
 	}, []string{"site_serve"})
 
 	body := joinMessageContent(messages)
-	if !strings.Contains(body, "This runtime was not told the current date") {
+	if !strings.Contains(body, "Now: not known to this runtime") {
 		t.Fatalf("expected confirmation plan temporal context, got %s", body)
 	}
 	if !strings.Contains(body, "Do not invent schedule, startAt, endAt, or cadence") {
@@ -140,7 +140,7 @@ func TestConfirmationMessageIncludesTemporalContextAndAvoidsInventedTiming(t *te
 		t.Fatalf("expected one confirmation message request, got %d", len(languageModel.requests))
 	}
 	body := joinMessageContent(languageModel.requests[0].Messages)
-	if !strings.Contains(body, "This runtime was not told the current date") {
+	if !strings.Contains(body, "Now: not known to this runtime") {
 		t.Fatalf("expected confirmation message temporal context, got %s", body)
 	}
 	if !strings.Contains(body, "Mention repeat, start, or end conditions only when they are present") {

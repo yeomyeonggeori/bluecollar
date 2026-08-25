@@ -475,7 +475,7 @@ func TestTurnRouterBuildMessagesKeepsStablePrefixClockInvariantAndOrdersVolatile
 
 	temporalIndex := -1
 	for index, message := range earlyMessages {
-		if strings.Contains(message.Content, "Runtime temporal context:") {
+		if strings.Contains(message.Content, "Now: ") {
 			temporalIndex = index
 			break
 		}
@@ -1249,7 +1249,7 @@ func TestTaskIntakePlannerIncludesTemporalContext(t *testing.T) {
 		t.Fatalf("expected one intake request, got %d", len(languageModel.requests))
 	}
 	body := joinMessageContent(languageModel.requests[0].Messages)
-	if !strings.Contains(body, "Runtime temporal context") || !strings.Contains(body, "This runtime was not told the current date") {
+	if !strings.Contains(body, "Now: not known to this runtime") {
 		t.Fatalf("expected intake temporal context, got %s", body)
 	}
 }
