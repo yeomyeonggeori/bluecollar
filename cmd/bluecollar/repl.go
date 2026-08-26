@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/ergochat/readline"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/loop"
@@ -70,8 +71,15 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 	turnDecision := decideTurn(ctx, session.languageModel, request, session.options)
 	request.PrecomputedTurnDecision = &turnDecision
 
+	taskRun := session.taskRunService.CreateTaskRunWithOrigin(request.RequesterPersonID, taskstate.TaskRunOrigin{
+		ConversationID: request.ConversationID,
+	}, prompt)
+	request.ExistingTaskRunID = taskRun.TaskRunID
+	unregisterLedgerPrinter := session.taskRunService.RegisterTaskRunObserver(taskRun.TaskRunID, printLedgerEvent)
+	defer unregisterLedgerPrinter()
+	printLedgerEvent(taskstate.RawTurnEvent{TaskRunID: taskRun.TaskRunID, Name: "task.created", Body: prompt})
+
 	result, errorValue := session.kernel.RunTurn(ctx, request)
-	printLedger(session.taskRunService, result.TaskRun.TaskRunID)
 	writeMetrics(session.options.metricsPath, session.taskRunService, result.TaskRun.TaskRunID)
 	writeTrace(session.options.tracePath, session.taskRunService, result)
 	session.remember(prompt, result)
@@ -102,16 +110,25 @@ func runInteractive(options runOptions) error {
 	}
 	defer session.closeTape()
 
-	fmt.Fprintf(os.Stderr, "%sbluecollar%s  %s  ·  %s  ·  /exit to leave\n", styleBold, styleReset, options.modelName, session.workspacePath)
-	reader := bufio.NewScanner(os.Stdin)
-	reader.Buffer(make([]byte, 0, 1024*1024), 1024*1024)
+	printWelcome(options.modelName, session.workspacePath)
+	reader, readerError := readline.NewFromConfig(&readline.Config{
+		Prompt: styleBold + "❯ " + styleReset,
+	})
+	if readerError != nil {
+		return readerError
+	}
+	defer reader.Close()
 	for {
-		fmt.Fprintf(os.Stderr, "\n%s❯%s ", styleBold, styleReset)
-		if !reader.Scan() {
-			fmt.Fprintln(os.Stderr)
-			return reader.Err()
+		fmt.Fprintln(os.Stderr)
+		line, lineError := reader.ReadLine()
+		if lineError == readline.ErrInterrupt {
+			continue
 		}
-		prompt := strings.TrimSpace(reader.Text())
+		if lineError != nil {
+			fmt.Fprintln(os.Stderr)
+			return nil
+		}
+		prompt := strings.TrimSpace(line)
 		switch prompt {
 		case "":
 			continue

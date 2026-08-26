@@ -61,6 +61,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "usage: bluecollar [flags] <what you want done>")
 			os.Exit(2)
 		}
+		options.isConversation = true
 		if errorValue := runInteractive(options); errorValue != nil {
 			fmt.Fprintln(os.Stderr, "bluecollar:", errorValue)
 			os.Exit(1)
@@ -90,6 +91,7 @@ type runOptions struct {
 	execPrefix     string
 	metricsPath    string
 	withoutIntake  bool
+	isConversation bool
 	tracePath      string
 	recordTapePath string
 	replayTapePath string
@@ -106,18 +108,14 @@ func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
 	return session.runPrompt(turnContext, options.prompt)
 }
 
-func printLedger(taskRunService *taskstate.TaskRunService, taskRunID string) {
-	if strings.TrimSpace(taskRunID) == "" {
+func printLedgerEvent(rawTurnEvent taskstate.RawTurnEvent) {
+	taskEvent := taskstate.TaskEvent{Name: rawTurnEvent.Name, Body: rawTurnEvent.Body}
+	if !stderrWantsStyle() {
+		fmt.Fprintf(os.Stderr, "  %s  %s\n", taskEvent.Name, collapsedWhitespace(taskEvent.Body))
 		return
 	}
-	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if !stderrWantsStyle() {
-			fmt.Fprintf(os.Stderr, "  %s  %s\n", taskEvent.Name, collapsedWhitespace(taskEvent.Body))
-			continue
-		}
-		if line := prettyLedgerLine(taskEvent); line != "" {
-			fmt.Fprintln(os.Stderr, line)
-		}
+	if line := prettyLedgerLine(taskEvent); line != "" {
+		fmt.Fprintln(os.Stderr, line)
 	}
 }
 
@@ -279,6 +277,9 @@ func decideTurn(ctx context.Context, languageModel model.LanguageModelProvider, 
 	if routingError != nil {
 		fmt.Fprintln(os.Stderr, "bluecollar: classifying the request failed, doing it anyway:", routingError)
 		return boundedTaskDecision()
+	}
+	if options.isConversation {
+		return turnDecision
 	}
 	return startingTheTaskItWasGiven(turnDecision)
 }

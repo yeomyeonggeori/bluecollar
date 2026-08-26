@@ -45,8 +45,11 @@ func prettyLedgerLine(taskEvent taskstate.TaskEvent) string {
 		return ledgerLine(inkAgent, "◇", "action", actionSummary(body))
 	case "agent.execution_state":
 		return ledgerLine(inkFaint, "", "plan", inkFaint+clippedTo(stringField(body, "goal"), 96)+styleReset)
-	case "agent.evidence_missing", "agent.completion_required":
+	case "agent.evidence_missing":
 		return ledgerLine(inkGate, "●", "gate", inkGate+"finish refused: evidence missing"+styleReset)
+	case "agent.completion_required":
+		output, _ := body["output"].(map[string]any)
+		return ledgerLine(inkFaint, "", "gate", inkFaint+clippedTo(collapsedWhitespace(stringField(output, "content")), 96)+styleReset)
 	case "completion_judge.verdict":
 		return ledgerLine(inkGate, "●", "judge", judgeSummary(body))
 	case "completion_judge.degraded":
