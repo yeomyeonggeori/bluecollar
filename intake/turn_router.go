@@ -116,9 +116,23 @@ func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agent
 	}
 
 	var turnDecision agentcontract.TurnDecision
-	errorValue = json.Unmarshal([]byte(structuredResponse.Content), &turnDecision)
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+	parseError := json.Unmarshal([]byte(structuredResponse.Content), &turnDecision)
+	if parseError == nil {
+		return turnDecision, nil
+	}
+	if ctx.Err() != nil {
+		return agentcontract.TurnDecision{}, parseError
+	}
+	correctionMessages := append(append([]model.Message{}, messages...), model.Message{
+		Role:    "system",
+		Content: "The previous answer could not be read as one complete JSON document for the schema: " + parseError.Error() + ". Answer again with exactly one complete JSON object and nothing else.",
+	})
+	correctedResponse, correctionError := turnRouter.generateStructuredResponse(ctx, turnRouterRequest(request, correctionMessages))
+	if correctionError != nil {
+		return agentcontract.TurnDecision{}, parseError
+	}
+	if json.Unmarshal([]byte(correctedResponse.Content), &turnDecision) != nil {
+		return agentcontract.TurnDecision{}, parseError
 	}
 	return turnDecision, nil
 }

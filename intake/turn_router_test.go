@@ -1441,3 +1441,33 @@ func TestNormalizeWebsiteDeliverableKindRoutesSiteNamespace(t *testing.T) {
 		t.Fatalf("existing site routing must stay untouched: %#v", alreadyRouted.InitialToolNames)
 	}
 }
+
+type truncatedThenWholeLanguageModel struct {
+	requestCount int
+}
+
+func (languageModel *truncatedThenWholeLanguageModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (languageModel *truncatedThenWholeLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	languageModel.requestCount++
+	if languageModel.requestCount == 1 {
+		return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_`}, nil
+	}
+	return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","responseLanguage":"en","reason":"one thing to do"}`}, nil
+}
+
+func TestATruncatedRouterAnswerGetsOneCorrectedAsk(t *testing.T) {
+	languageModel := &truncatedThenWholeLanguageModel{}
+	turnRouter := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+
+	decision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "count the lines"})
+
+	if errorValue != nil {
+		t.Fatalf("a cut-off answer is one bad sample, and surfacing it unasked fails the whole turn: %v", errorValue)
+	}
+	if decision.Route != agentcontract.TurnRouteStartTask || languageModel.requestCount != 2 {
+		t.Fatalf("expected the corrected second ask to carry the decision, got %+v after %d asks", decision, languageModel.requestCount)
+	}
+}

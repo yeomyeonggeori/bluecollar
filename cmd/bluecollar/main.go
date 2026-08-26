@@ -12,7 +12,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/bench"
 	"github.com/yeomyeonggeori/bluecollar/intake"
-	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/model/tape"
@@ -39,12 +38,7 @@ func main() {
 	flag.Parse()
 
 	prompt := strings.TrimSpace(strings.Join(flag.Args(), " "))
-	if prompt == "" {
-		fmt.Fprintln(os.Stderr, "usage: bluecollar [flags] <what you want done>")
-		os.Exit(2)
-	}
-
-	result, errorValue := runOneTurn(runOptions{
+	options := runOptions{
 		endpointURL:    *endpointURL,
 		apiKey:         *apiKey,
 		modelName:      *modelName,
@@ -60,7 +54,22 @@ func main() {
 		tracePath:      *tracePath,
 		recordTapePath: *recordTapePath,
 		replayTapePath: *replayTapePath,
-	})
+	}
+
+	if prompt == "" {
+		if !stderrWantsStyle() {
+			fmt.Fprintln(os.Stderr, "usage: bluecollar [flags] <what you want done>")
+			os.Exit(2)
+		}
+		if errorValue := runInteractive(options); errorValue != nil {
+			fmt.Fprintln(os.Stderr, "bluecollar:", errorValue)
+			os.Exit(1)
+		}
+		return
+	}
+
+	options.prompt = prompt
+	result, errorValue := runOneTurn(options)
 	if errorValue != nil {
 		fmt.Fprintln(os.Stderr, "bluecollar:", errorValue)
 		os.Exit(1)
@@ -87,44 +96,14 @@ type runOptions struct {
 }
 
 func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
-	endpointModel := openaicompatible.NewProvider(options.endpointURL, options.apiKey, options.modelName)
-	taskEventService := taskstate.NewTaskEventService()
-	taskRunService := taskstate.NewTaskRunService(taskEventService)
-	kernel := loop.NewAgentKernel(taskRunService, taskstate.NewTaskStepService())
-
 	turnContext, cancel := context.WithTimeout(context.Background(), options.timeout)
 	defer cancel()
-
-	languageModel, closeTape, tapeError := turnLanguageModel(options, endpointModel)
-	if tapeError != nil {
-		return agentcontract.AgentTurnResult{}, tapeError
+	session, sessionError := newConversationSession(turnContext, options)
+	if sessionError != nil {
+		return agentcontract.AgentTurnResult{}, sessionError
 	}
-	defer closeTape()
-	kernel.UseLanguageModelProvider(languageModel)
-	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: contextWindowTokens(turnContext, options, endpointModel)})
-
-	runningShell := turnShellWithInterpreter(turnContext, options)
-	workspacePath := runningShell.resolvedWorkingDirectoryPath(turnContext)
-	request := agentcontract.AgentTurnRequest{
-		RequesterPersonID:    "person-local",
-		RequesterName:        currentUserName(),
-		ConversationID:       "conversation-local",
-		Prompt:               options.prompt,
-		AgentIdentity:        agentcontract.AgentIdentity{Name: options.agentName},
-		WorkspaceRootPath:    workspacePath,
-		EnvironmentNow:       options.environmentNow,
-		WorkspaceDefaultPath: workspacePath,
-		ToolSet:              turnToolSet(options, runningShell),
-	}
-
-	turnDecision := decideTurn(turnContext, languageModel, request, options)
-	request.PrecomputedTurnDecision = &turnDecision
-
-	result, errorValue := kernel.RunTurn(turnContext, request)
-	printLedger(taskRunService, result.TaskRun.TaskRunID)
-	writeMetrics(options.metricsPath, taskRunService, result.TaskRun.TaskRunID)
-	writeTrace(options.tracePath, taskRunService, result)
-	return result, errorValue
+	defer session.closeTape()
+	return session.runPrompt(turnContext, options.prompt)
 }
 
 func printLedger(taskRunService *taskstate.TaskRunService, taskRunID string) {
