@@ -67,13 +67,13 @@ func BuildVisibleContextDescription(visibleContext VisibleContext) string {
 
 	sections := []string{}
 	if len(currentMaterialLines) > 0 {
-		sections = append(sections, "Current attachments:\nUse the listed fileHint exactly with file_preview, file_read, image_read, or file.materialize. fileHint is a deterministic locator, not a natural-language description.\n"+strings.Join(currentMaterialLines, "\n"))
+		sections = append(sections, "Current attachments:\nUse the listed fileHint exactly with file_preview, file_read, or image_read. fileHint is a deterministic locator, not a natural-language description.\n"+strings.Join(currentMaterialLines, "\n"))
 	}
 	if len(contextLines) > 0 {
 		sections = append(sections, strings.Join(contextLines, "\n"))
 	}
 	if len(materialLines) > 0 {
-		sections = append(sections, "Previous attachments:\nUse the listed fileHint exactly with file_preview, file_read, image_read, or file.materialize when older conversation context is relevant.\n"+strings.Join(materialLines, "\n"))
+		sections = append(sections, "Previous attachments:\nUse the listed fileHint exactly with file_preview, file_read, or image_read when older conversation context is relevant.\n"+strings.Join(materialLines, "\n"))
 	}
 	sections = append(sections, historyLine)
 	return visibleContextHeading(visibleContext) + "\n" + strings.Join(sections, "\n")
