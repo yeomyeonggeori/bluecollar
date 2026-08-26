@@ -18,43 +18,54 @@ const (
 	inkFaint = "\x1b[38;5;243m"
 )
 
+const ledgerLabelWidth = 12
+
+func ledgerLine(ink string, glyph string, label string, value string) string {
+	if glyph == "" {
+		glyph = " "
+	}
+	padded := fmt.Sprintf("%-*s", ledgerLabelWidth, label)
+	return ink + glyph + " " + padded + styleReset + " " + value
+}
+
 func prettyLedgerLine(taskEvent taskstate.TaskEvent) string {
 	body := decodedEventBody(taskEvent.Body)
 	switch taskEvent.Name {
 	case "task.created":
-		return inkTask + "● task" + styleReset + "     " + quotedRequest(taskEvent.Body)
+		return ledgerLine(inkTask, "●", "task", quotedRequest(taskEvent.Body))
 	case "task.running", "agent.intake", "agent.goal.completed", "agent.step_working_set":
 		return ""
 	case "agent.conversation_budget":
-		return inkFaint + "  context   " + withThousands(body["contextWindowTokens"]) + " tokens" + styleReset
+		return ledgerLine(inkFaint, "", "context", inkFaint+withThousands(body["contextWindowTokens"])+" tokens"+styleReset)
 	case "agent.instructions_loaded":
-		return inkFaint + "  contract  " + clippedTo(goalInstruction(body), 96) + styleReset
+		return ledgerLine(inkFaint, "", "contract", inkFaint+clippedTo(goalInstruction(body), 96)+styleReset)
 	case "llm.call":
-		return inkModel + "◆ llm" + styleReset + "      " + llmCallSummary(body)
+		return ledgerLine(inkModel, "◆", "llm", llmCallSummary(body))
 	case "agent.action":
-		return inkAgent + "◇ action" + styleReset + "   " + actionSummary(body)
+		return ledgerLine(inkAgent, "◇", "action", actionSummary(body))
 	case "agent.execution_state":
-		return inkFaint + "  plan      " + clippedTo(stringField(body, "goal"), 96) + styleReset
+		return ledgerLine(inkFaint, "", "plan", inkFaint+clippedTo(stringField(body, "goal"), 96)+styleReset)
 	case "agent.evidence_missing", "agent.completion_required":
-		return inkGate + "● gate" + styleReset + "     " + inkGate + "finish refused: evidence missing" + styleReset
+		return ledgerLine(inkGate, "●", "gate", inkGate+"finish refused: evidence missing"+styleReset)
 	case "completion_judge.verdict":
-		return inkGate + "● judge" + styleReset + "    " + judgeSummary(body)
+		return ledgerLine(inkGate, "●", "judge", judgeSummary(body))
 	case "completion_judge.degraded":
-		return inkFaint + "  judge     unavailable, accepting the deterministic gate" + styleReset
+		return ledgerLine(inkFaint, "", "judge", inkFaint+"unavailable, accepting the deterministic gate"+styleReset)
 	case "agent.budget_extended_one_level":
-		return inkFaint + "  budget    extended one level → " + stringField(body, "grantedLevel") + styleReset
+		return ledgerLine(inkFaint, "", "budget", inkFaint+"extended one level → "+stringField(body, "grantedLevel")+styleReset)
 	case "task.completed":
-		return inkTool + "✓ done" + styleReset + "     " + clippedTo(collapsedWhitespace(taskEvent.Body), 96)
+		return ledgerLine(inkTool, "✓", "done", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
 	case "task.failed":
-		return inkFault + "✗ failed" + styleReset + "   " + clippedTo(collapsedWhitespace(taskEvent.Body), 96)
+		return ledgerLine(inkFault, "✗", "failed", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
 	}
 	if strings.HasPrefix(taskEvent.Name, "tool.") && strings.HasSuffix(taskEvent.Name, ".requested") {
-		return inkTool + "▸ " + strings.TrimSuffix(strings.TrimPrefix(taskEvent.Name, "tool."), ".requested") + styleReset + toolPad(taskEvent.Name) + toolRequestSummary(body)
+		toolName := strings.TrimSuffix(strings.TrimPrefix(taskEvent.Name, "tool."), ".requested")
+		return ledgerLine(inkTool, "▸", toolName, toolRequestSummary(body))
 	}
 	if strings.HasPrefix(taskEvent.Name, "tool.") && strings.HasSuffix(taskEvent.Name, ".result") {
-		return toolResultSummary(body)
+		return ledgerLine(inkFaint, "", "", toolResultSummary(body))
 	}
-	return "  " + styledEventName(taskEvent.Name) + "  " + styledEventBody(clippedForTerminal(collapsedWhitespace(taskEvent.Body)))
+	return ledgerLine(inkFaint, "", "", styledEventName(taskEvent.Name)+"  "+styledEventBody(clippedForTerminal(collapsedWhitespace(taskEvent.Body))))
 }
 
 func decodedEventBody(body string) map[string]any {
@@ -126,17 +137,9 @@ func toolResultSummary(body map[string]any) string {
 	output, _ := body["output"].(map[string]any)
 	content := clippedTo(strings.Join(strings.Fields(stringField(output, "content")), " "), 88)
 	if failure, isFailure := body["failure"].(map[string]any); isFailure && len(failure) > 0 {
-		return inkFault + "  → failed" + styleReset + "  " + inkFaint + content + styleReset
+		return inkFault + "→ failed" + styleReset + "  " + inkFaint + content + styleReset
 	}
-	return inkFaint + "  → " + content + styleReset
-}
-
-func toolPad(eventName string) string {
-	visible := len(strings.TrimSuffix(strings.TrimPrefix(eventName, "tool."), ".requested")) + 2
-	if visible >= 11 {
-		return " "
-	}
-	return strings.Repeat(" ", 11-visible)
+	return inkFaint + "→ " + content + styleReset
 }
 
 func stringField(document map[string]any, key string) string {
