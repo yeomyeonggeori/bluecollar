@@ -2,6 +2,8 @@
 
 # bluecollar
 
+*An agent harness that does the work, keeps a record, and tells you when it can't.*
+
 [![check](https://github.com/yeomyeonggeori/bluecollar/actions/workflows/check.yml/badge.svg)](https://github.com/yeomyeonggeori/bluecollar/actions/workflows/check.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/yeomyeonggeori/bluecollar.svg)](https://pkg.go.dev/github.com/yeomyeonggeori/bluecollar)
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
@@ -16,22 +18,38 @@
 bluecollar is a headless, embeddable agent harness for unattended work: the loop that takes a
 request, decides what to do, calls tools, and answers.
 
+The name is the design. This loop works the way a good tradesperson works: it takes the job, does
+it, and answers to whoever asked. It can prove what it finished, because every step went into a
+ledger as it happened. When it cannot finish, it says so, to the person who asked, in their
+language, with what it tried. And when a job would cost more than it is worth, it puts the tools
+down and says that too, instead of looking busy for another hour on someone else's money.
+
 It owns no tools, no identity and no storage. A host hands it a tool set and a task store and it
 runs the turn, so the same loop runs behind a chat connector on a server or in a terminal in front
 of you.
 
 It is built for work nobody is watching. A request arrives from someone else, the person who sent it
-goes back to their day, and the answer has to be right without anyone checking. So the loop carries
-what an interactive coding agent has no use for:
+goes back to their day, and the answer has to be right without anyone checking — or the failure has
+to be reported like one. So the loop carries what an interactive coding agent has no use for:
 
 - an outcome contract agreed before work starts
 - a completion gate that will not take the model's word that it is done
+- a clock derived from what a step measurably costs, so a slow model gets a longer shift and a
+  hopeless task gets a plain stop
 - approval as a state a task can sit in for days and resume from
 - a tier ladder that picks the model from the difficulty of the work
 - failure text written for the person who asked, not for a log
 
+We measure all of this against a leaner open-source loop: same model, same tasks, same verifier,
+only the harness swapped, and every number published, the rows we lose included. Pass rates land
+close enough that the columns trade places between runs; one task class we still lose outright, and
+[the write-up](./bench/terminalbench/README.md) names it. Where the two never trade places is
+failure: across our failed runs the requester was told in about half of them, and across the other
+loop's failed runs the requester was told in none — every one ended as a confident wrong answer.
+For work nobody is watching, that column is the product.
+
 It is heavier than an interactive loop. For sitting beside a developer and fixing code as they
-watch, a coding agent is the better tool.
+watch, a coding agent is the better tool, and it will not pretend otherwise.
 
 ## The shape
 
