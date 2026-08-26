@@ -96,6 +96,59 @@ contract and completion gate, and reports back as an observation. The host still
 call, so a child reaches nothing its parent could not. It is off unless a host sets
 `TurnOptions.DelegationLimit`, and off costs a turn nothing: no action variant, no paragraph.
 
+## The machinery
+
+Each of the bullets above is a mechanism with a sharp edge. This section is for reading them the
+way an engineer reads them.
+
+**Completion is proven, never claimed.** The model has a `finish` action, and taking it starts an
+argument instead of ending the turn. A deterministic gate checks the recorded facts first: every
+tool the outcome contract requires has a successful call in the ledger, side-effect evidence
+exists where the contract demands it, promised artifacts validate. Only a turn that passes the
+gate reaches the completion judge: a second model call that reads the ledger, expands the
+observations it names as evidence, and can reject with reasons the loop must answer. Rejections
+are remembered across attempts, so a turn cannot farm the judge by re-finishing until the dice
+land well. When the judge itself is unavailable, the event says so; the loop degrades loudly and
+in writing.
+
+**The clock is measured, and it follows the model.** Every iteration's wall time is sampled per
+model; the task budget is the tier's step count times the measured median times a margin, floored
+and capped by plausible per-step costs rather than by a constant. A slow model gets a longer
+shift because the arithmetic says so. Budgets refresh monotonically as samples accumulate, a
+raised wall re-derives the working context's deadline, and the single free tier escalation fires
+from whichever limit arrives first — step overflow, the elapsed wall, or a deadline that expires
+mid-call — and spends exactly once. A wall the host set explicitly is the host's number and is
+never escalated away.
+
+**Progress is an output the model has not read before.** The stall watchdog does not count tool
+calls; it counts novel results. A call whose output is byte-identical to one already in the
+ledger adds nothing, whoever made it and however the arguments differed, and three consecutive
+nothings stop the run. There is no hand-kept list of which tools count: the rule derives it.
+
+**Failure is a budget, and each class has its own.** A failed call opens failure debt that the
+loop must either pay or report. Recovery spends from typed allowances (corrected retry,
+alternate route, adjacent tool, no-tool fallback), and a failure signature that repeats three
+times is structural: that route closes, whatever the remaining budget says. What survives to the
+requester is written by the model for the person who asked, carrying what was tried; the raw
+error goes to the ledger, where raw things belong.
+
+**The transport carries everything the model produces.** Native tool calling with parallel calls,
+and the first sample of every step runs with `tool_choice: auto`: a text-only response is the
+model thinking, and the loop replays it as the model's own turn before asking again with
+`required`: typed actions without forbidding thought. The provider decodes `reasoning_content`
+and replays it in the field it arrived in, so a reasoning model keeps its working memory across
+steps. Tool schemas stay provider-portable: string enums, no `$ref`, no numeric-enum tricks that
+one endpoint accepts and the next rejects.
+
+**Everything above is a ledger read.** Every model call, tool call, decision, grant, rejection
+and failure is an append-only event with its full body. The completion gate reads it, the judge
+reads it, the bench measures from it, `--trace` renders it, and a postmortem replays it. There is
+no second bookkeeping to disagree with the first.
+
+None of this is free: the loop pays one model call to judge completion and some prompt bytes to
+carry contracts. That price buys the property the whole design exists for: when this loop says
+done, the ledger can prove it, and when it says it could not, that sentence was earned.
+
 ## Provider-agnostic
 
 Models reach bluecollar through a provider port. Anything satisfying it works, and
