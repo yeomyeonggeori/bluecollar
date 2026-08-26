@@ -1,5 +1,3 @@
-<img src="assets/bluecollar.logo.svg" alt="bluecollar" width="112">
-
 # bluecollar
 
 *An agent harness that does the work, keeps a record, and tells you when it can't.*
@@ -9,7 +7,7 @@
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-<img src="assets/mascot.png" alt="the bluecollar worker" width="120" align="right">
+<img src="assets/demo/welcome.png" alt="the bluecollar welcome screen: the mascot above the model, workspace, and exit hint in a bordered box" width="420">
 
 > **Status: pre-alpha, under active development.** The exported API, the
 > contract types and the event names all still change without notice, and there
@@ -171,8 +169,6 @@ so the same command is what an external benchmark drives; `--without-tools` take
 again when you only want to watch the loop reason. With a prompt as its argument it runs one turn
 and exits; with no arguments the terminal becomes the conversation.
 
-<img src="assets/demo/welcome.png" alt="the bluecollar welcome screen: the mascot above the model, workspace, and exit hint in a bordered box" width="420">
-
 ```bash
 ollama serve &
 go run ./cmd/bluecollar --model qwen3:4b "In one sentence, what is a POSIX user?"
@@ -198,8 +194,6 @@ sending it anywhere.
 ## What it promises
 
 The loop's guarantees are written as tests, so the names are the specification.
-
-<img src="assets/guarantees.png" alt="go test output: approval continuation restores the selected tool decision, launch failure redacts the raw error, a waiting task resumes without flags, a checkpoint does not lose the work it absorbed, checkpoint bookkeeping never reaches the model" width="100%">
 
 ```bash
 go test -run 'Checkpoint|Resume|Approval' -v .
