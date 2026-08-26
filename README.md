@@ -112,9 +112,10 @@ land well. When the judge itself is unavailable, the event says so; the loop deg
 in writing.
 
 **The clock is measured, and it follows the model.** Every iteration's wall time is sampled per
-model; the task budget is the tier's step count times the measured median times a margin, floored
-and capped by plausible per-step costs rather than by a constant. A slow model gets a longer
-shift because the arithmetic says so. Budgets refresh monotonically as samples accumulate, a
+model; the task budget is the tier's step count times the measured median times a margin. The
+floor and the cap are per-step plausibility bounds, so both scale with the tier's step count
+instead of sitting at a fixed number of minutes. A slow model gets a longer shift because the
+arithmetic says so. Budgets refresh monotonically as samples accumulate, a
 raised wall re-derives the working context's deadline, and the single free tier escalation fires
 from whichever limit arrives first — step overflow, the elapsed wall, or a deadline that expires
 mid-call — and spends exactly once. A wall the host set explicitly is the host's number and is
