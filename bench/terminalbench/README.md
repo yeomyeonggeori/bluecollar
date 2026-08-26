@@ -924,3 +924,60 @@ certifying from invisible rows, a budget shrunk by its own fast failures
 this number. The lesson the row order teaches: the mechanism fixes were
 necessary for the runs to be judged honestly, and the pass rate was
 waiting on the one thing the format forbade.
+
+## A slower model, and the walls it found
+
+The comparison then moved to a pinned snapshot, `deepseek-v4-flash-0731`,
+whose calls think server-side for ten to forty seconds. pi held its level.
+bluecollar collapsed to 1/24, and the autopsy of that collapse found four
+stacked defects in the time-budget machinery, each one hidden behind the
+one before it:
+
+- the one free level grant was reachable only from iteration overflow, and
+  a slow model burns the clock before it overflows steps (#221)
+- the budget ceiling was a constant tuned on a fast model, cutting a
+  measured forty-nine minutes to fifteen (#223)
+- the caller-set-wall flag was re-inferred on every normalization pass, so
+  the kernel's own derived budget arrived marked as the host's and blocked
+  every grant (#225, #226)
+- raising the wall never moved the working context's deadline, so calls
+  kept dying at a wall that no longer existed (#227)
+
+Each fix moved the row: 0/24, then 5/24, then 7/24. The last distance was
+transport again: the provider decoded role, content and tool calls, and
+threw the model's own reasoning away. A model that spends most of a call
+thinking lost that work from every later request. Decoding it and replaying
+it in the field it arrived in (#228) closed the gap:
+
+| row | resolved |
+|---|---|
+| bluecollar, three full rows | 12/23 · 7/24 · 11/24 |
+| pi, two full rows | 12/23 · 14/23 |
+
+Outside one task the aggregate is even: 30/61 against 20/40. That one task
+is the whole remaining difference, and it deserves its own paragraph.
+
+## The task that wants the money wasted
+
+`23cf851` asks for the total likes on this month's sent transactions. The
+benchmark container's clock says August 2026; the simulated apps live in
+May 2023; the task's own text tells the agent the `date` command is a fine
+way to learn the current date. Every run that believes it loses.
+
+The winning trajectory, read from a captured transcript, is this: list all
+transactions unfiltered, notice the data ends in May 2023 while the prompt
+claims 2026, reconcile in the data's favor, then walk ten pages and sum.
+The run that did this spent roughly fifty turns. bluecollar's low tier
+grants twenty steps, forty after escalation, and its runs died at the wall
+with twelve to twenty-six calls spent. Three context explanations were
+tried and measured away first — softer clock wording, saying nothing at
+all when the clock is unknown, and no longer re-issuing the request text
+with system authority. Each survived on its own merits; none moved this
+task, because the missing ingredient was never context. It was permission
+to wander.
+
+We keep the budgets. A loop that spends fifty turns to reconcile a
+contradiction also spends seventy-five minutes on tasks it goes on to
+fail, and unattended work pays for both. This task class is a recorded
+loss, priced in, and revisited when the sizing of tiers is, with the
+numbers above as the case file.
