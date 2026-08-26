@@ -9,6 +9,8 @@
 [![Go](https://img.shields.io/badge/go-1.26-00ADD8?logo=go&logoColor=white)](go.mod)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
+<img src="assets/mascot.png" alt="the bluecollar worker" width="120" align="right">
+
 > **Status: pre-alpha, under active development.** The exported API, the
 > contract types and the event names all still change without notice, and there
 > is no release, no versioning policy and no migration path between commits. It
@@ -163,24 +165,20 @@ usage accounting bring their own; the reference is an [AI SDK](https://ai-sdk.de
 
 ## Running it
 
-`cmd/bluecollar` runs one turn against a local model and prints the ledger to stderr, which is the
+`cmd/bluecollar` runs against a local model and prints the ledger as it happens, which is the
 shortest way to see the loop work before embedding it. It brings a shell scoped to `--workspace`,
 so the same command is what an external benchmark drives; `--without-tools` takes the shell away
-again when you only want to watch the loop reason.
+again when you only want to watch the loop reason. With a prompt as its argument it runs one turn
+and exits; with no arguments the terminal becomes the conversation.
+
+<img src="assets/demo/welcome.png" alt="the bluecollar welcome screen: the mascot above the model, workspace, and exit hint in a bordered box" width="420">
 
 ```bash
 ollama serve &
 go run ./cmd/bluecollar --model qwen3:4b "In one sentence, what is a POSIX user?"
 ```
 
-```
-task.created  In one sentence, what is a POSIX user?
-task.running  assistant
-agent.instructions_loaded  {"activeGoal":{"outcomeContract":{"artifactRequirement":"none"…
-llm.call  {"kind":"structured","schemaName":"bluecollar_agent_turn_action","model":"qwen3:4b"…
-agent.action  {"action":"finish"…
-task.completed
-```
+<img src="assets/demo/repl.png" alt="a bluecollar conversation: two tasks, each showing the llm calls, the shell commands with their output, the plan, the judge verdict and the completed status" width="100%">
 
 Every step is a ledger entry, which is the point of reading it: the same events appear whether the
 turn calls fifty tools or none.
