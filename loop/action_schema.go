@@ -63,6 +63,9 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 		}
 	}
 
+	if len(variants) == 0 {
+		variants = append(variants, failActionSchema(hasFailureDebt))
+	}
 	schema := map[string]any{"oneOf": variants}
 	if hasContinueVariant {
 		schema["$defs"] = actionSchemaSharedDefinitions()
