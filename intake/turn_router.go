@@ -662,6 +662,7 @@ func turnRoutingContextDescription(request agentcontract.AgentRequest) string {
 			"- Selection mode: "+strings.TrimSpace(pendingChoice.SelectionMode),
 			"- Options: "+strings.Join(optionLines, "; "),
 			"- Return choices as option keys when the latest natural-language answer matches options. Return an empty array for a valid custom answer.",
+			"- An answer names an option by its number, its label, or a paraphrase of it, in any language and any script, so read \"2\", \"두 번째\", and the label itself as the same option. Do not require a particular wording, and do not return an option the message does not point at.",
 			"- Preserve the latest user message as the task input; choices classify it but do not replace its wording.",
 		)
 	}
