@@ -89,8 +89,8 @@ func TestStallRecoveryBudgetRefreshesAfterRealProgress(t *testing.T) {
 
 func TestContinueStalledRecoverySkipsFinishStall(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{}, TurnOptions{})
-	failedBuild := newFailureObservation("obs-001", "continue", "terminal_run", "EACCES", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
-	failedBuild.ToolInputKey = "terminal_run:build"
+	failedBuild := newFailureObservation("obs-001", "continue", "shell", "EACCES", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
+	failedBuild.ToolInputKey = "shell:build"
 	state := &agentTaskState{Observations: []turnObservation{
 		failedBuild,
 		{ObservationID: "obs-002", Action: "evidence_missing", Summary: "finish is missing required expected result"},
@@ -192,7 +192,7 @@ func TestBrowserFailureRecoveryGuidanceRedirectsToWebFetch(t *testing.T) {
 	if !strings.Contains(guidance, "web_fetch") {
 		t.Fatalf("expected browser failure to steer toward web_fetch, got %q", guidance)
 	}
-	nonBrowser := newFailureObservation("obs-002", "continue", "terminal_run", "boom", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "terminal_run")
+	nonBrowser := newFailureObservation("obs-002", "continue", "shell", "boom", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell")
 	if strings.Contains(recoveryGuidanceContent(browserToolSet, nonBrowser, ""), "browser capability operations run on the user's Companion") {
 		t.Fatal("expected non-browser failures not to get browser guidance")
 	}

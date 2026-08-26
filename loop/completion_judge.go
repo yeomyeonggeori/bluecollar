@@ -85,6 +85,9 @@ func standingJudgeRejection(observations []turnObservation) (completionGateResul
 	if latestObservation.Action != "evidence_missing" || latestObservation.PolicyCode != evidenceKindExpectedResult || latestObservation.Failure == nil {
 		return completionGateResult{}, false
 	}
+	if !latestObservation.JudgeNamedMissingWork {
+		return completionGateResult{}, false
+	}
 	return completionGateResult{
 		Message:        latestObservation.Failure.UserSafeSummary,
 		EvidenceKind:   evidenceKindExpectedResult,
@@ -115,9 +118,10 @@ func (agentTurnRunner *AgentTurnRunner) evaluateCompletionJudge(ctx context.Cont
 		return completionGateResult{IsSatisfied: true}
 	}
 	return completionGateResult{
-		Message:        completionJudgeUnsatisfiedMessage(verdict),
-		EvidenceKind:   evidenceKindExpectedResult,
-		IsJudgeVerdict: true,
+		Message:          completionJudgeUnsatisfiedMessage(verdict),
+		EvidenceKind:     evidenceKindExpectedResult,
+		IsJudgeVerdict:   true,
+		NamesMissingWork: len(verdict.MissingWork) > 0,
 	}
 }
 

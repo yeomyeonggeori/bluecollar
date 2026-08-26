@@ -88,13 +88,13 @@ func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 }
 
 func TestValidateTerminalToolInputRejectsRegisteredToolNameAsCommand(t *testing.T) {
-	toolRegistry := newTestToolSet([]string{"terminal_run"})
+	toolRegistry := newTestToolSet([]string{"shell"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_serve"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("created"), nil
 	})
 	input := toolcontract.MarshalToolInput(map[string]any{"command": "site_serve --slug demo"})
 
-	errorValue := validateTerminalToolInput("terminal_run", input, toolRegistry)
+	errorValue := validateTerminalToolInput("shell", input, toolRegistry)
 
 	if errorValue == nil || !isTerminalToolNameError(errorValue) {
 		t.Fatalf("expected terminal tool-name error, got %v", errorValue)
@@ -619,14 +619,14 @@ func TestRepeatedSuccessfulReadIsNotACompletionCandidateWhenContractExpectsMutat
 
 func TestAgentTurnRunnerRejectsRepeatedSuccessfulToolCall(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"terminal_run","toolInput":{"command":"marp --version"}}`,
-		`{"action":"continue","toolName":"terminal_run","toolInput":{"command":"marp --version"}}`,
+		`{"action":"continue","toolName":"shell","toolInput":{"command":"marp --version"}}`,
+		`{"action":"continue","toolName":"shell","toolInput":{"command":"marp --version"}}`,
 		finishMessageDocument("The command finished running.\n\n@marp-team/marp-cli v4.3.1"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4, MaxToolCallCount: 4})
 	toolCallCount := 0
-	toolRegistry := newTestToolSet([]string{"terminal_run"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "terminal_run"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{"shell"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		toolCallCount++
 		return testToolSuccess(`{"exitCode":0,"stdout":"@marp-team/marp-cli v4.3.1\n","stderr":"","timedOut":false}`), nil
 	})
@@ -895,10 +895,10 @@ func TestALongEditResultStillSaysWhichFileItChanged(t *testing.T) {
 }
 
 func TestATerminalCommandThatIsActuallyAToolNameIsRefusedBeforeTheShellRuns(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName, "get_weather"})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName, "get_weather"})
 
 	validationError, failureCode := malformedToolInputError(turnActionDocument{
-		ToolName:  toolcontract.TerminalRunToolName,
+		ToolName:  toolcontract.ShellToolName,
 		ToolInput: json.RawMessage(`{"command":"get_weather Seoul"}`),
 	}, toolSet)
 
@@ -914,10 +914,10 @@ func TestATerminalCommandThatIsActuallyAToolNameIsRefusedBeforeTheShellRuns(t *t
 }
 
 func TestAShellCommandThatMerelyResemblesAToolNameStillRuns(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName, "get_weather"})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName, "get_weather"})
 
 	validationError, _ := malformedToolInputError(turnActionDocument{
-		ToolName:  toolcontract.TerminalRunToolName,
+		ToolName:  toolcontract.ShellToolName,
 		ToolInput: json.RawMessage(`{"command":"cd /app && python convert.py"}`),
 	}, toolSet)
 
@@ -927,11 +927,11 @@ func TestAShellCommandThatMerelyResemblesAToolNameStillRuns(t *testing.T) {
 }
 
 func TestAnOrdinaryCommandIsNotAnAgentActionForMentioningOne(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 
 	for _, command := range []string{"grep -rn finish build.log", "ls /app/finished", "echo done > finish.txt"} {
 		input, _ := json.Marshal(map[string]string{"command": command})
-		validationError := validateTerminalToolInput(toolcontract.TerminalRunToolName, input, toolSet)
+		validationError := validateTerminalToolInput(toolcontract.ShellToolName, input, toolSet)
 		if validationError != nil {
 			t.Errorf("%q names no agent action and has to reach the shell, got %v", command, validationError)
 		}
@@ -939,11 +939,11 @@ func TestAnOrdinaryCommandIsNotAnAgentActionForMentioningOne(t *testing.T) {
 }
 
 func TestAnAgentActionTypedAsTheWholeCommandIsStillRefused(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 
 	for _, command := range []string{"finish", "set_quality_criteria --strict"} {
 		input, _ := json.Marshal(map[string]string{"command": command})
-		if validateTerminalToolInput(toolcontract.TerminalRunToolName, input, toolSet) == nil {
+		if validateTerminalToolInput(toolcontract.ShellToolName, input, toolSet) == nil {
 			t.Errorf("%q is an action the model meant to call directly, and no shell can run it", command)
 		}
 	}

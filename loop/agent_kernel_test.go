@@ -118,9 +118,9 @@ func TestRequiredNextToolsPreferPersistedThenArbitratedThenRouterOrder(t *testin
 		},
 		{
 			name:              "arbitrated workflow",
-			arbitratedTools:   []string{"file_write", toolcontract.TerminalRunToolName, toolcontract.FileDeliverToolName},
+			arbitratedTools:   []string{"file_write", toolcontract.ShellToolName, toolcontract.FileDeliverToolName},
 			routerTools:       []string{"file_write", toolcontract.FileDeliverToolName},
-			expectedToolNames: []string{"file_write", toolcontract.TerminalRunToolName, toolcontract.FileDeliverToolName},
+			expectedToolNames: []string{"file_write", toolcontract.ShellToolName, toolcontract.FileDeliverToolName},
 		},
 		{
 			name:              "router fallback",
@@ -514,19 +514,19 @@ func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *test
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeMaintenanceTask,
 		TaskLevel:        TaskLevelLow,
-		InitialToolNames: []string{toolcontract.TerminalRunToolName},
+		InitialToolNames: []string{toolcontract.ShellToolName},
 		ResponseLanguage: "ko",
 		Reason:           "side effect tool planned without a predicted evidence name",
 	}})
 	toolCallCount := 0
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName, "task_update"})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.TerminalRunToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName, "task_update"})
+	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.ShellToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		toolCallCount++
 		return testToolSuccess(`{"exitCode":0,"stdout":"done","stderr":"","timedOut":false}`), nil
 	})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"terminal_run","toolInput":{"command":"do the side effect"}}`,
-		finishMessageWithEvidence("완료했습니다.", "obs-001", toolcontract.TerminalRunToolName, 0),
+		`{"action":"continue","toolName":"shell","toolInput":{"command":"do the side effect"}}`,
+		finishMessageWithEvidence("완료했습니다.", "obs-001", toolcontract.ShellToolName, 0),
 	}})
 	request := kernelTestRequest("서버에 배포 스크립트 실행해줘")
 	request.ToolSet = toolSet

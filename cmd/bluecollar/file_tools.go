@@ -98,7 +98,7 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 			ResultContract:  &toolcontract.ToolResultContract{Schema: fileReadOutputSchema},
 			Description:     "Read a file and get back its exact contents.",
 			WhenToUse:       "you need what a file actually says, before changing it or answering a question about it.",
-			WhenNotToUse:    "finding which files exist or which of them contain a string; run terminal_run for that.",
+			WhenNotToUse:    "finding which files exist or which of them contain a string; run shell for that.",
 			Visibility:      toolcontract.ToolVisibilityModel,
 			InputSchema:     fileReadInputSchema,
 		},

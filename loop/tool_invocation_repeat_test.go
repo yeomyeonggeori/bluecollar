@@ -10,7 +10,7 @@ func observationWithOutput(observationID string, content string) turnObservation
 	return turnObservation{
 		ObservationID: observationID,
 		Action:        "continue",
-		Tool:          toolcontract.TerminalRunToolName,
+		Tool:          toolcontract.ShellToolName,
 		Output:        toolcontract.ToolOutput{Content: content},
 	}
 }

@@ -578,13 +578,13 @@ func TestAgentTurnRunnerAcceptsGeneratedStructuredFailureReplyWithStageAndCode(t
 
 func TestLimitFailureNoticePreservesTypedFailureFacts(t *testing.T) {
 	observations := []turnObservation{
-		newFailureObservation("obs-001", "continue", "terminal_run", `{"exitCode":1,"stderr":"mkdir: cannot create directory 'artifacts': Permission denied"}`, toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "terminal_run"),
+		newFailureObservation("obs-001", "continue", "shell", `{"exitCode":1,"stderr":"mkdir: cannot create directory 'artifacts': Permission denied"}`, toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell"),
 	}
 	report := buildFailureReport(AgentTurnRequest{Prompt: "pptx 만들어줘"}, "task-1", "limit", "max_iterations", observations, nil, ExecutionState{}, recoveryDecision{})
 	prompt := buildFailureNoticePrompt(report)
 
 	for _, expectedText := range []string{
-		"terminal_run",
+		"shell",
 		"Permission denied",
 	} {
 		if !strings.Contains(prompt, expectedText) {
@@ -601,7 +601,7 @@ func TestRequiredArtifactFailureNoticeForbidsTextSubstitute(t *testing.T) {
 		OutcomeContract:            OutcomeContract{ArtifactRequirement: ArtifactRequirementRequired},
 	}
 
-	report := buildFailureReport(request, "task-1", "failure", "terminal_run failed", nil, nil, ExecutionState{}, recoveryDecision{})
+	report := buildFailureReport(request, "task-1", "failure", "shell failed", nil, nil, ExecutionState{}, recoveryDecision{})
 	prompt := buildFailureNoticePrompt(report)
 
 	if !strings.Contains(prompt, "Do not offer chat text as a substitute") {

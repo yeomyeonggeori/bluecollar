@@ -268,11 +268,11 @@ func TestRecoveryGuidanceDoesNotCopyTheRequestBackIn(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-004",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureUnknown,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
-			Stage:           "terminal_run",
+			Stage:           "shell",
 			UserSafeSummary: "the command exited 1",
 		},
 	}

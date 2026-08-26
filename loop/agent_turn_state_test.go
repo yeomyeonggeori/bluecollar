@@ -37,11 +37,11 @@ func TestDecideAgentActionUsesNativeChatForFinishAndContinue(t *testing.T) {
 		},
 		{
 			name:         "continue",
-			toolName:     "terminal_run",
+			toolName:     "shell",
 			arguments:    `{"command":"pwd"}`,
 			expectedType: "continue",
 			check: func(t *testing.T, action agentAction) {
-				if action.ToolName != "terminal_run" || string(action.ToolInput) != `{"command":"pwd"}` {
+				if action.ToolName != "shell" || string(action.ToolInput) != `{"command":"pwd"}` {
 					t.Fatalf("expected continue tool fields to survive native action parsing, got %+v", action)
 				}
 			},
@@ -76,7 +76,7 @@ func TestDecideAgentActionNativeChatOmitsTextToolCatalog(t *testing.T) {
 	if strings.Contains(chatMessageContent(provider.lastRequest.Messages), "Available tool catalog") {
 		t.Fatalf("expected native chat messages to omit textual tool catalog, got %s", chatMessageContent(provider.lastRequest.Messages))
 	}
-	if nativeChatTool(t, provider.lastRequest.Tools, toolcontract.TerminalRunToolName).Function.Name != toolcontract.TerminalRunToolName {
+	if nativeChatTool(t, provider.lastRequest.Tools, toolcontract.ShellToolName).Function.Name != toolcontract.ShellToolName {
 		t.Fatalf("expected native chat to preserve direct typed tool, got %+v", provider.lastRequest.Tools)
 	}
 }
@@ -99,7 +99,7 @@ func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *tes
 	if len(chatRequest.Tools) != 4 {
 		t.Fatalf("expected one callable tool and three terminal controls, got %+v", chatRequest.Tools)
 	}
-	tool := nativeChatTool(t, chatRequest.Tools, toolcontract.TerminalRunToolName)
+	tool := nativeChatTool(t, chatRequest.Tools, toolcontract.ShellToolName)
 	if tool.Type != "function" {
 		t.Fatalf("expected function tool, got %+v", tool)
 	}
@@ -160,9 +160,9 @@ func TestDecideAgentActionNativeChatRejectsInvalidCallsWithoutStructuredFallback
 	}{
 		{name: "empty calls", response: model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{Role: "assistant"}}},
 		{name: "unknown tool", response: nativeAgentActionChatResponse("unknown", `{}`)},
-		{name: "malformed arguments", response: nativeAgentActionChatResponse(toolcontract.TerminalRunToolName, "{invalid")},
-		{name: "non-object arguments", response: nativeAgentActionChatResponse(toolcontract.TerminalRunToolName, `[]`)},
-		{name: "empty arguments", response: nativeAgentActionChatResponse(toolcontract.TerminalRunToolName, "")},
+		{name: "malformed arguments", response: nativeAgentActionChatResponse(toolcontract.ShellToolName, "{invalid")},
+		{name: "non-object arguments", response: nativeAgentActionChatResponse(toolcontract.ShellToolName, `[]`)},
+		{name: "empty arguments", response: nativeAgentActionChatResponse(toolcontract.ShellToolName, "")},
 		{name: "blank tool call ID", response: blankToolCallIDResponse},
 	}
 
@@ -246,7 +246,7 @@ func TestDecideAgentActionNativeChatRetryRequiresExactDiagnosticTool(t *testing.
 			nativeAgentActionChatResponse("task_add", `{"title":"plan review"}`),
 		},
 	}
-	state := nativeAgentActionTestStateWithTools("task_add", toolcontract.TerminalRunToolName)
+	state := nativeAgentActionTestStateWithTools("task_add", toolcontract.ShellToolName)
 
 	_, errorValue := DecideAgentAction(context.Background(), &provider, state)
 	if errorValue != nil {
@@ -291,7 +291,7 @@ func TestDecideAgentActionNativeChatRetryRequiresSinglePendingContractTool(t *te
 				ToolInput:     json.RawMessage(`{"path":"report.txt"}`),
 				Output:        toolcontract.ToolOutput{Content: "written"},
 			}},
-			expectedToolName: toolcontract.TerminalRunToolName,
+			expectedToolName: toolcontract.ShellToolName,
 		},
 	}
 
@@ -449,7 +449,7 @@ func TestDecideAgentActionNativeChatRetryPreservesModelChoiceOutsidePendingContr
 			updateState: func(state agentTaskState) agentTaskState {
 				state.Observations = []turnObservation{
 					successfulContractObservation("observation-1", "file_write", "kernel:file_write", `{"path":"report.txt"}`),
-					successfulContractObservation("observation-2", toolcontract.TerminalRunToolName, "kernel:terminal_run", `{"command":"wc report.txt"}`),
+					successfulContractObservation("observation-2", toolcontract.ShellToolName, "kernel:shell", `{"command":"wc report.txt"}`),
 				}
 				return state
 			},
@@ -521,17 +521,17 @@ func TestFirstPendingActionToolNameUsesRequiredNextTools(t *testing.T) {
 	}
 
 	state.Observations = []turnObservation{
-		successfulContractObservation("observation-1", toolcontract.TerminalRunToolName, "kernel:terminal_run", `{"command":"ls"}`),
+		successfulContractObservation("observation-1", toolcontract.ShellToolName, "kernel:shell", `{"command":"ls"}`),
 		successfulContractObservation("observation-2", "file_write", "kernel:file_write", `{"path":"report.txt"}`),
 		{
 			ObservationID: "observation-3",
 			Action:        "continue",
-			Tool:          toolcontract.TerminalRunToolName,
-			ToolInputKey:  toolcontract.TerminalRunToolName + "\x00{}",
+			Tool:          toolcontract.ShellToolName,
+			ToolInputKey:  toolcontract.ShellToolName + "\x00{}",
 			Failure:       &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()},
 		},
 	}
-	if toolName := firstPendingRequiredToolName(state.Request.ContractToolWorkingSet.RequiredNextTools, state.Observations); toolName != toolcontract.TerminalRunToolName {
+	if toolName := firstPendingRequiredToolName(state.Request.ContractToolWorkingSet.RequiredNextTools, state.Observations); toolName != toolcontract.ShellToolName {
 		t.Fatalf("expected out-of-order and failed observations not to advance the sequence, got %q", toolName)
 	}
 	if toolName := firstPendingActionToolName(state); toolName != "" {
@@ -599,12 +599,12 @@ func TestDecideAgentActionNativeChatStopsAfterTwoCorrections(t *testing.T) {
 		Code: "provider_response_invalid",
 		Diagnostic: model.StructuredOutputDiagnostic{
 			Category: model.StructuredOutputDiagnosticToolCallContract,
-			ToolName: "terminal_run",
+			ToolName: "shell",
 		},
 	}}
 	finalError := testStructuredOutputCorrectionError{correction: model.StructuredOutputCorrection{
 		Code:       "third_invalid",
-		Diagnostic: model.StructuredOutputDiagnostic{Category: model.StructuredOutputDiagnosticToolCallContract, ToolName: "terminal_run"},
+		Diagnostic: model.StructuredOutputDiagnostic{Category: model.StructuredOutputDiagnosticToolCallContract, ToolName: "shell"},
 	}}
 	provider := nativeAgentActionLanguageModel{chatErrors: []error{correctionError, correctionError, finalError}}
 
@@ -623,7 +623,7 @@ func TestDecideAgentActionNativeChatStopsCorrectionLoopOnCancellation(t *testing
 		Code: "provider_response_invalid",
 		Diagnostic: model.StructuredOutputDiagnostic{
 			Category: model.StructuredOutputDiagnosticToolCallContract,
-			ToolName: toolcontract.TerminalRunToolName,
+			ToolName: toolcontract.ShellToolName,
 		},
 	}}
 	provider := nativeAgentActionLanguageModel{chatErrors: []error{correctionError, context.Canceled, nil}}
@@ -665,7 +665,7 @@ func TestDecideAgentActionNativeChatUsesFirstProviderOrderedCall(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected native action: %v", errorValue)
 	}
-	if action.Action != "continue" || action.ToolName != toolcontract.TerminalRunToolName || string(action.ToolInput) != `{"command":"pwd"}` {
+	if action.Action != "continue" || action.ToolName != toolcontract.ShellToolName || string(action.ToolInput) != `{"command":"pwd"}` {
 		t.Fatalf("expected first provider-ordered tool call, got %+v", action)
 	}
 	if provider.chatCalls != 1 || provider.structuredCalls != 0 {
@@ -682,8 +682,8 @@ func TestDecideAgentActionBatchesFollowingToolCalls(t *testing.T) {
 		Message: model.ChatCompletionMessage{
 			Role: "assistant",
 			ToolCalls: []model.ChatCompletionToolCall{
-				nativeAgentActionToolCall(toolcontract.TerminalRunToolName, `{"command":"pwd"}`),
-				nativeAgentActionToolCall(toolcontract.TerminalRunToolName, `{"command":"ls"}`),
+				nativeAgentActionToolCall(toolcontract.ShellToolName, `{"command":"pwd"}`),
+				nativeAgentActionToolCall(toolcontract.ShellToolName, `{"command":"ls"}`),
 			},
 		},
 	}}
@@ -700,14 +700,14 @@ func TestDecideAgentActionBatchesFollowingToolCalls(t *testing.T) {
 func TestBatchedActionsRunWithoutAModelCallUntilOneFails(t *testing.T) {
 	state := &agentTaskState{}
 	rememberBatchedActions(state, turnActionDocument{BatchedActions: []turnActionDocument{
-		{Action: "continue", ToolName: toolcontract.TerminalRunToolName},
-		{Action: "continue", ToolName: toolcontract.TerminalRunToolName},
+		{Action: "continue", ToolName: toolcontract.ShellToolName},
+		{Action: "continue", ToolName: toolcontract.ShellToolName},
 	}})
 
 	if _, isBatched := takeBatchedAction(state); !isBatched {
 		t.Fatal("expected the first batched action to run without a model call")
 	}
-	state.Observations = append(state.Observations, newFailureObservation("obs-1", "continue", toolcontract.TerminalRunToolName, "failed", toolcontract.FailurePermissionDenied, toolcontract.FailureCodes.AccessDenied, toolcontract.TerminalRunToolName))
+	state.Observations = append(state.Observations, newFailureObservation("obs-1", "continue", toolcontract.ShellToolName, "failed", toolcontract.FailurePermissionDenied, toolcontract.FailureCodes.AccessDenied, toolcontract.ShellToolName))
 	rememberBatchedActions(state, turnActionDocument{})
 	if _, isBatched := takeBatchedAction(state); isBatched {
 		t.Fatal("expected a failed observation to drop the rest of the batch")
@@ -788,9 +788,9 @@ func TestDecideAgentActionUsesStructuredProviderWithoutChatCapability(t *testing
 }
 
 func nativeAgentActionTestState() agentTaskState {
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.ShellToolName})
 	registerTestTool(toolSet, toolcontract.ToolDefinition{
-		Name:        toolcontract.TerminalRunToolName,
+		Name:        toolcontract.ShellToolName,
 		Description: "Run a command.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}`),
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -814,8 +814,8 @@ func nativeAgentActionTestStateWithTools(toolNames ...string) agentTaskState {
 }
 
 func nativeAgentActionContractState() agentTaskState {
-	state := nativeAgentActionTestStateWithTools("file_write", toolcontract.TerminalRunToolName)
-	state.Request.ContractToolWorkingSet.RequiredNextTools = []string{"file_write", toolcontract.TerminalRunToolName}
+	state := nativeAgentActionTestStateWithTools("file_write", toolcontract.ShellToolName)
+	state.Request.ContractToolWorkingSet.RequiredNextTools = []string{"file_write", toolcontract.ShellToolName}
 	return state
 }
 
@@ -929,7 +929,7 @@ func nativeAgentActionMultipleCallsResponse() model.ChatCompletionResponse {
 		Message: model.ChatCompletionMessage{
 			Role: "assistant",
 			ToolCalls: []model.ChatCompletionToolCall{
-				nativeAgentActionToolCall(toolcontract.TerminalRunToolName, `{"command":"pwd"}`),
+				nativeAgentActionToolCall(toolcontract.ShellToolName, `{"command":"pwd"}`),
 				nativeAgentActionToolCall("finish", `{}`),
 			},
 		},
@@ -1041,9 +1041,9 @@ func (provider *structuredOnlyAgentActionLanguageModel) GenerateStructuredRespon
 func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T) {
 	seed := int64(77)
 	temperature := 0.4
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName, "site_serve"})
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.ShellToolName, "site_serve"})
 	registerTestTool(toolSet, toolcontract.ToolDefinition{
-		Name:        toolcontract.TerminalRunToolName,
+		Name:        toolcontract.ShellToolName,
 		Description: "Run a command.",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"command":{"type":"string"}},"required":["command"],"additionalProperties":false}`),
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -1116,7 +1116,7 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 	if strings.Contains(request.StructuredOutputSchema.Document, `"call_tool"`) || strings.Contains(request.StructuredOutputSchema.Document, `"final_reply"`) || strings.Contains(request.StructuredOutputSchema.Document, `"finalReply"`) {
 		t.Fatalf("expected model-facing schema to omit legacy action aliases, got %s", request.StructuredOutputSchema.Document)
 	}
-	if !strings.Contains(request.StructuredOutputSchema.Document, `"toolName":{"enum":["terminal_run"]`) {
+	if !strings.Contains(request.StructuredOutputSchema.Document, `"toolName":{"enum":["shell"]`) {
 		t.Fatalf("expected kernel toolName enum to be preserved, got %s", request.StructuredOutputSchema.Document)
 	}
 	if !strings.Contains(request.StructuredOutputSchema.Document, `"toolName":{"enum":["site_serve"]`) {
@@ -1692,11 +1692,11 @@ func TestProducedSourcePathsRecoversSourceFilesFromDurableResults(t *testing.T) 
 }
 
 func TestArgumentsThatAreNotAnObjectAreTheModelsMistakeNotTheRuntimes(t *testing.T) {
-	tools := []model.ChatCompletionTool{{Function: model.ChatCompletionFunction{Name: toolcontract.TerminalRunToolName}}}
+	tools := []model.ChatCompletionTool{{Function: model.ChatCompletionFunction{Name: toolcontract.ShellToolName}}}
 	toolCall := model.ChatCompletionToolCall{
 		ID:       "call-1",
 		Type:     "function",
-		Function: model.ChatCompletionToolCallFunction{Name: toolcontract.TerminalRunToolName, Arguments: `"ls -la"`},
+		Function: model.ChatCompletionToolCallFunction{Name: toolcontract.ShellToolName, Arguments: `"ls -la"`},
 	}
 
 	_, errorValue := nativeAgentActionFromToolCall(toolCall, tools)
@@ -1746,7 +1746,7 @@ func TestAToolResultArrivesOnTheCallThatProducedIt(t *testing.T) {
 	state.Observations = []turnObservation{{
 		ObservationID: "obs-007",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		ToolInput:     json.RawMessage(`{"command":"cli venmo --help"}`),
 		Summary:       "usage: cli venmo [show_balance|send_money]",
 	}}
@@ -1757,7 +1757,7 @@ func TestAToolResultArrivesOnTheCallThatProducedIt(t *testing.T) {
 	if call.ToolCalls[0].ID != "obs-007" || result.ToolCallID != "obs-007" {
 		t.Fatalf("the pair has to be keyed by the observation that made it, got call %q and result %q", call.ToolCalls[0].ID, result.ToolCallID)
 	}
-	if call.ToolCalls[0].Function.Name != "terminal_run" {
+	if call.ToolCalls[0].Function.Name != "shell" {
 		t.Fatalf("the call has to name the tool that ran, got %q", call.ToolCalls[0].Function.Name)
 	}
 	if call.ToolCalls[0].Function.Arguments != `{"command":"cli venmo --help"}` {
@@ -1796,7 +1796,7 @@ func TestAResultCarriedNativelyIsNotAlsoRetoldInTheSystemSection(t *testing.T) {
 	state.Observations = []turnObservation{{
 		ObservationID: "obs-007",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		ToolInput:     json.RawMessage(`{"command":"cli venmo --help"}`),
 		Summary:       "usage: cli venmo [show_balance|send_money]",
 	}}
@@ -1832,7 +1832,7 @@ func lastToolCallPair(t *testing.T, messages []model.ChatCompletionMessage) (mod
 }
 
 func refusalObservation(observationID string) turnObservation {
-	return turnObservation{ObservationID: observationID, Action: "evidence_missing", Tool: "terminal_run"}
+	return turnObservation{ObservationID: observationID, Action: "evidence_missing", Tool: "shell"}
 }
 
 func TestAnAgentToldThreeTimesItHasNotDoneTheTaskCanSaySoItCannot(t *testing.T) {
@@ -1854,7 +1854,7 @@ func TestAnAgentToldThreeTimesItHasNotDoneTheTaskCanSaySoItCannot(t *testing.T) 
 
 func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T) {
 	stored := strings.Repeat("endpoint: send_money\n", 1600)
-	observation := turnObservation{ObservationID: "obs-009", Tool: "terminal_run"}
+	observation := turnObservation{ObservationID: "obs-009", Tool: "shell"}
 	observation.Output.Content = stored
 
 	carried := toolResultForTranscript(observation)
@@ -1867,7 +1867,7 @@ func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T)
 func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-004",
-		Tool:          toolcontract.TerminalRunToolName,
+		Tool:          toolcontract.ShellToolName,
 		AssistantText: "The contacts list has no venmo field, so I have to cross-reference the venmo account list instead.",
 	}
 	observation.Output.Content = "ok"
@@ -1880,7 +1880,7 @@ func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 }
 
 func TestATranscriptEntryWithNoReasoningCarriesNone(t *testing.T) {
-	observation := turnObservation{ObservationID: "obs-005", Tool: toolcontract.TerminalRunToolName}
+	observation := turnObservation{ObservationID: "obs-005", Tool: toolcontract.ShellToolName}
 	observation.Output.Content = "ok"
 
 	transcript := toolCallTranscript([]turnObservation{observation})
@@ -1891,7 +1891,7 @@ func TestATranscriptEntryWithNoReasoningCarriesNone(t *testing.T) {
 }
 
 func TestEveryNativeActionCarriesAReasoningSlot(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.ShellToolName})
 	schemaDocument := ActionSchemaForToolSet(toolSet, false, nil, false)
 	tools, errorValue := nativeAgentActionTools(schemaDocument)
 	if errorValue != nil || len(tools) == 0 {
@@ -1906,11 +1906,11 @@ func TestEveryNativeActionCarriesAReasoningSlot(t *testing.T) {
 }
 
 func TestReasoningIsCarriedAndStrippedFromTheToolInput(t *testing.T) {
-	tools := []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.TerminalRunToolName}}}
+	tools := []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.ShellToolName}}}
 	toolCall := model.ChatCompletionToolCall{
 		ID: "call-1", Type: "function",
 		Function: model.ChatCompletionToolCallFunction{
-			Name:      toolcontract.TerminalRunToolName,
+			Name:      toolcontract.ShellToolName,
 			Arguments: `{"command":"ls","reasoning":"the contacts list had no venmo field, so I check the venmo accounts instead"}`,
 		},
 	}
@@ -1939,20 +1939,20 @@ func (languageModel *thinkThenActLanguageModel) GenerateChatCompletion(_ context
 	}
 	return model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{
 		Role:      "assistant",
-		ToolCalls: []model.ChatCompletionToolCall{{ID: "call-1", Type: "function", Function: model.ChatCompletionToolCallFunction{Name: toolcontract.TerminalRunToolName, Arguments: `{"command":"ls"}`}}},
+		ToolCalls: []model.ChatCompletionToolCall{{ID: "call-1", Type: "function", Function: model.ChatCompletionToolCallFunction{Name: toolcontract.ShellToolName, Arguments: `{"command":"ls"}`}}},
 	}}, nil
 }
 
 func TestAModelThatThinksFirstThenActsCompletesOneStep(t *testing.T) {
 	languageModel := &thinkThenActLanguageModel{}
 	request := model.ChatCompletionRequest{
-		Tools:      []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.TerminalRunToolName}}},
+		Tools:      []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.ShellToolName}}},
 		ToolChoice: json.RawMessage(`"auto"`),
 	}
 
 	action, errorValue := decideAgentActionWithChat(context.Background(), languageModel, request, agentTaskState{})
 
-	if errorValue != nil || action.ToolName != toolcontract.TerminalRunToolName {
+	if errorValue != nil || action.ToolName != toolcontract.ShellToolName {
 		t.Fatalf("a text-only response is the model thinking, and treating it as a malformed action threw the thought away: %v %+v", errorValue, action)
 	}
 	if len(languageModel.chatRequests) != 2 {

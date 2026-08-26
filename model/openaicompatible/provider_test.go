@@ -7,7 +7,7 @@ import (
 )
 
 func TestToolCallsAreReadFromTheEndpointsOwnFieldName(t *testing.T) {
-	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"call-1","type":"function","function":{"name":"terminal_run","arguments":"{\"command\":\"ls\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"call-1","type":"function","function":{"name":"shell","arguments":"{\"command\":\"ls\"}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12}}`)
 
 	response, errorValue := decodeChatCompletion(responseBody, "any/model")
 
@@ -18,7 +18,7 @@ func TestToolCallsAreReadFromTheEndpointsOwnFieldName(t *testing.T) {
 		t.Fatal("an endpoint sends tool_calls while the internal type is tagged toolCalls, and decoding one straight into the other silently drops every call the model made")
 	}
 	call := response.Message.ToolCalls[0]
-	if call.ID != "call-1" || call.Function.Name != "terminal_run" || call.Function.Arguments != `{"command":"ls"}` {
+	if call.ID != "call-1" || call.Function.Name != "shell" || call.Function.Arguments != `{"command":"ls"}` {
 		t.Fatalf("expected the call to survive decoding intact, got %+v", call)
 	}
 }
@@ -38,7 +38,7 @@ func TestMessagePartsReachTheEndpointAsContent(t *testing.T) {
 }
 
 func TestTheCostTheEndpointChargedIsRecorded(t *testing.T) {
-	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12,"cost":0.0034}}`)
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"shell","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12,"cost":0.0034}}`)
 
 	response, errorValue := decodeChatCompletion(responseBody, "any/model")
 
@@ -51,7 +51,7 @@ func TestTheCostTheEndpointChargedIsRecorded(t *testing.T) {
 }
 
 func TestThePromptTokensTheEndpointServedFromCacheAreRecorded(t *testing.T) {
-	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10000,"completion_tokens":2,"total_tokens":10002,"prompt_tokens_details":{"cached_tokens":9000}}}`)
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"shell","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":10000,"completion_tokens":2,"total_tokens":10002,"prompt_tokens_details":{"cached_tokens":9000}}}`)
 
 	response, errorValue := decodeChatCompletion(responseBody, "any/model")
 
@@ -64,7 +64,7 @@ func TestThePromptTokensTheEndpointServedFromCacheAreRecorded(t *testing.T) {
 }
 
 func TestTheModelsOwnReasoningSurvivesDecoding(t *testing.T) {
-	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","reasoning_content":"the contacts list has no venmo field, so I will cross-reference","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`)
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","reasoning_content":"the contacts list has no venmo field, so I will cross-reference","tool_calls":[{"id":"c1","type":"function","function":{"name":"shell","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`)
 
 	response, errorValue := decodeChatCompletion(responseBody, "any/model")
 

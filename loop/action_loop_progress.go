@@ -89,7 +89,7 @@ func evaluateRecoveryAllowance(observations []turnObservation, budget RecoveryBu
 // input, so changing cosmetic fields to re-issue the same broken call does not disguise it as
 // fresh progress and does not keep the recovery loop banging on a route that keeps failing the
 // same way. It counts inside the episode because a signature that a successful call already
-// cleared is not recurring, and terminal_run gives every shell failure the same signature.
+// cleared is not recurring, and shell gives every shell failure the same signature.
 func repeatedFailureSignature(observations []turnObservation, failureDebt FailureDebt) string {
 	signature := failureSignatureKey(failureDebt.LatestFailure)
 	if signature == "" {

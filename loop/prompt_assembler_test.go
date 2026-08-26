@@ -449,7 +449,7 @@ func TestWorkspaceContextCarriesTheHostsOwnSandboxDescription(t *testing.T) {
 }
 
 func TestATurnWithNoImagesIsNotToldToInspectThem(t *testing.T) {
-	message := toolResultImageContextMessage([]turnObservation{{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run"}})
+	message := toolResultImageContextMessage([]turnObservation{{ObservationID: "obs-001", Action: "continue", Tool: "shell"}})
 
 	if strings.TrimSpace(message.Content) != "" || len(message.Parts) != 0 {
 		t.Fatalf("a turn that produced no images carries an instruction about image parts that are not there: %q", message.Content)
@@ -457,7 +457,7 @@ func TestATurnWithNoImagesIsNotToldToInspectThem(t *testing.T) {
 }
 
 func TestTheProgressLedgerDoesNotClaimResultsItNoLongerCarries(t *testing.T) {
-	observation := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "terminal_run", Summary: "ran and printed a page of output"}
+	observation := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "shell", Summary: "ran and printed a page of output"}
 
 	native := buildProgressContext(AgentTurnRequest{Prompt: "do it"}, []turnObservation{observation}, true)
 	flattened := buildProgressContext(AgentTurnRequest{Prompt: "do it"}, []turnObservation{observation}, false)

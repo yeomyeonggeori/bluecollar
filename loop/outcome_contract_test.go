@@ -25,12 +25,12 @@ func TestSelectedEvidenceHintsComeFromSelectedSkills(t *testing.T) {
 	instructionBundle := InstructionBundle{
 		Skills:                []SkillInstruction{{Name: "site-prototype"}, {Name: "calendar"}},
 		SkillDecisions:        []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-		RequiredEvidenceTools: []string{"site_serve", "terminal_run", "site_serve"},
+		RequiredEvidenceTools: []string{"site_serve", "shell", "site_serve"},
 	}
 
 	toolNames := selectedEvidenceHintTools(instructionBundle)
 
-	if len(toolNames) != 3 || toolNames[0] != "site_serve" || toolNames[1] != "terminal_run" || toolNames[2] != "site_serve" {
+	if len(toolNames) != 3 || toolNames[0] != "site_serve" || toolNames[1] != "shell" || toolNames[2] != "site_serve" {
 		t.Fatalf("expected selected skill evidence tools, got %+v", toolNames)
 	}
 }
@@ -656,18 +656,18 @@ func TestOutcomeReferenceToolSetHidesSendAndSiteToolsForDocumentGoal(t *testing.
 }
 
 func TestAgentTurnToolSetExposesPinnedNonKernelTools(t *testing.T) {
-	toolSet := testToolSet([]string{"web_search", "web_fetch", "terminal_run", "file_write"})
+	toolSet := testToolSet([]string{"web_search", "web_fetch", "shell", "file_write"})
 	instructionBundle := InstructionBundle{
-		Skills:         []SkillInstruction{{Name: "presentation", ToolReferences: []string{"terminal_run", "file_write"}}},
+		Skills:         []SkillInstruction{{Name: "presentation", ToolReferences: []string{"shell", "file_write"}}},
 		SkillDecisions: []SkillSelectionDecision{{Name: "presentation", Status: "selected"}},
 	}
 
 	filteredToolSet := toolSetForAgentTurn(toolSet, instructionBundle, AgentRequest{
 		Prompt:          "https://example.com use it to make the deck",
-		PinnedToolNames: []string{"web_search", "web_fetch", "terminal_run", "file_write"},
+		PinnedToolNames: []string{"web_search", "web_fetch", "shell", "file_write"},
 	}, ExecutionPlan{}, false, OutcomeContract{})
 
-	for _, toolName := range []string{"terminal_run", "file_write", "web_search", "web_fetch"} {
+	for _, toolName := range []string{"shell", "file_write", "web_search", "web_fetch"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected pinned tool %s to remain available, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
@@ -689,11 +689,11 @@ func TestOutcomeReferenceToolSetKeepsSiteToolsForSiteGoal(t *testing.T) {
 }
 
 func TestOutcomeReferenceToolSetKeepsActiveGoalEvidenceToolsForContinuation(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "terminal_run", "site_serve", "site_serve"})
+	toolSet := testToolSet([]string{"web_fetch", "shell", "site_serve", "site_serve"})
 	request := AgentRequest{
 		Prompt: "try again, it should work",
 		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a website", OutcomeContract: OutcomeContract{
-			SelectedEvidenceHints: []string{"site_serve", "terminal_run", "site_serve"},
+			SelectedEvidenceHints: []string{"site_serve", "shell", "site_serve"},
 		}},
 	}
 
@@ -707,27 +707,27 @@ func TestOutcomeReferenceToolSetKeepsActiveGoalEvidenceToolsForContinuation(t *t
 }
 
 func TestAgentTurnToolSetHidesSiteToolsForActiveGoalContinuation(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "terminal_run", "site_serve", "site_serve"})
+	toolSet := testToolSet([]string{"web_fetch", "shell", "site_serve", "site_serve"})
 	instructionBundle := InstructionBundle{
 		Skills: []SkillInstruction{{
 			Name:           "site-prototype",
-			ToolReferences: []string{"terminal_run", "site_serve", "site_serve"},
+			ToolReferences: []string{"shell", "site_serve", "site_serve"},
 		}},
 		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
 	}
 	request := AgentRequest{
 		Prompt:          "try again, it should work",
-		PinnedToolNames: []string{"terminal_run", "site_serve", "site_serve"},
+		PinnedToolNames: []string{"shell", "site_serve", "site_serve"},
 		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a website", OutcomeContract: OutcomeContract{
-			SelectedEvidenceHints: []string{"site_serve", "terminal_run", "site_serve"},
+			SelectedEvidenceHints: []string{"site_serve", "shell", "site_serve"},
 		}},
 	}
-	contract := OutcomeContract{SelectedEvidenceHints: []string{"site_serve", "terminal_run", "site_serve"}}
+	contract := OutcomeContract{SelectedEvidenceHints: []string{"site_serve", "shell", "site_serve"}}
 
 	filteredToolSet := toolSetForAgentTurn(toolSet, instructionBundle, request, ExecutionPlan{}, false, contract)
 
 	// Continuation of an active site goal keeps site.* exposed because it is still pinned.
-	for _, toolName := range []string{"terminal_run", "site_serve", "site_serve"} {
+	for _, toolName := range []string{"shell", "site_serve", "site_serve"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected pinned tool %s to remain available for an active site continuation, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
@@ -735,21 +735,21 @@ func TestAgentTurnToolSetHidesSiteToolsForActiveGoalContinuation(t *testing.T) {
 }
 
 func TestAgentTurnToolSetHidesSelectedSiteSkillToolsWhenActiveGoalWasAttachmentFallback(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "terminal_run", "file_deliver", "site_serve", "site_serve"})
+	toolSet := testToolSet([]string{"web_fetch", "shell", "file_deliver", "site_serve", "site_serve"})
 	instructionBundle := InstructionBundle{
 		Skills: []SkillInstruction{{
 			Name:           "site-prototype",
-			ToolReferences: []string{"terminal_run", "site_serve", "site_serve"},
+			ToolReferences: []string{"shell", "site_serve", "site_serve"},
 		}},
 		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
 	}
 	request := AgentRequest{
 		Prompt:          "try again",
-		PinnedToolNames: []string{"terminal_run", "site_serve", "site_serve"},
+		PinnedToolNames: []string{"shell", "site_serve", "site_serve"},
 		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a personal homepage", OutcomeContract: OutcomeContract{
 			RequiredEvidenceTools:      []string{"file_deliver"},
 			RequiredAttachmentSuffixes: []string{".html"},
-			SelectedEvidenceHints:      []string{"site_serve", "terminal_run", "site_serve"},
+			SelectedEvidenceHints:      []string{"site_serve", "shell", "site_serve"},
 			ArtifactRequirement:        ArtifactRequirementRequired,
 		}},
 	}
@@ -758,7 +758,7 @@ func TestAgentTurnToolSetHidesSelectedSiteSkillToolsWhenActiveGoalWasAttachmentF
 	filteredToolSet := toolSetForAgentTurn(toolSet, instructionBundle, request, ExecutionPlan{}, false, contract)
 
 	// A selected site skill keeps site.* exposed because it is still pinned, alongside the kernel tools.
-	for _, toolName := range []string{"terminal_run", "file_deliver", "site_serve", "site_serve"} {
+	for _, toolName := range []string{"shell", "file_deliver", "site_serve", "site_serve"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected pinned tool %s to remain available after selected site skill, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
@@ -769,13 +769,13 @@ func TestOutcomeContractRequiresActiveGoalRequiredEvidenceForContinuation(t *tes
 	instructionBundle := InstructionBundle{
 		Skills:                []SkillInstruction{{Name: "site-prototype"}},
 		SkillDecisions:        []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-		RequiredEvidenceTools: []string{"site_serve", "terminal_run", "site_serve"},
+		RequiredEvidenceTools: []string{"site_serve", "shell", "site_serve"},
 	}
 	request := AgentRequest{
 		Prompt: "try again, it should work",
 		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a website", OutcomeContract: OutcomeContract{
 			RequiredEvidenceTools: []string{"site_serve", "site_serve"},
-			SelectedEvidenceHints: []string{"site_serve", "terminal_run", "site_serve"},
+			SelectedEvidenceHints: []string{"site_serve", "shell", "site_serve"},
 		}},
 	}
 

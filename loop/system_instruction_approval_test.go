@@ -17,7 +17,7 @@ func TestSystemInstructionRequiresConcreteReadResults(t *testing.T) {
 
 func TestAWorkspaceTaskIsNotToldAboutMessengersItHasNone(t *testing.T) {
 	workspaceOnly := buildAgentSystemInstruction(AgentTurnRequest{
-		ToolSet: newTestToolSet([]string{toolcontract.TerminalRunToolName}),
+		ToolSet: newTestToolSet([]string{toolcontract.ShellToolName}),
 	}, TurnOptions{}).Text()
 
 	for _, absent := range []string{"Bare mentions and banter", "Recipients:", "Delivery and artifacts", "Approvals and user input", "Skills:"} {

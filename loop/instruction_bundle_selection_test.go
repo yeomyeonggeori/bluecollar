@@ -129,7 +129,7 @@ func TestASkillWithSomethingToSayCarriesTheGuidance(t *testing.T) {
 }
 
 func TestASkillBodyRidesOnlyWithItsTools(t *testing.T) {
-	shellOnly := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
+	shellOnly := toolcontract.NewToolSet([]string{toolcontract.ShellToolName})
 	memorySkill := SkillInstruction{Name: "memory", Prompt: "Call memory_search before answering.", ToolReferences: []string{"memory_search", "memory_remember"}}
 	workflowSkill := SkillInstruction{Name: "handbook", Prompt: "Follow the escalation order."}
 

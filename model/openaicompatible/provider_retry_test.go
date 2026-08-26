@@ -121,7 +121,7 @@ func TestAGenerationTheEndpointAbortedIsRetried(t *testing.T) {
 			writer.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":""},"finish_reason":"error"}]}`))
 			return
 		}
-		writer.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`))
+		writer.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"shell","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`))
 	}))
 	defer server.Close()
 
@@ -136,7 +136,7 @@ func TestAGenerationTheEndpointAbortedIsRetried(t *testing.T) {
 }
 
 func TestAnEmptyFinishReasonWithToolCallsIsAToolCall(t *testing.T) {
-	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"terminal_run","arguments":"{}"}}]}}]}`)
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"shell","arguments":"{}"}}]}}]}`)
 
 	response, errorValue := decodeChatCompletion(responseBody, "any/model")
 

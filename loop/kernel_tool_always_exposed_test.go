@@ -27,7 +27,7 @@ func TestKernelToolsStayExposedEvenWhenAvailabilityDenied(t *testing.T) {
 	}
 
 	toolSet := toolcontract.NewToolSet(append(append([]string{}, toolcontract.KernelToolNames()...), "domain_op"))
-	for _, kernelToolName := range []string{toolcontract.FileReadToolName, toolcontract.FileDeliverToolName, toolcontract.TerminalRunToolName} {
+	for _, kernelToolName := range []string{toolcontract.FileReadToolName, toolcontract.FileDeliverToolName, toolcontract.ShellToolName} {
 		toolSet.RegisterBoundTool(deniedTool(kernelToolName))
 		if !toolSet.IsAllowed(kernelToolName) {
 			t.Fatalf("%s must stay exposed even with denied availability", kernelToolName)

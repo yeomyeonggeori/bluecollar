@@ -142,15 +142,15 @@ func TestEvidenceRequirementsSkipReadOnlyTools(t *testing.T) {
 }
 
 func TestARequirementNamingAnUnavailableToolIsNotARequirement(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 	requirements := []toolUseRequirement{
 		{ToolName: toolcontract.FileDeliverToolName, RequiresAttachment: true},
-		{ToolName: toolcontract.TerminalRunToolName},
+		{ToolName: toolcontract.ShellToolName},
 	}
 
 	callable := requirementsTheTaskCanCall(toolSet, requirements)
 
-	if len(callable) != 1 || callable[0].ToolName != toolcontract.TerminalRunToolName {
+	if len(callable) != 1 || callable[0].ToolName != toolcontract.ShellToolName {
 		t.Fatalf("a requirement the palette cannot call can never be met, so keeping it only spends the run's turns: %+v", callable)
 	}
 }

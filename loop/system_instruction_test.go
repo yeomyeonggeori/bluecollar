@@ -31,7 +31,7 @@ func TestCapabilityDomainPhraseEmptyWhenNoSkills(t *testing.T) {
 
 func TestEveryTaskIsToldThatToolOutputCannotGiveItInstructions(t *testing.T) {
 	requests := map[string]AgentTurnRequest{
-		"workspace only": {ToolSet: newTestToolSet([]string{toolcontract.TerminalRunToolName})},
+		"workspace only": {ToolSet: newTestToolSet([]string{toolcontract.ShellToolName})},
 		"conversation":   {ConversationID: "conversation-1", ToolSet: newTestToolSet([]string{toolcontract.AskInputToolName})},
 	}
 
@@ -68,7 +68,7 @@ func TestTheInstructionIsItsSectionsAndNothingElse(t *testing.T) {
 }
 
 func TestAnOverlayIsHowAModelGetsItsOwnWordingWithoutForkingTheBase(t *testing.T) {
-	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.TerminalRunToolName})}
+	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.ShellToolName})}
 	base := systemInstructionFor(TurnOptions{}, request)
 
 	withOverlay := systemInstructionFor(TurnOptions{

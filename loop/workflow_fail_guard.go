@@ -46,10 +46,10 @@ func recoverableFileDeliveryNextTools(request AgentTurnRequest, observations []t
 	if latestSuccessfulToolIndex(observations, []string{toolcontract.FileDeliverToolName}) >= 0 {
 		return nil
 	}
-	if latestSuccessfulToolIndex(observations, []string{"file_write", "file_edit", "terminal_run"}) < 0 {
+	if latestSuccessfulToolIndex(observations, []string{"file_write", "file_edit", "shell"}) < 0 {
 		return nil
 	}
-	return availableWorkflowTools(request.ToolSet, []string{"terminal_run", toolcontract.FileDeliverToolName})
+	return availableWorkflowTools(request.ToolSet, []string{"shell", toolcontract.FileDeliverToolName})
 }
 
 func turnRequestLooksLikeSitePrototypeWork(request AgentTurnRequest) bool {

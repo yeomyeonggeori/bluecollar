@@ -5,16 +5,16 @@ import ()
 import "testing"
 
 func TestApplyToolRequestNormalizesContinueActionToolNames(t *testing.T) {
-	request := AgentTurnRequest{ToolSet: testToolSet([]string{"file_deliver", "file.promote", "terminal_run"})}
+	request := AgentTurnRequest{ToolSet: testToolSet([]string{"file_deliver", "file.promote", "shell"})}
 
 	updatedRequest, result := applyToolRequest(request, requestToolsArguments{
-		ToolNames: []string{"continue__file_deliver", "continue__file_promote", "terminal_run"},
+		ToolNames: []string{"continue__file_deliver", "continue__file_promote", "shell"},
 	})
 
 	if len(result.UnknownToolNames) != 0 {
 		t.Fatalf("expected no unknown tools, got %+v", result.UnknownToolNames)
 	}
-	for _, toolName := range []string{"file_deliver", "file.promote", "terminal_run"} {
+	for _, toolName := range []string{"file_deliver", "file.promote", "shell"} {
 		if !containsString(result.PinnedToolNames, toolName) {
 			t.Fatalf("expected result to pin %s, got %+v", toolName, result.PinnedToolNames)
 		}

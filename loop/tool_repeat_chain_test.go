@@ -17,11 +17,11 @@ func callObservation(observationID string, toolName string, toolInputKey string)
 }
 
 func TestBookkeepingBetweenTwoIdenticalCallsDoesNotLaunderTheLoop(t *testing.T) {
-	searchKey := "terminal_run\x00{\"command\":\"grep -r needle .\"}"
+	searchKey := "shell\x00{\"command\":\"grep -r needle .\"}"
 	observations := []turnObservation{
-		callObservation("obs-1", toolcontract.TerminalRunToolName, searchKey),
+		callObservation("obs-1", toolcontract.ShellToolName, searchKey),
 		callObservation("obs-2", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}"),
-		callObservation("obs-3", toolcontract.TerminalRunToolName, searchKey),
+		callObservation("obs-3", toolcontract.ShellToolName, searchKey),
 	}
 
 	if count := consecutiveIdenticalToolCallCount(observations, searchKey); count != 2 {
@@ -30,11 +30,11 @@ func TestBookkeepingBetweenTwoIdenticalCallsDoesNotLaunderTheLoop(t *testing.T) 
 }
 
 func TestADifferentCallBreaksTheChain(t *testing.T) {
-	searchKey := "terminal_run\x00{\"command\":\"grep -r needle .\"}"
+	searchKey := "shell\x00{\"command\":\"grep -r needle .\"}"
 	observations := []turnObservation{
-		callObservation("obs-1", toolcontract.TerminalRunToolName, searchKey),
-		callObservation("obs-2", toolcontract.TerminalRunToolName, "terminal_run\x00{\"command\":\"ls\"}"),
-		callObservation("obs-3", toolcontract.TerminalRunToolName, searchKey),
+		callObservation("obs-1", toolcontract.ShellToolName, searchKey),
+		callObservation("obs-2", toolcontract.ShellToolName, "shell\x00{\"command\":\"ls\"}"),
+		callObservation("obs-3", toolcontract.ShellToolName, searchKey),
 	}
 
 	if count := consecutiveIdenticalToolCallCount(observations, searchKey); count != 1 {
@@ -54,11 +54,11 @@ func TestACallThatKeptFailingStillCounts(t *testing.T) {
 }
 
 func TestTheThirdIdenticalCallEarnsANudge(t *testing.T) {
-	searchKey := "terminal_run\x00{\"command\":\"grep -r needle .\"}"
-	call := callObservation("obs-3", toolcontract.TerminalRunToolName, searchKey)
+	searchKey := "shell\x00{\"command\":\"grep -r needle .\"}"
+	call := callObservation("obs-3", toolcontract.ShellToolName, searchKey)
 	observations := []turnObservation{
-		callObservation("obs-1", toolcontract.TerminalRunToolName, searchKey),
-		callObservation("obs-2", toolcontract.TerminalRunToolName, searchKey),
+		callObservation("obs-1", toolcontract.ShellToolName, searchKey),
+		callObservation("obs-2", toolcontract.ShellToolName, searchKey),
 		call,
 	}
 
@@ -76,9 +76,9 @@ func TestTheThirdIdenticalCallEarnsANudge(t *testing.T) {
 }
 
 func TestTheSecondIdenticalCallIsLeftAlone(t *testing.T) {
-	searchKey := "terminal_run\x00{\"command\":\"grep -r needle .\"}"
-	call := callObservation("obs-2", toolcontract.TerminalRunToolName, searchKey)
-	observations := []turnObservation{callObservation("obs-1", toolcontract.TerminalRunToolName, searchKey), call}
+	searchKey := "shell\x00{\"command\":\"grep -r needle .\"}"
+	call := callObservation("obs-2", toolcontract.ShellToolName, searchKey)
+	observations := []turnObservation{callObservation("obs-1", toolcontract.ShellToolName, searchKey), call}
 
 	if _, _, hasReminder := toolRepeatReminderObservation(observations, call); hasReminder {
 		t.Fatal("checking something twice is ordinary work, not a loop")
@@ -107,7 +107,7 @@ func toolSetDeclaringPlanUpdateWithoutSideEffect(t *testing.T) *toolcontract.Too
 	t.Helper()
 	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 		{Name: toolcontract.PlanUpdateToolName, SideEffectClass: toolcontract.ToolSideEffectNone, Visibility: toolcontract.ToolVisibilityModel},
-		{Name: toolcontract.TerminalRunToolName, SideEffectClass: toolcontract.ToolSideEffectStateChange, Visibility: toolcontract.ToolVisibilityModel},
+		{Name: toolcontract.ShellToolName, SideEffectClass: toolcontract.ToolSideEffectStateChange, Visibility: toolcontract.ToolVisibilityModel},
 	})
 }
 
@@ -115,7 +115,7 @@ func TestAPlanResubmittedAcrossRealWorkStillChangedNothing(t *testing.T) {
 	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
 	observations := []turnObservation{
 		callObservation("obs-1", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}"),
-		callObservation("obs-2", toolcontract.TerminalRunToolName, "terminal_run\x00{\"command\":\"ls\"}"),
+		callObservation("obs-2", toolcontract.ShellToolName, "shell\x00{\"command\":\"ls\"}"),
 	}
 	repeated := callObservation("obs-3", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}")
 	repeated.RepeatsObservationID = "obs-1"
@@ -131,7 +131,7 @@ func TestAPlanResubmittedAcrossRealWorkStillChangedNothing(t *testing.T) {
 
 func TestARepeatedResultFromAToolThatDoesSomethingIsNotANoOp(t *testing.T) {
 	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
-	repeated := callObservation("obs-3", toolcontract.TerminalRunToolName, "terminal_run\x00{\"command\":\"ls\"}")
+	repeated := callObservation("obs-3", toolcontract.ShellToolName, "shell\x00{\"command\":\"ls\"}")
 	repeated.RepeatsObservationID = "obs-1"
 
 	if _, hasReminder := unchangedResultReminderObservation(toolSet, nil, repeated); hasReminder {
@@ -148,12 +148,12 @@ func resultRepeating(observationID string, toolName string, repeatsObservationID
 func TestTheThirdIdenticalResultFromASideEffectingToolIsALoop(t *testing.T) {
 	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
 	observations := []turnObservation{
-		callObservation("obs-1", toolcontract.TerminalRunToolName, "terminal_run\x00{}"),
-		resultRepeating("obs-2", toolcontract.TerminalRunToolName, "obs-1"),
+		callObservation("obs-1", toolcontract.ShellToolName, "shell\x00{}"),
+		resultRepeating("obs-2", toolcontract.ShellToolName, "obs-1"),
 	}
-	third := resultRepeating("obs-3", toolcontract.TerminalRunToolName, "obs-1")
+	third := resultRepeating("obs-3", toolcontract.ShellToolName, "obs-1")
 
-	if _, hasReminder := unchangedResultReminderObservation(toolSet, observations, resultRepeating("obs-2", toolcontract.TerminalRunToolName, "obs-1")); hasReminder {
+	if _, hasReminder := unchangedResultReminderObservation(toolSet, observations, resultRepeating("obs-2", toolcontract.ShellToolName, "obs-1")); hasReminder {
 		t.Fatal("one repeat of a command that changes things is not proof of a loop, and saying so would be noise")
 	}
 	if _, hasReminder := unchangedResultReminderObservation(toolSet, append(observations, third), third); !hasReminder {

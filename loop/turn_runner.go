@@ -84,33 +84,34 @@ func lastObservationFailed(observations []turnObservation) bool {
 }
 
 type turnObservation struct {
-	ObservationID        string                        `json:"observationID"`
-	Action               string                        `json:"action"`
-	Tool                 string                        `json:"tool,omitempty"`
-	ToolID               string                        `json:"toolID,omitempty"`
-	ToolInput            json.RawMessage               `json:"toolInput,omitempty"`
-	Output               toolcontract.ToolOutput       `json:"output,omitempty"`
-	Effects              []toolcontract.ResourceEffect `json:"effects,omitempty"`
-	Failure              *toolcontract.ToolFailure     `json:"failure,omitempty"`
-	Summary              string                        `json:"summary,omitempty"`
-	ImageRefs            []ToolResultImageRef          `json:"imageRefs,omitempty"`
-	RepeatsObservationID string                        `json:"repeatsObservationID,omitempty"`
-	ToolInputKey         string                        `json:"toolInputKey,omitempty"`
-	AttemptFingerprint   string                        `json:"attemptFingerprint,omitempty"`
-	RecoveryAttemptKey   string                        `json:"recoveryAttemptKey,omitempty"`
-	AssistantText        string                        `json:"assistantText,omitempty"`
-	ModelReasoning       string                        `json:"modelReasoning,omitempty"`
-	ModelReasoningField  string                        `json:"modelReasoningField,omitempty"`
-	RecoveryStep         string                        `json:"recoveryStep,omitempty"`
-	ToolIsReadOnly       bool                          `json:"toolIsReadOnly,omitempty"`
-	RecoveryAttemptSpent bool                          `json:"recoveryAttemptSpent,omitempty"`
-	PolicyCode           string                        `json:"policyCode,omitempty"`
-	RelatedResultIDs     []string                      `json:"relatedResultIDs,omitempty"`
-	RelatedPaths         []string                      `json:"relatedPaths,omitempty"`
-	RecoveryPacket       *RecoveryPacket               `json:"recoveryPacket,omitempty"`
-	Attachments          []toolcontract.FileAttachment `json:"attachments,omitempty"`
-	RecoveryActions      []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
-	DurationMS           int64                         `json:"durationMs"`
+	ObservationID         string                        `json:"observationID"`
+	Action                string                        `json:"action"`
+	Tool                  string                        `json:"tool,omitempty"`
+	ToolID                string                        `json:"toolID,omitempty"`
+	ToolInput             json.RawMessage               `json:"toolInput,omitempty"`
+	Output                toolcontract.ToolOutput       `json:"output,omitempty"`
+	Effects               []toolcontract.ResourceEffect `json:"effects,omitempty"`
+	Failure               *toolcontract.ToolFailure     `json:"failure,omitempty"`
+	Summary               string                        `json:"summary,omitempty"`
+	ImageRefs             []ToolResultImageRef          `json:"imageRefs,omitempty"`
+	RepeatsObservationID  string                        `json:"repeatsObservationID,omitempty"`
+	ToolInputKey          string                        `json:"toolInputKey,omitempty"`
+	AttemptFingerprint    string                        `json:"attemptFingerprint,omitempty"`
+	RecoveryAttemptKey    string                        `json:"recoveryAttemptKey,omitempty"`
+	AssistantText         string                        `json:"assistantText,omitempty"`
+	JudgeNamedMissingWork bool                          `json:"judgeNamedMissingWork,omitempty"`
+	ModelReasoning        string                        `json:"modelReasoning,omitempty"`
+	ModelReasoningField   string                        `json:"modelReasoningField,omitempty"`
+	RecoveryStep          string                        `json:"recoveryStep,omitempty"`
+	ToolIsReadOnly        bool                          `json:"toolIsReadOnly,omitempty"`
+	RecoveryAttemptSpent  bool                          `json:"recoveryAttemptSpent,omitempty"`
+	PolicyCode            string                        `json:"policyCode,omitempty"`
+	RelatedResultIDs      []string                      `json:"relatedResultIDs,omitempty"`
+	RelatedPaths          []string                      `json:"relatedPaths,omitempty"`
+	RecoveryPacket        *RecoveryPacket               `json:"recoveryPacket,omitempty"`
+	Attachments           []toolcontract.FileAttachment `json:"attachments,omitempty"`
+	RecoveryActions       []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
+	DurationMS            int64                         `json:"durationMs"`
 }
 
 type toolCallActionOutcome struct {
@@ -1253,7 +1254,7 @@ func pendingFileDeliveryToolNames(request AgentTurnRequest, observations []turnO
 }
 
 func availableFileDeliveryToolNames(request AgentTurnRequest) []string {
-	toolNames := []string{toolcontract.TerminalRunToolName, toolcontract.FileDeliverToolName, toolcontract.SkillSearchToolName}
+	toolNames := []string{toolcontract.ShellToolName, toolcontract.FileDeliverToolName, toolcontract.SkillSearchToolName}
 	if request.ToolSet == nil {
 		return toolNames
 	}

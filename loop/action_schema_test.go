@@ -111,7 +111,7 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 func TestTerminalActionSchemasAcceptFinishAndFailDocuments(t *testing.T) {
 	finishDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
 	failDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
-	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"terminal_run","errorCode":"operation_failed","failureStage":"terminal_run","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
+	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"shell","errorCode":"operation_failed","failureStage":"shell","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
 	finishWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"no_tool_fallback","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
 
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), finishDocument)
@@ -194,7 +194,7 @@ func assertEveryObjectSchemaIsClosed(t *testing.T, schemaValue any) {
 }
 
 func TestAStrictActionSchemaRequiresEveryPropertyItDeclares(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 
 	for _, allowQualityCriteria := range []bool{false, true} {
 		for _, hasFailureDebt := range []bool{false, true} {
@@ -261,7 +261,7 @@ func asStrings(value any) []string {
 }
 
 func TestFinishCanOnlyCiteEvidenceThatExists(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 
 	document := actionSchemaForToolSet(toolSet, []string{"obs-001", "obs-003"}, false, nil, false, true, true)
 
@@ -276,7 +276,7 @@ func TestFinishCanOnlyCiteEvidenceThatExists(t *testing.T) {
 }
 
 func TestFinishCitesFreelyWhenThereIsNoEvidenceToName(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 
 	document := actionSchemaForToolSet(toolSet, nil, false, nil, false, true, true)
 
@@ -322,7 +322,7 @@ func completionEvidenceEnumInSchema(t *testing.T, node any) []string {
 }
 
 func TestAContinueVariantAsksOnlyForWhatTheLoopReads(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 	var schema struct {
 		OneOf []struct {
 			Properties map[string]json.RawMessage `json:"properties"`

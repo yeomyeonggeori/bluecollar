@@ -15,8 +15,8 @@ func TestRequiredEvidenceToolCanBeSatisfiedAcceptsDirectTool(t *testing.T) {
 }
 
 func TestRequiredEvidenceToolCanBeSatisfiedAcceptsRegisteredCapabilityOperation(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
-	for _, toolName := range []string{toolcontract.TerminalRunToolName, "calendar_add"} {
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.ShellToolName})
+	for _, toolName := range []string{toolcontract.ShellToolName, "calendar_add"} {
 		currentToolName := toolName
 		registerTestTool(toolSet, toolcontract.ToolDefinition{Name: currentToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return testToolSuccess("ok"), nil
@@ -32,7 +32,7 @@ func TestRequiredEvidenceToolCanBeSatisfiedAcceptsRegisteredCapabilityOperation(
 }
 
 func TestRequiredEvidenceToolCanBeSatisfiedRejectsUnavailableTool(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.TerminalRunToolName})
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.ShellToolName})
 	toolSet.RegisterBoundTool(toolcontract.BoundTool{
 		Definition:   toolcontract.ToolDefinition{Name: "calendar_add"},
 		Availability: toolcontract.ToolAvailability{Status: toolcontract.ToolAvailabilityDenied},
