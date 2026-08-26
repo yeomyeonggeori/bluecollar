@@ -22,7 +22,7 @@ func invokeTerminalRunThrough(t *testing.T, runningShell shell, input string) to
 	t.Helper()
 	toolSet := newWorkspaceToolSet(runningShell)
 	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: toolcontract.TerminalRunToolName,
+		ToolName: toolcontract.ShellToolName,
 		Input:    json.RawMessage(input),
 	})
 	if errorValue != nil {
@@ -31,9 +31,9 @@ func invokeTerminalRunThrough(t *testing.T, runningShell shell, input string) to
 	return result
 }
 
-func decodedOutput(t *testing.T, result toolcontract.ToolResult) terminalRunOutput {
+func decodedOutput(t *testing.T, result toolcontract.ToolResult) shellOutput {
 	t.Helper()
-	output := terminalRunOutput{}
+	output := shellOutput{}
 	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
 		t.Fatalf("expected structured output, got %q: %v", result.Output.Data, errorValue)
 	}
@@ -150,7 +150,7 @@ func TestAClassifierCannotTalkTheRunnerOutOfTheTaskItWasGiven(t *testing.T) {
 		Route:            agentcontract.TurnRouteGiveUp,
 		Classification:   agentcontract.IntakeClassificationUnsupported,
 		TaskShape:        agentcontract.TaskShapeImmediateReply,
-		InitialToolNames: []string{toolcontract.TerminalRunToolName},
+		InitialToolNames: []string{toolcontract.ShellToolName},
 	}
 
 	started := startingTheTaskItWasGiven(refused)
@@ -207,7 +207,7 @@ func TestEveryWorkspaceToolReachesTheModel(t *testing.T) {
 	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: t.TempDir()})
 
 	for _, toolName := range []string{
-		toolcontract.TerminalRunToolName,
+		toolcontract.ShellToolName,
 		toolcontract.FileReadToolName,
 		toolcontract.FileWriteToolName,
 		toolcontract.FileEditToolName,
@@ -296,9 +296,9 @@ func TestALocalShellKeepsTheWorkspaceItWasGiven(t *testing.T) {
 }
 
 func TestASuccessfulCommandIsVisibleAsProgress(t *testing.T) {
-	result := terminalRunResult(context.Background(), shell{}, 0, "done\n", nil)
+	result := shellResult(context.Background(), shell{}, 0, "done\n", nil)
 
-	var output terminalRunOutput
+	var output shellOutput
 	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -308,9 +308,9 @@ func TestASuccessfulCommandIsVisibleAsProgress(t *testing.T) {
 }
 
 func TestAFailedCommandIsNotProgress(t *testing.T) {
-	result := terminalRunResult(context.Background(), shell{}, 1, "no such file\n", nil)
+	result := shellResult(context.Background(), shell{}, 1, "no such file\n", nil)
 
-	var output terminalRunOutput
+	var output shellOutput
 	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -338,9 +338,9 @@ func TestWithoutBashTheShellStillRuns(t *testing.T) {
 func TestOutputTooLongToReturnIsLeftSomewhereReadable(t *testing.T) {
 	runningShell := shell{workingDirectoryPath: t.TempDir()}.withInterpreterFound(context.Background())
 
-	result := terminalRunResult(context.Background(), runningShell, 0, strings.Repeat("x", maximumCapturedOutput+2000), nil)
+	result := shellResult(context.Background(), runningShell, 0, strings.Repeat("x", maximumCapturedOutput+2000), nil)
 
-	var output terminalRunOutput
+	var output shellOutput
 	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -364,9 +364,9 @@ func TestSpilledOutputLandsWhereThisPersonMayWrite(t *testing.T) {
 	t.Setenv("TMPDIR", temporaryDirectory)
 	runningShell := shell{workingDirectoryPath: t.TempDir()}.withInterpreterFound(context.Background())
 
-	result := terminalRunResult(context.Background(), runningShell, 0, strings.Repeat("x", maximumCapturedOutput+2000), nil)
+	result := shellResult(context.Background(), runningShell, 0, strings.Repeat("x", maximumCapturedOutput+2000), nil)
 
-	var output terminalRunOutput
+	var output shellOutput
 	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
 		t.Fatal(errorValue)
 	}

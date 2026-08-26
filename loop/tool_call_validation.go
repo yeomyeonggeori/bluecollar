@@ -549,11 +549,11 @@ func canonicalToolInput(toolInput json.RawMessage) string {
 	return string(content)
 }
 
-// terminalRerunAfterWorkspaceMutation frees an identical terminal_run command
+// terminalRerunAfterWorkspaceMutation frees an identical shell command
 // from duplicate rejection once the workspace changed after the previous run —
 // a revise-then-rebuild loop legitimately repeats the same build command.
 func terminalRerunAfterWorkspaceMutation(actionDocument turnActionDocument, observations []turnObservation, duplicateObservation turnObservation) bool {
-	if strings.TrimSpace(actionDocument.ToolName) != "terminal_run" {
+	if strings.TrimSpace(actionDocument.ToolName) != "shell" {
 		return false
 	}
 	seenDuplicateObservation := false
@@ -573,7 +573,7 @@ func terminalRerunAfterWorkspaceMutation(actionDocument turnActionDocument, obse
 }
 
 func handlesDuplicateSuccessfulToolCall(toolSet *toolcontract.ToolSet, toolName string, toolInput json.RawMessage) bool {
-	if strings.TrimSpace(toolName) == "terminal_run" {
+	if strings.TrimSpace(toolName) == "shell" {
 		return true
 	}
 	return isOneShotCompletionEvidenceTool(toolSet, toolName)
@@ -685,7 +685,7 @@ func requestRequiresExternalSendTool(request AgentTurnRequest, toolName string) 
 
 func isTerminalExecutionTool(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
-	case "terminal_run":
+	case "shell":
 		return true
 	default:
 		return false

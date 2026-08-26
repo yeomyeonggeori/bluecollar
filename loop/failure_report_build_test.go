@@ -11,10 +11,10 @@ func TestTheReportTheUserSeesSaysWhatHappened(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-006",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
-			Stage: "terminal_run", UserSafeSummary: "the command exited 1",
+			Stage: "shell", UserSafeSummary: "the command exited 1",
 		},
 	}
 	observation.Output.Content = "Your Venmo balance does not have $91.00 to make this transaction"

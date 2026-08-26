@@ -45,7 +45,7 @@ func TestBothRenderingsComeFromOneSnapshot(t *testing.T) {
 func TestATraceKeepsWhatTheRunCarriedAndSaysSo(t *testing.T) {
 	bundle := Build(
 		taskstate.TaskRun{TaskRunID: "task-1", Status: taskstate.TaskStatusFailed, FailureReason: "the endpoint refused"},
-		[]taskstate.TaskEvent{{Name: "tool.terminal_run.requested", Body: `{"input":{"command":"deploy --token hunter2"}}`}},
+		[]taskstate.TaskEvent{{Name: "tool.shell.requested", Body: `{"input":{"command":"deploy --token hunter2"}}`}},
 		"",
 	)
 

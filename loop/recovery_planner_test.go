@@ -78,11 +78,11 @@ func TestRecoveryIsToldWhatTheCommandPrinted(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-009",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureUnknown,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
-			Stage:           "terminal_run",
+			Stage:           "shell",
 			UserSafeSummary: "the command exited 1",
 		},
 	}
@@ -121,11 +121,11 @@ func TestRecoveryShowsTheInputItAsksToChange(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-011",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		ToolInput:     json.RawMessage(`{"command":"python3 -c \"print(card['card_id'])\""}`),
 		Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
-			Stage: "terminal_run", UserSafeSummary: "the command exited 1",
+			Stage: "shell", UserSafeSummary: "the command exited 1",
 		},
 	}
 	observation.Output.Content = "KeyError: 'card_id'"

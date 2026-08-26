@@ -18,12 +18,12 @@ const (
 	maximumCapturedOutput = 32 * 1024
 )
 
-type terminalRunInput struct {
+type shellInput struct {
 	Command       string `json:"command"`
 	TimeoutSecond int    `json:"timeoutSecond"`
 }
 
-type terminalRunOutput struct {
+type shellOutput struct {
 	ExitCode   int    `json:"exitCode"`
 	Output     string `json:"output"`
 	Truncated  bool   `json:"truncated"`
@@ -31,7 +31,7 @@ type terminalRunOutput struct {
 	OutputPath string `json:"outputPath,omitempty"`
 }
 
-var terminalRunInputSchema = json.RawMessage(`{
+var shellInputSchema = json.RawMessage(`{
   "type": "object",
   "properties": {
     "command": {"type": "string", "minLength": 1},
@@ -41,7 +41,7 @@ var terminalRunInputSchema = json.RawMessage(`{
   "additionalProperties": false
 }`)
 
-var terminalRunOutputSchema = json.RawMessage(`{
+var shellOutputSchema = json.RawMessage(`{
   "type": "object",
   "properties": {
     "exitCode": {"type": "integer"},
@@ -106,25 +106,25 @@ func (runningShell shell) resolvedWorkingDirectoryPath(ctx context.Context) stri
 
 func newWorkspaceToolSet(runningShell shell) *toolcontract.ToolSet {
 	toolSet := toolcontract.NewToolSet([]string{
-		toolcontract.TerminalRunToolName,
+		toolcontract.ShellToolName,
 		toolcontract.FileReadToolName,
 		toolcontract.FileWriteToolName,
 		toolcontract.FileEditToolName,
 	})
-	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[terminalRunInput, toolcontract.ToolResult]{
+	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[shellInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			ID:              "bluecollar/terminal_run",
-			Name:            toolcontract.TerminalRunToolName,
+			ID:              "bluecollar/shell",
+			Name:            toolcontract.ShellToolName,
 			Description:     "Run one shell command in the working directory and read back its combined output and exit code. This is a full machine you control: a missing package is something to install and try again, not a reason the work cannot be done.",
 			WhenToUse:       "anything the file tools do not cover: building, testing, searching, installing, inspecting the machine.",
 			WhenNotToUse:    "reading or writing a file whose path you already have; file_read, file_write and file_edit do that with nothing to quote and nothing to escape.",
 			Visibility:      toolcontract.ToolVisibilityModel,
-			InputSchema:     terminalRunInputSchema,
-			OutputSchema:    terminalRunOutputSchema,
-			ResultContract:  &toolcontract.ToolResultContract{Schema: terminalRunOutputSchema},
+			InputSchema:     shellInputSchema,
+			OutputSchema:    shellOutputSchema,
+			ResultContract:  &toolcontract.ToolResultContract{Schema: shellOutputSchema},
 			SideEffectClass: toolcontract.ToolSideEffectStateChange,
 		},
-		Handler: func(toolContext context.Context, input terminalRunInput) (toolcontract.ToolResult, error) {
+		Handler: func(toolContext context.Context, input shellInput) (toolcontract.ToolResult, error) {
 			return runShellCommand(toolContext, runningShell, input), nil
 		},
 		Result: toolcontract.IdentityToolResult,
@@ -135,10 +135,10 @@ func newWorkspaceToolSet(runningShell shell) *toolcontract.ToolSet {
 	return toolSet
 }
 
-func runShellCommand(ctx context.Context, runningShell shell, input terminalRunInput) toolcontract.ToolResult {
+func runShellCommand(ctx context.Context, runningShell shell, input shellInput) toolcontract.ToolResult {
 	command := strings.TrimSpace(input.Command)
 	if command == "" {
-		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "terminal_run", "a command is required")
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "shell", "a command is required")
 	}
 	commandContext, cancel := context.WithTimeout(ctx, commandTimeout(input.TimeoutSecond))
 	defer cancel()
@@ -150,24 +150,24 @@ func runShellCommand(ctx context.Context, runningShell shell, input terminalRunI
 	runError := shellCommand.Run()
 
 	if errors.Is(commandContext.Err(), context.DeadlineExceeded) {
-		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "terminal_run",
+		return toolcontract.ToolFailureResult(toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "shell",
 			"the command was still running after "+commandTimeout(input.TimeoutSecond).String()+" and was stopped")
 	}
-	return terminalRunResult(ctx, runningShell, shellCommand.ProcessState.ExitCode(), capturedOutput.String(), runError)
+	return shellResult(ctx, runningShell, shellCommand.ProcessState.ExitCode(), capturedOutput.String(), runError)
 }
 
-func terminalRunResult(ctx context.Context, runningShell shell, exitCode int, output string, runError error) toolcontract.ToolResult {
+func shellResult(ctx context.Context, runningShell shell, exitCode int, output string, runError error) toolcontract.ToolResult {
 	truncatedOutput, wasTruncated := truncateOutput(output)
 	outputPath := ""
 	if wasTruncated {
 		outputPath = runningShell.spilledOutputPath(ctx, output)
 	}
-	document, marshalError := json.Marshal(terminalRunOutput{ExitCode: exitCode, Output: truncatedOutput, Truncated: wasTruncated, Completed: exitCode == 0, OutputPath: outputPath})
+	document, marshalError := json.Marshal(shellOutput{ExitCode: exitCode, Output: truncatedOutput, Truncated: wasTruncated, Completed: exitCode == 0, OutputPath: outputPath})
 	if marshalError != nil {
-		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "terminal_run", marshalError.Error())
+		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "shell", marshalError.Error())
 	}
 	if runError != nil && exitCode == 0 {
-		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "terminal_run", runError.Error())
+		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "shell", runError.Error())
 	}
 	contentText := truncatedOutput
 	if wasTruncated {
@@ -193,7 +193,7 @@ func exitedNonZeroResult(exitCode int, output string, document json.RawMessage) 
 	result := toolcontract.ToolFailureWithOutput(
 		toolcontract.FailureUnknown,
 		toolcontract.FailureCodes.OperationFailed,
-		"terminal_run",
+		"shell",
 		"the command exited "+strconv.Itoa(exitCode),
 		document,
 	)

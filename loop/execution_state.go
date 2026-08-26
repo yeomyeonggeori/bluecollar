@@ -154,7 +154,7 @@ func compactTerminalObservationTails(observations []turnObservation, limit int) 
 	tails := []TerminalObservationTail{}
 	for index := len(observations) - 1; index >= 0; index-- {
 		observation := observations[index]
-		if strings.TrimSpace(observation.Tool) != "terminal_run" {
+		if strings.TrimSpace(observation.Tool) != "shell" {
 			continue
 		}
 		tail, ok := terminalObservationTail(observation)

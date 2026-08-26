@@ -21,7 +21,7 @@ func TestEffectiveObservationToolNamePreservesDirectToolNames(t *testing.T) {
 	if got := effectiveObservationToolName("site_serve", json.RawMessage(`{"siteID":"s1"}`)); got != "site_serve" {
 		t.Fatalf("expected direct tool name unchanged, got %q", got)
 	}
-	if got := effectiveObservationToolName(toolcontract.TerminalRunToolName, json.RawMessage(`{"command":"ls"}`)); got != toolcontract.TerminalRunToolName {
+	if got := effectiveObservationToolName(toolcontract.ShellToolName, json.RawMessage(`{"command":"ls"}`)); got != toolcontract.ShellToolName {
 		t.Fatalf("expected terminal tool name unchanged, got %q", got)
 	}
 }

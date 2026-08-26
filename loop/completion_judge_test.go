@@ -296,12 +296,13 @@ func TestCompletionGateRunsJudgeFromLedgerWhenContractIsEmpty(t *testing.T) {
 
 func TestAFinishThatAddedNothingGetsTheVerdictItAlreadyGot(t *testing.T) {
 	rejection := completionGateObservation(3, completionGateResult{
-		Message:        "Filter the contacts to those without an account before sending.",
-		EvidenceKind:   evidenceKindExpectedResult,
-		IsJudgeVerdict: true,
+		Message:          "Filter the contacts to those without an account before sending.",
+		EvidenceKind:     evidenceKindExpectedResult,
+		IsJudgeVerdict:   true,
+		NamesMissingWork: true,
 	}, nil, nil)
 	observations := []turnObservation{
-		newContentObservation("obs-001", "continue", toolcontract.TerminalRunToolName, "sent to everyone"),
+		newContentObservation("obs-001", "continue", toolcontract.ShellToolName, "sent to everyone"),
 		rejection,
 	}
 
@@ -322,7 +323,7 @@ func TestAFinishThatDidMoreWorkIsJudgedAgain(t *testing.T) {
 	}, nil, nil)
 	observations := []turnObservation{
 		rejection,
-		newContentObservation("obs-004", "continue", toolcontract.TerminalRunToolName, "re-sent to the filtered list"),
+		newContentObservation("obs-004", "continue", toolcontract.ShellToolName, "re-sent to the filtered list"),
 	}
 
 	if _, isStanding := standingJudgeRejection(observations); isStanding {
@@ -397,11 +398,11 @@ func TestTheJudgeSeesWhatDidNotWork(t *testing.T) {
 	failed := turnObservation{
 		ObservationID: "obs-004",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		ToolInput:     json.RawMessage(`{"command":"cli venmo send_money 91"}`),
 		Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
-			Stage: "terminal_run", UserSafeSummary: "the command exited 1",
+			Stage: "shell", UserSafeSummary: "the command exited 1",
 		},
 	}
 	failed.Output.Content = "insufficient balance"
@@ -419,7 +420,7 @@ func TestTheJudgeSeesWhatDidNotWork(t *testing.T) {
 func TestTheJudgeSeesBothEndsOfATruncatedResult(t *testing.T) {
 	echoedCall := "Calling:\nprint(apis.example.search_users(**{'access_token': '" + strings.Repeat("x", 220) + "', 'query': 'Sam Example'}))"
 	dataRows := `[{"first_name": "Sam", "last_name": "Example", "email": "sam@example.com", "registered_at": "2022-07-03"}]`
-	observation := newContentObservation("obs-003", "continue", toolcontract.TerminalRunToolName, echoedCall+"\n"+dataRows)
+	observation := newContentObservation("obs-003", "continue", toolcontract.ShellToolName, echoedCall+"\n"+dataRows)
 
 	ledger := completionJudgeLedger(nil, []turnObservation{observation}, map[string]bool{})
 
@@ -434,7 +435,7 @@ func TestTheJudgeSeesBothEndsOfATruncatedResult(t *testing.T) {
 func TestDroppedOperationsAreNotEvidence(t *testing.T) {
 	ledger := []completionLedgerEntry{}
 	for index := 0; index < 40; index++ {
-		ledger = append(ledger, completionLedgerEntry{Tool: "terminal_run", Input: strings.Repeat("a", 900), Result: strings.Repeat("b", 900)})
+		ledger = append(ledger, completionLedgerEntry{Tool: "shell", Input: strings.Repeat("a", 900), Result: strings.Repeat("b", 900)})
 	}
 
 	bounded := newestLedgerEntriesWithinBudget(ledger, 24000)
@@ -446,7 +447,7 @@ func TestDroppedOperationsAreNotEvidence(t *testing.T) {
 	if !strings.Contains(marker.Result, "unknown in both directions") {
 		t.Fatalf("a judge told only that operations were recorded certifies them as done, which is how a run that never sent the money was passed: %q", marker.Result)
 	}
-	if !strings.Contains(marker.Result, "terminal_run x") {
+	if !strings.Contains(marker.Result, "shell x") {
 		t.Fatalf("the tool tally is the one deterministic fact the dropped prefix can still state: %q", marker.Result)
 	}
 }
@@ -472,7 +473,7 @@ func TestTheJudgeAsksForWhatItCannotSeeAndDecidesFromTheFullEntry(t *testing.T) 
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	echoedCall := "Calling: search_users(access_token=" + strings.Repeat("x", 260) + ")"
-	observation := newContentObservation("obs-002", "continue", toolcontract.TerminalRunToolName, echoedCall+`[{"name":"Sam Example","registered_at":"2022-07-03"}]`)
+	observation := newContentObservation("obs-002", "continue", toolcontract.ShellToolName, echoedCall+`[{"name":"Sam Example","registered_at":"2022-07-03"}]`)
 	request := AgentTurnRequest{Prompt: "message only the relatives without an account", OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"task_add"}}}
 
 	result := services.runner.evaluateCompletionJudge(context.Background(), "task-judge-ask", request, []turnObservation{observation}, nil, completionJudgeFinishActionDocument())
@@ -527,5 +528,28 @@ func TestAFirstFinishCarriesNoRejectionContext(t *testing.T) {
 
 	if strings.Contains(joinedMessageContent(messages), "Earlier finishes of this task were rejected") {
 		t.Fatal("nothing was rejected and nothing should be claimed")
+	}
+}
+
+func TestARejectionNamingNoMissingWorkDoesNotStand(t *testing.T) {
+	listlessRejection := completionGateObservation(0, completionGateResult{
+		Message:        "the ledger does not show the requested result",
+		EvidenceKind:   evidenceKindExpectedResult,
+		IsJudgeVerdict: true,
+	}, nil, nil)
+
+	if _, isStanding := standingJudgeRejection([]turnObservation{listlessRejection}); isStanding {
+		t.Fatal("a verdict that rejects while naming nothing to do is one bad sample, and remembering it turns that sample into a permanent veto")
+	}
+
+	listedRejection := completionGateObservation(0, completionGateResult{
+		Message:          "the summary file was never written",
+		EvidenceKind:     evidenceKindExpectedResult,
+		IsJudgeVerdict:   true,
+		NamesMissingWork: true,
+	}, nil, nil)
+
+	if _, isStanding := standingJudgeRejection([]turnObservation{listedRejection}); !isStanding {
+		t.Fatal("a rejection that names the missing work stands until the ledger changes, or the judge can be farmed by re-finishing")
 	}
 }

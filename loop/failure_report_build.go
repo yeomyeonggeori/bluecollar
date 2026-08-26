@@ -63,7 +63,7 @@ func latestFailedOperation(observations []turnObservation) string {
 	return ""
 }
 
-// The summary labels the failure and terminal_run labels every one of them with its exit status.
+// The summary labels the failure and shell labels every one of them with its exit status.
 // A report that reaches the user saying the command exited 1 tells them nothing they can act on.
 func failureLineForUser(observation turnObservation) string {
 	summary := strings.TrimSpace(observation.FailureSummary())

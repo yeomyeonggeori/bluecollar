@@ -20,9 +20,9 @@ func eventBodiesNamed(events []taskstate.TaskEvent, name string) []string {
 func TestTheLedgerCarriesTheWordsARepeatReminderPutInFrontOfTheModel(t *testing.T) {
 	services := newTurnRunnerTestServices(nil, TurnOptions{})
 	state := &agentTaskState{}
-	searchKey := "terminal_run\x00{\"command\":\"grep -r needle .\"}"
+	searchKey := "shell\x00{\"command\":\"grep -r needle .\"}"
 	for index := 1; index <= 3; index++ {
-		observation := callObservation(nextObservationIDForObservations(state.Observations), "terminal_run", searchKey)
+		observation := callObservation(nextObservationIDForObservations(state.Observations), "shell", searchKey)
 		services.runner.recordToolObservation("run-1", state, turnActionDocument{}, map[string]turnObservation{}, observation, "")
 	}
 

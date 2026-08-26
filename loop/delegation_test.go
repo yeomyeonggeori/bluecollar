@@ -13,7 +13,7 @@ func delegateActionDocument(instruction string, expectedResult string) string {
 }
 
 func TestDelegationCostsNothingUntilAHostAsksForIt(t *testing.T) {
-	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.TerminalRunToolName})}
+	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.ShellToolName})}
 
 	withoutDelegation := buildAgentSystemInstruction(request, TurnOptions{}).Text()
 	if strings.Contains(withoutDelegation, "Delegation:") {
@@ -48,7 +48,7 @@ func TestADelegatedTurnReportsBackThroughTheParentsLedger(t *testing.T) {
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "무엇이 바뀌었는지 알려줘",
-		ToolSet:           newTestToolSet([]string{toolcontract.TerminalRunToolName}),
+		ToolSet:           newTestToolSet([]string{toolcontract.ShellToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)

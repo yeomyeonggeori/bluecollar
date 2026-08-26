@@ -26,12 +26,12 @@ func TestPlannedToolsDropRepeatedFileRead(t *testing.T) {
 		newFailureObservation("obs-001", "policy", "file_read", "Already read tmp/deck/presentation.md lines 1-400.", toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "file_read_repeat"),
 	}
 
-	toolNames := filterExhaustedRecoveryToolNames([]string{"file_read", "terminal_run", "file_deliver"}, observations)
+	toolNames := filterExhaustedRecoveryToolNames([]string{"file_read", "shell", "file_deliver"}, observations)
 
 	if stringSliceContains(toolNames, "file_read") {
 		t.Fatalf("expected repeated file_read to be removed, got %+v", toolNames)
 	}
-	for _, toolName := range []string{"terminal_run", "file_deliver"} {
+	for _, toolName := range []string{"shell", "file_deliver"} {
 		if !stringSliceContains(toolNames, toolName) {
 			t.Fatalf("expected %s to remain available, got %+v", toolName, toolNames)
 		}
@@ -261,7 +261,7 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 		"site_list", "site.history", "site.diff", "site.logs",
 		"site.rollback", "site.unpublish", "site.restore", "site_unserve",
 		"site.metrics", "site.backup", "site.scan", "site.verify", "site.export",
-		"file_read", "file_write", "file_edit", "terminal_run",
+		"file_read", "file_write", "file_edit", "shell",
 	}
 	toolSet := testToolSet(append(toolcontract.KernelToolNames(), selectedToolNames...))
 	instructionBundle := InstructionBundle{
@@ -272,14 +272,14 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 	filteredToolSet, event := toolSetForAgentTurnWithExposure(
 		toolSet,
 		instructionBundle,
-		AgentRequest{PinnedToolNames: []string{"terminal_run"}},
+		AgentRequest{PinnedToolNames: []string{"shell"}},
 		ExecutionPlan{},
 		false,
 		OutcomeContract{},
 		ToolExposureEvent{},
 	)
 
-	if !filteredToolSet.IsAllowed("terminal_run") {
+	if !filteredToolSet.IsAllowed("shell") {
 		t.Fatalf("expected pinned direct tool inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
 	expectedToolCount := len(kernelToolNamesForInstructionBundle(instructionBundle)) + maxExtensionCallableToolCount
@@ -301,7 +301,7 @@ func TestRequiredEvidenceWinsToolBudget(t *testing.T) {
 		"site_serve", "site_serve", "artifact_review", "site_serve",
 		"site_list", "site.history", "site.diff", "site.logs",
 		"site.rollback", "site.unpublish", "site.restore", "site_unserve",
-		"file_read", "file_write", "file_edit", "terminal_run",
+		"file_read", "file_write", "file_edit", "shell",
 	}
 	toolSet := testToolSet(append(append(toolcontract.KernelToolNames(), selectedToolNames...), "task_update"))
 	instructionBundle := InstructionBundle{
@@ -534,7 +534,7 @@ func TestRegisteredToolNameCeilingSurvivesSkillReexposure(t *testing.T) {
 
 	filteredToolSet, event := toolSetForAgentTurnWithExposure(ceilingToolSet, instructionBundle, AgentRequest{}, ExecutionPlan{}, false, OutcomeContract{}, ToolExposureEvent{})
 
-	for _, toolName := range []string{"message_send", toolcontract.TerminalRunToolName, toolcontract.FileWriteToolName} {
+	for _, toolName := range []string{"message_send", toolcontract.ShellToolName, toolcontract.FileWriteToolName} {
 		if filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected %s to stay outside the ceiling, got %+v", toolName, filteredToolSet.ListToolNames())
 		}

@@ -32,12 +32,12 @@ func oversizedToolResult(runner *AgentTurnRunner) string {
 
 func TestTheWholeOutputIsSavedWhereTheAgentCanReadItBack(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{textResponses: []string{"the build failed"}}, TurnOptions{})
-	store := &recordingSpillStore{locator: "/workspace/private/people/p1/tmp/tasks/run-1/terminal_run.result.txt", bytes: 4096, hint: "Use grep or sed on that path."}
+	store := &recordingSpillStore{locator: "/workspace/private/people/p1/tmp/tasks/run-1/shell.result.txt", bytes: 4096, hint: "Use grep or sed on that path."}
 	services.runner.UseToolResultSpillStore(store)
 	content := oversizedToolResult(services.runner)
 
-	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "", "", "terminal_run", "tool-1",
-		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "", "", "shell", "tool-1",
+		nil, "shell", "shell\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
 		true, "/workspace", time.Time{}, 12)
 
 	if len(store.saved) != 1 {
@@ -59,8 +59,8 @@ func TestASaveThatFailsLeavesTheCallSuccessful(t *testing.T) {
 	services.runner.UseToolResultSpillStore(&recordingSpillStore{failureText: "no space left on device"})
 	content := oversizedToolResult(services.runner)
 
-	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "", "", "terminal_run", "tool-1",
-		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "", "", "shell", "tool-1",
+		nil, "shell", "shell\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
 		true, "/workspace", time.Time{}, 12)
 
 	if observation.Failed() {
@@ -75,8 +75,8 @@ func TestAHostWithNoSpillStoreKeepsTheNarrowerAskAdvice(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{textResponses: []string{"the build failed"}}, TurnOptions{})
 	content := oversizedToolResult(services.runner)
 
-	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "", "", "terminal_run", "tool-1",
-		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "", "", "shell", "tool-1",
+		nil, "shell", "shell\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: content}},
 		true, "/workspace", time.Time{}, 12)
 
 	if !strings.Contains(observation.Summary, narrowTheOutputAdvice) {
@@ -88,7 +88,7 @@ func TestAFailedSaveIsRecordedSoTheGapIsExplainable(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{textResponses: []string{"the build failed"}}, TurnOptions{})
 	services.runner.UseToolResultSpillStore(&recordingSpillStore{failureText: "no space left on device"})
 
-	services.runner.spillToolResult(context.Background(), "run-1", "obs-1", "terminal_run", "/workspace", "output")
+	services.runner.spillToolResult(context.Background(), "run-1", "obs-1", "shell", "/workspace", "output")
 
 	for _, event := range services.taskRunService.ListTaskEvent("run-1") {
 		if event.Name == "tool.result_spill_failed" && strings.Contains(event.Body, "no space left on device") {
@@ -102,8 +102,8 @@ func TestTheSavedObservationKeepsTheReasoningThatChoseIt(t *testing.T) {
 	services := newTurnRunnerTestServices(nil, TurnOptions{})
 	reasoning := "The contacts list has no venmo field, so I cross-reference the venmo accounts instead."
 
-	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", reasoning, "", "", "terminal_run", "tool-1",
-		nil, "terminal_run", "terminal_run\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "ok"}},
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", reasoning, "", "", "shell", "tool-1",
+		nil, "shell", "shell\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "ok"}},
 		true, "/workspace", time.Time{}, 12)
 
 	if observation.AssistantText != reasoning {

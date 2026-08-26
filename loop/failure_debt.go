@@ -349,7 +349,7 @@ func recoveryBudgetAllowsStep(observations []turnObservation, budget RecoveryBud
 }
 
 // A correction is spent against the call it corrected. Counting every correction in the episode
-// together spends the budget of the next broken command on the last one, and terminal_run runs
+// together spends the budget of the next broken command on the last one, and shell runs
 // into several unrelated walls in a row often enough that this was the common case.
 func correctedRetryUseCount(observations []turnObservation, attemptKey string) int {
 	count := 0

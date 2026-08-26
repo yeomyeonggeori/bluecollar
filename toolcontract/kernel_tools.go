@@ -3,7 +3,7 @@ package toolcontract
 import "strings"
 
 const (
-	TerminalRunToolName         = "terminal_run"
+	ShellToolName               = "shell"
 	AskInputToolName            = "ask_input"
 	AskConfirmToolName          = "ask_confirm"
 	FileDeliverToolName         = "file_deliver"
@@ -22,7 +22,7 @@ const (
 
 func KernelToolNames() []string {
 	return []string{
-		TerminalRunToolName,
+		ShellToolName,
 		FileDeliverToolName,
 		SkillSearchToolName,
 		FileReadToolName,

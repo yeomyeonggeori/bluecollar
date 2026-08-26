@@ -61,7 +61,7 @@ func TestEvidenceConditionUsesSemanticJSONEquality(t *testing.T) {
 
 func TestTerminalCompletionRequiresCompletedResult(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
-		Name:            toolcontract.TerminalRunToolName,
+		Name:            toolcontract.ShellToolName,
 		InputSchema:     json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		OutputSchema:    json.RawMessage(`{"type":"object","properties":{"completed":{"type":"boolean"}},"required":["completed"],"additionalProperties":true}`),
 		SideEffectClass: toolcontract.ToolSideEffectWorkspaceWrite,
@@ -90,12 +90,12 @@ func TestTerminalCompletionRequiresCompletedResult(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			observation := turnObservation{
 				ObservationID: "obs-001",
-				Tool:          toolcontract.TerminalRunToolName,
+				Tool:          toolcontract.ShellToolName,
 				Output:        toolcontract.ToolOutput{Data: testCase.data},
 			}
 			state := buildCompletionState(
 				AgentTurnRequest{ToolSet: toolSet},
-				[]toolUseRequirement{{ToolName: toolcontract.TerminalRunToolName}},
+				[]toolUseRequirement{{ToolName: toolcontract.ShellToolName}},
 				[]turnObservation{observation},
 			)
 			if state.Requirements[0].Satisfied != testCase.isSatisfied {

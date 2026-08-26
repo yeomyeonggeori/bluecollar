@@ -11,7 +11,7 @@ func longToolObservation(observationID string, characterCount int) turnObservati
 	return turnObservation{
 		ObservationID: observationID,
 		Action:        "continue",
-		Tool:          toolcontract.TerminalRunToolName,
+		Tool:          toolcontract.ShellToolName,
 		Output:        toolcontract.ToolOutput{Content: strings.Repeat("x", characterCount)},
 	}
 }

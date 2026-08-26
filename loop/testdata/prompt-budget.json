@@ -9,11 +9,11 @@
       "messageBytes": 5435
     },
     "workspace task": {
-      "totalBytes": 9325,
+      "totalBytes": 9311,
       "instructionBytes": 3582,
-      "toolCatalogBytes": 288,
-      "actionSchemaBytes": 5173,
-      "messageBytes": 4152
+      "toolCatalogBytes": 281,
+      "actionSchemaBytes": 5166,
+      "messageBytes": 4145
     }
   }
 }

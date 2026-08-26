@@ -26,12 +26,12 @@ func TestQualityReviewRequiresPassingEvidence(t *testing.T) {
 	review := []qualityReviewItem{{
 		ID:       "original-request-is-preserved",
 		Passed:   true,
-		Evidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "terminal_run"}},
+		Evidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "shell"}},
 	}}
 	observations := []turnObservation{{
 		ObservationID: "obs-001",
 		Action:        "continue",
-		Tool:          "terminal_run",
+		Tool:          "shell",
 		Output:        toolcontract.ToolOutput{Content: "ok"},
 	}}
 

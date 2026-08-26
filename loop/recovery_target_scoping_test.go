@@ -38,10 +38,10 @@ func TestASiblingMutationOnTheSameEventIsStillAnAlternateRoute(t *testing.T) {
 func TestARouteWithNoInputFieldsInCommonIsStillCharged(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 		namespacedToolDefinition("file_edit", "file", toolcontract.ToolSideEffectStateChange),
-		namespacedToolDefinition("terminal_run", "terminal", toolcontract.ToolSideEffectStateChange),
+		namespacedToolDefinition("shell", "terminal", toolcontract.ToolSideEffectStateChange),
 	})
 	failedEdit := failureDebtForFailedCall("file_edit", `{"path":"home/notes/a.md"}`)
-	recoveryStep := classifyRecoveryStep(toolSet, failedEdit, "terminal_run", json.RawMessage(`{"command":"sed -i s/a/b/ home/notes/a.md"}`))
+	recoveryStep := classifyRecoveryStep(toolSet, failedEdit, "shell", json.RawMessage(`{"command":"sed -i s/a/b/ home/notes/a.md"}`))
 	if recoveryStep != recoveryStepAdjacentTool {
 		t.Fatalf("calls with no comparable field in common keep their old classification, got %q", recoveryStep)
 	}

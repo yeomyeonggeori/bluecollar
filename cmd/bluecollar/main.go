@@ -132,7 +132,13 @@ func printLedger(taskRunService *taskstate.TaskRunService, taskRunID string) {
 		return
 	}
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		fmt.Fprintf(os.Stderr, "  %s  %s\n", taskEvent.Name, collapsedWhitespace(taskEvent.Body))
+		if !stderrWantsStyle() {
+			fmt.Fprintf(os.Stderr, "  %s  %s\n", taskEvent.Name, collapsedWhitespace(taskEvent.Body))
+			continue
+		}
+		if line := prettyLedgerLine(taskEvent); line != "" {
+			fmt.Fprintln(os.Stderr, line)
+		}
 	}
 }
 
@@ -154,7 +160,7 @@ func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, r
 
 func printResult(result agentcontract.AgentTurnResult) {
 	fmt.Println(strings.TrimSpace(firstNonEmpty(result.FinishMessage, result.UserNotice, "(no reply)")))
-	fmt.Fprintf(os.Stderr, "\nstatus: %s\n", result.TaskRun.Status)
+	fmt.Fprintf(os.Stderr, "\nstatus: %s\n", styledStatus(result.TaskRun.Status))
 	if reason := strings.TrimSpace(result.TaskRun.FailureReason); reason != "" {
 		fmt.Fprintln(os.Stderr, "reason:", reason)
 	}

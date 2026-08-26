@@ -28,10 +28,10 @@ func TestNormalizePersistedActiveGoalMigratesLegacyToolNames(t *testing.T) {
 
 	normalizedGoal := normalizePersistedActiveGoal(activeGoal)
 
-	assertSameStrings(t, normalizedGoal.RequiredNextTools, []string{toolcontract.TerminalRunToolName, "site_serve"})
-	assertSameStrings(t, normalizedGoal.SelectedToolNames, []string{toolcontract.TerminalRunToolName, "site_serve"})
+	assertSameStrings(t, normalizedGoal.RequiredNextTools, []string{toolcontract.ShellToolName, "site_serve"})
+	assertSameStrings(t, normalizedGoal.SelectedToolNames, []string{toolcontract.ShellToolName, "site_serve"})
 	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEvidenceTools, []string{toolcontract.FileDeliverToolName})
-	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEvidenceAnyOf[0], []string{toolcontract.AskInputToolName, toolcontract.TerminalRunToolName})
+	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEvidenceAnyOf[0], []string{toolcontract.AskInputToolName, toolcontract.ShellToolName})
 	assertSameStrings(t, normalizedGoal.OutcomeContract.SelectedEvidenceHints, []string{"site_serve"})
 	assertSameStrings(t, normalizedGoal.OutcomeContract.ExpectedResults[0].AcceptanceHints, []string{toolcontract.AskInputToolName})
 	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEffects[0].SuggestedNextTools, []string{"site_serve"})

@@ -193,7 +193,7 @@ func TestTurnRouterPreservesUnsupportedArtifactDecision(t *testing.T) {
 		Reason:                 "unsupported",
 		UserFacingReply:        "지원하지 않습니다.",
 		PriorTaskReference:     agentcontract.PriorTaskReferenceNone,
-	}, agentcontract.AgentRequest{Prompt: "PDF 만들어줘", AllowGiveUp: true, ToolSet: newTestToolSet([]string{"terminal_run", "file_deliver"})})
+	}, agentcontract.AgentRequest{Prompt: "PDF 만들어줘", AllowGiveUp: true, ToolSet: newTestToolSet([]string{"shell", "file_deliver"})})
 
 	if decision.Classification != agentcontract.IntakeClassificationUnsupported || decision.Route != agentcontract.TurnRouteGiveUp {
 		t.Fatalf("expected router decision to remain authoritative, got %+v", decision)
@@ -728,7 +728,7 @@ func TestTaskIntakePlannerKeepsStructuredOutputFormats(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":["html"],"reason":"explicit html output","userFacingReply":""}`,
 	}}
-	toolRegistry := newTestToolSet([]string{"terminal_run", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"shell", "file_deliver"})
 	planner := NewTaskIntakePlanner(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
 
 	decision := mustPlanIntake(t, planner, agentcontract.AgentRequest{
@@ -771,7 +771,7 @@ func TestTaskIntakePlannerUsesStructuredArtifactEnumForFileDelivery(t *testing.T
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"route":"give_up","classification":"unsupported","taskShape":"immediate_reply","level":"medium","requestedOutputFormats":["pdf"],"responseLanguage":"ko","reason":"mistaken unsupported file artifact","userFacingReply":"PDF 생성은 지원하지 않습니다.","priorTaskReference":"none"}`,
 	}}
-	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "file_write", "terminal_run", "file.promote", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "file_write", "shell", "file.promote", "file_deliver"})
 	planner := NewTaskIntakePlanner(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
 
 	decision := mustPlanIntake(t, planner, agentcontract.AgentRequest{
@@ -800,7 +800,7 @@ func TestTaskIntakePlannerPreservesTypedOutputFormatsAndExpectedResults(t *testi
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"medium","requestedOutputFormats":["pdf"],"expectedResults":[{"id":"result-1","type":"file","description":"PDF document","required":true},{"id":"site-public-link","type":"link","description":"public URL","required":true}],"responseLanguage":"ko","reason":"conflicted artifact kind","userFacingReply":"","initialToolNames":["site_list"],"priorTaskReference":"none"}`,
 	}}
-	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "file_write", "terminal_run", "file.promote", "file_deliver", "site_list"})
+	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "file_write", "shell", "file.promote", "file_deliver", "site_list"})
 	planner := NewTaskIntakePlanner(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
 
 	decision := mustPlanIntake(t, planner, agentcontract.AgentRequest{
@@ -1160,7 +1160,7 @@ func TestTaskIntakePlannerTreatsLocalArtifactConfirmationAsBoundedTask(t *testin
 		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"medium","requestedOutputFormats":["pdf"],"reason":"asks for generated files","userFacingReply":"승인하시겠습니까?"}`,
 		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"medium","requestedOutputFormats":["pdf"],"responseLanguage":"ko","reason":"request is executable","userFacingReply":"","initialToolNames":["file_write"]}`,
 	}}
-	toolRegistry := newTestToolSet([]string{"terminal_run", "file_write", "file.promote", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"shell", "file_write", "file.promote", "file_deliver"})
 	planner := NewTaskIntakePlanner(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
 
 	decision := mustPlanIntake(t, planner, agentcontract.AgentRequest{
@@ -1261,7 +1261,7 @@ func TestTaskIntakePlannerRoutesDestructiveArtifactWorkBeforeApprovalGate(t *tes
 		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"medium","requestedOutputFormats":null,"reason":"destructive","userFacingReply":"승인하시겠습니까?"}`,
 		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"medium","requestedOutputFormats":null,"responseLanguage":"ko","reason":"confirmation is handled after routing","userFacingReply":"","initialToolNames":["file_write"]}`,
 	}}
-	toolRegistry := newTestToolSet([]string{"terminal_run", "file_write", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"shell", "file_write", "file_deliver"})
 	planner := NewTaskIntakePlanner(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
 
 	decision := mustPlanIntake(t, planner, agentcontract.AgentRequest{

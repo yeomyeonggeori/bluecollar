@@ -22,7 +22,7 @@ func observationCarryingAnImage(observationID string) turnObservation {
 func TestAnImageStopsBeingResentOnceItLeavesTheWindow(t *testing.T) {
 	observations := []turnObservation{observationCarryingAnImage("obs-001")}
 	for range maxProgressObservations + 4 {
-		observations = append(observations, turnObservation{ObservationID: "obs-filler", Action: "continue", Tool: toolcontract.TerminalRunToolName})
+		observations = append(observations, turnObservation{ObservationID: "obs-filler", Action: "continue", Tool: toolcontract.ShellToolName})
 	}
 
 	message := toolResultImageContextMessage(observations)
@@ -34,7 +34,7 @@ func TestAnImageStopsBeingResentOnceItLeavesTheWindow(t *testing.T) {
 
 func TestAnImageStaysWhileTheWorkIsStillAboutIt(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: toolcontract.TerminalRunToolName},
+		{ObservationID: "obs-001", Action: "continue", Tool: toolcontract.ShellToolName},
 		observationCarryingAnImage("obs-002"),
 	}
 

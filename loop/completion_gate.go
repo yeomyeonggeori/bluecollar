@@ -39,6 +39,7 @@ type completionGateResult struct {
 	ValidityState      ValidityState
 	SuggestedNextTools []string
 	IsJudgeVerdict     bool
+	NamesMissingWork   bool
 	PolicyCode         string
 }
 
@@ -783,6 +784,7 @@ func completionGateObservation(index int, result completionGateResult, toolSet *
 	observation = withObservationContent(observation, content)
 	observation.Summary = content
 	observation.PolicyCode = evidenceKind
+	observation.JudgeNamedMissingWork = result.NamesMissingWork
 	observation.RelatedPaths = invalidValidityPaths(result.ValidityState)
 	observation.Failure.Retryable = true
 	observation.Failure.SafeRetry = true
