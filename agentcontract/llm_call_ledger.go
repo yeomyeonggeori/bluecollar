@@ -306,10 +306,16 @@ func chatRequestSchemaName(request model.ChatCompletionRequest) string {
 	return strings.TrimSpace(request.SchemaName)
 }
 
+// An image travels as a part beside the text, so counting only the text says a
+// prompt carrying a megabyte of picture is the same size as one carrying none.
+// The ledger is what an outage is read from; it has to see what was sent.
 func chatRequestByteCount(request model.ChatCompletionRequest) int {
 	byteCount := 0
 	for _, message := range request.Messages {
 		byteCount += len(message.Content)
+		for _, part := range message.Parts {
+			byteCount += len(part.Text) + len(part.DataBase64)
+		}
 	}
 	return byteCount
 }
