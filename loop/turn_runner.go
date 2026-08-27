@@ -27,6 +27,7 @@ type AgentTurnRunner struct {
 	languageModelTaskLevel TaskLevel
 	recoveryLanguageModel  model.LanguageModelProvider
 	toolResultSpillStore   ToolResultSpillStore
+	toolResultImageSource  ToolResultImageSource
 	options                TurnOptions
 }
 
@@ -236,6 +237,10 @@ func (agentTurnRunner *AgentTurnRunner) UseToolResultSpillStore(toolResultSpillS
 	agentTurnRunner.toolResultSpillStore = toolResultSpillStore
 }
 
+func (agentTurnRunner *AgentTurnRunner) UseToolResultImageSource(toolResultImageSource ToolResultImageSource) {
+	agentTurnRunner.toolResultImageSource = toolResultImageSource
+}
+
 func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID string) llmCallObserver {
 	return func(record llmCallRecord) {
 		agentTurnRunner.appendEvent(taskRunID, "llm.call", marshalEventBody(record))
@@ -407,6 +412,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	if errorValue != nil {
 		return agentTurnRunner.failLaunchStep(context.Background(), taskRun, request, "restore_state", errorValue), nil
 	}
+	agentTurnRunner.bringBackImagesTheTurnAlreadyRead(workContext, taskRun.TaskRunID, state.Observations)
 	toolUseRequirements := state.Requirements
 	successfulToolCalls := map[string]turnObservation{}
 	agentTurnRunner.recordCarriedOutCalls(workContext, taskRun.TaskRunID, request, &state, successfulToolCalls)

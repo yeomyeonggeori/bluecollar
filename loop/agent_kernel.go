@@ -33,6 +33,7 @@ type AgentKernel struct {
 	skillRetriever          SkillRetriever
 	companyProvider         func() CompanyContext
 	toolResultSpillStore    ToolResultSpillStore
+	toolResultImageSource   ToolResultImageSource
 }
 
 func NewAgentKernel(taskRunService taskstate.TaskRunStore, taskStepService taskstate.TaskStepStore) *AgentKernel {
@@ -65,6 +66,10 @@ func (agentKernel *AgentKernel) UseTaskArtifactService(taskArtifactService tasks
 
 func (agentKernel *AgentKernel) UseToolResultSpillStore(toolResultSpillStore ToolResultSpillStore) {
 	agentKernel.toolResultSpillStore = toolResultSpillStore
+}
+
+func (agentKernel *AgentKernel) UseToolResultImageSource(toolResultImageSource ToolResultImageSource) {
+	agentKernel.toolResultImageSource = toolResultImageSource
 }
 
 func (agentKernel *AgentKernel) UseTurnOptions(turnOptions TurnOptions) {
@@ -410,6 +415,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	)
 	agentTurnRunner.UseIterationCostObserver(agentKernel.iterationCostObserver)
 	agentTurnRunner.UseToolResultSpillStore(agentKernel.toolResultSpillStore)
+	agentTurnRunner.UseToolResultImageSource(agentKernel.toolResultImageSource)
 	result, errorValue := agentTurnRunner.RunTurn(taskBudget.callerContext(), turnRequest)
 	result.TurnRoute = turnDecision.Route
 	result.ToolNames = toolNamesForEvent(turnRequest.ToolSet)
