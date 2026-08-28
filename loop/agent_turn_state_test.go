@@ -1835,6 +1835,38 @@ func refusalObservation(observationID string) turnObservation {
 	return turnObservation{ObservationID: observationID, Action: "evidence_missing", Tool: "shell"}
 }
 
+func TestAnAgentToldThreeTimesAlsoGetsFinishBack(t *testing.T) {
+	state := nativeAgentActionTestState()
+	state.Options.MaxIterationCount = 100
+	state.Options.MaxToolCallCount = 100
+	state.Observations = []turnObservation{
+		refusalObservation("obs-001"),
+		refusalObservation("obs-002"),
+		requiredToolRefusalObservation("obs-003"),
+	}
+
+	if !shouldExposeFinishAction(state, nil) {
+		t.Fatal("a gate that has refused three times has said what it has to say, and holding finish shut leaves failure as the only exit from finished work")
+	}
+}
+
+func TestARequiredToolRefusalStillWithholdsFinishAtFirst(t *testing.T) {
+	state := nativeAgentActionTestState()
+	state.Options.MaxIterationCount = 100
+	state.Options.MaxToolCallCount = 100
+	state.Observations = []turnObservation{requiredToolRefusalObservation("obs-001")}
+
+	if shouldExposeFinishAction(state, nil) {
+		t.Fatal("the first refusal is the gate naming the tool that has not run, and finish there answers it before the agent has")
+	}
+}
+
+func requiredToolRefusalObservation(observationID string) turnObservation {
+	observation := refusalObservation(observationID)
+	observation.PolicyCode = "required_tool_missing"
+	return observation
+}
+
 func TestAnAgentToldThreeTimesItHasNotDoneTheTaskCanSaySoItCannot(t *testing.T) {
 	state := nativeAgentActionTestState()
 	state.Options.MaxIterationCount = 100
