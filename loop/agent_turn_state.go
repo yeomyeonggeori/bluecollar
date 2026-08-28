@@ -484,7 +484,7 @@ func modelCallableToolSet(toolSet *toolcontract.ToolSet, restrictToTerminalActio
 }
 
 func shouldExposeFailAction(state agentTaskState) bool {
-	if completionRefusalCount(state.Observations) >= refusalsThatOfferTheExit {
+	if completionGateHasRefusedEnough(state.Observations) {
 		return true
 	}
 	if declinedToClaimSuccess(state.Observations) {
@@ -516,6 +516,10 @@ func declinedToClaimSuccess(observations []turnObservation) bool {
 	return false
 }
 
+func completionGateHasRefusedEnough(observations []turnObservation) bool {
+	return completionRefusalCount(observations) >= refusalsThatOfferTheExit
+}
+
 func completionRefusalCount(observations []turnObservation) int {
 	count := 0
 	for _, observation := range observations {
@@ -532,6 +536,9 @@ func turnIsAlreadyWrappingUp(state agentTaskState) bool {
 }
 
 func shouldExposeFinishAction(state agentTaskState, requirements []toolUseRequirement) bool {
+	if completionGateHasRefusedEnough(state.Observations) {
+		return true
+	}
 	if finishWasRejectedWithoutAnyToolEvidence(state.Observations) {
 		return false
 	}
