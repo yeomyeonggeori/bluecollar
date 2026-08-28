@@ -882,6 +882,26 @@ func TestTurnRoutingContextTreatsDelegatedPendingInputAsAnswer(t *testing.T) {
 	}
 }
 
+func TestTurnRoutingContextHoldsApproveTaskToThePendingAction(t *testing.T) {
+	description := turnRoutingContextDescription(agentcontract.AgentRequest{
+		PendingConfirmation: agentcontract.PendingConfirmationContext{
+			TaskRunID: "task-1",
+			Prompt:    "여명 님한테 생산 일정 문의 전달해줘",
+			Question:  "김여명 님께 다음 메시지를 보낼까요?",
+		},
+	})
+
+	if !strings.Contains(description, "approval=approve or approval=approve_task only when") {
+		t.Fatalf("expected approve_task to carry the same authorization bar, got %q", description)
+	}
+	if !strings.Contains(description, "Redirecting the work is not approving it") {
+		t.Fatalf("expected redirection guidance, got %q", description)
+	}
+	if !strings.Contains(description, "no approving signal may be returned for it") {
+		t.Fatalf("expected an explicit must-not rule for redirected messages, got %q", description)
+	}
+}
+
 func TestTurnRouterNormalizesClarificationFields(t *testing.T) {
 	router := NewTurnRouter(nil, agentcontract.IntakeOptions{IsEnabled: false})
 	decision := mustNormalizeTurn(t, router, agentcontract.TurnDecision{

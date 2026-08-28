@@ -660,9 +660,9 @@ func turnRoutingContextDescription(request agentcontract.AgentRequest) string {
 			"Pending confirmation:",
 			"- Task: "+strings.TrimSpace(request.PendingConfirmation.Prompt),
 			"- Question: "+strings.TrimSpace(request.PendingConfirmation.Question),
-			"- Return approval=approve only when the latest user message clearly authorizes this exact pending action.",
+			"- Return approval=approve or approval=approve_task only when the latest user message clearly authorizes this exact pending action. approve_task differs from approve only by covering the rest of this task's work of the same kind as well; it never authorizes an action the message did not authorize.",
 			"- Use answer_question only when the latest user message asks about this pending confirmation.",
-			"- If the latest user message changes the target, scope, conditions, or asks for a different action, use revise_task or start_task with approval=unclear.",
+			"- If the latest user message changes the target, scope, conditions, or asks for a different action, use revise_task or start_task with approval=unclear. Redirecting the work is not approving it: when the message names a different action, the pending one stays unauthorized however agreeable the wording, and no approving signal may be returned for it.",
 		)
 	}
 	if pendingChoice := pendingChoiceContext(request); strings.TrimSpace(pendingChoice.TaskRunID) != "" {
