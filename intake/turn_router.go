@@ -591,7 +591,11 @@ func expectedResultsSchema() map[string]any {
 			"type": "object",
 			"properties": map[string]any{
 				"id":              map[string]any{"type": "string", "maxLength": 128},
-				"type":            map[string]any{"type": "string", "enum": []string{agentcontract.ExpectedResultTypeMessage, agentcontract.ExpectedResultTypeFile, agentcontract.ExpectedResultTypeLink}},
+				"type": map[string]any{
+					"type": "string",
+					"enum": []string{agentcontract.ExpectedResultTypeMessage, agentcontract.ExpectedResultTypeFile, agentcontract.ExpectedResultTypeLink},
+					"description": "message means an answer the final reply itself delivers — never add a second message result for the reply, or the agent sends the same answer twice. A separate message result is only for a message that must exist apart from the reply: a standalone channel post, or a direct message to somebody else.",
+				},
 				"description":     map[string]any{"type": "string", "maxLength": 256},
 				"required":        map[string]any{"type": "boolean"},
 				"acceptanceHints": map[string]any{"type": "array", "maxItems": 4, "items": map[string]any{"type": "string", "maxLength": 128}},
