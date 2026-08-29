@@ -27,12 +27,13 @@ type VisibleContextMessage struct {
 }
 
 type VisibleContextMaterial struct {
-	MaterialID        string
+	MaterialID string
 	// URL is the attachment's one platform-wide name: it stands in the
 	// message text (or is minted by the adapter from its file identity), and
 	// a read tool handed this exact URL fetches the file through the
 	// platform's own record and authorization.
 	URL               string
+	FileID            string
 	Platform          string
 	MessageID         string
 	Filename          string
