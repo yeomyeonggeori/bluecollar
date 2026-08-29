@@ -22,6 +22,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "business": {
+            "description": "Business label, taken from registeredLabels.businesses in a task_list result. Omit when the user names no business; the workspace default applies.",
+            "type": "string"
+          },
           "endsAt": {
             "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
@@ -57,12 +61,16 @@
               "completed",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
           "title": {
             "description": "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Task type label, taken from registeredLabels.types in a task_list result. Omit when unsure.",
             "type": "string"
           }
         },
@@ -72,6 +80,10 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "business": {
+            "description": "Business label, taken from registeredLabels.businesses in a task_list result. Omit when the user names no business; the workspace default applies.",
+            "type": "string"
+          },
           "endsAt": {
             "description": "When the work is due. ISO 8601 with timezone for a moment, or YYYY-MM-DD for a whole day. Resolve relative dates from the current date. Omit when the user did not specify one.",
             "type": "string"
@@ -107,12 +119,16 @@
               "completed",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
           "title": {
             "description": "Concise noun-phrase title for the work itself, in the user's language. Keep the user's exact title when they give one; otherwise write one rather than reusing their sentence. People belong in the person fields, not the title.",
+            "type": "string"
+          },
+          "type": {
+            "description": "Task type label, taken from registeredLabels.types in a task_list result. Omit when unsure.",
             "type": "string"
           }
         },
@@ -333,7 +349,7 @@
       },
       "sideEffect": "workspace_write",
       "sideEffectClass": "workspace_write",
-      "version": "3",
+      "version": "5",
       "worksOffline": false
     },
     {
@@ -373,7 +389,7 @@
             "type": "string"
           },
           "status": {
-            "description": "Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'cancelled'. Leave empty to return all statuses.",
+            "description": "Filter by task status. Accepted values: 'planned', 'in_progress', 'completed', 'requested', 'paused', 'rejected', 'stopped'. Leave empty to return all statuses.",
             "type": "string"
           },
           "weekFrom": {
@@ -742,7 +758,7 @@
       },
       "sideEffect": "read",
       "sideEffectClass": "read",
-      "version": "2",
+      "version": "3",
       "worksOffline": false
     },
     {
@@ -806,7 +822,7 @@
               "requested",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
@@ -866,7 +882,7 @@
               "requested",
               "paused",
               "rejected",
-              "cancelled"
+              "stopped"
             ],
             "type": "string"
           },
@@ -1102,7 +1118,7 @@
       },
       "sideEffect": "workspace_write",
       "sideEffectClass": "workspace_write",
-      "version": "3",
+      "version": "4",
       "worksOffline": false
     },
     {
@@ -3017,7 +3033,7 @@
         "mode": "success",
         "targetKind": "message"
       },
-      "description": "Replace one exact span of text inside your own earlier message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read.",
+      "description": "Replace one exact span of text inside your own earlier message, leaving the rest of it untouched. oldText must appear exactly once in that message; copy it verbatim from a message_search preview or from the message you sent. This is the tool for every correction to something you already posted — when the user points out a mistake, fix that message instead of posting a correction as a new one. It runs immediately without asking the user to confirm, because it can only change text you quoted. If oldText does not match, the call fails without changing anything and returns the message as it currently reads, so retry with a span copied from that. To rewrite a long message wholesale, read it in full first with message_search messageIDs and quote what you read. attachments uploads workspace files into the edited message; pass it alone to add a file, such as an inbound image original, without changing the text.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
@@ -3028,6 +3044,15 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "attachments": {
+            "description": "Workspace file paths to upload into the edited message, copied exactly from the attachment catalog or a file tool result. Use this to add an original file, such as an inbound image, to a message already sent. The message keeps its text when no oldText is given.",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
           "isPinned": {
             "description": "Whether the message should be pinned.",
             "type": "boolean"
@@ -3056,6 +3081,15 @@
         "additionalProperties": false,
         "minProperties": 2,
         "properties": {
+          "attachments": {
+            "description": "Workspace file paths to upload into the edited message, copied exactly from the attachment catalog or a file tool result. Use this to add an original file, such as an inbound image, to a message already sent. The message keeps its text when no oldText is given.",
+            "items": {
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 5,
+            "type": "array"
+          },
           "isPinned": {
             "description": "Whether the message should be pinned.",
             "type": "boolean"
@@ -4209,7 +4243,7 @@
         "state": "ok"
       },
       "canonicalName": "document_read",
-      "description": "Read a workspace document from an exact /workspace path and return Markdown content. Use image_read for image files.",
+      "description": "Read a workspace document and return Markdown content. path takes an exact /workspace path, or an attachment's exact url copied verbatim from the conversation — a document attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use image_read for image files.",
       "estimatedLatency": "high",
       "idempotency": {
         "required": false,
@@ -4359,7 +4393,7 @@
         "state": "ok"
       },
       "canonicalName": "image_read",
-      "description": "Read a workspace image from an exact /workspace path and return a base64 attachment. Use document_read for document files.",
+      "description": "Read a workspace image and return a base64 attachment. path takes an exact /workspace path, or an attachment's exact url copied verbatim from the conversation — an image attached to an earlier message is fetched by that url. Never invent a filesystem path from a url. Use document_read for document files.",
       "estimatedLatency": "medium",
       "idempotency": {
         "required": false,
