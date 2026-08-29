@@ -103,7 +103,36 @@ func NormalizeExpectedResults(results []ExpectedResult) []ExpectedResult {
 		seenResults[key] = true
 		normalizedResults = append(normalizedResults, normalizedResult)
 	}
-	return normalizedResults
+	return foldMessageResultsIntoTheReply(normalizedResults)
+}
+
+// The gate can hold a message result to exactly one thing: the final reply is
+// not empty. Two message results are therefore the same requirement written
+// twice, and a model that reads them as two messages answers twice — once
+// through message_send and once by finishing. Fold them into one, keeping
+// every description and acceptance hint for the judge. A message that must
+// exist apart from the reply is an effect, not a result.
+func foldMessageResultsIntoTheReply(results []ExpectedResult) []ExpectedResult {
+	foldedResults := []ExpectedResult{}
+	replyIndex := -1
+	for _, result := range results {
+		if result.Type != ExpectedResultTypeMessage {
+			foldedResults = append(foldedResults, result)
+			continue
+		}
+		if replyIndex < 0 {
+			replyIndex = len(foldedResults)
+			foldedResults = append(foldedResults, result)
+			continue
+		}
+		reply := &foldedResults[replyIndex]
+		if !strings.Contains(reply.Description, result.Description) {
+			reply.Description = reply.Description + " " + result.Description
+		}
+		reply.AcceptanceHints = AppendUniqueStrings(reply.AcceptanceHints, result.AcceptanceHints...)
+		reply.Required = reply.Required || result.Required
+	}
+	return foldedResults
 }
 
 func normalizeExpectedResult(result ExpectedResult, index int) ExpectedResult {
