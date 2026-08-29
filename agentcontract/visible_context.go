@@ -27,7 +27,6 @@ type VisibleContextMessage struct {
 }
 
 type VisibleContextMaterial struct {
-	FileHint          string
 	MaterialID        string
 	// URL is the attachment's one platform-wide name: it stands in the
 	// message text (or is minted by the adapter from its file identity), and

@@ -70,7 +70,6 @@ func (context AmbientDutyContext) Normalized() AmbientDutyContext {
 }
 
 type ArtifactManifestEntry struct {
-	FileHint       string    `json:"fileHint"`
 	TaskRunID      string    `json:"taskRunID"`
 	RelativePath   string    `json:"relativePath"`
 	ProducingTool  string    `json:"producingTool,omitempty"`
