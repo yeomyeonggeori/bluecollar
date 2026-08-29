@@ -119,12 +119,15 @@ func TestLLMContextBuilderIncludesObservedResultProjection(t *testing.T) {
 	}
 }
 
+// An attachment is named by its url; an imported one also lists its workspace
+// path. Invented locator vocabularies (fileHint, materialID) are not shown.
 func TestLLMContextBuilderIncludesAttachmentCatalog(t *testing.T) {
 	contextText := (LLMContextBuilder{}).Build(LLMContextInput{
 		TurnStartedAt: time.Date(2026, time.May, 12, 8, 32, 27, 0, time.UTC),
 		VisibleContext: VisibleContext{
 			CurrentMaterials: []VisibleContextMaterial{{
 				MaterialID:  "mattermost:file-0",
+				URL:         "https://mattermost.local/api/v4/files/file-0",
 				Filename:    "current.html",
 				ContentType: "text/html",
 				SizeBytes:   691000,
@@ -137,6 +140,7 @@ func TestLLMContextBuilderIncludesAttachmentCatalog(t *testing.T) {
 				Text:    "이 파일 봐줘",
 				Materials: []VisibleContextMaterial{{
 					MaterialID:  "mattermost:file-1",
+					URL:         "https://mattermost.local/api/v4/files/file-1",
 					Filename:    "report.pdf",
 					ContentType: "application/pdf",
 					Path:        "/workspace/circles/staff/inbox/mattermost/thread-1/post-1/report.pdf",
@@ -146,6 +150,7 @@ func TestLLMContextBuilderIncludesAttachmentCatalog(t *testing.T) {
 			}},
 			Materials: []VisibleContextMaterial{{
 				MaterialID:  "mattermost:file-2",
+				URL:         "https://mattermost.local/api/v4/files/file-2",
 				Filename:    "screen.png",
 				ContentType: "image/png",
 				Path:        "/workspace/circles/staff/inbox/mattermost/thread-1/post-2/screen.png",
@@ -157,12 +162,12 @@ func TestLLMContextBuilderIncludesAttachmentCatalog(t *testing.T) {
 
 	for _, expected := range []string{
 		"Current attachments:",
-		"materialID=mattermost:file-0",
+		"url=https://mattermost.local/api/v4/files/file-0",
 		"path=home/inbox/mattermost/thread-1/post-0/current.html",
 		"availableTools=file_preview,file_read",
-		"admin attached materialID=mattermost:file-1",
+		"admin attached url=https://mattermost.local/api/v4/files/file-1",
 		"Previous attachments:",
-		"materialID=mattermost:file-2",
+		"url=https://mattermost.local/api/v4/files/file-2",
 		"path=/workspace/circles/staff/inbox/mattermost/thread-1/post-2/screen.png",
 	} {
 		if !strings.Contains(contextText, expected) {
@@ -170,6 +175,8 @@ func TestLLMContextBuilderIncludesAttachmentCatalog(t *testing.T) {
 		}
 	}
 	for _, unexpected := range []string{
+		"materialID=",
+		"fileHint=",
 		"filename=current.html",
 		"contentType=text/html",
 		"sizeBytes=691000",
@@ -193,9 +200,6 @@ func TestLLMContextBuilderIncludesUnavailableAttachmentMetadata(t *testing.T) {
 				SizeBytes:   512,
 				MessageID:   "post-1",
 				ErrorCode:   "mattermost_download_failed",
-			}, {
-				MaterialID: "mattermost:file-2",
-				MessageID:  "post-2",
 			}},
 		},
 	})
@@ -206,15 +210,16 @@ func TestLLMContextBuilderIncludesUnavailableAttachmentMetadata(t *testing.T) {
 		"contentType=application/octet-stream",
 		"sizeBytes=512",
 		"sourceMessageID=post-1",
+		"unreadable=true",
 		"available=false",
 		"errorCode=mattermost_download_failed",
-		"availableTools=file_preview,file_read",
-		"materialID=mattermost:file-2",
-		"sourceMessageID=post-2",
 	} {
 		if !strings.Contains(contextText, expected) {
 			t.Fatalf("expected unavailable attachment metadata %q, got %s", expected, contextText)
 		}
+	}
+	if strings.Contains(contextText, "availableTools=") {
+		t.Fatalf("an attachment with no url and no path has no tool that can read it, got %s", contextText)
 	}
 }
 
