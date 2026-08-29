@@ -4,6 +4,7 @@ import "strings"
 
 const (
 	ShellToolName               = "shell"
+	ReadToolName                = "read"
 	AskInputToolName            = "ask_input"
 	AskConfirmToolName          = "ask_confirm"
 	FileDeliverToolName         = "file_deliver"
@@ -23,6 +24,7 @@ const (
 func KernelToolNames() []string {
 	return []string{
 		ShellToolName,
+		ReadToolName,
 		FileDeliverToolName,
 		SkillSearchToolName,
 		FileReadToolName,
