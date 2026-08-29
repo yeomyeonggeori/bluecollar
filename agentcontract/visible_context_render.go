@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func FormatContextTimestamp(sentAt time.Time) string {
@@ -120,7 +122,7 @@ func formatVisibleContextMaterial(material VisibleContextMaterial) string {
 		values = append(values, "message="+material.Message)
 	}
 	if path != "" || materialURL != "" {
-		values = append(values, "availableTools="+strings.Join(visibleContextMaterialToolNames(material), ","))
+		values = append(values, "availableTools="+toolcontract.ReadToolName)
 	}
 	return strings.Join(values, " ")
 }
@@ -136,13 +138,6 @@ func shouldIncludeVisibleContextContentType(material VisibleContextMaterial, pat
 	return !strings.Contains(strings.TrimSpace(path), ".")
 }
 
-func visibleContextMaterialToolNames(material VisibleContextMaterial) []string {
-	if visibleContextMaterialLooksLikeImage(material) {
-		return []string{"image_read"}
-	}
-	return []string{"file_preview", "file_read"}
-}
-
 func formatSpeakerLabel(callingName string, handle string, fullName string) string {
 	primary := strings.TrimSpace(callingName)
 	if primary == "" {
@@ -156,19 +151,6 @@ func formatSpeakerLabel(callingName string, handle string, fullName string) stri
 		return primary
 	}
 	return primary + " (@" + trimmedHandle + ")"
-}
-
-func visibleContextMaterialLooksLikeImage(material VisibleContextMaterial) bool {
-	contentType := strings.ToLower(strings.TrimSpace(material.ContentType))
-	if strings.HasPrefix(contentType, "image/") {
-		return true
-	}
-	filename := strings.ToLower(strings.TrimSpace(material.Filename))
-	return strings.HasSuffix(filename, ".png") ||
-		strings.HasSuffix(filename, ".jpg") ||
-		strings.HasSuffix(filename, ".jpeg") ||
-		strings.HasSuffix(filename, ".gif") ||
-		strings.HasSuffix(filename, ".webp")
 }
 
 // What the messages are decides how they should be read, and the same heading

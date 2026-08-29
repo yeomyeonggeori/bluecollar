@@ -164,7 +164,7 @@ func TestLLMContextBuilderIncludesAttachmentCatalog(t *testing.T) {
 		"Current attachments:",
 		"url=https://mattermost.local/api/v4/files/file-0",
 		"path=home/inbox/mattermost/thread-1/post-0/current.html",
-		"availableTools=file_preview,file_read",
+		"availableTools=read",
 		"admin attached url=https://mattermost.local/api/v4/files/file-1",
 		"Previous attachments:",
 		"url=https://mattermost.local/api/v4/files/file-2",
