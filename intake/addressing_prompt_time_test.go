@@ -19,10 +19,10 @@ func TestAddressingPromptCarriesMessageAndContextTime(t *testing.T) {
 			},
 		},
 	})
-	if !strings.Contains(prompt, "messageTime: 07-10 14:03") {
+	if !strings.Contains(prompt, "messageTime: 2026-07-10 14:03") {
 		t.Fatalf("expected messageTime line, got %q", prompt)
 	}
-	if !strings.Contains(prompt, "context: [07-10 14:03]") {
+	if !strings.Contains(prompt, "context: [2026-07-10 14:03]") {
 		t.Fatalf("expected timestamped context line, got %q", prompt)
 	}
 }

@@ -12,7 +12,7 @@ func FormatContextTimestamp(sentAt time.Time) string {
 	if sentAt.IsZero() {
 		return ""
 	}
-	return sentAt.In(ContextRenderLocation()).Format("01-02 15:04")
+	return sentAt.In(ContextRenderLocation()).Format("2006-01-02 15:04")
 }
 
 func ContextRenderLocation() *time.Location {
