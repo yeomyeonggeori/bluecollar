@@ -15,7 +15,7 @@ func TestBuildVisibleContextDescriptionRendersTimestamp(t *testing.T) {
 			{Speaker: "Wendy", SpeakerCallingName: "Wendy", Text: "tidy up this file", SentAt: sentAt},
 		},
 	})
-	if !strings.Contains(description, "[07-10 14:03]") {
+	if !strings.Contains(description, "[2026-07-10 14:03]") {
 		t.Fatalf("expected rendered timestamp in context, got %q", description)
 	}
 }
