@@ -21,6 +21,7 @@ type AddressingClassificationRequest struct {
 	SenderHandle     string
 	VisibleContext   VisibleContext
 	AgentIdentity    AgentIdentity
+	Company          CompanyContext
 }
 
 type AddressingDecision struct {

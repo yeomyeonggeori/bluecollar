@@ -12,6 +12,7 @@ type CompanyContext struct {
 	Description    string
 	Representative string
 	Website        string
+	TimeZone       string
 }
 
 func (company CompanyContext) IsEmpty() bool {

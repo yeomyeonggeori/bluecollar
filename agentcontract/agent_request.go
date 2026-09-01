@@ -52,6 +52,7 @@ type AgentRequest struct {
 	TaskLevel                  TaskLevel
 	TurnStartedAt              time.Time
 	EnvironmentNow             time.Time
+	Company                    CompanyContext
 	CarriedOutCalls            []CarriedOutCall
 	CheckpointSender           AgentCheckpointSender
 }

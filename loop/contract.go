@@ -222,7 +222,7 @@ var buildMemoryContext = agentcontract.BuildMemoryContext
 
 var (
 	buildTemporalContextDescription = agentcontract.BuildTemporalContextDescription
-	temporalContextLocation         = agentcontract.TemporalContextLocation
+	companyLocation                 = agentcontract.CompanyLocation
 )
 
 var (

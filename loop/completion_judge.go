@@ -192,7 +192,7 @@ func completionJudgeRequest(request AgentTurnRequest, observations []turnObserva
 func completionJudgeMessages(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument, expandedObservationIDs []string) []model.Message {
 	messages := withoutEmptyMessages([]model.Message{
 		{Role: "system", Content: completionJudgeInstruction()},
-		{Role: "system", Content: buildTemporalContextDescription(request.EnvironmentNow)},
+		{Role: "system", Content: buildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone)},
 		{Role: "system", Content: "Original instruction:\n" + completionJudgeOriginalInstruction(request)},
 	})
 	if expectedResultsDescription := completionJudgeExpectedResultsDescription(request.OutcomeContract.ExpectedResults); expectedResultsDescription != "" {

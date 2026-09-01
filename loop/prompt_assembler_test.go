@@ -14,6 +14,7 @@ func TestPromptAssemblerIncludesTemporalContext(t *testing.T) {
 		Prompt:         "내일 오후 6시 회식 추가해줘",
 		TurnStartedAt:  time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC),
 		EnvironmentNow: time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC),
+		Company:        CompanyContext{TimeZone: "Asia/Seoul"},
 	}, nil, "base", "")
 	body := joinMessageContent(messages)
 
@@ -99,19 +100,19 @@ func TestBuildTemporalContextDescriptionAnchorsWeeksAcrossCalendarBoundaries(t *
 	}{
 		{
 			name:      "month boundary",
-			startedAt: time.Date(2026, 7, 30, 12, 0, 0, 0, defaultTurnLocation()),
+			startedAt: time.Date(2026, 7, 30, 12, 0, 0, 0, companyLocation("Asia/Seoul")),
 			expected:  "This week: Mon 07-27, Tue 07-28, Wed 07-29, Thu 07-30, Fri 07-31, Sat 08-01, Sun 08-02",
 		},
 		{
 			name:      "year boundary",
-			startedAt: time.Date(2026, 1, 1, 12, 0, 0, 0, defaultTurnLocation()),
+			startedAt: time.Date(2026, 1, 1, 12, 0, 0, 0, companyLocation("Asia/Seoul")),
 			expected:  "This week: Mon 12-29, Tue 12-30, Wed 12-31, Thu 01-01, Fri 01-02, Sat 01-03, Sun 01-04",
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			description := buildTemporalContextDescription(testCase.startedAt)
+			description := buildTemporalContextDescription(testCase.startedAt, "Asia/Seoul")
 			if !strings.Contains(description, testCase.expected) {
 				t.Fatalf("expected week anchors %q, got %s", testCase.expected, description)
 			}

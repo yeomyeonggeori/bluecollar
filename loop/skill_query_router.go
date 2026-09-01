@@ -57,10 +57,10 @@ func (skillSearchQueryRouter SkillSearchQueryRouter) buildMessages(request Agent
 			Content: "Available tools: " + strings.Join(skillSearchAvailableToolNames(request), ", "),
 		},
 	}
-	if temporalContext := buildTemporalContextDescription(request.EnvironmentNow); temporalContext != "" {
+	if temporalContext := buildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone); temporalContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: temporalContext})
 	}
-	if contextDescription := buildVisibleContextDescription(request.VisibleContext); contextDescription != "" {
+	if contextDescription := buildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
 	}
 	if goalDescription := activeGoalDescriptionForPrompt(request.ActiveGoal, request.Prompt); goalDescription != "" {
