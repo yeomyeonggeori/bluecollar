@@ -186,14 +186,6 @@ func buildWorkspaceContextDescription(request AgentTurnRequest) string {
 	return strings.Join(lines, "\n")
 }
 
-func defaultTurnLocation() *time.Location {
-	location, errorValue := time.LoadLocation("Asia/Seoul")
-	if errorValue != nil {
-		return time.Local
-	}
-	return location
-}
-
 func buildObservationContext(observations []turnObservation, toolResultsCarriedNatively bool) string {
 	if len(observations) == 0 {
 		return ""

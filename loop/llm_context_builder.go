@@ -67,7 +67,7 @@ func (builder LLMContextBuilder) BuildUnchangingContext(input LLMContextInput) s
 		strings.TrimSpace(input.ToolDescription),
 		builder.additionalToolsContext(input),
 		builder.workspaceContext(input.WorkspaceContext),
-		builder.conversationContext(input.VisibleContext),
+		builder.conversationContext(input.VisibleContext, input.Company.TimeZone),
 		builder.taskContext(input),
 		builder.memoryContext(input),
 	}), "\n\n")
@@ -203,7 +203,7 @@ func (builder LLMContextBuilder) runtimeContext(input LLMContextInput) string {
 		"Runtime:",
 		"Response language: " + ResolveResponseLanguage(input.ResponseLanguage),
 	}
-	if temporalContext := buildTemporalContextDescription(input.EnvironmentNow); temporalContext != "" {
+	if temporalContext := buildTemporalContextDescription(input.EnvironmentNow, input.Company.TimeZone); temporalContext != "" {
 		lines = append(lines, temporalContext)
 	}
 	return strings.Join(lines, "\n")
@@ -228,8 +228,8 @@ func (builder LLMContextBuilder) workspaceContext(workspaceContext WorkspaceCont
 	return strings.Join(nonEmptyStrings(sections), "\n")
 }
 
-func (builder LLMContextBuilder) conversationContext(visibleContext VisibleContext) string {
-	description := buildVisibleContextDescription(visibleContext)
+func (builder LLMContextBuilder) conversationContext(visibleContext VisibleContext, timeZone string) string {
+	description := buildVisibleContextDescription(visibleContext, timeZone)
 	if strings.TrimSpace(description) == "" {
 		return ""
 	}

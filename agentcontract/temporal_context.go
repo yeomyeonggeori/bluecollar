@@ -5,13 +5,12 @@ import (
 	"time"
 )
 
-func BuildTemporalContextDescription(environmentNow time.Time) string {
+func BuildTemporalContextDescription(environmentNow time.Time, timeZone string) string {
 	if environmentNow.IsZero() {
 		return ""
 	}
-	location := TemporalContextLocation()
-	currentTime := environmentNow
-	localTime := currentTime.In(location)
+	location := CompanyLocation(timeZone)
+	localTime := environmentNow.In(location)
 	return strings.Join([]string{
 		"Now: " + localTime.Format("2006-01-02 (Mon) 15:04 -07:00") + " " + location.String(),
 		buildCurrentWeekDescription(localTime),
@@ -29,10 +28,14 @@ func buildCurrentWeekDescription(localTime time.Time) string {
 	return "This week: " + strings.Join(anchors, ", ")
 }
 
-func TemporalContextLocation() *time.Location {
-	location, errorValue := time.LoadLocation("Asia/Seoul")
-	if errorValue == nil {
-		return location
+func CompanyLocation(timeZone string) *time.Location {
+	named := strings.TrimSpace(timeZone)
+	if named == "" {
+		return time.Local
 	}
-	return time.FixedZone("Asia/Seoul", 9*60*60)
+	location, errorValue := time.LoadLocation(named)
+	if errorValue != nil {
+		return time.Local
+	}
+	return location
 }

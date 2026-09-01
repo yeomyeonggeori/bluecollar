@@ -236,7 +236,7 @@ func (turnRouter TurnRouter) buildMessages(request agentcontract.AgentRequest) [
 			Content: toolDescriptions,
 		},
 	}
-	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext); contextDescription != "" {
+	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
 	}
 	if goalDescription := agentcontract.ActiveGoalDescriptionForPrompt(request.ActiveGoal, request.Prompt); goalDescription != "" {
@@ -251,7 +251,7 @@ func (turnRouter TurnRouter) buildMessages(request agentcontract.AgentRequest) [
 	if routingContext := turnRoutingContextDescription(request); routingContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: routingContext})
 	}
-	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow); temporalContext != "" {
+	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone); temporalContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: temporalContext})
 	}
 	messages = append(messages, model.Message{Role: "user", Content: request.Prompt})
@@ -590,10 +590,10 @@ func expectedResultsSchema() map[string]any {
 		"items": map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"id":              map[string]any{"type": "string", "maxLength": 128},
+				"id": map[string]any{"type": "string", "maxLength": 128},
 				"type": map[string]any{
-					"type": "string",
-					"enum": []string{agentcontract.ExpectedResultTypeMessage, agentcontract.ExpectedResultTypeFile, agentcontract.ExpectedResultTypeLink},
+					"type":        "string",
+					"enum":        []string{agentcontract.ExpectedResultTypeMessage, agentcontract.ExpectedResultTypeFile, agentcontract.ExpectedResultTypeLink},
 					"description": "message means an answer the final reply itself delivers — never add a second message result for the reply, or the agent sends the same answer twice. A separate message result is only for a message that must exist apart from the reply: a standalone channel post, or a direct message to somebody else.",
 				},
 				"description":     map[string]any{"type": "string", "maxLength": 256},

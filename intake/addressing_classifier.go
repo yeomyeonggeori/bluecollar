@@ -110,13 +110,13 @@ func addressingClassificationPrompt(request agentcontract.AddressingClassificati
 		"senderHandle: "+strings.TrimSpace(request.SenderHandle),
 		"message: "+strings.TrimSpace(request.Prompt),
 	)
-	if stamp := agentcontract.FormatContextTimestamp(request.MessageSentAt); stamp != "" {
+	if stamp := agentcontract.FormatContextTimestamp(request.MessageSentAt, request.Company.TimeZone); stamp != "" {
 		lines = append(lines, "messageTime: "+stamp+" (context timestamps below share this clock; consecutive messages seconds apart from the same sender are usually one split thought)")
 	}
 	for _, message := range recentVisibleMessages(request.VisibleContext.Messages, 6) {
 		speaker := firstNonEmptyAddressingText(message.SpeakerCallingName, message.Speaker, message.SpeakerHandle, "unknown")
 		prefix := "context: "
-		if stamp := agentcontract.FormatContextTimestamp(message.SentAt); stamp != "" {
+		if stamp := agentcontract.FormatContextTimestamp(message.SentAt, request.Company.TimeZone); stamp != "" {
 			prefix = "context: [" + stamp + "] "
 		}
 		lines = append(lines, prefix+speaker+": "+strings.TrimSpace(message.Text))

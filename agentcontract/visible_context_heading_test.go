@@ -11,11 +11,11 @@ import (
 func TestTheHeadingSaysWhichOfTheTwoThisIs(t *testing.T) {
 	continuing := BuildVisibleContextDescription(VisibleContext{
 		Messages: []VisibleContextMessage{{Speaker: "이동하", Text: "목요일 팁스 연구노트 작성 일정 추가해줘"}},
-	})
+	}, "Asia/Seoul")
 	others := BuildVisibleContextDescription(VisibleContext{
 		MessagesOpenOtherExchanges: true,
 		Messages:                   []VisibleContextMessage{{Speaker: "이동하", Text: "NVIDIA·젯슨 공급 미팅 지워주고"}},
-	})
+	}, "Asia/Seoul")
 
 	if strings.HasPrefix(others, strings.SplitN(continuing, "\n", 2)[0]) {
 		t.Fatal("the two read the same, which is what let one be taken for the other")

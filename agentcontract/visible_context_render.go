@@ -8,27 +8,19 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func FormatContextTimestamp(sentAt time.Time) string {
+func FormatContextTimestamp(sentAt time.Time, timeZone string) string {
 	if sentAt.IsZero() {
 		return ""
 	}
-	return sentAt.In(ContextRenderLocation()).Format("2006-01-02 15:04")
+	return sentAt.In(CompanyLocation(timeZone)).Format("2006-01-02 15:04")
 }
 
-func ContextRenderLocation() *time.Location {
-	location, errorValue := time.LoadLocation("Asia/Seoul")
-	if errorValue != nil {
-		return time.Local
-	}
-	return location
-}
-
-func BuildVisibleContextDescription(visibleContext VisibleContext) string {
+func BuildVisibleContextDescription(visibleContext VisibleContext, timeZone string) string {
 	contextLines := []string{}
 	for _, message := range visibleContext.Messages {
 		speaker := formatSpeakerLabel(message.SpeakerCallingName, message.SpeakerHandle, message.Speaker)
 		prefix := "- "
-		if stamp := FormatContextTimestamp(message.SentAt); stamp != "" {
+		if stamp := FormatContextTimestamp(message.SentAt, timeZone); stamp != "" {
 			prefix = "- [" + stamp + "] "
 		}
 		text := strings.TrimSpace(message.Text)
