@@ -68,9 +68,13 @@ func requiredEvidenceIncludesNamespace(toolSet *toolcontract.ToolSet, toolNames 
 
 func requiredEvidenceIncludesSideEffect(toolSet *toolcontract.ToolSet, toolNames []string) bool {
 	for _, toolName := range toolNames {
-		if toolcontract.IsArtifactDeliveryTool(toolName) || requiredEvidenceToolNeedsSuccessfulSideEffect(toolSet, toolName) {
+		if evidenceToolChangesSomething(toolSet, toolName) {
 			return true
 		}
 	}
 	return false
+}
+
+func evidenceToolChangesSomething(toolSet *toolcontract.ToolSet, toolName string) bool {
+	return toolcontract.IsArtifactDeliveryTool(toolName) || requiredEvidenceToolNeedsSuccessfulSideEffect(toolSet, toolName)
 }

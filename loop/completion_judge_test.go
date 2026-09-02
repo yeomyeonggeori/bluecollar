@@ -51,6 +51,12 @@ func completionJudgeFinishActionDocument() turnActionDocument {
 	return turnActionDocument{Action: "finish", GoalStatus: "satisfied", GoalSatisfied: &goalSatisfied}
 }
 
+func completionJudgeFinishActionDocumentCiting(observationID string, toolName string) turnActionDocument {
+	actionDocument := completionJudgeFinishActionDocument()
+	actionDocument.CompletionEvidence = []completionEvidenceReference{{ObservationID: observationID, ToolName: toolName}}
+	return actionDocument
+}
+
 func TestCompletionJudgeMessagesCarryTheFinishReplyAsDelivered(t *testing.T) {
 	actionDocument := turnActionDocument{Action: "finish", Message: "deploy complete: https://sites.example/launch"}
 	joined := joinedMessageContent(completionJudgeMessages(AgentTurnRequest{Prompt: "publish the site and give me the link"}, nil, nil, actionDocument, nil))
@@ -268,7 +274,7 @@ func TestValidateCompletionGateWithJudgeReturnsJudgeUnsatisfied(t *testing.T) {
 	}
 	observations := []turnObservation{successfulSideEffectObservation("obs-001", "task_add", `{"title":"missing quarterly settlement check"}`, "created")}
 
-	result := services.runner.validateCompletionGateWithJudge(context.Background(), "task-judge-6", request, nil, observations, nil, nil, completionJudgeFinishActionDocument())
+	result := services.runner.validateCompletionGateWithJudge(context.Background(), "task-judge-6", request, nil, observations, nil, nil, completionJudgeFinishActionDocumentCiting("obs-001", "task_add"))
 
 	if result.IsSatisfied {
 		t.Fatal("expected the judge to reject a semantically incomplete finish")

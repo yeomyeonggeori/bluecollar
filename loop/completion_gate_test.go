@@ -38,6 +38,10 @@ func (languageModel *contextExpiringJudgeLanguageModel) GenerateStructuredRespon
 	return model.StructuredResponse{Content: languageModel.content}, languageModel.errorValue
 }
 
+func completionGateDeletedTaskState() CompletionState {
+	return CompletionState{EvidenceReferences: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "task_delete"}}}
+}
+
 func completionGateSideEffectToolSetAndObservations() (*toolcontract.ToolSet, []turnObservation) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{testToolDescriptor("task_delete")})
 	observations := []turnObservation{successfulSideEffectObservation("obs-001", "task_delete", `{"taskID":"task-1"}`, `{"deleted":true}`)}
@@ -56,7 +60,7 @@ func TestFinalizeCompletionStateCompletesDespiteJudgeContextDeadlineExceeded(t *
 	}
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
 
-	transition := services.runner.finalizeCompletionState(ctx, taskRun.TaskRunID, "step-1", request, nil, observations, nil, nil, CompletionState{}, "오래된 작업을 삭제했습니다.")
+	transition := services.runner.finalizeCompletionState(ctx, taskRun.TaskRunID, "step-1", request, nil, observations, nil, nil, completionGateDeletedTaskState(), "오래된 작업을 삭제했습니다.")
 
 	if !transition.IsCompleted || !transition.DidTransition {
 		t.Fatalf("expected the turn to complete despite judge context expiry, got %+v", transition)
@@ -87,7 +91,7 @@ func TestFinalizeCompletionStateDeliversBestEffortWhenJudgeUnsatisfiedAndBudgetE
 	}
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
 
-	transition := services.runner.finalizeCompletionState(ctx, taskRun.TaskRunID, "step-1", request, nil, observations, nil, nil, CompletionState{}, "오래된 작업을 삭제했습니다.")
+	transition := services.runner.finalizeCompletionState(ctx, taskRun.TaskRunID, "step-1", request, nil, observations, nil, nil, completionGateDeletedTaskState(), "오래된 작업을 삭제했습니다.")
 
 	if !transition.IsCompleted || !transition.DidTransition {
 		t.Fatalf("expected best-effort completion when the judge is unsatisfied and the budget is expired, got %+v", transition)
@@ -117,7 +121,7 @@ func TestFinalizeCompletionStateKeepsRetryingWhenJudgeUnsatisfiedAndBudgetRemain
 	}
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
 
-	transition := services.runner.finalizeCompletionState(context.Background(), taskRun.TaskRunID, "step-1", request, nil, observations, nil, nil, CompletionState{}, "오래된 작업을 삭제했습니다.")
+	transition := services.runner.finalizeCompletionState(context.Background(), taskRun.TaskRunID, "step-1", request, nil, observations, nil, nil, completionGateDeletedTaskState(), "오래된 작업을 삭제했습니다.")
 
 	if transition.IsCompleted {
 		t.Fatalf("expected the turn to keep retrying when the judge is unsatisfied and the budget is not expired, got %+v", transition)
@@ -2344,5 +2348,86 @@ func TestAFinishClaimingSuccessLeavesTheExitOffTheMenu(t *testing.T) {
 
 	if shouldExposeFailAction(agentTaskState{Observations: []turnObservation{refusal}}) {
 		t.Fatal("a finish refused for missing evidence is a reason to do the work, not to give up on it")
+	}
+}
+
+func stateChangeHintedRequest() AgentTurnRequest {
+	return AgentTurnRequest{
+		ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+			testToolDescriptor("event_add"),
+			testToolDescriptor("event_list"),
+		}),
+		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"event_add"}},
+	}
+}
+
+func stateChangeHintedFinish(references []completionEvidenceReference) turnActionDocument {
+	goalSatisfied := true
+	return turnActionDocument{
+		Action:             "finish",
+		Message:            "7월 13일 미팅을 등록했습니다.",
+		GoalStatus:         "satisfied",
+		GoalSatisfied:      &goalSatisfied,
+		CompletionEvidence: references,
+	}
+}
+
+func TestCompletionGateRejectsStateChangeFinishThatCitesNothing(t *testing.T) {
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, nil, nil, stateChangeHintedFinish(nil), defaultRecoveryBudget())
+
+	if result.IsSatisfied {
+		t.Fatal("expected a finish claiming a state change with no cited evidence to be rejected")
+	}
+	if result.EvidenceKind != evidenceKindReference {
+		t.Fatalf("expected the same evidence kind a cited-but-failed observation gets, got %q", result.EvidenceKind)
+	}
+	if len(result.SuggestedNextTools) != 1 || result.SuggestedNextTools[0] != "event_add" {
+		t.Fatalf("expected the hinted state-changing tool to be suggested, got %+v", result.SuggestedNextTools)
+	}
+}
+
+func TestCompletionGateRejectsStateChangeFinishThatOnlyCitesAReadObservation(t *testing.T) {
+	observations := []turnObservation{successfulSideEffectObservation("obs-001", "event_list", `{}`, "no events")}
+	references := []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "event_list"}}
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, observations, nil, stateChangeHintedFinish(references), defaultRecoveryBudget())
+
+	if result.IsSatisfied {
+		t.Fatal("expected reading something to be rejected as evidence that something changed")
+	}
+}
+
+func TestCompletionGateAcceptsStateChangeFinishThatCitesTheChange(t *testing.T) {
+	observations := []turnObservation{successfulSideEffectObservation("obs-001", "event_add", `{"title":"미팅"}`, "created")}
+	references := []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "event_add"}}
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, observations, nil, stateChangeHintedFinish(references), defaultRecoveryBudget())
+
+	if !result.IsSatisfied {
+		t.Fatalf("expected a finish citing the successful state change to pass, got %+v", result)
+	}
+}
+
+func TestCompletionGateLetsAReadOnlyOutcomeFinishWithoutEvidence(t *testing.T) {
+	request := AgentTurnRequest{
+		ToolSet:         newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{testToolDescriptor("event_list")}),
+		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"event_list"}},
+	}
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(request, nil, nil, nil, stateChangeHintedFinish(nil), defaultRecoveryBudget())
+
+	if !result.IsSatisfied {
+		t.Fatalf("expected a read outcome to stay finishable without evidence, got %+v", result)
+	}
+}
+
+func TestCompletionGateLetsNoToolFallbackFinishWithoutStateChangeEvidence(t *testing.T) {
+	actionDocument := stateChangeHintedFinish(nil)
+	actionDocument.FailureResolution = failureResolutionNoToolFallback
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, nil, nil, actionDocument, defaultRecoveryBudget())
+
+	if !result.IsSatisfied {
+		t.Fatalf("expected a no_tool_fallback answer to stay finishable, got %+v", result)
 	}
 }
