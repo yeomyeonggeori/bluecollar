@@ -18,6 +18,7 @@ func TestAddressingPromptCarriesMessageAndContextTime(t *testing.T) {
 				{Speaker: "Wendy", SpeakerCallingName: "Wendy", Text: "tidy it up", SentAt: sentAt},
 			},
 		},
+		Company: agentcontract.CompanyContext{TimeZone: "Asia/Seoul"},
 	})
 	if !strings.Contains(prompt, "messageTime: 2026-07-10 14:03") {
 		t.Fatalf("expected messageTime line, got %q", prompt)
