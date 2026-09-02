@@ -358,7 +358,7 @@ func validateProviderTool(boundTool BoundTool) error {
 		}
 	}
 	if !IsCanonicalToolName(toolDescriptor.Name) {
-		return errors.New("name must match ^[A-Za-z0-9_.-]{1,128}$")
+		return errors.New("name must match " + canonicalToolNamePattern.String())
 	}
 	if boundTool.Handler == nil {
 		return errors.New("handler is required")
