@@ -160,6 +160,29 @@ func toolResultImageContextMessage(observations []turnObservation) model.Message
 	return message
 }
 
+// A picture that arrived on the message is in front of the executor from the
+// first step, so a reply describing it cites no operation and leaves no ledger
+// entry to check. The judge is shown the same picture and reads the claim
+// against it.
+func inputImageContextMessage(inputParts []AgentPart) model.Message {
+	message := model.Message{Role: "user"}
+	for _, part := range inputParts {
+		if strings.TrimSpace(part.Type) != AgentPartTypeImage {
+			continue
+		}
+		imagePart := agentImageToLLMPart(part)
+		if strings.TrimSpace(imagePart.DataBase64) == "" || strings.TrimSpace(imagePart.MimeType) == "" {
+			continue
+		}
+		message.Parts = append(message.Parts, imagePart)
+	}
+	if len(message.Parts) == 0 {
+		return model.Message{}
+	}
+	message.Content = "Images the user's message came with. A claim the finish reply makes about one of these is judged against the image itself."
+	return message
+}
+
 func compactMessages(messages []model.Message) []model.Message {
 	result := []model.Message{}
 	for _, message := range messages {

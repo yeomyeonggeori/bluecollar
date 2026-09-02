@@ -599,3 +599,73 @@ func TestCompletionJudgeStaysSkippedWhenTheContractOnlyHintsAReadTool(t *testing
 		t.Fatalf("expected no judge call when nothing in the contract can have changed, got %d", len(languageModel.requests))
 	}
 }
+
+func inputImageAgentPart() AgentPart {
+	return AgentPart{
+		Type: AgentPartTypeImage,
+		Image: &AgentImagePart{
+			MimeType:   "image/png",
+			Filename:   "sent.png",
+			DataBase64: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+		},
+	}
+}
+
+func TestTheJudgeIsShownThePictureTheMessageCameWith(t *testing.T) {
+	request := AgentTurnRequest{
+		Prompt:     "이 그림에 적힌 글자를 그대로 알려줘",
+		ToolSet:    completionJudgeTestToolSet(),
+		InputParts: []AgentPart{TextAgentPart("이 그림에 적힌 글자를 그대로 알려줘"), inputImageAgentPart()},
+	}
+
+	messages := completionJudgeMessages(request, nil, nil, completionJudgeFinishActionDocument(), nil)
+
+	imagePartCount := 0
+	for _, message := range messages {
+		for _, part := range message.Parts {
+			if part.Type == "image" && strings.TrimSpace(part.DataBase64) != "" {
+				imagePartCount++
+			}
+		}
+	}
+	if imagePartCount != 1 {
+		t.Fatalf("the judge grades a claim about a picture it was never shown: %d image parts", imagePartCount)
+	}
+}
+
+func TestAReplyDescribingAPictureNobodyOpenedIsJudged(t *testing.T) {
+	languageModel := &completionJudgeStubLanguageModel{response: model.StructuredResponse{Content: `{"satisfied":false,"missingWork":["the picture holds no letters"],"reason":"the reply describes a black rectangle the image does not show"}`}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := AgentTurnRequest{
+		Prompt:     "이 그림에 적힌 글자를 그대로 알려줘",
+		ToolSet:    completionJudgeTestToolSet(),
+		InputParts: []AgentPart{inputImageAgentPart()},
+	}
+
+	result := services.runner.validateCompletionGateWithJudge(context.Background(), "task-judge-input-image", request, nil, nil, nil, nil, completionJudgeFinishActionDocument())
+
+	if result.IsSatisfied {
+		t.Fatal("a finish describing what an unopened picture shows was accepted on its own say-so")
+	}
+	if result.EvidenceKind != evidenceKindExpectedResult {
+		t.Fatalf("expected the judge's expected-result refusal, got %q", result.EvidenceKind)
+	}
+	if len(languageModel.requests) != 1 {
+		t.Fatalf("expected exactly one judge call, got %d", len(languageModel.requests))
+	}
+}
+
+func TestATurnWithNoPictureAndNothingToJudgeStillSkipsTheJudge(t *testing.T) {
+	languageModel := &completionJudgeStubLanguageModel{response: model.StructuredResponse{Content: `{"satisfied":false,"missingWork":[],"reason":"should not run"}`}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := AgentTurnRequest{Prompt: "안녕하세요", ToolSet: completionJudgeTestToolSet()}
+
+	result := services.runner.validateCompletionGateWithJudge(context.Background(), "task-judge-no-image", request, nil, nil, nil, nil, completionJudgeFinishActionDocument())
+
+	if !result.IsSatisfied {
+		t.Fatalf("a greeting with nothing to grade was refused: %+v", result)
+	}
+	if len(languageModel.requests) != 0 {
+		t.Fatalf("expected no judge call, got %d", len(languageModel.requests))
+	}
+}

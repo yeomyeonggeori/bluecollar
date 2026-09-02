@@ -67,6 +67,13 @@ func contractAsksForSomethingToJudge(contract OutcomeContract) bool {
 	return false
 }
 
+// The executor's account of a picture the message came with is the whole record
+// of it: no operation reads it, so nothing else can contradict the account. A
+// turn holding such a picture is judged even when the contract asks for nothing.
+func requestCarriesInputImage(request AgentTurnRequest) bool {
+	return len(inputImageContextMessage(request.InputParts).Parts) > 0
+}
+
 func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithJudge(ctx context.Context, taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
 	completionGateResult := validateCompletionGateForRequestWithExpectedResults(request, requirements, observations, attachments, criteria, actionDocument, agentTurnRunner.options.RecoveryBudget)
 	if !completionGateResult.IsSatisfied || ctx.Err() != nil {
@@ -75,7 +82,8 @@ func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithJudge(ctx cont
 	if !contractAsksForSomethingToJudge(request.OutcomeContract) &&
 		!outcomeContractHasSideEffectEvidence(request.ToolSet, request.OutcomeContract) &&
 		!outcomeContractHintsSideEffectEvidence(request.ToolSet, request.OutcomeContract) &&
-		!observationsIncludeSideEffect(request.ToolSet, observations) {
+		!observationsIncludeSideEffect(request.ToolSet, observations) &&
+		!requestCarriesInputImage(request) {
 		return completionGateResult
 	}
 	if judgeResult := agentTurnRunner.evaluateCompletionJudge(ctx, taskRunID, request, observations, deliveredCompletionAttachments(observations, actionDocument), actionDocument); !judgeResult.IsSatisfied {
@@ -224,6 +232,9 @@ func completionJudgeMessages(request AgentTurnRequest, observations []turnObserv
 	if toolResultImages := toolResultImageContextMessage(observations); len(toolResultImages.Parts) > 0 {
 		messages = append(messages, toolResultImages)
 	}
+	if inputImages := inputImageContextMessage(request.InputParts); len(inputImages.Parts) > 0 {
+		messages = append(messages, inputImages)
+	}
 	messages = append(messages, model.Message{Role: "user", Content: "Recorded operations this turn, reads and state changes alike. An entry with failed=true did not do what it attempted:\n" + completionJudgeLedgerDocument(request.ToolSet, observations, fullyShownObservationIDs(actionDocument, expandedObservationIDs))})
 	return messages
 }
@@ -268,7 +279,7 @@ func completionJudgeInstruction() string {
 		"When the verdict turns on content that is cut, dropped, or otherwise not visible, list those entries' observationIDs in needObservationIDs and decide from what is visible for now; they will be shown to you in full exactly once. Leave needObservationIDs empty when the visible parts already decide the verdict.",
 		"Resolve relative dates such as today, tomorrow, 오늘, and 내일 only from the runtime temporal context below. Never guess the current date from ledger values.",
 		"Judge state changes by the recorded operation results. Items that merely appear inside another result's diagnostic fields, such as candidate lists in a search result, are not additional requirements unless the instruction itself names them.",
-		"Images a recorded operation read are shown to you as image parts. When the finish reply makes a claim about one — that it holds no text, that it shows a particular thing — judge that claim against the image itself, and mark unsatisfied when the image contradicts it. Do not require anything of an image the instruction does not ask for, and an image nobody made a claim about is not a failure.",
+		"Images a recorded operation read, and images the user's message came with, are shown to you as image parts. When the finish reply makes a claim about one — that it holds no text, that it shows a particular thing — judge that claim against the image itself, and mark unsatisfied when the image contradicts it. Do not require anything of an image the instruction does not ask for, and an image nobody made a claim about is not a failure.",
 		"Do not invent requirements the instruction does not state. Wording, formatting, phrasing, and which list or table a record appears in are not failures. If the right operations ran and every explicitly stated value appears in some recorded input, mark satisfied.",
 	}, "\n")
 }
