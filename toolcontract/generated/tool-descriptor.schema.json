@@ -1,0 +1,177 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "providerID": {
+      "type": "string"
+    },
+    "namespace": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "whenToUse": {
+      "type": "string"
+    },
+    "whenNotToUse": {
+      "type": "string"
+    },
+    "privacyClass": {
+      "type": "string"
+    },
+    "requiresUserPresence": {
+      "type": "boolean"
+    },
+    "requiresRequesterDevice": {
+      "type": "boolean"
+    },
+    "worksOffline": {
+      "type": "boolean"
+    },
+    "recoveryCard": {
+      "type": "object",
+      "properties": {
+        "does": {
+          "type": "string"
+        },
+        "produces": {
+          "type": "string"
+        },
+        "sideEffect": {
+          "type": "string"
+        },
+        "useWhen": {
+          "type": "string"
+        },
+        "avoidWhen": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "inputSchema": true,
+    "inputIntentSchema": true,
+    "outputSchema": true,
+    "resultContract": {
+      "type": [
+        "null",
+        "object"
+      ],
+      "properties": {
+        "schema": true,
+        "effects": {
+          "type": [
+            "null",
+            "array"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "objectType": {
+                "type": "string"
+              },
+              "effect": {
+                "type": "string"
+              },
+              "resultField": {
+                "type": "string"
+              },
+              "effectIdentity": {
+                "type": "string"
+              },
+              "when": {
+                "type": [
+                  "null",
+                  "object"
+                ],
+                "properties": {
+                  "resultField": {
+                    "type": "string"
+                  },
+                  "equals": true
+                },
+                "required": [
+                  "resultField",
+                  "equals"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "objectType",
+              "effect",
+              "resultField",
+              "effectIdentity"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "evidenceCondition": {
+          "type": [
+            "null",
+            "object"
+          ],
+          "properties": {
+            "resultField": {
+              "type": "string"
+            },
+            "equals": true
+          },
+          "required": [
+            "resultField",
+            "equals"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema"
+      ],
+      "additionalProperties": false
+    },
+    "visibility": {
+      "type": "string"
+    },
+    "policyResource": {
+      "type": "string"
+    },
+    "sideEffectClass": {
+      "type": "string"
+    },
+    "requiresApproval": {
+      "type": "boolean"
+    },
+    "approvalScope": {
+      "type": "string"
+    },
+    "completion": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "idempotency": {
+      "type": "string"
+    },
+    "idempotencyScope": {
+      "type": "string"
+    },
+    "timeoutMS": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "name",
+    "description"
+  ],
+  "additionalProperties": false
+}
