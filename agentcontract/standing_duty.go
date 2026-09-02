@@ -14,7 +14,7 @@ var standingDuties = []StandingDuty{
 		Name:        "calendar_upkeep",
 		Description: "a specific meeting, deadline, or scheduled event that should be created or updated as a calendar event right now",
 		Instruction: "Record the concrete meeting, deadline, or scheduled event the overheard message states as a calendar entry. List the existing entries around that date first and update the matching one instead of creating a duplicate. When the message states nothing concrete enough to put on a calendar, finish without changing anything.",
-		ToolNames:   []string{"calendar_list", "calendar_add", "calendar_update", "conversation_history", "memory_search"},
+		ToolNames:   []string{"event_list", "event_add", "event_update", "conversation_history", "memory_search"},
 	},
 	{
 		Name:        "team_flow_update",
