@@ -2351,17 +2351,23 @@ func TestAFinishClaimingSuccessLeavesTheExitOffTheMenu(t *testing.T) {
 	}
 }
 
-func stateChangeHintedRequest() AgentTurnRequest {
+func stateChangeEvidenceTestToolSet() *toolcontract.ToolSet {
+	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		testToolDescriptor("event_add"),
+		testToolDescriptor("event_list"),
+		testToolDescriptor("file_write"),
+	})
+}
+
+func stateChangeDemandedRequest() AgentTurnRequest {
 	return AgentTurnRequest{
-		ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
-			testToolDescriptor("event_add"),
-			testToolDescriptor("event_list"),
-		}),
-		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"event_add"}},
+		ToolSet:               stateChangeEvidenceTestToolSet(),
+		RequiredEvidenceTools: []string{"event_add"},
+		OutcomeContract:       OutcomeContract{RequiredEvidenceTools: []string{"event_add"}},
 	}
 }
 
-func stateChangeHintedFinish(references []completionEvidenceReference) turnActionDocument {
+func stateChangeClaimingFinish(references []completionEvidenceReference) turnActionDocument {
 	goalSatisfied := true
 	return turnActionDocument{
 		Action:             "finish",
@@ -2372,49 +2378,112 @@ func stateChangeHintedFinish(references []completionEvidenceReference) turnActio
 	}
 }
 
+func addedEventObservations() []turnObservation {
+	return []turnObservation{successfulSideEffectObservation("obs-001", "event_add", `{"title":"미팅"}`, "created")}
+}
+
 func TestCompletionGateRejectsStateChangeFinishThatCitesNothing(t *testing.T) {
-	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, nil, nil, stateChangeHintedFinish(nil), defaultRecoveryBudget())
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeDemandedRequest(), nil, addedEventObservations(), nil, stateChangeClaimingFinish(nil), defaultRecoveryBudget())
 
 	if result.IsSatisfied {
-		t.Fatal("expected a finish claiming a state change with no cited evidence to be rejected")
+		t.Fatal("expected a finish that claims the change and cites nothing to be rejected")
 	}
-	if result.EvidenceKind != evidenceKindReference {
-		t.Fatalf("expected the same evidence kind a cited-but-failed observation gets, got %q", result.EvidenceKind)
+	if result.EvidenceKind != evidenceKindRequiredTool {
+		t.Fatalf("expected the required-tool guidance, which says to cite the tool, got %q", result.EvidenceKind)
 	}
 	if len(result.SuggestedNextTools) != 1 || result.SuggestedNextTools[0] != "event_add" {
-		t.Fatalf("expected the hinted state-changing tool to be suggested, got %+v", result.SuggestedNextTools)
+		t.Fatalf("expected the demanded tool to be suggested, got %+v", result.SuggestedNextTools)
 	}
 }
 
 func TestCompletionGateRejectsStateChangeFinishThatOnlyCitesAReadObservation(t *testing.T) {
-	observations := []turnObservation{successfulSideEffectObservation("obs-001", "event_list", `{}`, "no events")}
-	references := []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "event_list"}}
+	observations := append(addedEventObservations(), successfulSideEffectObservation("obs-002", "event_list", `{}`, "one event"))
+	references := []completionEvidenceReference{{ObservationID: "obs-002", ToolName: "event_list"}}
 
-	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, observations, nil, stateChangeHintedFinish(references), defaultRecoveryBudget())
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeDemandedRequest(), nil, observations, nil, stateChangeClaimingFinish(references), defaultRecoveryBudget())
 
 	if result.IsSatisfied {
 		t.Fatal("expected reading something to be rejected as evidence that something changed")
 	}
 }
 
+// A change is not interchangeable with the change that was asked for: a note
+// written to the workspace is a successful state change and proves nothing about
+// a calendar entry.
+func TestCompletionGateRejectsStateChangeFinishThatCitesADifferentChange(t *testing.T) {
+	observations := append(addedEventObservations(), successfulSideEffectObservation("obs-002", "file_write", `{"path":"notes.txt"}`, "written"))
+	references := []completionEvidenceReference{{ObservationID: "obs-002", ToolName: "file_write"}}
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeDemandedRequest(), nil, observations, nil, stateChangeClaimingFinish(references), defaultRecoveryBudget())
+
+	if result.IsSatisfied {
+		t.Fatal("expected a change to something else to be rejected as evidence for the demanded tool")
+	}
+}
+
 func TestCompletionGateAcceptsStateChangeFinishThatCitesTheChange(t *testing.T) {
-	observations := []turnObservation{successfulSideEffectObservation("obs-001", "event_add", `{"title":"미팅"}`, "created")}
 	references := []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "event_add"}}
 
-	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, observations, nil, stateChangeHintedFinish(references), defaultRecoveryBudget())
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeDemandedRequest(), nil, addedEventObservations(), nil, stateChangeClaimingFinish(references), defaultRecoveryBudget())
 
 	if !result.IsSatisfied {
 		t.Fatalf("expected a finish citing the successful state change to pass, got %+v", result)
 	}
 }
 
-func TestCompletionGateLetsAReadOnlyOutcomeFinishWithoutEvidence(t *testing.T) {
+// A delegated turn does the work in a child run and records one observation for
+// it, carrying no tool name of its own. Citing it is how the parent shows the
+// work happened.
+func TestCompletionGateAcceptsStateChangeFinishThatCitesDelegatedWork(t *testing.T) {
+	observations := []turnObservation{newContentObservation("obs-001", "delegate", "", "The delegated turn finished and reported:\n등록했습니다.")}
+	references := []completionEvidenceReference{{ObservationID: "obs-001"}}
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeDemandedRequest(), nil, observations, nil, stateChangeClaimingFinish(references), defaultRecoveryBudget())
+
+	if !result.IsSatisfied {
+		t.Fatalf("expected delegated work to be citable, got %+v", result)
+	}
+}
+
+// Intake's guess at a working set is a hint, and a hint never became a
+// requirement (c777fd69). Whether a reply claims a change the ledger does not
+// carry is the completion judge's reading, not a rule the gate can apply.
+func TestCompletionGateLetsAHintedStateChangeToolFinishWithoutEvidence(t *testing.T) {
 	request := AgentTurnRequest{
-		ToolSet:         newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{testToolDescriptor("event_list")}),
-		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"event_list"}},
+		ToolSet:         stateChangeEvidenceTestToolSet(),
+		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"event_list", "event_add"}},
 	}
 
-	result := validateCompletionGateForRequestWithRecoveryBudget(request, nil, nil, nil, stateChangeHintedFinish(nil), defaultRecoveryBudget())
+	result := validateCompletionGateForRequestWithRecoveryBudget(request, nil, nil, nil, stateChangeClaimingFinish(nil), defaultRecoveryBudget())
+
+	if !result.IsSatisfied {
+		t.Fatalf("expected a hinted tool not to bind the deterministic gate, got %+v", result)
+	}
+}
+
+// removeExternalSendContract drops a send tool from the requirements and leaves
+// it in the hints on purpose, so a hinted send must not block a finish either.
+func TestCompletionGateLetsAHintedSendToolFinishWithoutSendEvidence(t *testing.T) {
+	request := AgentTurnRequest{
+		ToolSet:         externalSendCompletionTestToolSet(t, "mail_message_send"),
+		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"mail_message_send"}},
+	}
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(request, nil, nil, nil, stateChangeClaimingFinish(nil), defaultRecoveryBudget())
+
+	if !result.IsSatisfied {
+		t.Fatalf("expected a hinted send tool not to block a finish, got %+v", result)
+	}
+}
+
+func TestCompletionGateLetsAReadOnlyOutcomeFinishWithoutEvidence(t *testing.T) {
+	request := AgentTurnRequest{
+		ToolSet:               newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{testToolDescriptor("event_list")}),
+		RequiredEvidenceTools: []string{"event_list"},
+		OutcomeContract:       OutcomeContract{RequiredEvidenceTools: []string{"event_list"}},
+	}
+
+	result := validateCompletionGateForRequestWithRecoveryBudget(request, nil, nil, nil, stateChangeClaimingFinish(nil), defaultRecoveryBudget())
 
 	if !result.IsSatisfied {
 		t.Fatalf("expected a read outcome to stay finishable without evidence, got %+v", result)
@@ -2422,10 +2491,10 @@ func TestCompletionGateLetsAReadOnlyOutcomeFinishWithoutEvidence(t *testing.T) {
 }
 
 func TestCompletionGateLetsNoToolFallbackFinishWithoutStateChangeEvidence(t *testing.T) {
-	actionDocument := stateChangeHintedFinish(nil)
+	actionDocument := stateChangeClaimingFinish(nil)
 	actionDocument.FailureResolution = failureResolutionNoToolFallback
 
-	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeHintedRequest(), nil, nil, nil, actionDocument, defaultRecoveryBudget())
+	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeDemandedRequest(), nil, addedEventObservations(), nil, actionDocument, defaultRecoveryBudget())
 
 	if !result.IsSatisfied {
 		t.Fatalf("expected a no_tool_fallback answer to stay finishable, got %+v", result)

@@ -48,6 +48,14 @@ func outcomeContractHasSideEffectEvidence(toolSet *toolcontract.ToolSet, contrac
 	return false
 }
 
+// A hint is intake's guess, so it cannot bind the deterministic gate, but a task
+// whose working set was chosen around a tool that changes something can end in a
+// reply claiming the change. Whether this reply does is a reading of the reply
+// against the ledger, which is the judge's question, not a rule.
+func outcomeContractHintsSideEffectEvidence(toolSet *toolcontract.ToolSet, contract OutcomeContract) bool {
+	return requiredEvidenceIncludesSideEffect(toolSet, contract.SelectedEvidenceHints)
+}
+
 // What there is to grade is named by the contract; delivering the reply is asked of every task
 // and grades no work.
 func contractAsksForSomethingToJudge(contract OutcomeContract) bool {
@@ -66,6 +74,7 @@ func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithJudge(ctx cont
 	}
 	if !contractAsksForSomethingToJudge(request.OutcomeContract) &&
 		!outcomeContractHasSideEffectEvidence(request.ToolSet, request.OutcomeContract) &&
+		!outcomeContractHintsSideEffectEvidence(request.ToolSet, request.OutcomeContract) &&
 		!observationsIncludeSideEffect(request.ToolSet, observations) {
 		return completionGateResult
 	}

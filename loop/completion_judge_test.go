@@ -559,3 +559,43 @@ func TestARejectionNamingNoMissingWorkDoesNotStand(t *testing.T) {
 		t.Fatal("a rejection that names the missing work stands until the ledger changes, or the judge can be farmed by re-finishing")
 	}
 }
+
+// The gate cannot refuse on a hint, so the reading that catches a false claim on
+// a hinted-write task is the judge's. Without this trigger the claim ships.
+func TestCompletionJudgeRunsWhenTheContractOnlyHintsAStateChangeTool(t *testing.T) {
+	languageModel := &completionJudgeStubLanguageModel{response: model.StructuredResponse{Content: `{"satisfied":false,"missingWork":["no task_add operation is recorded"],"reason":"the reply says the task was added and the ledger carries no such operation"}`}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := AgentTurnRequest{
+		Prompt:          "월요일까지 신규 가입 플로우 점검 작업 추가해줘",
+		ToolSet:         completionJudgeTestToolSet(),
+		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"task_list", "task_add"}},
+	}
+
+	result := services.runner.validateCompletionGateWithJudge(context.Background(), "task-judge-hinted-write", request, nil, nil, nil, nil, completionJudgeFinishActionDocument())
+
+	if result.IsSatisfied {
+		t.Fatal("expected the judge to reject a claim the empty ledger does not carry")
+	}
+	if len(languageModel.requests) != 1 {
+		t.Fatalf("expected exactly one judge call, got %d", len(languageModel.requests))
+	}
+}
+
+func TestCompletionJudgeStaysSkippedWhenTheContractOnlyHintsAReadTool(t *testing.T) {
+	languageModel := &completionJudgeStubLanguageModel{response: model.StructuredResponse{Content: `{"satisfied":false,"missingWork":["unused"],"reason":"unused"}`}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := AgentTurnRequest{
+		Prompt:          "월요일 일정 뭐 있어?",
+		ToolSet:         completionJudgeTestToolSet(),
+		OutcomeContract: OutcomeContract{SelectedEvidenceHints: []string{"task_list"}},
+	}
+
+	result := services.runner.validateCompletionGateWithJudge(context.Background(), "task-judge-hinted-read", request, nil, nil, nil, nil, completionJudgeFinishActionDocument())
+
+	if !result.IsSatisfied {
+		t.Fatalf("expected an answer with nothing to change to finish, got %+v", result)
+	}
+	if len(languageModel.requests) != 0 {
+		t.Fatalf("expected no judge call when nothing in the contract can have changed, got %d", len(languageModel.requests))
+	}
+}
