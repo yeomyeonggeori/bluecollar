@@ -109,6 +109,7 @@ func TestRegisterProviderRejectsNonCanonicalToolName(t *testing.T) {
 		toolName string
 	}{
 		{name: "contains a space", toolName: "task add"},
+		{name: "contains a dot", toolName: "attention.triage"},
 		{name: "exceeds 128 characters", toolName: "task_" + strings.Repeat("a", 128)},
 	}
 	for _, testCase := range testCases {
@@ -121,8 +122,8 @@ func TestRegisterProviderRejectsNonCanonicalToolName(t *testing.T) {
 				tools:      []toolcontract.BoundTool{providerTool},
 			})
 
-			if errorValue == nil || !strings.Contains(errorValue.Error(), "name must match") {
-				t.Fatalf("expected canonical name rejection, got %v", errorValue)
+			if errorValue == nil || !strings.Contains(errorValue.Error(), "name must match ^[A-Za-z0-9_]{1,128}$") {
+				t.Fatalf("expected canonical name rejection naming the pattern it enforces, got %v", errorValue)
 			}
 		})
 	}
