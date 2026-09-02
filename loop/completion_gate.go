@@ -700,11 +700,11 @@ func validateCompletionGateForRequestWithRecoveryBudget(request AgentTurnRequest
 		result.Attachments = nil
 		return result
 	}
-	if stateChangeCompletionEvidenceRequired(request, actionDocument) && !hasStateChangeCompletionEvidence(request.ToolSet, observations, actionDocument.CompletionEvidence) {
+	if demandedToolNames := stateChangeEvidenceDemand(request, actionDocument); len(demandedToolNames) > 0 && !hasStateChangeCompletionEvidence(observations, actionDocument.CompletionEvidence, demandedToolNames) {
 		result.IsSatisfied = false
-		result.SuggestedNextTools = stateChangeEvidenceToolNamesForRequest(request)
-		result.Message = stateChangeCompletionEvidenceRequiredMessage(result.SuggestedNextTools)
-		result.EvidenceKind = evidenceKindReference
+		result.SuggestedNextTools = demandedToolNames
+		result.Message = stateChangeCompletionEvidenceRequiredMessage(demandedToolNames)
+		result.EvidenceKind = evidenceKindRequiredTool
 		result.Attachments = nil
 		return result
 	}
@@ -722,32 +722,40 @@ func validateCompletionGateForRequestWithRecoveryBudget(request AgentTurnRequest
 	return result
 }
 
-func stateChangeCompletionEvidenceRequired(request AgentTurnRequest, actionDocument turnActionDocument) bool {
+func stateChangeEvidenceDemand(request AgentTurnRequest, actionDocument turnActionDocument) []string {
 	if strings.TrimSpace(actionDocument.FailureResolution) == failureResolutionNoToolFallback {
-		return false
+		return nil
 	}
-	return len(stateChangeEvidenceToolNamesForRequest(request)) > 0
-}
-
-func stateChangeEvidenceToolNamesForRequest(request AgentTurnRequest) []string {
 	toolNames := stateChangeEvidenceToolsFromValues(request.ToolSet, request.RequiredEvidenceTools)
-	return appendUniqueStrings(toolNames, stateChangeEvidenceToolsFromValues(request.ToolSet, outcomeContractToolNames(request.OutcomeContract))...)
+	return appendUniqueStrings(toolNames, stateChangeEvidenceToolsFromValues(request.ToolSet, outcomeContractRequiredToolNames(request.OutcomeContract))...)
 }
 
 func stateChangeEvidenceToolsFromValues(toolSet *toolcontract.ToolSet, values []string) []string {
 	toolNames := []string{}
 	for _, value := range values {
-		if evidenceToolChangesSomething(toolSet, value) {
+		if evidenceToolChangesSomething(toolSet, value) && isToolCallable(toolSet, value) {
 			toolNames = appendUniqueStrings(toolNames, value)
 		}
 	}
 	return toolNames
 }
 
-func hasStateChangeCompletionEvidence(toolSet *toolcontract.ToolSet, observations []turnObservation, references []completionEvidenceReference) bool {
+func hasStateChangeCompletionEvidence(observations []turnObservation, references []completionEvidenceReference, demandedToolNames []string) bool {
 	for _, reference := range references {
 		observation, isFound := findSuccessfulObservation(observations, reference)
-		if isFound && evidenceToolChangesSomething(toolSet, observation.Tool) {
+		if !isFound {
+			continue
+		}
+		if observation.Action == "delegate" || toolNameMatchesAny(observation.Tool, demandedToolNames) {
+			return true
+		}
+	}
+	return false
+}
+
+func toolNameMatchesAny(toolName string, candidateToolNames []string) bool {
+	for _, candidateToolName := range candidateToolNames {
+		if toolcontract.ToolNamesMatch(toolName, candidateToolName) {
 			return true
 		}
 	}
@@ -755,7 +763,7 @@ func hasStateChangeCompletionEvidence(toolSet *toolcontract.ToolSet, observation
 }
 
 func stateChangeCompletionEvidenceRequiredMessage(toolNames []string) string {
-	return "finish requires completionEvidence from a successful observation that changed something; run the work with one of these tools, then cite that observation: " + strings.Join(toolNames, ", ")
+	return "finish requires completionEvidence citing the successful observation that did the work; run one of these tools, then cite that observation: " + strings.Join(toolNames, ", ")
 }
 
 func validateObservedResultProjection(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) completionGateResult {
