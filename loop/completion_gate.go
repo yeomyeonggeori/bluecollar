@@ -700,6 +700,14 @@ func validateCompletionGateForRequestWithRecoveryBudget(request AgentTurnRequest
 		result.Attachments = nil
 		return result
 	}
+	if stateChangeCompletionEvidenceRequired(request, actionDocument) && !hasStateChangeCompletionEvidence(request.ToolSet, observations, actionDocument.CompletionEvidence) {
+		result.IsSatisfied = false
+		result.SuggestedNextTools = stateChangeEvidenceToolNamesForRequest(request)
+		result.Message = stateChangeCompletionEvidenceRequiredMessage(result.SuggestedNextTools)
+		result.EvidenceKind = evidenceKindReference
+		result.Attachments = nil
+		return result
+	}
 	if projectionResult := validateObservedResultProjection(request, observations, result.Attachments, actionDocument); !projectionResult.IsSatisfied {
 		return projectionResult
 	}
@@ -712,6 +720,42 @@ func validateCompletionGateForRequestWithRecoveryBudget(request AgentTurnRequest
 		return result
 	}
 	return result
+}
+
+func stateChangeCompletionEvidenceRequired(request AgentTurnRequest, actionDocument turnActionDocument) bool {
+	if strings.TrimSpace(actionDocument.FailureResolution) == failureResolutionNoToolFallback {
+		return false
+	}
+	return len(stateChangeEvidenceToolNamesForRequest(request)) > 0
+}
+
+func stateChangeEvidenceToolNamesForRequest(request AgentTurnRequest) []string {
+	toolNames := stateChangeEvidenceToolsFromValues(request.ToolSet, request.RequiredEvidenceTools)
+	return appendUniqueStrings(toolNames, stateChangeEvidenceToolsFromValues(request.ToolSet, outcomeContractToolNames(request.OutcomeContract))...)
+}
+
+func stateChangeEvidenceToolsFromValues(toolSet *toolcontract.ToolSet, values []string) []string {
+	toolNames := []string{}
+	for _, value := range values {
+		if evidenceToolChangesSomething(toolSet, value) {
+			toolNames = appendUniqueStrings(toolNames, value)
+		}
+	}
+	return toolNames
+}
+
+func hasStateChangeCompletionEvidence(toolSet *toolcontract.ToolSet, observations []turnObservation, references []completionEvidenceReference) bool {
+	for _, reference := range references {
+		observation, isFound := findSuccessfulObservation(observations, reference)
+		if isFound && evidenceToolChangesSomething(toolSet, observation.Tool) {
+			return true
+		}
+	}
+	return false
+}
+
+func stateChangeCompletionEvidenceRequiredMessage(toolNames []string) string {
+	return "finish requires completionEvidence from a successful observation that changed something; run the work with one of these tools, then cite that observation: " + strings.Join(toolNames, ", ")
 }
 
 func validateObservedResultProjection(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) completionGateResult {
