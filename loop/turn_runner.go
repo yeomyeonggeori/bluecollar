@@ -2453,7 +2453,7 @@ func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Contex
 		if toolName == "" {
 			continue
 		}
-		didDriftFromItsHold := agentTurnRunner.settleHeldCallApproval(taskRunID, heldCalls, carriedOutCall)
+		didDriftFromItsHold := agentTurnRunner.noteDriftFromHeldCall(taskRunID, heldCalls, carriedOutCall)
 		observationID := agentTurnRunner.nextUnusedObservationID(taskRunID, state.Observations)
 		agentTurnRunner.appendEvent(taskRunID, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
 			"observationID": observationID,

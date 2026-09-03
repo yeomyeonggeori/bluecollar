@@ -102,14 +102,10 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 		t.Fatal("a call nobody approved does not spend the approval that is still waiting")
 	}
 
-	services.runner.settleHeldCallApproval(taskRun.TaskRunID, heldCalls, CarriedOutCall{
-		ToolName:      "message_send",
-		ToolInput:     json.RawMessage(`{"to":["alice"]}`),
-		ApprovalToken: heldCalls[0].ApprovalToken,
-		Result:        toolcontract.ToolSuccess("sent to alice"),
-	})
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalExecuted,
+		`{"approvalToken":"`+heldCalls[0].ApprovalToken+`","toolName":"message_send","toolInput":{"to":["alice"]}}`)
 	if len(services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)) != 0 {
-		t.Fatal("the call that was held, carried back under its own token, spends it")
+		t.Fatal("the host that released the approval records the call it let run, and that record is what spends the hold")
 	}
 }
 

@@ -81,16 +81,11 @@ func heldCallForCarriedOutCall(heldCalls []HeldCall, carriedOutCall CarriedOutCa
 	return HeldCall{}, false
 }
 
-// The effect already happened, so the tool's own result is left exactly as it is.
-// What a mismatch changes is the bookkeeping around it: the hold stays unspent and
-// the ledger says so.
-func (agentTurnRunner *AgentTurnRunner) settleHeldCallApproval(taskRunID string, heldCalls []HeldCall, carriedOutCall CarriedOutCall) (didDriftFromItsHold bool) {
+func (agentTurnRunner *AgentTurnRunner) noteDriftFromHeldCall(taskRunID string, heldCalls []HeldCall, carriedOutCall CarriedOutCall) (didDriftFromItsHold bool) {
 	if !toolWasHeldForApproval(heldCalls, carriedOutCall.ToolName) {
 		return false
 	}
-	heldCall, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall)
-	if isMatched {
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventApprovalExecuted, marshalEventBody(heldCall))
+	if _, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall); isMatched {
 		return false
 	}
 	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventApprovalUnheldCallCarriedOut, marshalEventBody(map[string]any{
