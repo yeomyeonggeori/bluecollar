@@ -12,6 +12,7 @@ const (
 	TaskEventAgentCheckpointFailed                 = "agent.checkpoint.failed"
 	TaskEventAgentCheckpointSent                   = "agent.checkpoint.sent"
 	TaskEventAgentCheckpointSkipped                = "agent.checkpoint.skipped"
+	TaskEventAgentCompanyTimeZoneFallback          = "agent.company_time_zone_fallback"
 	TaskEventAgentCompletionPersistFailed          = "agent.completion_persist_failed"
 	TaskEventAgentCompletionReplyFailed            = "agent.completion_reply_failed"
 	TaskEventAgentCompletionRequired               = "agent.completion_required"

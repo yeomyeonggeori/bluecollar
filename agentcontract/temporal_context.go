@@ -5,6 +5,11 @@ import (
 	"time"
 )
 
+const (
+	CompanyZoneFallbackUnset      = "unset"
+	CompanyZoneFallbackUnloadable = "unloadable"
+)
+
 func BuildTemporalContextDescription(environmentNow time.Time, timeZone string) string {
 	if environmentNow.IsZero() {
 		return ""
@@ -29,13 +34,23 @@ func buildCurrentWeekDescription(localTime time.Time) string {
 }
 
 func CompanyLocation(timeZone string) *time.Location {
+	location, _ := companyLocationWithFallbackReason(timeZone)
+	return location
+}
+
+func CompanyZoneFallbackReason(timeZone string) string {
+	_, fallbackReason := companyLocationWithFallbackReason(timeZone)
+	return fallbackReason
+}
+
+func companyLocationWithFallbackReason(timeZone string) (*time.Location, string) {
 	named := strings.TrimSpace(timeZone)
 	if named == "" {
-		return time.Local
+		return time.Local, CompanyZoneFallbackUnset
 	}
 	location, errorValue := time.LoadLocation(named)
 	if errorValue != nil {
-		return time.Local
+		return time.Local, CompanyZoneFallbackUnloadable
 	}
-	return location
+	return location, ""
 }

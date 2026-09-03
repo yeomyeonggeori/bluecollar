@@ -422,9 +422,22 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	if result.TaskRun.TaskRunID != "" {
 		agentKernel.appendTurnRouterCallRecords(result.TaskRun.TaskRunID, routerCallLedger.Records)
 		agentKernel.taskRunService.AppendTaskEvent(result.TaskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(intakeDecision))
+		agentKernel.appendCompanyTimeZoneFallbackEvent(result.TaskRun.TaskRunID, turnRequest.Company)
 		agentKernel.appendGoalLifecycleEvent(result.TaskRun, turnRequest.ActiveGoal)
 	}
 	return result, errorValue
+}
+
+func (agentKernel *AgentKernel) appendCompanyTimeZoneFallbackEvent(taskRunID string, company CompanyContext) {
+	fallbackReason := agentcontract.CompanyZoneFallbackReason(company.TimeZone)
+	if fallbackReason == "" {
+		return
+	}
+	agentKernel.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentCompanyTimeZoneFallback, marshalEventBody(map[string]string{
+		"reason":          fallbackReason,
+		"companyTimeZone": company.TimeZone,
+		"readTheClockIn":  companyLocation(company.TimeZone).String(),
+	}))
 }
 
 func requestStartsFreshTask(turnDecision TurnDecision, request AgentRequest) bool {

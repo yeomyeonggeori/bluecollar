@@ -29,6 +29,18 @@ func TestACompanyThatNamesNoZoneLeavesTheMachineItRunsOn(t *testing.T) {
 	}
 }
 
+func TestTheMachinesZoneIsReportedRatherThanTakenSilently(t *testing.T) {
+	if reason := CompanyZoneFallbackReason(""); reason != CompanyZoneFallbackUnset {
+		t.Fatalf("expected %q, got %q", CompanyZoneFallbackUnset, reason)
+	}
+	if reason := CompanyZoneFallbackReason("Not/AZone"); reason != CompanyZoneFallbackUnloadable {
+		t.Fatalf("expected %q, got %q", CompanyZoneFallbackUnloadable, reason)
+	}
+	if reason := CompanyZoneFallbackReason("Asia/Seoul"); reason != "" {
+		t.Fatalf("a company that named its zone guessed nothing, got %q", reason)
+	}
+}
+
 func TestAMessageIsStampedWhereTheCompanyIs(t *testing.T) {
 	sentAt := time.Date(2026, 7, 10, 5, 3, 0, 0, time.UTC)
 
