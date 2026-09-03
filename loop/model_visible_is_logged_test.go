@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-func eventBodiesNamed(events []taskstate.TaskEvent, name string) []string {
+func eventBodiesNamed(events []agentcontract.TaskEvent, name string) []string {
 	bodies := []string{}
 	for _, event := range events {
 		if event.Name == name {
@@ -40,7 +40,7 @@ func TestTheLedgerCarriesTheWordsARepeatReminderPutInFrontOfTheModel(t *testing.
 }
 
 func TestAdvisoryNoticesAreTurnLocalAndDoNotComeBackOnReplay(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		{TaskEventID: "event-1", Name: "tool.note_write.result", Body: marshalEventBody(callObservation("obs-1", "note_write", "note_write\x00{}"))},
 		{TaskEventID: "event-2", Name: "agent.repeated_tool_call", Body: marshalEventBody(reminderEventBody{Observation: newContentObservation("obs-2", "policy", "note_write", "stop repeating yourself")})},
 		{TaskEventID: "event-3", Name: "agent.recovery_guidance", Body: marshalEventBody(newContentObservation("obs-3", "policy", "note_write", "try another route"))},

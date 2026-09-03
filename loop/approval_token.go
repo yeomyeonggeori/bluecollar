@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"strings"
 )
 
@@ -28,7 +28,7 @@ func (agentTurnRunner *AgentTurnRunner) mintHeldCallApproval(taskRunID string, o
 	if heldCall.ApprovalToken == "" {
 		return
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventApprovalHeldCall, marshalEventBody(heldCall))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventApprovalHeldCall, marshalEventBody(heldCall))
 }
 
 func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID string) []HeldCall {
@@ -36,12 +36,12 @@ func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID stri
 	spentTokens := map[string]bool{}
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
 		switch taskEvent.Name {
-		case taskstate.TaskEventApprovalHeldCall:
+		case agentcontract.TaskEventApprovalHeldCall:
 			heldCall := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &heldCall) == nil && heldCall.ApprovalToken != "" {
 				heldCalls = append(heldCalls, heldCall)
 			}
-		case taskstate.TaskEventApprovalExecuted:
+		case agentcontract.TaskEventApprovalExecuted:
 			executed := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &executed) == nil {
 				spentTokens[executed.ApprovalToken] = true
@@ -88,7 +88,7 @@ func (agentTurnRunner *AgentTurnRunner) noteDriftFromHeldCall(taskRunID string, 
 	if _, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall); isMatched {
 		return false
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventApprovalUnheldCallCarriedOut, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventApprovalUnheldCallCarriedOut, marshalEventBody(map[string]any{
 		"toolName":            strings.TrimSpace(carriedOutCall.ToolName),
 		"toolInputKey":        canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput),
 		"presentedToken":      strings.TrimSpace(carriedOutCall.ApprovalToken),

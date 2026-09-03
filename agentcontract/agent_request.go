@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -175,7 +174,7 @@ type AgentTurnRequest struct {
 }
 
 type AgentTurnResult struct {
-	TaskRun                taskstate.TaskRun
+	TaskRun                TaskRun
 	TurnRoute              TurnRoute
 	ReactionEmojiName      string
 	FinishMessage          string

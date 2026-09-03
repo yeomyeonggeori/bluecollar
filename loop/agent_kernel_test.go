@@ -192,7 +192,7 @@ func TestAgentKernelConsumeRouteSuppressesReply(t *testing.T) {
 	if !result.ReplySuppressed {
 		t.Fatalf("expected reply suppression for consume route")
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task run, got %q", result.TaskRun.Status)
 	}
 	if skillRetriever.searchCount != 0 {
@@ -230,7 +230,7 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected the repaired decision to run: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the repaired decision to complete the task, got %q", result.TaskRun.Status)
 	}
 	if toolCallCount != 1 {
@@ -261,7 +261,7 @@ func TestAgentKernelPausesNeedsConfirmationDisambiguation(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected disambiguation pause to complete: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusWaitingUserInput {
+	if result.TaskRun.Status != agentcontract.TaskStatusWaitingUserInput {
 		t.Fatalf("expected waiting user input, got %q", result.TaskRun.Status)
 	}
 	if result.UserNotice != "어느 보고서를 말하는 건가요?" {
@@ -285,7 +285,7 @@ func TestAgentKernelBlocksUnsupportedIntake(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked {
 		t.Fatalf("expected blocked task run, got %q", result.TaskRun.Status)
 	}
 	if result.UserNotice != "이 요청은 현재 권한 범위 밖이라 진행할 수 없어요." {
@@ -336,7 +336,7 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 	if errorValue != nil {
 		t.Fatalf("expected approval continuation to run: %v", errorValue)
 	}
-	if result.TaskRun.Status == taskstate.TaskStatusBlocked {
+	if result.TaskRun.Status == agentcontract.TaskStatusBlocked {
 		t.Fatal("expected approval continuation to survive invalid intake evidence, got blocked")
 	}
 	if toolCallCount != 1 {
@@ -375,7 +375,7 @@ func TestExistingTaskRunIDDoesNotAuthorizeConfirmationBypass(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected runtime approval gate: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusWaitingApproval {
+	if result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
 		t.Fatalf("expected existing task identity not to authorize execution, got %s", result.TaskRun.Status)
 	}
 	if toolCallCount != 0 {
@@ -421,7 +421,7 @@ func TestSemanticRevisionStartsNewTaskRun(t *testing.T) {
 	if result.TaskRun.TaskRunID == existingTaskRun.TaskRunID {
 		t.Fatal("expected semantic revision to start a fresh task run")
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected revised task to complete, got %s", result.TaskRun.Status)
 	}
 }
@@ -484,7 +484,7 @@ func TestInvalidPersistedActiveGoalBlocksBeforeToolHandler(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected fail-closed result: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusFailed {
+	if result.TaskRun.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("expected failed task, got %s", result.TaskRun.Status)
 	}
 	if toolCallCount != 0 {
@@ -535,7 +535,7 @@ func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *test
 	if errorValue != nil {
 		t.Fatalf("expected side-effect task without predicted evidence to proceed: %v", errorValue)
 	}
-	if result.TaskRun.Status == taskstate.TaskStatusBlocked {
+	if result.TaskRun.Status == agentcontract.TaskStatusBlocked {
 		t.Fatalf("expected the intake to never block for missing evidence, got %q", result.TaskRun.Status)
 	}
 	if toolCallCount != 1 {
@@ -569,7 +569,7 @@ func (languageModel *routerLedgerLanguageModel) GenerateStructuredResponse(_ con
 	return response, nil
 }
 
-func persistedTurnRouterCallRecords(taskEvents []taskstate.TaskEvent) []llmCallRecord {
+func persistedTurnRouterCallRecords(taskEvents []agentcontract.TaskEvent) []llmCallRecord {
 	records := []llmCallRecord{}
 	for _, taskEvent := range taskEvents {
 		if taskEvent.Name != "llm.call" {
@@ -641,7 +641,7 @@ func TestAgentKernelRunsBoundedTaskThroughTurnRunner(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected bounded run to complete: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task run, got %q", result.TaskRun.Status)
 	}
 	if !strings.Contains(result.TaskRun.Result, "수요일") {
@@ -708,7 +708,7 @@ func TestAgentKernelSkillDeadlinePersistsOneBlockedTask(t *testing.T) {
 	if len(taskRuns) != 1 || result.TaskRun.TaskRunID != taskRuns[0].TaskRunID {
 		t.Fatalf("expected exactly one persisted task, got %+v", taskRuns)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
 		t.Fatalf("expected blocked max elapsed task, got %+v", result.TaskRun)
 	}
 	if languageModel.postRouterCallCount == 0 {
@@ -841,7 +841,7 @@ func TestAgentKernelXHighTaskKeepsHourBudgetWithLowExecutionModel(t *testing.T) 
 
 	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
 
-	if errorValue != nil || result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected xhigh task to complete with low execution model: result=%+v error=%v", result, errorValue)
 	}
 	if languageModel.deadline.IsZero() {
@@ -876,7 +876,7 @@ func TestAgentKernelClampsStaleNonResumeAnchorInsteadOfInstantElapsing(t *testin
 	if errorValue != nil {
 		t.Fatalf("expected a completed task result: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the clamped anchor to let the task proceed to completion, got %+v", result.TaskRun)
 	}
 	if len(languageModel.requests) == 0 {
@@ -940,7 +940,7 @@ func TestAgentKernelCompleteLaunchFailureRedactsRawError(t *testing.T) {
 		ResponseLanguage:  "ko",
 	}, "launch", "build_tool_set", errors.New("tool registry mismatch token=launch-secret"))
 
-	if result.TaskRun.Status != taskstate.TaskStatusFailed {
+	if result.TaskRun.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("expected failed task run, got %q", result.TaskRun.Status)
 	}
 	if result.FailureNotice.Source != "raw_error" {
@@ -997,7 +997,7 @@ func (languageModel *deadlineCapturingFinishLanguageModel) GenerateStructuredRes
 	return model.StructuredResponse{Content: finishMessageDocument("완료했습니다.")}, nil
 }
 
-func taskEventNameCount(taskEvents []taskstate.TaskEvent, eventName string) int {
+func taskEventNameCount(taskEvents []agentcontract.TaskEvent, eventName string) int {
 	count := 0
 	for _, taskEvent := range taskEvents {
 		if taskEvent.Name == eventName {

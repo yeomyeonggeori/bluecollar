@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type Task struct {
@@ -20,12 +19,12 @@ type Verifier func(context.Context, TaskOutcome) (Verdict, error)
 type TaskOutcome struct {
 	TaskID     string
 	TurnResult agentcontract.AgentTurnResult
-	TaskEvents []taskstate.TaskEvent
+	TaskEvents []agentcontract.TaskEvent
 	RunError   error
 }
 
 type TaskEventReader interface {
-	ListTaskEvent(taskRunID string) []taskstate.TaskEvent
+	ListTaskEvent(taskRunID string) []agentcontract.TaskEvent
 }
 
 type Runner struct {
@@ -78,7 +77,7 @@ func ReachedEndWithoutFailure(_ context.Context, outcome TaskOutcome) (Verdict, 
 	if outcome.RunError != nil {
 		return VerdictFailed, nil
 	}
-	if outcome.TurnResult.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if outcome.TurnResult.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		return VerdictFailed, nil
 	}
 	return VerdictPassed, nil

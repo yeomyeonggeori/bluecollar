@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/trace"
 )
 
 func TestTheTraceFormatFollowsThePathItIsWrittenTo(t *testing.T) {
-	bundle := trace.Build(taskstate.TaskRun{TaskRunID: "task-1"}, nil, "done")
+	bundle := trace.Build(agentcontract.TaskRun{TaskRunID: "task-1"}, nil, "done")
 
 	asJSON, errorValue := renderTrace("/tmp/run.json", bundle)
 	if errorValue != nil {

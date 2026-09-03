@@ -2,10 +2,9 @@ package loop
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
-
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func (agentTurnRunner *AgentTurnRunner) prepareRecoveryAttempt(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, state *agentTaskState, actionDocument turnActionDocument, stopForNoProgress func(string) (AgentTurnResult, bool)) (string, toolCallActionOutcome) {
@@ -19,8 +18,8 @@ func (agentTurnRunner *AgentTurnRunner) prepareRecoveryAttempt(ctx context.Conte
 	if !recoveryBudgetAllowsStep(state.Observations, agentTurnRunner.options.RecoveryBudget, recoveryStep, attemptKey) {
 		observation := recoveryBudgetExhaustedObservation(request.ToolSet, len(state.Observations)+1, failureDebt.LatestFailure, recoveryStep, effectiveToolName, firstNonEmptyString(request.ActiveGoal.OriginalInstruction, request.Prompt))
 		state.Observations = append(state.Observations, observation)
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentRecoveryBudgetExhausted, marshalEventBody(observation))
-		agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusCompleted, "recovery_budget_exhausted "+effectiveToolName, observation.ContentText())
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentRecoveryBudgetExhausted, marshalEventBody(observation))
+		agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusCompleted, "recovery_budget_exhausted "+effectiveToolName, observation.ContentText())
 		if recoveryToolBudgetExhaustedForRequest(state.Observations, request.ToolSet, agentTurnRunner.options.RecoveryBudget, failureDebt) {
 			result := agentTurnRunner.runTerminalNoToolsStep(ctx, taskRunID, stepID, request, state, "recovery_tool_budget_exhausted")
 			return "", toolCallActionOutcome{Result: result, ShouldReturn: true, WasHandled: true}
@@ -28,7 +27,7 @@ func (agentTurnRunner *AgentTurnRunner) prepareRecoveryAttempt(ctx context.Conte
 		result, shouldStop := stopForNoProgress(stepID)
 		return "", noProgressToolCallActionOutcome(result, shouldStop)
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentRecoveryAttempt, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentRecoveryAttempt, marshalEventBody(map[string]any{
 		"status":       "started",
 		"recoveryStep": recoveryStep,
 		"toolName":     effectiveToolName,

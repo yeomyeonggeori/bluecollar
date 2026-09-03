@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
@@ -1273,8 +1274,8 @@ func TestBuildAgentActionRequestGenerationOptionsDoNotChangeSchema(t *testing.T)
 }
 
 func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
-	events := []taskstate.TaskEvent{{
-		Name: taskstate.TaskEventAgentContextSummary,
+	events := []agentcontract.TaskEvent{{
+		Name: agentcontract.TaskEventAgentContextSummary,
 		Body: marshalEventBody(TaskContextSummary{
 			ObservationID:                 "context-summary-001",
 			CompactedThroughObservationID: "obs-007",
@@ -1285,9 +1286,9 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 		}),
 	}}
 
-	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "continue"}, TurnOptions{}, taskstate.TaskRun{
+	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "continue"}, TurnOptions{}, agentcontract.TaskRun{
 		TaskRunID: "task-1",
-		Status:    taskstate.TaskStatusRunning,
+		Status:    agentcontract.TaskStatusRunning,
 	}, events)
 
 	if errorValue != nil {
@@ -1543,20 +1544,20 @@ func TestAdvanceAgentTaskReturnsFinishMessageEffectForSatisfiedBrowserOpen(t *te
 }
 
 func TestRestoreAgentTaskStateRestoresToolProgressOnly(t *testing.T) {
-	events := []taskstate.TaskEvent{{
+	events := []agentcontract.TaskEvent{{
 		Name: "tool.browser_open.result",
 		Body: `{"observationID":"obs-001","action":"continue","tool":"browser_open","content":"opened","isError":false}`,
 	}}
 
-	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "continue"}, TurnOptions{}, taskstate.TaskRun{
+	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "continue"}, TurnOptions{}, agentcontract.TaskRun{
 		TaskRunID: "task-1",
-		Status:    taskstate.TaskStatusWaitingUserInput,
+		Status:    agentcontract.TaskStatusWaitingUserInput,
 	}, events)
 
 	if errorValue != nil {
 		t.Fatalf("expected restored state: %v", errorValue)
 	}
-	if state.Status != taskstate.TaskStatusWaitingUserInput {
+	if state.Status != agentcontract.TaskStatusWaitingUserInput {
 		t.Fatalf("expected restored status, got %s", state.Status)
 	}
 	if len(state.Observations) != 1 || state.Observations[0].Tool != "browser_open" {
@@ -1573,7 +1574,7 @@ func TestWaitingTaskResumeRestoresObservationsWithoutFlags(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	taskRunService.AppendTaskEvent(runningTaskRun.TaskRunID, "tool.message_search.result", `{"observationID":"obs-001","action":"continue","tool":"message_search","content":"{\"messageIDs\":[\"message-1\"]}","isError":false}`)
-	waitingTaskRun, errorValue := taskRunService.PauseTaskRun(runningTaskRun.TaskRunID, taskstate.TaskStatusWaitingUserInput, "ask input")
+	waitingTaskRun, errorValue := taskRunService.PauseTaskRun(runningTaskRun.TaskRunID, agentcontract.TaskStatusWaitingUserInput, "ask input")
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -1601,7 +1602,7 @@ func TestBlockedResumeRestoresPriorObservations(t *testing.T) {
 	}
 	taskRunService.AppendTaskEvent(runningTaskRun.TaskRunID, "tool.file_write.result", `{"observationID":"obs-001","action":"continue","tool":"file_write","content":"wrote app","isError":false}`)
 	taskRunService.AppendTaskEvent(runningTaskRun.TaskRunID, "tool.file_read.result", `{"observationID":"obs-003","action":"continue","tool":"file_read","content":"read app","isError":false}`)
-	blockedTaskRun, errorValue := taskRunService.PauseTaskRun(runningTaskRun.TaskRunID, taskstate.TaskStatusBlocked, "max_iterations")
+	blockedTaskRun, errorValue := taskRunService.PauseTaskRun(runningTaskRun.TaskRunID, agentcontract.TaskStatusBlocked, "max_iterations")
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -1680,7 +1681,7 @@ func TestUserResumeClearsInheritedFailureDebt(t *testing.T) {
 }
 
 func TestProducedSourcePathsRecoversSourceFilesFromDurableResults(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTestEvent("tool.file_write.result", "obs-1", "file_write", `{"path":"tmp/deck/slides.html","sizeBytes":20}`, false),
 		toolResultTestEvent("tool.file_edit.result", "obs-2", "file_edit", `{"editedFiles":["tmp/deck/slides.html","tmp/deck/DESIGN.md"]}`, false),
 		toolResultTestEvent("tool.file_write.result", "obs-3", "file_write", `{"path":"tmp/deck/notes.md"}`, true),

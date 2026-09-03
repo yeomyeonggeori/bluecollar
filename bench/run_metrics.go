@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type Verdict string
@@ -48,13 +47,13 @@ type RunMetrics struct {
 }
 
 var terminalTaskEventStatuses = map[string]string{
-	taskstate.TaskEventTaskCompleted: string(taskstate.TaskStatusCompleted),
-	taskstate.TaskEventTaskFailed:    string(taskstate.TaskStatusFailed),
-	taskstate.TaskEventTaskCancelled: string(taskstate.TaskStatusCancelled),
-	taskstate.TaskEventTaskBlocked:   string(taskstate.TaskStatusBlocked),
+	agentcontract.TaskEventTaskCompleted: string(agentcontract.TaskStatusCompleted),
+	agentcontract.TaskEventTaskFailed:    string(agentcontract.TaskStatusFailed),
+	agentcontract.TaskEventTaskCancelled: string(agentcontract.TaskStatusCancelled),
+	agentcontract.TaskEventTaskBlocked:   string(agentcontract.TaskStatusBlocked),
 }
 
-func MeasureTaskRun(taskRunID string, taskEvents []taskstate.TaskEvent) RunMetrics {
+func MeasureTaskRun(taskRunID string, taskEvents []agentcontract.TaskEvent) RunMetrics {
 	metrics := RunMetrics{TaskRunID: taskRunID, Verdict: VerdictUnverified}
 	for _, taskEvent := range taskEvents {
 		countTaskEvent(&metrics, taskEvent)
@@ -65,22 +64,22 @@ func MeasureTaskRun(taskRunID string, taskEvents []taskstate.TaskEvent) RunMetri
 	return metrics
 }
 
-func countTaskEvent(metrics *RunMetrics, taskEvent taskstate.TaskEvent) {
+func countTaskEvent(metrics *RunMetrics, taskEvent agentcontract.TaskEvent) {
 	if terminalStatus, isTerminal := terminalTaskEventStatuses[taskEvent.Name]; isTerminal {
 		metrics.TerminalStatus = terminalStatus
 		metrics.ReachedEnd = true
 		return
 	}
 	switch {
-	case taskEvent.Name == taskstate.TaskEventAgentAction:
+	case taskEvent.Name == agentcontract.TaskEventAgentAction:
 		metrics.Turns++
-	case taskEvent.Name == taskstate.TaskEventApprovalPendingCall:
+	case taskEvent.Name == agentcontract.TaskEventApprovalPendingCall:
 		metrics.ApprovalHolds++
-	case taskEvent.Name == taskstate.TaskEventAgentRecoveryAttempt:
+	case taskEvent.Name == agentcontract.TaskEventAgentRecoveryAttempt:
 		metrics.RecoveryAttempts++
-	case taskEvent.Name == taskstate.TaskEventLLMCall:
+	case taskEvent.Name == agentcontract.TaskEventLLMCall:
 		countLanguageModelCall(metrics, taskEvent.Body)
-	case taskEvent.Name == taskstate.TaskEventAgentConversationBudget:
+	case taskEvent.Name == agentcontract.TaskEventAgentConversationBudget:
 		readConversationBudget(metrics, taskEvent.Body)
 	case isToolRequestedEvent(taskEvent.Name):
 		metrics.ToolCalls++
@@ -136,12 +135,12 @@ func countToolResult(metrics *RunMetrics, body string) {
 }
 
 func isToolRequestedEvent(eventName string) bool {
-	_, isToolRequest := taskstate.ToolTaskEventToolName(eventName, taskstate.ToolTaskEventRequestedSuffix)
+	_, isToolRequest := agentcontract.ToolTaskEventToolName(eventName, agentcontract.ToolTaskEventRequestedSuffix)
 	return isToolRequest
 }
 
 func isToolResultEvent(eventName string) bool {
-	_, isToolResult := taskstate.ToolTaskEventToolName(eventName, taskstate.ToolTaskEventResultSuffix)
+	_, isToolResult := agentcontract.ToolTaskEventToolName(eventName, agentcontract.ToolTaskEventResultSuffix)
 	return isToolResult
 }
 
@@ -161,7 +160,7 @@ func perTurn(total int64, turns int) float64 {
 	return float64(total) / float64(turns)
 }
 
-func elapsedMilliseconds(taskEvents []taskstate.TaskEvent) int64 {
+func elapsedMilliseconds(taskEvents []agentcontract.TaskEvent) int64 {
 	if len(taskEvents) < 2 {
 		return 0
 	}

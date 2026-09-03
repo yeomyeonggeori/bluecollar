@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -72,7 +72,7 @@ func (agentTurnRunner *AgentTurnRunner) bringBackImagesTheTurnAlreadyRead(
 		}
 		lost = append(lost, map[string]string{"devicePath": outcome.DevicePath, "reason": outcome.Failure})
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentToolResultImagesRestored, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentToolResultImagesRestored, marshalEventBody(map[string]any{
 		"broughtBack": broughtBack,
 		"lost":        lost,
 	}))

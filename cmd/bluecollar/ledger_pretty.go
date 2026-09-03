@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 const (
@@ -28,43 +28,43 @@ func ledgerLine(ink string, glyph string, label string, value string) string {
 	return ink + glyph + " " + padded + styleReset + " " + value
 }
 
-func prettyLedgerLine(taskEvent taskstate.TaskEvent) string {
+func prettyLedgerLine(taskEvent agentcontract.TaskEvent) string {
 	body := decodedEventBody(taskEvent.Body)
 	switch taskEvent.Name {
-	case taskstate.TaskEventTaskCreated:
+	case agentcontract.TaskEventTaskCreated:
 		return ledgerLine(inkTask, "●", "task", quotedRequest(taskEvent.Body))
-	case taskstate.TaskEventTaskRunning, taskstate.TaskEventAgentIntake, taskstate.TaskEventAgentGoalCompleted, taskstate.TaskEventAgentStepWorkingSet:
+	case agentcontract.TaskEventTaskRunning, agentcontract.TaskEventAgentIntake, agentcontract.TaskEventAgentGoalCompleted, agentcontract.TaskEventAgentStepWorkingSet:
 		return ""
-	case taskstate.TaskEventAgentConversationBudget:
+	case agentcontract.TaskEventAgentConversationBudget:
 		return ledgerLine(inkFaint, "", "context", inkFaint+withThousands(body["contextWindowTokens"])+" tokens"+styleReset)
-	case taskstate.TaskEventAgentInstructionsLoaded:
+	case agentcontract.TaskEventAgentInstructionsLoaded:
 		return ledgerLine(inkFaint, "", "contract", inkFaint+clippedTo(goalInstruction(body), 96)+styleReset)
-	case taskstate.TaskEventLLMCall:
+	case agentcontract.TaskEventLLMCall:
 		return ledgerLine(inkModel, "◆", "llm", llmCallSummary(body))
-	case taskstate.TaskEventAgentAction:
+	case agentcontract.TaskEventAgentAction:
 		return ledgerLine(inkAgent, "◇", "action", actionSummary(body))
-	case taskstate.TaskEventAgentExecutionState:
+	case agentcontract.TaskEventAgentExecutionState:
 		return ledgerLine(inkFaint, "", "plan", inkFaint+clippedTo(stringField(body, "goal"), 96)+styleReset)
-	case taskstate.TaskEventAgentEvidenceMissing:
+	case agentcontract.TaskEventAgentEvidenceMissing:
 		return ledgerLine(inkGate, "●", "gate", inkGate+"finish refused: evidence missing"+styleReset)
-	case taskstate.TaskEventAgentCompletionRequired:
+	case agentcontract.TaskEventAgentCompletionRequired:
 		output, _ := body["output"].(map[string]any)
 		return ledgerLine(inkFaint, "", "gate", inkFaint+clippedTo(collapsedWhitespace(stringField(output, "content")), 96)+styleReset)
-	case taskstate.TaskEventCompletionJudgeVerdict:
+	case agentcontract.TaskEventCompletionJudgeVerdict:
 		return ledgerLine(inkGate, "●", "judge", judgeSummary(body))
-	case taskstate.TaskEventCompletionJudgeDegraded:
+	case agentcontract.TaskEventCompletionJudgeDegraded:
 		return ledgerLine(inkFaint, "", "judge", inkFaint+"unavailable, accepting the deterministic gate"+styleReset)
-	case taskstate.TaskEventAgentBudgetExtendedOneLevel:
+	case agentcontract.TaskEventAgentBudgetExtendedOneLevel:
 		return ledgerLine(inkFaint, "", "budget", inkFaint+"extended one level → "+stringField(body, "grantedLevel")+styleReset)
-	case taskstate.TaskEventTaskCompleted:
+	case agentcontract.TaskEventTaskCompleted:
 		return ledgerLine(inkTool, "✓", "done", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
-	case taskstate.TaskEventTaskFailed:
+	case agentcontract.TaskEventTaskFailed:
 		return ledgerLine(inkFault, "✗", "failed", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
 	}
-	if toolName, isToolRequest := taskstate.ToolTaskEventToolName(taskEvent.Name, taskstate.ToolTaskEventRequestedSuffix); isToolRequest {
+	if toolName, isToolRequest := agentcontract.ToolTaskEventToolName(taskEvent.Name, agentcontract.ToolTaskEventRequestedSuffix); isToolRequest {
 		return ledgerLine(inkTool, "▸", toolName, toolRequestSummary(body))
 	}
-	if _, isToolResult := taskstate.ToolTaskEventToolName(taskEvent.Name, taskstate.ToolTaskEventResultSuffix); isToolResult {
+	if _, isToolResult := agentcontract.ToolTaskEventToolName(taskEvent.Name, agentcontract.ToolTaskEventResultSuffix); isToolResult {
 		return ledgerLine(inkFaint, "", "", toolResultSummary(body))
 	}
 	return ledgerLine(inkFaint, "", "", styledEventName(taskEvent.Name)+"  "+styledEventBody(clippedForTerminal(collapsedWhitespace(taskEvent.Body))))

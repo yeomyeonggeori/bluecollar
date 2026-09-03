@@ -6,11 +6,10 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 type scriptedHarness struct {
-	statusByTaskID map[string]taskstate.TaskStatus
+	statusByTaskID map[string]agentcontract.TaskStatus
 	finishMessage  string
 	runError       error
 	promptsSeen    []string
@@ -23,17 +22,17 @@ func (harness *scriptedHarness) RunTurn(_ context.Context, request agentcontract
 	}
 	status := harness.statusByTaskID[request.Prompt]
 	if status == "" {
-		status = taskstate.TaskStatusCompleted
+		status = agentcontract.TaskStatusCompleted
 	}
 	return agentcontract.AgentTurnResult{
-		TaskRun:       taskstate.TaskRun{TaskRunID: "run-" + request.Prompt, Status: status},
+		TaskRun:       agentcontract.TaskRun{TaskRunID: "run-" + request.Prompt, Status: status},
 		FinishMessage: harness.finishMessage,
 	}, nil
 }
 
-type ledgerByTaskRun map[string][]taskstate.TaskEvent
+type ledgerByTaskRun map[string][]agentcontract.TaskEvent
 
-func (ledger ledgerByTaskRun) ListTaskEvent(taskRunID string) []taskstate.TaskEvent {
+func (ledger ledgerByTaskRun) ListTaskEvent(taskRunID string) []agentcontract.TaskEvent {
 	return ledger[taskRunID]
 }
 
@@ -66,7 +65,7 @@ func TestASuiteRunMeasuresEveryTaskItDrove(t *testing.T) {
 }
 
 func TestATaskThatNeverFinishedFailsRatherThanScoringOnItsEfficiency(t *testing.T) {
-	harness := &scriptedHarness{statusByTaskID: map[string]taskstate.TaskStatus{"first": taskstate.TaskStatusBlocked}}
+	harness := &scriptedHarness{statusByTaskID: map[string]agentcontract.TaskStatus{"first": agentcontract.TaskStatusBlocked}}
 	runner := NewRunner("bluecollar", harness, ledgerByTaskRun{})
 
 	report, _ := runner.RunSuite(context.Background(), "smoke", []Task{

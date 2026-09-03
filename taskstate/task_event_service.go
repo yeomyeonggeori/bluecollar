@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type TaskEventRepository interface {
-	InsertTaskEvent(TaskEvent) error
-	ListTaskEvent(string) ([]TaskEvent, error)
-	ListTaskEventByNameForTaskRuns([]string, string) ([]TaskEvent, error)
+	InsertTaskEvent(agentcontract.TaskEvent) error
+	ListTaskEvent(string) ([]agentcontract.TaskEvent, error)
+	ListTaskEventByNameForTaskRuns([]string, string) ([]agentcontract.TaskEvent, error)
 }
 
 type TaskEventService struct {
 	mutex                sync.RWMutex
-	taskEvents           map[string][]TaskEvent
+	taskEvents           map[string][]agentcontract.TaskEvent
 	repository           TaskEventRepository
 	observerMutex        sync.RWMutex
 	observers            map[string]func(RawTurnEvent)
@@ -25,7 +27,7 @@ type TaskEventService struct {
 
 func NewTaskEventService() *TaskEventService {
 	return &TaskEventService{
-		taskEvents:      map[string][]TaskEvent{},
+		taskEvents:      map[string][]agentcontract.TaskEvent{},
 		observers:       map[string]func(RawTurnEvent){},
 		globalObservers: map[int]func(RawTurnEvent){},
 	}
@@ -97,26 +99,26 @@ func (taskEventService *TaskEventService) recordObserverFailure(rawTurnEvent Raw
 	if errorValue != nil {
 		return
 	}
-	taskEventService.storeTaskEvent(rawTurnEvent.TaskRunID, TaskEventTaskObserverCrashed, string(body))
+	taskEventService.storeTaskEvent(rawTurnEvent.TaskRunID, agentcontract.TaskEventTaskObserverCrashed, string(body))
 }
 
 func (taskEventService *TaskEventService) UseRepository(repository TaskEventRepository) {
 	taskEventService.repository = repository
 }
 
-func (taskEventService *TaskEventService) AppendTaskEvent(taskRunID string, name string, body string) TaskEvent {
+func (taskEventService *TaskEventService) AppendTaskEvent(taskRunID string, name string, body string) agentcontract.TaskEvent {
 	taskEvent, _ := taskEventService.AppendTaskEventWithError(taskRunID, name, body)
 	return taskEvent
 }
 
-func (taskEventService *TaskEventService) AppendTaskEventWithError(taskRunID string, name string, body string) (TaskEvent, error) {
+func (taskEventService *TaskEventService) AppendTaskEventWithError(taskRunID string, name string, body string) (agentcontract.TaskEvent, error) {
 	taskEvent, saveError := taskEventService.storeTaskEvent(taskRunID, name, body)
 	taskEventService.notifyTaskRunObserver(RawTurnEvent{TaskRunID: taskRunID, Name: name, Body: body})
 	return taskEvent, saveError
 }
 
-func (taskEventService *TaskEventService) storeTaskEvent(taskRunID string, name string, body string) (TaskEvent, error) {
-	taskEvent := TaskEvent{
+func (taskEventService *TaskEventService) storeTaskEvent(taskRunID string, name string, body string) (agentcontract.TaskEvent, error) {
+	taskEvent := agentcontract.TaskEvent{
 		TaskEventID: NewIdentifier(),
 		TaskRunID:   taskRunID,
 		Name:        name,
@@ -129,13 +131,13 @@ func (taskEventService *TaskEventService) storeTaskEvent(taskRunID string, name 
 	return taskEvent, taskEventService.saveTaskEvent(taskEvent)
 }
 
-func (taskEventService *TaskEventService) RecordTaskEvent(taskEvent TaskEvent) {
+func (taskEventService *TaskEventService) RecordTaskEvent(taskEvent agentcontract.TaskEvent) {
 	taskEventService.mutex.Lock()
 	defer taskEventService.mutex.Unlock()
 	taskEventService.taskEvents[taskEvent.TaskRunID] = append(taskEventService.taskEvents[taskEvent.TaskRunID], taskEvent)
 }
 
-func (taskEventService *TaskEventService) ListTaskEvent(taskRunID string) []TaskEvent {
+func (taskEventService *TaskEventService) ListTaskEvent(taskRunID string) []agentcontract.TaskEvent {
 	if taskEventService.repository != nil {
 		taskEvents, errorValue := taskEventService.repository.ListTaskEvent(taskRunID)
 		if errorValue == nil {
@@ -144,12 +146,12 @@ func (taskEventService *TaskEventService) ListTaskEvent(taskRunID string) []Task
 	}
 	taskEventService.mutex.RLock()
 	defer taskEventService.mutex.RUnlock()
-	return append([]TaskEvent{}, taskEventService.taskEvents[taskRunID]...)
+	return append([]agentcontract.TaskEvent{}, taskEventService.taskEvents[taskRunID]...)
 }
 
-func (taskEventService *TaskEventService) ListTaskEventByNameForTaskRuns(taskRunIDs []string, name string) []TaskEvent {
+func (taskEventService *TaskEventService) ListTaskEventByNameForTaskRuns(taskRunIDs []string, name string) []agentcontract.TaskEvent {
 	if len(taskRunIDs) == 0 || name == "" {
-		return []TaskEvent{}
+		return []agentcontract.TaskEvent{}
 	}
 	if taskEventService.repository != nil {
 		taskEvents, errorValue := taskEventService.repository.ListTaskEventByNameForTaskRuns(taskRunIDs, name)
@@ -168,7 +170,7 @@ func (taskEventService *TaskEventService) ListTaskEventByNameForTaskRuns(taskRun
 	}
 	taskEventService.mutex.RLock()
 	defer taskEventService.mutex.RUnlock()
-	taskEvents := []TaskEvent{}
+	taskEvents := []agentcontract.TaskEvent{}
 	for _, taskRunID := range selectedTaskRunIDs {
 		for _, taskEvent := range taskEventService.taskEvents[taskRunID] {
 			if taskEvent.Name == name {
@@ -185,7 +187,7 @@ func (taskEventService *TaskEventService) RemoveTaskRunEvents(taskRunID string) 
 	delete(taskEventService.taskEvents, taskRunID)
 }
 
-func (taskEventService *TaskEventService) saveTaskEvent(taskEvent TaskEvent) error {
+func (taskEventService *TaskEventService) saveTaskEvent(taskEvent agentcontract.TaskEvent) error {
 	if taskEventService.repository == nil {
 		return nil
 	}

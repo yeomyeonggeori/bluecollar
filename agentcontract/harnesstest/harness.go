@@ -16,7 +16,7 @@ type Harness struct {
 	taskRunService *taskstate.TaskRunService
 
 	TurnResult           agentcontract.AgentTurnResult
-	TurnStatus           taskstate.TaskStatus
+	TurnStatus           agentcontract.TaskStatus
 	TurnDecision         agentcontract.TurnDecision
 	Reply                string
 	AddressingDecision   agentcontract.AddressingDecision
@@ -30,7 +30,7 @@ type Harness struct {
 func New(taskRunService *taskstate.TaskRunService) *Harness {
 	return &Harness{
 		taskRunService: taskRunService,
-		TurnStatus:     taskstate.TaskStatusCompleted,
+		TurnStatus:     agentcontract.TaskStatusCompleted,
 	}
 }
 
@@ -51,7 +51,7 @@ func (harness *Harness) RunAgentRequest(context.Context, agentcontract.AgentRequ
 }
 
 func (harness *Harness) CompleteLaunchFailure(_ context.Context, request agentcontract.AgentTurnRequest, phase string, stepName string, errorValue error) agentcontract.AgentTurnResult {
-	failedTaskRun, transitionError := harness.settleTaskRun(request, taskstate.TaskStatusFailed, errorValue.Error())
+	failedTaskRun, transitionError := harness.settleTaskRun(request, agentcontract.TaskStatusFailed, errorValue.Error())
 	if transitionError != nil {
 		return agentcontract.AgentTurnResult{}
 	}
@@ -103,25 +103,25 @@ func (harness *Harness) ClassifyAddressingCallCount() int {
 	return harness.classifyAddressingCallCount
 }
 
-func (harness *Harness) settleTaskRun(request agentcontract.AgentTurnRequest, status taskstate.TaskStatus, message string) (taskstate.TaskRun, error) {
+func (harness *Harness) settleTaskRun(request agentcontract.AgentTurnRequest, status agentcontract.TaskStatus, message string) (agentcontract.TaskRun, error) {
 	taskRun := harness.taskRunForRequest(request)
 	runningTaskRun, errorValue := harness.taskRunService.AdvanceTaskRun(taskRun.TaskRunID, request.ProfileName)
 	if errorValue != nil {
-		return taskstate.TaskRun{}, errorValue
+		return agentcontract.TaskRun{}, errorValue
 	}
 	switch status {
-	case taskstate.TaskStatusRunning:
+	case agentcontract.TaskStatusRunning:
 		return runningTaskRun, nil
-	case taskstate.TaskStatusCompleted:
+	case agentcontract.TaskStatusCompleted:
 		return harness.taskRunService.CompleteTaskRun(taskRun.TaskRunID, message)
-	case taskstate.TaskStatusFailed:
+	case agentcontract.TaskStatusFailed:
 		return harness.taskRunService.FailTaskRun(taskRun.TaskRunID, message)
 	default:
 		return harness.taskRunService.PauseTaskRun(taskRun.TaskRunID, status, message)
 	}
 }
 
-func (harness *Harness) taskRunForRequest(request agentcontract.AgentTurnRequest) taskstate.TaskRun {
+func (harness *Harness) taskRunForRequest(request agentcontract.AgentTurnRequest) agentcontract.TaskRun {
 	if taskRunID := strings.TrimSpace(request.ExistingTaskRunID); taskRunID != "" {
 		if taskRun, isFound := harness.taskRunService.FindTaskRun(taskRunID); isFound {
 			return taskRun

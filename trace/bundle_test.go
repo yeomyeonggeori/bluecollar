@@ -5,13 +5,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func TestBothRenderingsComeFromOneSnapshot(t *testing.T) {
 	bundle := Build(
-		taskstate.TaskRun{TaskRunID: "task-1", Status: taskstate.TaskStatusCompleted, Prompt: "회의록 보내줘"},
-		[]taskstate.TaskEvent{
+		agentcontract.TaskRun{TaskRunID: "task-1", Status: agentcontract.TaskStatusCompleted, Prompt: "회의록 보내줘"},
+		[]agentcontract.TaskEvent{
 			{Name: "task.created", Body: `{"prompt":"회의록 보내줘"}`},
 			{Name: "tool.message_send.result", Body: `{"output":{"content":"sent to 이샘플"}}`},
 			{Name: "task.completed", Body: ""},
@@ -44,8 +44,8 @@ func TestBothRenderingsComeFromOneSnapshot(t *testing.T) {
 
 func TestATraceKeepsWhatTheRunCarriedAndSaysSo(t *testing.T) {
 	bundle := Build(
-		taskstate.TaskRun{TaskRunID: "task-1", Status: taskstate.TaskStatusFailed, FailureReason: "the endpoint refused"},
-		[]taskstate.TaskEvent{{Name: "tool.shell.requested", Body: `{"input":{"command":"deploy --token hunter2"}}`}},
+		agentcontract.TaskRun{TaskRunID: "task-1", Status: agentcontract.TaskStatusFailed, FailureReason: "the endpoint refused"},
+		[]agentcontract.TaskEvent{{Name: "tool.shell.requested", Body: `{"input":{"command":"deploy --token hunter2"}}`}},
 		"",
 	)
 

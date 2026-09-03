@@ -8,21 +8,6 @@ type TaskRunOrigin struct {
 	IsThread       bool
 }
 
-type TaskRunTransition struct {
-	TaskRunID               string
-	FromStates              []TaskStatus
-	ToState                 TaskStatus
-	CurrentAgentProfileName string
-	Result                  string
-	FailureReason           string
-	StartedAttempt          *TaskAttempt
-	FinishCurrentAttempt    bool
-	FinishedAttemptStatus   TaskAttemptStatus
-	RunnerID                string
-	Event                   *TaskEvent
-	UpdatedAt               time.Time
-}
-
 type TaskRunCancelRequest struct {
 	TaskRunIDs                 []string
 	RequesterPersonID          string

@@ -12,7 +12,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -216,10 +215,10 @@ func TestAHostDrivesTheLoopOverACPAndItsToolsComeFromTheCatalog(t *testing.T) {
 }
 
 func TestTheLoopsVerdictReachesTheHostAsAStopReason(t *testing.T) {
-	for status, expectedStopReason := range map[taskstate.TaskStatus]acp.StopReason{
-		taskstate.TaskStatusCompleted: acp.StopReasonEndTurn,
-		taskstate.TaskStatusCancelled: acp.StopReasonCancelled,
-		taskstate.TaskStatusBlocked:   acp.StopReasonRefusal,
+	for status, expectedStopReason := range map[agentcontract.TaskStatus]acp.StopReason{
+		agentcontract.TaskStatusCompleted: acp.StopReasonEndTurn,
+		agentcontract.TaskStatusCancelled: acp.StopReasonCancelled,
+		agentcontract.TaskStatusBlocked:   acp.StopReasonRefusal,
 	} {
 		if stopReason := stopReasonForStatus(status); stopReason != expectedStopReason {
 			t.Fatalf("a task the loop left %q reaches the host as %q, expected %q", status, stopReason, expectedStopReason)

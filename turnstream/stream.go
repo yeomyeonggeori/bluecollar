@@ -73,7 +73,7 @@ func (streamer *Streamer) StreamTurn(ctx context.Context, request agentcontract.
 	return stream
 }
 
-func (streamer *Streamer) taskRunForRequest(request agentcontract.AgentTurnRequest) taskstate.TaskRun {
+func (streamer *Streamer) taskRunForRequest(request agentcontract.AgentTurnRequest) agentcontract.TaskRun {
 	if taskRunID := strings.TrimSpace(request.ExistingTaskRunID); taskRunID != "" {
 		if taskRun, isFound := streamer.taskRunStore.FindTaskRun(taskRunID); isFound {
 			return taskRun
@@ -88,10 +88,10 @@ func (streamer *Streamer) taskRunForRequest(request agentcontract.AgentTurnReque
 
 func decodeEvent(rawTurnEvent taskstate.RawTurnEvent) (Event, bool) {
 	switch {
-	case rawTurnEvent.Name == taskstate.TaskEventAgentCheckpointSent:
+	case rawTurnEvent.Name == agentcontract.TaskEventAgentCheckpointSent:
 		checkpoint := decodeBody[checkpointEventBody](rawTurnEvent.Body)
 		return Event{Kind: EventReply, Message: checkpoint.Message, ToolName: checkpoint.ToolName}, true
-	case rawTurnEvent.Name == taskstate.TaskEventApprovalPendingCall:
+	case rawTurnEvent.Name == agentcontract.TaskEventApprovalPendingCall:
 		heldCall := decodeBody[agentcontract.HeldCall](rawTurnEvent.Body)
 		return Event{Kind: EventApproval, ToolName: heldCall.ToolName, Message: heldCall.Confirmation}, true
 	case isToolResultEventName(rawTurnEvent.Name):
@@ -120,6 +120,6 @@ func toolResultEventToolName(body string) string {
 }
 
 func isToolResultEventName(name string) bool {
-	_, isToolResult := taskstate.ToolTaskEventToolName(name, taskstate.ToolTaskEventResultSuffix)
+	_, isToolResult := agentcontract.ToolTaskEventToolName(name, agentcontract.ToolTaskEventResultSuffix)
 	return isToolResult
 }

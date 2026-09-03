@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/bench"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 const PrivacyNotice = "This trace carries whatever the task carried: message text, file contents and tool inputs, none of it removed. Read it before you send it anywhere."
@@ -28,7 +28,7 @@ type Event struct {
 	CreatedAt time.Time `json:"createdAt,omitempty"`
 }
 
-func Build(taskRun taskstate.TaskRun, taskEvents []taskstate.TaskEvent, reply string) Bundle {
+func Build(taskRun agentcontract.TaskRun, taskEvents []agentcontract.TaskEvent, reply string) Bundle {
 	events := make([]Event, 0, len(taskEvents))
 	for _, taskEvent := range taskEvents {
 		events = append(events, Event{

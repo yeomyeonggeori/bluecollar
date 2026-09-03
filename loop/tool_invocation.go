@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func earlierObservationWithIdenticalOutput(observations []turnObservation, observation turnObservation) string {
@@ -34,7 +34,7 @@ func (agentTurnRunner *AgentTurnRunner) recordToolObservation(taskRunID string, 
 	}
 	observation.RepeatsObservationID = earlierObservationWithIdenticalOutput(state.Observations, observation)
 	if observation.RepeatsObservationID != "" {
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentIdenticalOutput, marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentIdenticalOutput, marshalEventBody(map[string]any{
 			"observationID": observation.ObservationID,
 			"sameOutputAs":  observation.RepeatsObservationID,
 			"toolName":      observation.Tool,
@@ -44,26 +44,26 @@ func (agentTurnRunner *AgentTurnRunner) recordToolObservation(taskRunID string, 
 	state.Attachments = appendObservationAttachments(state.Attachments, observation)
 	if reminder, hasReminder := unchangedResultReminderObservation(state.Request.ToolSet, state.Observations, observation); hasReminder {
 		state.Observations = append(state.Observations, reminder)
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentUnchangedResult, marshalEventBody(reminderEventBody{
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentUnchangedResult, marshalEventBody(reminderEventBody{
 			Observation:         reminder,
 			RepeatedObservation: observation.RepeatsObservationID,
 		}))
 	}
 	if reminder, consecutiveCount, hasReminder := toolRepeatReminderObservation(state.Observations, observation); hasReminder {
 		state.Observations = append(state.Observations, reminder)
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentRepeatedToolCall, marshalEventBody(reminderEventBody{
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentRepeatedToolCall, marshalEventBody(reminderEventBody{
 			Observation:         reminder,
 			RepeatedObservation: observation.ObservationID,
 			ConsecutiveCalls:    consecutiveCount,
 		}))
 	}
 	if observation.Failed() {
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureDebtCreated, marshalEventBody(activeFailureDebtEventBody(state.Observations, agentTurnRunner.options.RecoveryBudget)))
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFailureDebtCreated, marshalEventBody(activeFailureDebtEventBody(state.Observations, agentTurnRunner.options.RecoveryBudget)))
 		if recoveryAttemptCount(state.Observations) < agentTurnRunner.options.RecoveryAttemptLimit {
 			originalInstruction := firstNonEmptyString(state.Request.ActiveGoal.OriginalInstruction, state.Request.Prompt)
 			recoveryObservation := recoveryGuidanceObservation(state.Request.ToolSet, nextObservationIndex(state.Observations), observation, originalInstruction)
 			state.Observations = append(state.Observations, recoveryObservation)
-			agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentRecoveryGuidance, marshalEventBody(recoveryObservation))
+			agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentRecoveryGuidance, marshalEventBody(recoveryObservation))
 		}
 		return
 	}
@@ -80,7 +80,7 @@ func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegi
 		observation.AttemptFingerprint = attemptFingerprint(toolInputKey, observation.FailureCode())
 		return observation
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.ToolTaskEventName(trimmedToolName, taskstate.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(trimmedToolName, agentcontract.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
 		"observationID": observationID,
 		"toolName":      trimmedToolName,
 		"input":         json.RawMessage(toolInput),
@@ -115,7 +115,7 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	artifactID := ""
 	spillRef := ToolResultSpillRef{}
 	if resultLimit := agentTurnRunner.toolResultLimit(); len(content) > resultLimit {
-		taskArtifact := agentTurnRunner.taskArtifactService.AddTaskArtifactBody(taskRunID, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventResultSuffix), content)
+		taskArtifact := agentTurnRunner.taskArtifactService.AddTaskArtifactBody(taskRunID, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventResultSuffix), content)
 		artifactID = taskArtifact.TaskArtifactID
 		spillRef = agentTurnRunner.spillToolResult(ctx, taskRunID, observationID, toolName, workspaceRootPath, content)
 		content = withMiddleElided(content, resultLimit)
@@ -132,7 +132,7 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 			isError = true
 			toolResult.Failure = &toolcontract.ToolFailure{Kind: toolcontract.FailureInvalidInput, Code: toolcontract.FailureCodes.InvalidInput.String(), Stage: "artifact_validation", UserSafeSummary: content}
 			attachments = nil
-			agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentArtifactAttachRejected, marshalEventBody(validityState))
+			agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentArtifactAttachRejected, marshalEventBody(validityState))
 		}
 	}
 	observation := turnObservation{
@@ -159,7 +159,7 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	if observation.Failed() {
 		observation.AttemptFingerprint = attemptFingerprint(toolInputKey, observation.FailureCode())
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventResultSuffix), marshalEventBody(observation))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventResultSuffix), marshalEventBody(observation))
 	return observation
 }
 
@@ -356,7 +356,7 @@ func (agentTurnRunner *AgentTurnRunner) recordToolCrash(taskRunID string, observ
 	if toolResult.Failure == nil || strings.TrimSpace(toolResult.Failure.CrashStack) == "" {
 		return
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventToolCrashed, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventToolCrashed, marshalEventBody(map[string]any{
 		"observationID": observationID,
 		"toolName":      strings.TrimSpace(toolName),
 		"reason":        toolResult.Failure.UserSafeSummary,

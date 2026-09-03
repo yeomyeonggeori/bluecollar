@@ -15,4 +15,8 @@
 // refuses to assume: who is asking, what identity the agent answers to, where
 // the workspace is, which instructions and skills apply, and what the company
 // is. AgentTurnResult carries the answer back with the task state it reached.
+//
+// That task state lives here as well: TaskRun and its nine statuses, TaskAttempt,
+// TaskEvent, and the ledger event names every producer emits. They are contract
+// data, so taskstate is the service over them and imports this package.
 package agentcontract

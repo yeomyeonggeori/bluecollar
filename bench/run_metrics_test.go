@@ -4,19 +4,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
-func taskEventAt(second int, name string, body string) taskstate.TaskEvent {
-	return taskstate.TaskEvent{
+func taskEventAt(second int, name string, body string) agentcontract.TaskEvent {
+	return agentcontract.TaskEvent{
 		Name:      name,
 		Body:      body,
 		CreatedAt: time.Date(2026, 8, 7, 0, 0, second, 0, time.UTC),
 	}
 }
 
-func twoTurnLedger() []taskstate.TaskEvent {
-	return []taskstate.TaskEvent{
+func twoTurnLedger() []agentcontract.TaskEvent {
+	return []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "send the summary"),
 		taskEventAt(1, "task.running", "assistant"),
 		taskEventAt(2, "llm.call", `{"schemaName":"bluecollar_agent_turn_action","model":"openai/gpt-5.6-luna","latencyMs":5000,"promptTokens":16000,"completionTokens":120,"cachedPromptTokens":15000,"totalTokens":16120,"costUSD":0.002}`),
@@ -41,7 +41,7 @@ func TestARunIsMeasuredFromTheLedgerItAlreadyWrote(t *testing.T) {
 	if metrics.CostUSD != 0.005 || metrics.ModelLatencyMS != 9000 {
 		t.Fatalf("expected cost and latency summed across calls, got cost=%v latency=%v", metrics.CostUSD, metrics.ModelLatencyMS)
 	}
-	if metrics.TerminalStatus != string(taskstate.TaskStatusCompleted) || !metrics.ReachedEnd {
+	if metrics.TerminalStatus != string(agentcontract.TaskStatusCompleted) || !metrics.ReachedEnd {
 		t.Fatalf("expected the run to be recorded as finished, got %+v", metrics)
 	}
 	if metrics.WallClockMS != 10000 {
@@ -58,7 +58,7 @@ func TestPromptTokensPerTurnIsWhatSeparatesTwoHarnessesOnOneModel(t *testing.T) 
 }
 
 func TestPromptBytesPerTurnSurvivesAServerThatMisreportsItsUsage(t *testing.T) {
-	metrics := MeasureTaskRun("task-1", []taskstate.TaskEvent{
+	metrics := MeasureTaskRun("task-1", []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "do it"),
 		taskEventAt(1, "llm.call", `{"promptBytes":40000,"promptTokens":3}`),
 		taskEventAt(2, "agent.action", `{"action":"continue"}`),
@@ -72,7 +72,7 @@ func TestPromptBytesPerTurnSurvivesAServerThatMisreportsItsUsage(t *testing.T) {
 }
 
 func TestATurnlessRunReportsNoPerTurnCostRatherThanDividingByZero(t *testing.T) {
-	metrics := MeasureTaskRun("task-1", []taskstate.TaskEvent{
+	metrics := MeasureTaskRun("task-1", []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "do nothing"),
 		taskEventAt(1, "task.failed", "launch failed"),
 	})
@@ -80,13 +80,13 @@ func TestATurnlessRunReportsNoPerTurnCostRatherThanDividingByZero(t *testing.T) 
 	if metrics.PromptTokensPerTurn != 0 || metrics.Turns != 0 {
 		t.Fatalf("expected no per-turn figure without a turn, got %+v", metrics)
 	}
-	if metrics.TerminalStatus != string(taskstate.TaskStatusFailed) {
+	if metrics.TerminalStatus != string(agentcontract.TaskStatusFailed) {
 		t.Fatalf("expected the failure to be the terminal status, got %q", metrics.TerminalStatus)
 	}
 }
 
 func TestACallHeldForApprovalIsNotCountedAsAFailedToolCall(t *testing.T) {
-	metrics := MeasureTaskRun("task-1", []taskstate.TaskEvent{
+	metrics := MeasureTaskRun("task-1", []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "send it"),
 		taskEventAt(1, "agent.action", `{"action":"continue","toolName":"message_send"}`),
 		taskEventAt(2, "tool.message_send.requested", `{"observationID":"obs-001"}`),
@@ -103,7 +103,7 @@ func TestACallHeldForApprovalIsNotCountedAsAFailedToolCall(t *testing.T) {
 }
 
 func TestARealFailedToolCallIsCounted(t *testing.T) {
-	metrics := MeasureTaskRun("task-1", []taskstate.TaskEvent{
+	metrics := MeasureTaskRun("task-1", []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "read it"),
 		taskEventAt(1, "tool.file_read.requested", `{"observationID":"obs-001"}`),
 		taskEventAt(2, "tool.file_read.result", `{"observationID":"obs-001","failure":{"code":"not_found"}}`),
@@ -126,7 +126,7 @@ func TestAMeasuredRunCarriesNoVerdictUntilABenchmarkGivesOne(t *testing.T) {
 }
 
 func TestAnUnfinishedRunIsNotReportedAsHavingReachedTheEnd(t *testing.T) {
-	metrics := MeasureTaskRun("task-1", []taskstate.TaskEvent{
+	metrics := MeasureTaskRun("task-1", []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "send it"),
 		taskEventAt(1, "agent.action", `{"action":"continue"}`),
 		taskEventAt(2, "task.paused", "may I?"),
@@ -138,7 +138,7 @@ func TestAnUnfinishedRunIsNotReportedAsHavingReachedTheEnd(t *testing.T) {
 }
 
 func TestARowSaysWhichWindowItWasFittedInto(t *testing.T) {
-	ledger := []taskstate.TaskEvent{
+	ledger := []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "count the likes"),
 		taskEventAt(1, "agent.conversation_budget", `{"contextWindowTokens":1048576,"windowWasDeclared":true,"compactionTriggerTokens":629145}`),
 		taskEventAt(2, "agent.action", `{"action":"finish"}`),
@@ -152,7 +152,7 @@ func TestARowSaysWhichWindowItWasFittedInto(t *testing.T) {
 }
 
 func TestARunGivenNoWindowSaysItWasNotDeclared(t *testing.T) {
-	ledger := []taskstate.TaskEvent{
+	ledger := []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "count the likes"),
 		taskEventAt(1, "agent.conversation_budget", `{"contextWindowTokens":0,"windowWasDeclared":false,"compactionTriggerTokens":96000}`),
 	}

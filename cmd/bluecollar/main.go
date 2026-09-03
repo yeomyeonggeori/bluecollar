@@ -109,7 +109,7 @@ func runOneTurn(options runOptions) (agentcontract.AgentTurnResult, error) {
 }
 
 func printLedgerEvent(rawTurnEvent taskstate.RawTurnEvent) {
-	taskEvent := taskstate.TaskEvent{Name: rawTurnEvent.Name, Body: rawTurnEvent.Body}
+	taskEvent := agentcontract.TaskEvent{Name: rawTurnEvent.Name, Body: rawTurnEvent.Body}
 	if !stderrWantsStyle() {
 		fmt.Fprintf(os.Stderr, "  %s  %s\n", taskEvent.Name, collapsedWhitespace(taskEvent.Body))
 		return

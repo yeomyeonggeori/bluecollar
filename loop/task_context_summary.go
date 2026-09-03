@@ -3,11 +3,11 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 const defaultCompactionTriggerTokens = 96000
@@ -38,9 +38,9 @@ func (summary TaskContextSummary) accountsForTaskEvents() bool {
 	return len(summary.AccountedTaskEventIDs) > 0
 }
 
-func taskContextSummaryFromTaskEvents(events []taskstate.TaskEvent) TaskContextSummary {
+func taskContextSummaryFromTaskEvents(events []agentcontract.TaskEvent) TaskContextSummary {
 	for index := len(events) - 1; index >= 0; index-- {
-		if strings.TrimSpace(events[index].Name) != taskstate.TaskEventAgentContextSummary {
+		if strings.TrimSpace(events[index].Name) != agentcontract.TaskEventAgentContextSummary {
 			continue
 		}
 		var summary TaskContextSummary
@@ -78,7 +78,7 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	replacedCharacters := observationsCharacterCount(plan.CompactableObservations)
 	summaryCharacters := len(summaryObservation(summary).ContentText())
 	if summaryCharacters >= replacedCharacters {
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentContextCompactionFreedNothing, marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentContextCompactionFreedNothing, marshalEventBody(map[string]any{
 			"compactedThroughObservationID": plan.CompactedThroughObservationID,
 			"replacedCharacters":            replacedCharacters,
 			"summaryCharacters":             summaryCharacters,
@@ -88,16 +88,16 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	compactedObservations := promptVisibleObservations(state.Observations, summary, pinnedObservationIDs)
 	summary = summaryAccountingForCompactedObservations(summary, currentSummary, compactedObservations, plan, taskEvents)
 	summary = normalizeTaskContextSummary(summary)
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentContextSummary, marshalEventBody(summary))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentContextSummary, marshalEventBody(summary))
 	return compactedObservations
 }
 
 // Once a summary of the same observations came back no smaller than what it replaced,
 // asking for it again every step buys the same nothing and pays the summarizer for it.
-func compactionAlreadyFreedNothing(events []taskstate.TaskEvent, compactedThroughObservationID string) bool {
+func compactionAlreadyFreedNothing(events []agentcontract.TaskEvent, compactedThroughObservationID string) bool {
 	trimmedObservationID := strings.TrimSpace(compactedThroughObservationID)
 	for _, taskEvent := range events {
-		if strings.TrimSpace(taskEvent.Name) != taskstate.TaskEventAgentContextCompactionFreedNothing {
+		if strings.TrimSpace(taskEvent.Name) != agentcontract.TaskEventAgentContextCompactionFreedNothing {
 			continue
 		}
 		attempt := struct {
@@ -121,14 +121,14 @@ func (agentTurnRunner *AgentTurnRunner) promptObservationsWithLongToolResultsPru
 	if prunedTokenCount >= estimatedTokenCount {
 		return promptObservations, estimatedTokenCount
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentToolResultsPruned, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentToolResultsPruned, marshalEventBody(map[string]any{
 		"estimatedTokensBefore": estimatedTokenCount,
 		"estimatedTokensAfter":  prunedTokenCount,
 	}))
 	return prunedObservations, prunedTokenCount
 }
 
-func summaryAccountingForCompactedObservations(summary TaskContextSummary, previousSummary TaskContextSummary, compactedObservations []turnObservation, plan taskContextCompactionPlan, events []taskstate.TaskEvent) TaskContextSummary {
+func summaryAccountingForCompactedObservations(summary TaskContextSummary, previousSummary TaskContextSummary, compactedObservations []turnObservation, plan taskContextCompactionPlan, events []agentcontract.TaskEvent) TaskContextSummary {
 	taskEventIDByObservationID := taskEventIDByObservationID(events)
 	newlyCompactedObservations := observationsNotYetCompacted(plan.CompactableObservations, taskEventIDByObservationID, previouslyCompactedTaskEventIDs(previousSummary, taskEventIDByObservationID))
 
@@ -178,7 +178,7 @@ func observationIDsOf(observations []turnObservation) []string {
 	return observationIDs
 }
 
-func taskEventIDByObservationID(events []taskstate.TaskEvent) map[string]string {
+func taskEventIDByObservationID(events []agentcontract.TaskEvent) map[string]string {
 	taskEventIDByObservationID := map[string]string{}
 	for _, event := range events {
 		if !isToolResultTaskEvent(event) {
@@ -218,7 +218,7 @@ func appendMissingStrings(values []string, additionalValues []string) []string {
 	return combinedValues
 }
 
-func latestTaskContextSummary(fallback TaskContextSummary, events []taskstate.TaskEvent) TaskContextSummary {
+func latestTaskContextSummary(fallback TaskContextSummary, events []agentcontract.TaskEvent) TaskContextSummary {
 	summary := taskContextSummaryFromTaskEvents(events)
 	if strings.TrimSpace(summary.ObservationID) != "" {
 		return summary
@@ -312,7 +312,7 @@ func summaryObservation(summary TaskContextSummary) turnObservation {
 	}
 }
 
-func pinnedPromptObservationIDs(observations []turnObservation, events []taskstate.TaskEvent) map[string]bool {
+func pinnedPromptObservationIDs(observations []turnObservation, events []agentcontract.TaskEvent) map[string]bool {
 	pinnedObservationIDs := completionEvidenceObservationIDs(events)
 	pinActiveFailureDebtObservations(pinnedObservationIDs, observations)
 	return pinnedObservationIDs
@@ -334,10 +334,10 @@ func pinActiveFailureDebtObservations(pinnedObservationIDs map[string]bool, obse
 	}
 }
 
-func completionEvidenceObservationIDs(events []taskstate.TaskEvent) map[string]bool {
+func completionEvidenceObservationIDs(events []agentcontract.TaskEvent) map[string]bool {
 	observationIDs := map[string]bool{}
 	for _, event := range events {
-		if strings.TrimSpace(event.Name) != taskstate.TaskEventAgentAction {
+		if strings.TrimSpace(event.Name) != agentcontract.TaskEventAgentAction {
 			continue
 		}
 		var actionDocument turnActionDocument

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
 
@@ -158,7 +159,7 @@ func indexOfTurnEventKind(turnEvents []turnstream.Event, kind turnstream.EventKi
 	return -1
 }
 
-func taskEventNames(taskEvents []taskstate.TaskEvent) []string {
+func taskEventNames(taskEvents []agentcontract.TaskEvent) []string {
 	names := make([]string, len(taskEvents))
 	for index, taskEvent := range taskEvents {
 		names[index] = taskEvent.Name

@@ -139,11 +139,11 @@ func (runningAgent *agent) CloseSession(_ context.Context, request acp.CloseSess
 	return acp.CloseSessionResponse{}, nil
 }
 
-func stopReasonForStatus(status taskstate.TaskStatus) acp.StopReason {
+func stopReasonForStatus(status agentcontract.TaskStatus) acp.StopReason {
 	switch status {
-	case taskstate.TaskStatusCancelled:
+	case agentcontract.TaskStatusCancelled:
 		return acp.StopReasonCancelled
-	case taskstate.TaskStatusBlocked:
+	case agentcontract.TaskStatusBlocked:
 		return acp.StopReasonRefusal
 	default:
 		return acp.StopReasonEndTurn

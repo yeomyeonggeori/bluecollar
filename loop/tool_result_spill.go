@@ -2,7 +2,7 @@ package loop
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"strconv"
 	"strings"
 )
@@ -68,7 +68,7 @@ func (agentTurnRunner *AgentTurnRunner) spillToolResult(ctx context.Context, tas
 		Content:           content,
 	})
 	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventToolResultSpillFailed, marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventToolResultSpillFailed, marshalEventBody(map[string]any{
 			"observationID": observationID,
 			"toolName":      strings.TrimSpace(toolName),
 			"bytes":         len(content),
@@ -79,7 +79,7 @@ func (agentTurnRunner *AgentTurnRunner) spillToolResult(ctx context.Context, tas
 	if !spillRef.isUsable() {
 		return ToolResultSpillRef{}
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventToolResultSpilled, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventToolResultSpilled, marshalEventBody(map[string]any{
 		"observationID": observationID,
 		"toolName":      strings.TrimSpace(toolName),
 		"locator":       strings.TrimSpace(spillRef.Locator),

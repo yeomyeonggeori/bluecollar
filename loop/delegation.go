@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -83,13 +83,13 @@ func (agentTurnRunner *AgentTurnRunner) runDelegatedTurn(ctx context.Context, ta
 			"this task has spent all "+strconv.Itoa(agentTurnRunner.options.DelegationLimit)+" of the delegations it is allowed, so the rest of the work happens here",
 			toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "delegate")
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventDelegateLaunched, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventDelegateLaunched, marshalEventBody(map[string]any{
 		"observationID":  observationID,
 		"instruction":    instruction,
 		"expectedResult": strings.TrimSpace(actionDocument.ExpectedResult),
 	}))
 	childResult, errorValue := agentTurnRunner.childRunner(state).RunTurn(ctx, childTurnRequest(state.Request, actionDocument))
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventDelegateFinished, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventDelegateFinished, marshalEventBody(map[string]any{
 		"observationID":  observationID,
 		"childTaskRunID": childResult.TaskRun.TaskRunID,
 		"childStatus":    string(childResult.TaskRun.Status),
@@ -98,7 +98,7 @@ func (agentTurnRunner *AgentTurnRunner) runDelegatedTurn(ctx context.Context, ta
 		return newFailureObservation(observationID, "delegate", "", "the delegated turn could not run: "+errorValue.Error(),
 			toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "delegate")
 	}
-	if childResult.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if childResult.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		return newFailureObservation(observationID, "delegate", "", delegatedFailureText(childResult),
 			toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "delegate")
 	}

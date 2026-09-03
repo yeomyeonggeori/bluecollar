@@ -25,7 +25,7 @@ func sendLedgerEvent(ctx context.Context, sender sessionUpdateSender, sessionID 
 
 func sessionUpdateForEvent(rawTurnEvent taskstate.RawTurnEvent) acp.SessionUpdate {
 	meta := ledgerMeta(rawTurnEvent)
-	if toolName, isRequest := taskstate.ToolTaskEventToolName(rawTurnEvent.Name, ".requested"); isRequest {
+	if toolName, isRequest := agentcontract.ToolTaskEventToolName(rawTurnEvent.Name, ".requested"); isRequest {
 		return acp.SessionUpdate{ToolCall: &acp.SessionUpdateToolCall{
 			ToolCallId: acp.ToolCallId(observationIDOfEvent(rawTurnEvent.Body)),
 			Title:      toolName,
@@ -34,7 +34,7 @@ func sessionUpdateForEvent(rawTurnEvent taskstate.RawTurnEvent) acp.SessionUpdat
 			Meta:       meta,
 		}}
 	}
-	if _, isResult := taskstate.ToolTaskEventToolName(rawTurnEvent.Name, ".result"); isResult {
+	if _, isResult := agentcontract.ToolTaskEventToolName(rawTurnEvent.Name, ".result"); isResult {
 		status := acp.ToolCallStatusCompleted
 		if isFailureEvent(rawTurnEvent.Body) {
 			status = acp.ToolCallStatusFailed

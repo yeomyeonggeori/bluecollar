@@ -1,7 +1,7 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"sort"
 	"strconv"
@@ -154,7 +154,7 @@ func (agentTurnRunner *AgentTurnRunner) appendInstructionEvent(taskRunID string,
 	} else {
 		body["status"] = "loaded"
 	}
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentInstructionsLoaded, marshalEventBody(body))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentInstructionsLoaded, marshalEventBody(body))
 }
 
 func toolNamesForEvent(toolSet *toolcontract.ToolSet) []string {

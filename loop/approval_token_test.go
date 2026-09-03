@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -55,7 +55,7 @@ func TestACarriedOutCallThatWasNeverHeldIsRecordedAsItHappened(t *testing.T) {
 	}
 
 	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if taskEventsContain(taskEvents, taskstate.TaskEventApprovalUnheldCallCarriedOut, "message_send") {
+	if taskEventsContain(taskEvents, agentcontract.TaskEventApprovalUnheldCallCarriedOut, "message_send") {
 		t.Fatal("a host that never held this call is not carrying back an approval it does not have; nothing changed for it")
 	}
 	if !taskEventsContain(taskEvents, "tool.message_send.result", "sent to alice") {
@@ -102,7 +102,7 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 		t.Fatal("a call nobody approved does not spend the approval that is still waiting")
 	}
 
-	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventApprovalExecuted,
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalExecuted,
 		`{"approvalToken":"`+heldCalls[0].ApprovalToken+`","toolName":"message_send","toolInput":{"to":["alice"]}}`)
 	if len(services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)) != 0 {
 		t.Fatal("the host that released the approval records the call it let run, and that record is what spends the hold")

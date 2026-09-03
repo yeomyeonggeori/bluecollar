@@ -1,4 +1,4 @@
-package taskstate
+package agentcontract
 
 import "strings"
 

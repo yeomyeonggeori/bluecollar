@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"strconv"
@@ -72,7 +73,7 @@ func TestAgentTurnRunnerCallsToolsUntilFinishMessage(t *testing.T) {
 	if result.FinishMessage != "done" {
 		t.Fatalf("expected final reply, got %q", result.FinishMessage)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s events=%+v", result.TaskRun.Status, services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID))
 	}
 	if len(services.taskStepService.ListTaskStep(result.TaskRun.TaskRunID)) != 3 {
@@ -116,7 +117,7 @@ func TestAgentTurnRunnerAppliesPendingSteeringEvent(t *testing.T) {
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "PDF 보고서를 작성한다")
-	services.taskEventService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskSteerRequested, marshalEventBody(map[string]string{
+	services.taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskSteerRequested, marshalEventBody(map[string]string{
 		"messageID":   "message-steer",
 		"instruction": "PDF 대신 HTML로 작성한다.",
 		"reason":      "user corrected output format",
@@ -134,7 +135,7 @@ func TestAgentTurnRunnerAppliesPendingSteeringEvent(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected steering event to apply: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "task.steer.applied", "message-steer") {
@@ -161,7 +162,7 @@ func TestAgentTurnRunnerFailsWhenAttemptStartFails(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected attempt start failure to become task result: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusFailed {
+	if result.TaskRun.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("expected failed task, got %+v", result.TaskRun)
 	}
 	if !strings.Contains(result.FailureNotice.SendableMessage(), "attempt store unavailable") {
@@ -291,7 +292,7 @@ func TestAgentTurnRunnerCompletesWhenCallerContextExpiresDuringCompletionJudge(t
 	if errorValue != nil {
 		t.Fatalf("expected the turn to succeed despite the caller context expiring mid-judge-call: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the task to complete, got status %q (replySuppressed=%v) failureReason=%q", result.TaskRun.Status, result.ReplySuppressed, result.TaskRun.FailureReason)
 	}
 	if result.ReplySuppressed {
@@ -781,7 +782,7 @@ func TestAgentTurnRunnerBudgetExhaustedContinueTriggersSingleTerminalNoToolsCall
 	if errorValue != nil {
 		t.Fatalf("expected terminal fallback result: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if countStructuredRequestsByName(languageModel.requests, "bluecollar_agent_terminal_no_tools_action") != 1 {
@@ -849,7 +850,7 @@ func TestAgentTurnRunnerTerminalNoToolsAcceptsFailureReportFail(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected terminal failure report result: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusFailed {
+	if result.TaskRun.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("expected failed task, got %s", result.TaskRun.Status)
 	}
 	if !strings.Contains(result.UserNotice, "schedule_lookup") {
@@ -959,7 +960,7 @@ func TestAgentTurnRunnerTerminalNoToolsRejectsFailWithoutReason(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected terminal failure report result: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusFailed {
+	if result.TaskRun.Status != agentcontract.TaskStatusFailed {
 		t.Fatalf("expected failed task, got %s", result.TaskRun.Status)
 	}
 	if countStructuredRequestsByName(languageModel.requests, "bluecollar_agent_terminal_no_tools_action") != 2 {
@@ -1186,7 +1187,7 @@ func TestAgentTurnRunnerSiteLoopBuildsReviewsPublishesBeforeFinish(t *testing.T)
 	if strings.Join(toolCalls, ",") != strings.Join(expectedCalls, ",") {
 		t.Fatalf("expected site tool loop %v, got %v", expectedCalls, toolCalls)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted || !strings.Contains(result.FinishMessage, "배포") {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted || !strings.Contains(result.FinishMessage, "배포") {
 		t.Fatalf("expected completed publish finish, got status=%s message=%q", result.TaskRun.Status, result.FinishMessage)
 	}
 }
@@ -1280,7 +1281,7 @@ func TestAgentTurnRunnerReselectsToolsAfterRejectedSiteFinish(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected rejected finish to recover into build: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if strings.Join(toolCalls, ",") != "site_serve,site_build" {
@@ -1352,7 +1353,7 @@ func TestAgentTurnRunnerRejectsFailAfterSiteSourceWriteBeforeBuildPublish(t *tes
 	if errorValue != nil {
 		t.Fatalf("expected recoverable fail to continue: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if strings.Join(toolCalls, ",") != "file_write,shell,site_serve" {
@@ -1409,7 +1410,7 @@ func (gate holdingToolCallGate) ReviewToolCall(_ context.Context, _ toolcontract
 	if !toolDefinition.RequiresApproval {
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
-	gate.taskRunService.PauseTaskRun(gate.taskRunID, taskstate.TaskStatusWaitingApproval, gate.confirmation)
+	gate.taskRunService.PauseTaskRun(gate.taskRunID, agentcontract.TaskStatusWaitingApproval, gate.confirmation)
 	heldResult := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.InteractionRequired, "approval", gate.confirmation)
 	heldResult.Failure.RequiresApproval = true
 	return toolcontract.ToolCallReview{Result: heldResult}, nil
@@ -1451,7 +1452,7 @@ func TestATurnEndsWhereTheHostHeldTheCallItAskedFor(t *testing.T) {
 	if len(invokedInputs) != 0 {
 		t.Fatalf("a withheld call that still reaches its handler has already had the effect, got %+v", invokedInputs)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusWaitingApproval {
+	if result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
 		t.Fatalf("expected the turn to end where the host paused it, got %s", result.TaskRun.Status)
 	}
 	if result.UserNotice != "이 일정을 삭제할까요?" {
@@ -1480,7 +1481,7 @@ func TestAgentTurnRunnerSteersStalledTurnBeforeStopping(t *testing.T) {
 	if !taskEventsContain(taskEvents, "agent.stall_exit_directive", "") {
 		t.Fatal("expected a stall-exit steer before terminating the no-progress loop")
 	}
-	if result.TaskRun.Status == taskstate.TaskStatusRunning {
+	if result.TaskRun.Status == agentcontract.TaskStatusRunning {
 		t.Fatalf("expected the stalled turn to terminate, got status %s", result.TaskRun.Status)
 	}
 }
@@ -1519,7 +1520,7 @@ func TestAgentTurnRunnerFinalizesSatisfiedGoalAtIterationEffort(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected attachment completion, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if len(result.Attachments) != 1 || result.Attachments[0].Filename != "browser-screenshot-2.png" {
@@ -1557,7 +1558,7 @@ func TestAgentTurnRunnerFinalizesRepeatedSuccessfulSideEffectWithoutPlannedEvide
 	if errorValue != nil {
 		t.Fatalf("expected completed turn, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if toolCallCount != 1 {
@@ -1592,7 +1593,7 @@ func TestAgentTurnRunnerFinalizesRepeatedSuccessfulReadWithoutExecutingAgain(t *
 	if errorValue != nil {
 		t.Fatalf("expected completed turn, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if toolCallCount != 1 {
@@ -1632,7 +1633,7 @@ func TestAgentTurnRunnerFinalizesReadAfterCorrectedInputRecovery(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected completed turn, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if toolCallCount != 2 {
@@ -1665,7 +1666,7 @@ func TestAgentTurnRunnerFinalizesSuccessfulReadDespiteUnsatisfiedReadHint(t *tes
 	if errorValue != nil {
 		t.Fatalf("expected completed turn, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if toolCallCount != 1 {
@@ -1704,7 +1705,7 @@ func TestAgentTurnRunnerDoesNotDeliverAttachmentsWhenFinalizerFails(t *testing.T
 	if errorValue != nil {
 		t.Fatalf("expected effort result, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked {
 		t.Fatalf("expected blocked task, got %s", result.TaskRun.Status)
 	}
 	if len(result.Attachments) != 0 {
@@ -1743,7 +1744,7 @@ func TestAgentTurnRunnerDoesNotCompleteEffortStopFromUnrequestedAttachment(t *te
 	if errorValue != nil {
 		t.Fatalf("expected effort result, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked {
 		t.Fatalf("expected blocked task, got %s", result.TaskRun.Status)
 	}
 	if len(result.Attachments) != 0 {
@@ -1777,7 +1778,7 @@ func TestAgentTurnRunnerFailsWhenMaximumIterationsAreExceeded(t *testing.T) {
 	if result.UserNotice != "작업을 시작했지만 완료 전에 멈췄습니다. 다시 시도하면 이어서 처리할 수 있어요." {
 		t.Fatalf("expected generated limit reply, got %q", result.UserNotice)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked {
 		t.Fatalf("expected blocked task run, got %s", result.TaskRun.Status)
 	}
 }
@@ -1814,7 +1815,7 @@ func TestAgentTurnRunnerDoesNotEscalateIterationLimitForInspectionOnlyProgress(t
 	if errorValue != nil {
 		t.Fatalf("expected blocked limit result, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked {
 		t.Fatalf("expected blocked task, got %s", result.TaskRun.Status)
 	}
 	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.budget_escalated", "") {
@@ -1915,26 +1916,26 @@ type turnRunnerTestServices struct {
 
 type failingAttemptStartRepository struct {
 	errorValue error
-	taskRuns   map[string]taskstate.TaskRun
+	taskRuns   map[string]agentcontract.TaskRun
 }
 
-func (repository failingAttemptStartRepository) SaveTaskRun(taskRun taskstate.TaskRun) error {
+func (repository failingAttemptStartRepository) SaveTaskRun(taskRun agentcontract.TaskRun) error {
 	return nil
 }
 
-func (repository failingAttemptStartRepository) StartTaskRunAttempt(taskstate.TaskRun, taskstate.TaskAttempt) error {
+func (repository failingAttemptStartRepository) StartTaskRunAttempt(agentcontract.TaskRun, agentcontract.TaskAttempt) error {
 	return repository.errorValue
 }
 
-func (repository failingAttemptStartRepository) FinishTaskRunAttempt(taskstate.TaskRun, taskstate.TaskAttempt) error {
+func (repository failingAttemptStartRepository) FinishTaskRunAttempt(agentcontract.TaskRun, agentcontract.TaskAttempt) error {
 	return nil
 }
 
-func (repository failingAttemptStartRepository) TransitionTaskRun(transition taskstate.TaskRunTransition) (taskstate.TaskRun, error) {
+func (repository failingAttemptStartRepository) TransitionTaskRun(transition agentcontract.TaskRunTransition) (agentcontract.TaskRun, error) {
 	if transition.StartedAttempt != nil {
-		return taskstate.TaskRun{}, repository.errorValue
+		return agentcontract.TaskRun{}, repository.errorValue
 	}
-	return taskstate.TaskRun{
+	return agentcontract.TaskRun{
 		TaskRunID:        transition.TaskRunID,
 		Status:           transition.ToState,
 		FailureReason:    transition.FailureReason,
@@ -1943,19 +1944,19 @@ func (repository failingAttemptStartRepository) TransitionTaskRun(transition tas
 	}, nil
 }
 
-func (repository failingAttemptStartRepository) FindTaskRun(string) (taskstate.TaskRun, bool, error) {
-	return taskstate.TaskRun{}, false, nil
+func (repository failingAttemptStartRepository) FindTaskRun(string) (agentcontract.TaskRun, bool, error) {
+	return agentcontract.TaskRun{}, false, nil
 }
 
-func (repository failingAttemptStartRepository) FindTaskAttempt(string) (taskstate.TaskAttempt, bool, error) {
-	return taskstate.TaskAttempt{}, false, nil
+func (repository failingAttemptStartRepository) FindTaskAttempt(string) (agentcontract.TaskAttempt, bool, error) {
+	return agentcontract.TaskAttempt{}, false, nil
 }
 
-func (repository failingAttemptStartRepository) ListTaskRun() ([]taskstate.TaskRun, error) {
+func (repository failingAttemptStartRepository) ListTaskRun() ([]agentcontract.TaskRun, error) {
 	return nil, nil
 }
 
-func (repository failingAttemptStartRepository) ListTaskRunByPersonID(string) ([]taskstate.TaskRun, error) {
+func (repository failingAttemptStartRepository) ListTaskRunByPersonID(string) ([]agentcontract.TaskRun, error) {
 	return nil, nil
 }
 
@@ -2187,7 +2188,7 @@ func (languageModel *localRecoveryFallbackLanguageModel) GenerateLocalRecoveryCh
 	}, nil
 }
 
-func taskEventsContain(taskEvents []taskstate.TaskEvent, name string, bodyFragment string) bool {
+func taskEventsContain(taskEvents []agentcontract.TaskEvent, name string, bodyFragment string) bool {
 	for _, taskEvent := range taskEvents {
 		if taskEvent.Name == name && strings.Contains(taskEvent.Body, bodyFragment) {
 			return true
@@ -2196,7 +2197,7 @@ func taskEventsContain(taskEvents []taskstate.TaskEvent, name string, bodyFragme
 	return false
 }
 
-func countTaskEvents(taskEvents []taskstate.TaskEvent, name string) int {
+func countTaskEvents(taskEvents []agentcontract.TaskEvent, name string) int {
 	count := 0
 	for _, taskEvent := range taskEvents {
 		if taskEvent.Name == name {

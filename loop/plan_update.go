@@ -2,7 +2,7 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -34,8 +34,8 @@ func (agentTurnRunner *AgentTurnRunner) applyPlanUpdateObservation(taskRunID str
 	}
 	state.ExecutionState.Steps = document.Steps
 	agentTurnRunner.widenPaceForPlannedLevel(taskRunID, state, document.Level)
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentPlanUpdated, marshalEventBody(planUpdateDocument{Goal: state.ExecutionState.Goal, Level: document.Level, Steps: state.ExecutionState.Steps}))
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentExecutionState, marshalEventBody(normalizeExecutionState(state.ExecutionState)))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentPlanUpdated, marshalEventBody(planUpdateDocument{Goal: state.ExecutionState.Goal, Level: document.Level, Steps: state.ExecutionState.Steps}))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentExecutionState, marshalEventBody(normalizeExecutionState(state.ExecutionState)))
 }
 
 func (agentTurnRunner *AgentTurnRunner) notePlanMissingBeforeStateChange(taskRunID string, request AgentTurnRequest, state *agentTaskState, actionDocument turnActionDocument) {
@@ -52,7 +52,7 @@ func (agentTurnRunner *AgentTurnRunner) notePlanMissingBeforeStateChange(taskRun
 	state.DidNudgePlan = true
 	observation := newContentObservation(nextObservationIDForObservations(state.Observations), "policy", actionDocument.ToolName, "This multi-step task has no recorded plan yet. The current call proceeds; after it completes, record your goal and step plan with plan_update, then continue.")
 	state.Observations = append(state.Observations, observation)
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentPlanNudged, marshalEventBody(observation))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentPlanNudged, marshalEventBody(observation))
 }
 
 func toolDefinitionIsStateChanging(toolDefinition toolcontract.ToolDefinition) bool {
@@ -83,7 +83,7 @@ func (agentTurnRunner *AgentTurnRunner) widenPaceForPlannedLevel(taskRunID strin
 	agentTurnRunner.options.MaxToolCallCount = plannedProfile.MaxToolCallCount
 	agentTurnRunner.setElapsedBudgetFromProfile(plannedProfile)
 	state.Request.TaskLevel = normalizedLevel
-	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentPlanSized, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentPlanSized, marshalEventBody(map[string]any{
 		"level":             string(normalizedLevel),
 		"maxToolCallCount":  agentTurnRunner.options.MaxToolCallCount,
 		"maxIterationCount": agentTurnRunner.options.MaxIterationCount,

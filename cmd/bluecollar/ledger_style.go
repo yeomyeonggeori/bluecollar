@@ -4,7 +4,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 const (
@@ -79,11 +79,11 @@ func styledEventBody(body string) string {
 	return styleDim + body + styleReset
 }
 
-func styledStatus(status taskstate.TaskStatus) string {
+func styledStatus(status agentcontract.TaskStatus) string {
 	if !stderrWantsStyle() {
 		return string(status)
 	}
-	if status == taskstate.TaskStatusCompleted {
+	if status == agentcontract.TaskStatusCompleted {
 		return styleBold + styleGreen + string(status) + styleReset
 	}
 	return styleBold + styleRed + string(status) + styleReset

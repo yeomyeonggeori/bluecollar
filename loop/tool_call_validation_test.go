@@ -3,12 +3,11 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func TestAgentTurnRunnerRecordsDeniedToolAsObservation(t *testing.T) {
@@ -72,7 +71,7 @@ func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected malformed call recovery: %v", errorValue)
 	}
-	if result.TaskRun.Status == taskstate.TaskStatusWaitingApproval {
+	if result.TaskRun.Status == agentcontract.TaskStatusWaitingApproval {
 		t.Fatal("expected malformed input to stay outside the approval flow")
 	}
 	if handlerCallCount != 0 {
@@ -131,7 +130,7 @@ func TestAgentTurnRunnerRejectsSecondDMSendAfterSuccess(t *testing.T) {
 	if sendCallCount != 1 {
 		t.Fatalf("expected exactly one DM send, got %d", sendCallCount)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s events=%+v", result.TaskRun.Status, services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID))
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_repeat_rejected", "obs-001") {
@@ -522,7 +521,7 @@ func TestAgentTurnRunnerStopsRepeatedMalformedToolInputByLimit(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected limit result, got error: %v", errorValue)
 	}
-	if result.TaskRun.Status == taskstate.TaskStatusRunning {
+	if result.TaskRun.Status == agentcontract.TaskStatusRunning {
 		t.Fatalf("expected the malformed-input loop to terminate, got status %s", result.TaskRun.Status)
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.stall_exit_directive", "") {
@@ -641,7 +640,7 @@ func TestAgentTurnRunnerRejectsRepeatedSuccessfulToolCall(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected duplicate completion: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s events=%+v", result.TaskRun.Status, services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID))
 	}
 	if toolCallCount != 1 {
@@ -817,7 +816,7 @@ func TestAgentTurnRunnerRejectsRepeatedScheduleCreateWithoutExecutingAgain(t *te
 	if errorValue != nil {
 		t.Fatalf("expected duplicate schedule turn to finish: %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if toolCallCount != 1 {

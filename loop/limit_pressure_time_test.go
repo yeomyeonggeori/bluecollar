@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"errors"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
@@ -99,7 +100,7 @@ func TestElapsedClosingDurationIsPartOfTheTotalBudget(t *testing.T) {
 func TestElapsedClosingCompletesFromExactEvidenceBeforeReply(t *testing.T) {
 	languageModel := newElapsedClosingLanguageModel("task_add", `{"title":"분기 결산 운영 검토"}`, "분기 결산 운영 검토 업무를 등록했습니다.")
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 1})
-	languageModel.observeTaskStatus = func() taskstate.TaskStatus {
+	languageModel.observeTaskStatus = func() agentcontract.TaskStatus {
 		return onlyTaskStatus(services.taskRunService, "person-1")
 	}
 	toolSet := newTestCapabilityToolSet([]string{"task_add"})
@@ -123,7 +124,7 @@ func TestElapsedClosingCompletesFromExactEvidenceBeforeReply(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected elapsed completion, got %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted || languageModel.statusAtClosing != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted || languageModel.statusAtClosing != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed status before closing, got result=%s closing=%s", result.TaskRun.Status, languageModel.statusAtClosing)
 	}
 	if result.FinishMessage != languageModel.closingReply {
@@ -144,7 +145,7 @@ func TestElapsedClosingCompletesFromExactEvidenceBeforeReply(t *testing.T) {
 func TestElapsedClosingBlocksBeforeReplyWhenEvidenceIsMissing(t *testing.T) {
 	languageModel := newElapsedClosingLanguageModel("", "", "작업 시간이 끝나 진행 상황을 저장했습니다.")
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 1})
-	languageModel.observeTaskStatus = func() taskstate.TaskStatus {
+	languageModel.observeTaskStatus = func() agentcontract.TaskStatus {
 		return onlyTaskStatus(services.taskRunService, "person-1")
 	}
 	toolSet := newTestCapabilityToolSet([]string{"task_add"})
@@ -163,10 +164,10 @@ func TestElapsedClosingBlocksBeforeReplyWhenEvidenceIsMissing(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected elapsed block, got %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
 		t.Fatalf("expected max_elapsed block, got %+v", result.TaskRun)
 	}
-	if languageModel.statusAtClosing != taskstate.TaskStatusBlocked {
+	if languageModel.statusAtClosing != agentcontract.TaskStatusBlocked {
 		t.Fatalf("expected blocked status before closing, got %s", languageModel.statusAtClosing)
 	}
 	if result.UserNotice != languageModel.closingReply {
@@ -183,7 +184,7 @@ func TestElapsedClosingUsesRemainingTotalBudget(t *testing.T) {
 	languageModel.closingStarted = make(chan struct{})
 	languageModel.blockClosing = true
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 1})
-	languageModel.observeTaskStatus = func() taskstate.TaskStatus {
+	languageModel.observeTaskStatus = func() agentcontract.TaskStatus {
 		return onlyTaskStatus(services.taskRunService, "person-1")
 	}
 	toolSet := newTestCapabilityToolSet([]string{"task_add"})
@@ -214,13 +215,13 @@ func TestElapsedClosingUsesRemainingTotalBudget(t *testing.T) {
 	if !languageModel.closingHasDeadline {
 		t.Fatal("expected elapsed closing to use the hard total deadline")
 	}
-	if languageModel.statusAtClosing != taskstate.TaskStatusCompleted {
+	if languageModel.statusAtClosing != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed status before closing, got %s", languageModel.statusAtClosing)
 	}
 
 	select {
 	case result := <-resultChannel:
-		if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+		if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 			t.Fatalf("expected persisted completion to survive closing cancellation, got %+v", result.TaskRun)
 		}
 		if result.ReplySuppressed {
@@ -265,7 +266,7 @@ func TestElapsedClosingTotalDeadlinePersistsRawFallback(t *testing.T) {
 
 	select {
 	case result := <-resultChannel:
-		if result.TaskRun.Status != taskstate.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
+		if result.TaskRun.Status != agentcontract.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
 			t.Fatalf("expected max elapsed block, got %+v", result.TaskRun)
 		}
 		if result.ReplySuppressed {
@@ -299,7 +300,7 @@ func TestElapsedClosingFailureDoesNotRetryOrUseLegacyFallback(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected compact fallback result, got %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked || result.FailureNotice.Source != "raw_error" {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked || result.FailureNotice.Source != "raw_error" {
 		t.Fatalf("expected persisted block with raw notice, got %+v", result)
 	}
 	assertSingleElapsedClosing(t, languageModel)
@@ -386,7 +387,7 @@ func TestAgentTurnRunnerCancelsToolCallAtExecutionEffortDeadline(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected bounded limit result, got %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
 		t.Fatalf("expected max_elapsed block, got %+v", result.TaskRun)
 	}
 	select {
@@ -426,7 +427,7 @@ func TestMaxIterationsClosingDefersToElapsedClosing(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected elapsed result, got %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
 		t.Fatalf("expected max_elapsed to own the terminal result, got %+v", result.TaskRun)
 	}
 	if languageModel.structuredCalls == 0 {
@@ -467,7 +468,7 @@ func TestMaxToolCallsClosingDefersToElapsedClosing(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected elapsed result, got %v", errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked || result.TaskRun.FailureReason != "max_elapsed" {
 		t.Fatalf("expected max_elapsed to own the terminal result, got %+v", result.TaskRun)
 	}
 	assertSingleElapsedClosing(t, languageModel)
@@ -486,7 +487,7 @@ func assertSingleElapsedClosing(t *testing.T, languageModel *elapsedClosingLangu
 	}
 }
 
-func onlyTaskStatus(taskRunService *taskstate.TaskRunService, personID string) taskstate.TaskStatus {
+func onlyTaskStatus(taskRunService *taskstate.TaskRunService, personID string) agentcontract.TaskStatus {
 	taskRuns := taskRunService.ListTaskRunByPersonID(personID)
 	if len(taskRuns) != 1 {
 		return ""
@@ -516,8 +517,8 @@ type elapsedClosingLanguageModel struct {
 	closingStarted     chan struct{}
 	blockClosing       bool
 	blockStructured    bool
-	observeTaskStatus  func() taskstate.TaskStatus
-	statusAtClosing    taskstate.TaskStatus
+	observeTaskStatus  func() agentcontract.TaskStatus
+	statusAtClosing    agentcontract.TaskStatus
 	closingHasDeadline bool
 	closingRequest     model.ChatCompletionRequest
 	actionCalls        int

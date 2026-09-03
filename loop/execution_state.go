@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 const executionStateMaxCharacters = 2500
@@ -113,10 +113,10 @@ func executionStateIsEmpty(state ExecutionState) bool {
 		state.NextPlan == ""
 }
 
-func executionStateFromTaskEvents(events []taskstate.TaskEvent) ExecutionState {
+func executionStateFromTaskEvents(events []agentcontract.TaskEvent) ExecutionState {
 	for index := len(events) - 1; index >= 0; index-- {
 		event := events[index]
-		if strings.TrimSpace(event.Name) != taskstate.TaskEventAgentExecutionState {
+		if strings.TrimSpace(event.Name) != agentcontract.TaskEventAgentExecutionState {
 			continue
 		}
 		var state ExecutionState

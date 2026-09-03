@@ -2,11 +2,10 @@ package loop
 
 import (
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
-
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func TestStalledOnRedundantInspectionDetectsCacheHit(t *testing.T) {
@@ -198,7 +197,7 @@ func TestBrowserFailureRecoveryGuidanceRedirectsToWebFetch(t *testing.T) {
 	}
 }
 
-func toolResultTestEvent(name string, observationID string, tool string, content string, failed bool) taskstate.TaskEvent {
+func toolResultTestEvent(name string, observationID string, tool string, content string, failed bool) agentcontract.TaskEvent {
 	observation := map[string]any{
 		"observationID": observationID,
 		"action":        "continue",
@@ -209,11 +208,11 @@ func toolResultTestEvent(name string, observationID string, tool string, content
 		observation["failure"] = map[string]any{"kind": "external_service", "code": "operation_failed", "stage": "tool"}
 	}
 	body, _ := json.Marshal(observation)
-	return taskstate.TaskEvent{Name: name, Body: string(body)}
+	return agentcontract.TaskEvent{Name: name, Body: string(body)}
 }
 
 func TestCleanRestartDiscardsPoisonedContextOnReSteerAfterStall(t *testing.T) {
-	poisoned := []taskstate.TaskEvent{
+	poisoned := []agentcontract.TaskEvent{
 		toolResultTestEvent("tool.browser_open.result", "obs-001", "browser_open", "browser URL must be absolute", true),
 		{Name: "agent.no_progress_loop_stopped", Body: "{}"},
 		{Name: "task.steer.requested", Body: "{}"},
@@ -222,7 +221,7 @@ func TestCleanRestartDiscardsPoisonedContextOnReSteerAfterStall(t *testing.T) {
 		t.Fatal("a user steer after a stall should trigger a clean restart")
 	}
 
-	state, errorValue := agentTaskStateForTurn(AgentTurnRequest{IsRuntimeRestartResume: true}, TurnOptions{}, taskstate.TaskRun{TaskRunID: "task-1"}, poisoned, false)
+	state, errorValue := agentTaskStateForTurn(AgentTurnRequest{IsRuntimeRestartResume: true}, TurnOptions{}, agentcontract.TaskRun{TaskRunID: "task-1"}, poisoned, false)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -237,13 +236,13 @@ func TestCleanRestartDiscardsPoisonedContextOnReSteerAfterStall(t *testing.T) {
 }
 
 func TestCleanRestartPreservesDurablePublishEvidence(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTestEvent("tool.site_serve.result", "obs-010", "site_serve", `{"publishedURL":"https://x.example.test"}`, false),
 		toolResultTestEvent("tool.browser_open.result", "obs-011", "browser_open", "garbage", true),
 		{Name: "agent.limit_stop", Body: "{}"},
 		{Name: "task.steer.requested", Body: "{}"},
 	}
-	state, _ := agentTaskStateForTurn(AgentTurnRequest{IsRuntimeRestartResume: true}, TurnOptions{}, taskstate.TaskRun{TaskRunID: "task-2"}, events, false)
+	state, _ := agentTaskStateForTurn(AgentTurnRequest{IsRuntimeRestartResume: true}, TurnOptions{}, agentcontract.TaskRun{TaskRunID: "task-2"}, events, false)
 	hasPublish := false
 	for _, observation := range state.Observations {
 		if observation.Tool == "site_serve" {
@@ -259,20 +258,20 @@ func TestCleanRestartPreservesDurablePublishEvidence(t *testing.T) {
 }
 
 func TestNonStalledResumeRestoresNormally(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTestEvent("tool.file_read.result", "obs-001", "file_read", "content", false),
 	}
 	if shouldCleanRestartRestoredTask(events) {
 		t.Fatal("a resume without a prior stall must not clean-restart")
 	}
-	state, _ := agentTaskStateForTurn(AgentTurnRequest{IsRuntimeRestartResume: true}, TurnOptions{}, taskstate.TaskRun{TaskRunID: "task-3"}, events, false)
+	state, _ := agentTaskStateForTurn(AgentTurnRequest{IsRuntimeRestartResume: true}, TurnOptions{}, agentcontract.TaskRun{TaskRunID: "task-3"}, events, false)
 	if len(state.Observations) != 1 || state.Observations[0].Tool != "file_read" {
 		t.Fatalf("normal resume should restore observations, got %+v", state.Observations)
 	}
 }
 
 func TestCleanRestartScrubsPoisonedGoalContext(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTestEvent("tool.browser_open.result", "obs-001", "browser_open", "garbage", true),
 		{Name: "agent.no_progress_loop_stopped", Body: "{}"},
 		{Name: "task.steer.requested", Body: "{}"},
@@ -283,7 +282,7 @@ func TestCleanRestartScrubsPoisonedGoalContext(t *testing.T) {
 			KnownContext: []string{"Assess prior progress from the task event ledger and restored observations."},
 		},
 	}
-	state, errorValue := agentTaskStateForTurn(request, TurnOptions{}, taskstate.TaskRun{TaskRunID: "task-1"}, events, false)
+	state, errorValue := agentTaskStateForTurn(request, TurnOptions{}, agentcontract.TaskRun{TaskRunID: "task-1"}, events, false)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

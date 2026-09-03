@@ -1,8 +1,11 @@
-// Package taskstate is the durable record of work.
+// Package taskstate is the service over the durable record of work.
 //
-// A TaskRun is one unit of work with one of nine statuses, and its event ledger
-// is the append-only sequence of everything that happened to it. Event names
-// follow a fixed grammar — tool.<name>.requested, tool.<name>.result,
+// The record itself belongs to agentcontract: TaskRun, TaskStatus, TaskAttempt,
+// TaskEvent and the ledger event names are contract data, so a reader can name
+// them without depending on where they are stored. taskstate creates runs,
+// advances them through their nine statuses, and appends to the event ledger.
+//
+// Event names follow a fixed grammar — tool.<name>.requested, tool.<name>.result,
 // approval.pending_call, approval.executed — so a reader can reconstruct a run
 // without access to any harness's internal types.
 //

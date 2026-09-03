@@ -1,30 +1,34 @@
 package taskstate
 
-import "context"
+import (
+	"context"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+)
 
 // The harness records what a task did; the host decides where that record lives.
 
 type TaskRunStore interface {
-	AdvanceTaskRun(taskRunID string, currentAgentProfileName string) (TaskRun, error)
+	AdvanceTaskRun(taskRunID string, currentAgentProfileName string) (agentcontract.TaskRun, error)
 	AppendTaskEvent(taskRunID string, name string, body string)
-	CancelActiveTaskRuns(request TaskRunCancelRequest) []TaskRun
-	CancelTaskRunWithReason(taskRunID string, requesterPersonID string, reason string) (TaskRun, error)
-	CompleteTaskRun(taskRunID string, result string) (TaskRun, error)
-	CreateTaskRunWithOrigin(requesterPersonID string, origin TaskRunOrigin, prompt string) TaskRun
-	CreateTaskRunWithOriginAndError(requesterPersonID string, origin TaskRunOrigin, prompt string) (TaskRun, error)
-	FailTaskRun(taskRunID string, reason string) (TaskRun, error)
-	FindTaskRun(taskRunID string) (TaskRun, bool)
-	InterruptInactiveTaskRun(taskRunID string, reason string) (TaskRun, bool)
-	IsTaskRunActuallyRunning(taskRun TaskRun) bool
-	ListTaskEvent(taskRunID string) []TaskEvent
-	ListTaskRun() []TaskRun
-	ListTaskRunByPersonID(personID string) []TaskRun
-	PauseTaskRun(taskRunID string, status TaskStatus, reason string) (TaskRun, error)
-	RecordTaskRunResult(taskRunID string, result string) (TaskRun, error)
+	CancelActiveTaskRuns(request TaskRunCancelRequest) []agentcontract.TaskRun
+	CancelTaskRunWithReason(taskRunID string, requesterPersonID string, reason string) (agentcontract.TaskRun, error)
+	CompleteTaskRun(taskRunID string, result string) (agentcontract.TaskRun, error)
+	CreateTaskRunWithOrigin(requesterPersonID string, origin TaskRunOrigin, prompt string) agentcontract.TaskRun
+	CreateTaskRunWithOriginAndError(requesterPersonID string, origin TaskRunOrigin, prompt string) (agentcontract.TaskRun, error)
+	FailTaskRun(taskRunID string, reason string) (agentcontract.TaskRun, error)
+	FindTaskRun(taskRunID string) (agentcontract.TaskRun, bool)
+	InterruptInactiveTaskRun(taskRunID string, reason string) (agentcontract.TaskRun, bool)
+	IsTaskRunActuallyRunning(taskRun agentcontract.TaskRun) bool
+	ListTaskEvent(taskRunID string) []agentcontract.TaskEvent
+	ListTaskRun() []agentcontract.TaskRun
+	ListTaskRunByPersonID(personID string) []agentcontract.TaskRun
+	PauseTaskRun(taskRunID string, status agentcontract.TaskStatus, reason string) (agentcontract.TaskRun, error)
+	RecordTaskRunResult(taskRunID string, result string) (agentcontract.TaskRun, error)
 	RegisterTaskRunCancel(taskRunID string, cancelFunction context.CancelFunc) func()
 	RegisterTaskRunObserver(taskRunID string, observer func(RawTurnEvent)) func()
 	RegisterTaskRunTool(taskRunID string, observationID string, toolName string) func()
-	ResumeTaskRun(taskRunID string) (TaskRun, error)
+	ResumeTaskRun(taskRunID string) (agentcontract.TaskRun, error)
 }
 
 type TaskStepStore interface {

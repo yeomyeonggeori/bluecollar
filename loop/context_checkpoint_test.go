@@ -5,12 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func toolResultTaskEvent(taskEventID string, observationID string) taskstate.TaskEvent {
-	return taskstate.TaskEvent{
+func toolResultTaskEvent(taskEventID string, observationID string) agentcontract.TaskEvent {
+	return agentcontract.TaskEvent{
 		TaskEventID: taskEventID,
 		Name:        "tool.note_write.result",
 		Body: marshalEventBody(turnObservation{
@@ -22,14 +22,14 @@ func toolResultTaskEvent(taskEventID string, observationID string) taskstate.Tas
 	}
 }
 
-func unreadableTaskEvent(taskEventID string) taskstate.TaskEvent {
-	return taskstate.TaskEvent{TaskEventID: taskEventID, Name: "tool.note_write.result", Body: "{this is not decodable"}
+func unreadableTaskEvent(taskEventID string) agentcontract.TaskEvent {
+	return agentcontract.TaskEvent{TaskEventID: taskEventID, Name: "tool.note_write.result", Body: "{this is not decodable"}
 }
 
-func checkpointTaskEvent(summary TaskContextSummary) taskstate.TaskEvent {
-	return taskstate.TaskEvent{
+func checkpointTaskEvent(summary TaskContextSummary) agentcontract.TaskEvent {
+	return agentcontract.TaskEvent{
 		TaskEventID: "event-checkpoint",
-		Name:        taskstate.TaskEventAgentContextSummary,
+		Name:        agentcontract.TaskEventAgentContextSummary,
 		Body:        marshalEventBody(summary),
 	}
 }
@@ -48,7 +48,7 @@ func retainedContextCheckpoint() TaskContextSummary {
 }
 
 func TestAResumeRebuildsContextFromTheCheckpointAloneWithoutTheEventsItAccountsFor(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		unreadableTaskEvent("event-1"),
 		unreadableTaskEvent("event-2"),
 		unreadableTaskEvent("event-3"),
@@ -57,7 +57,7 @@ func TestAResumeRebuildsContextFromTheCheckpointAloneWithoutTheEventsItAccountsF
 		toolResultTaskEvent("event-5", "observation-5"),
 	}
 
-	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "ship"}, TurnOptions{}, taskstate.TaskRun{TaskRunID: "task-1", Status: taskstate.TaskStatusRunning}, events)
+	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "ship"}, TurnOptions{}, agentcontract.TaskRun{TaskRunID: "task-1", Status: agentcontract.TaskStatusRunning}, events)
 
 	if errorValue != nil {
 		t.Fatalf("expected the resume to rebuild state: %v", errorValue)
@@ -71,7 +71,7 @@ func TestAResumeRebuildsContextFromTheCheckpointAloneWithoutTheEventsItAccountsF
 }
 
 func TestACheckpointDoesNotLoseTheWorkItAbsorbed(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTaskEvent("event-1", "observation-1"),
 		toolResultTaskEvent("event-2", "observation-2"),
 		toolResultTaskEvent("event-3", "observation-3"),
@@ -80,7 +80,7 @@ func TestACheckpointDoesNotLoseTheWorkItAbsorbed(t *testing.T) {
 		toolResultTaskEvent("event-5", "observation-5"),
 	}
 
-	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "ship"}, TurnOptions{}, taskstate.TaskRun{TaskRunID: "task-1", Status: taskstate.TaskStatusRunning}, events)
+	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "ship"}, TurnOptions{}, agentcontract.TaskRun{TaskRunID: "task-1", Status: agentcontract.TaskStatusRunning}, events)
 
 	if errorValue != nil {
 		t.Fatalf("expected the resume to rebuild state: %v", errorValue)
@@ -94,12 +94,12 @@ func TestACheckpointDoesNotLoseTheWorkItAbsorbed(t *testing.T) {
 }
 
 func TestATaskWithNoCheckpointStillResumesFromItsWholeHistory(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTaskEvent("event-1", "observation-1"),
 		toolResultTaskEvent("event-2", "observation-2"),
 	}
 
-	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "ship"}, TurnOptions{}, taskstate.TaskRun{TaskRunID: "task-1", Status: taskstate.TaskStatusRunning}, events)
+	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "ship"}, TurnOptions{}, agentcontract.TaskRun{TaskRunID: "task-1", Status: agentcontract.TaskStatusRunning}, events)
 
 	if errorValue != nil {
 		t.Fatalf("expected the resume to rebuild state: %v", errorValue)
@@ -121,7 +121,7 @@ func TestTheCheckpointBookkeepingNeverReachesTheModel(t *testing.T) {
 }
 
 func TestASecondCheckpointInheritsWhatTheFirstAlreadyAccountedFor(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTaskEvent("event-1", "observation-1"),
 		toolResultTaskEvent("event-2", "observation-2"),
 		toolResultTaskEvent("event-3", "observation-3"),
@@ -160,7 +160,7 @@ func TestASecondCheckpointInheritsWhatTheFirstAlreadyAccountedFor(t *testing.T) 
 }
 
 func TestRecompactingTheSameObservationDoesNotCountItTwice(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		toolResultTaskEvent("event-1", "observation-1"),
 		toolResultTaskEvent("event-2", "observation-2"),
 		toolResultTaskEvent("event-3", "observation-3"),
@@ -216,7 +216,7 @@ func TestACompactedRunResumesToExactlyWhatTheModelWasLastShown(t *testing.T) {
 	resumedState, errorValue := restoreAgentTaskState(
 		AgentTurnRequest{Prompt: "ship", IsRuntimeRestartResume: true},
 		services.runner.options,
-		taskstate.TaskRun{TaskRunID: taskRun.TaskRunID, Status: taskstate.TaskStatusRunning},
+		agentcontract.TaskRun{TaskRunID: taskRun.TaskRunID, Status: agentcontract.TaskStatusRunning},
 		events,
 	)
 	if errorValue != nil {
@@ -233,16 +233,16 @@ func TestACompactedRunResumesToExactlyWhatTheModelWasLastShown(t *testing.T) {
 	}
 }
 
-func requestedToolTaskEvent(taskEventID string, observationID string, toolName string) taskstate.TaskEvent {
-	return taskstate.TaskEvent{
+func requestedToolTaskEvent(taskEventID string, observationID string, toolName string) agentcontract.TaskEvent {
+	return agentcontract.TaskEvent{
 		TaskEventID: taskEventID,
-		Name:        taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix),
+		Name:        agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventRequestedSuffix),
 		Body:        marshalEventBody(map[string]any{"observationID": observationID, "toolName": toolName, "input": map[string]string{"to": "이샘플"}}),
 	}
 }
 
 func TestARestartSeesACallThatWasStartedAndNeverAnswered(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		requestedToolTaskEvent("event-1", "observation-1", "note_write"),
 		toolResultTaskEvent("event-2", "observation-1"),
 		requestedToolTaskEvent("event-3", "observation-2", "message_send"),
@@ -269,7 +269,7 @@ func TestARestartSeesACallThatWasStartedAndNeverAnswered(t *testing.T) {
 }
 
 func TestAnAnsweredCallLeavesNothingBehind(t *testing.T) {
-	events := []taskstate.TaskEvent{
+	events := []agentcontract.TaskEvent{
 		requestedToolTaskEvent("event-1", "observation-1", "note_write"),
 		toolResultTaskEvent("event-2", "observation-1"),
 	}

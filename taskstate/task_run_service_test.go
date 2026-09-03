@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func TestTaskRunCancelCallsRegisteredCancelFunction(t *testing.T) {
@@ -27,7 +29,7 @@ func TestTaskRunCancelCallsRegisteredCancelFunction(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if cancelledTaskRun.Status != TaskStatusCancelled {
+	if cancelledTaskRun.Status != agentcontract.TaskStatusCancelled {
 		t.Fatalf("status = %s, want cancelled", cancelledTaskRun.Status)
 	}
 	if !cancelCalled {
@@ -58,7 +60,7 @@ func TestCancelledTaskRunCannotComplete(t *testing.T) {
 		t.Fatalf("completed task run = %+v, want zero value", completedTaskRun)
 	}
 	storedTaskRun, isFound := taskRunService.FindTaskRun(taskRun.TaskRunID)
-	if !isFound || storedTaskRun.Status != TaskStatusCancelled {
+	if !isFound || storedTaskRun.Status != agentcontract.TaskStatusCancelled {
 		t.Fatalf("stored status = %s, found = %v, want cancelled", storedTaskRun.Status, isFound)
 	}
 }
@@ -112,7 +114,7 @@ func TestAdvanceTaskRunCreatesCurrentAttempt(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if runningTaskRun.Status != TaskStatusRunning {
+	if runningTaskRun.Status != agentcontract.TaskStatusRunning {
 		t.Fatalf("status = %s, want running", runningTaskRun.Status)
 	}
 	if runningTaskRun.CurrentAttemptID == "" {
@@ -122,7 +124,7 @@ func TestAdvanceTaskRunCreatesCurrentAttempt(t *testing.T) {
 	if !isFound {
 		t.Fatal("expected task attempt to be recorded")
 	}
-	if taskAttempt.TaskRunID != taskRun.TaskRunID || taskAttempt.Status != TaskAttemptStatusRunning {
+	if taskAttempt.TaskRunID != taskRun.TaskRunID || taskAttempt.Status != agentcontract.TaskAttemptStatusRunning {
 		t.Fatalf("unexpected attempt = %+v", taskAttempt)
 	}
 	if !taskRunService.IsTaskRunActuallyRunning(runningTaskRun) {
@@ -132,14 +134,14 @@ func TestAdvanceTaskRunCreatesCurrentAttempt(t *testing.T) {
 
 func TestAdvanceTaskRunAllowsBlockedResume(t *testing.T) {
 	taskRunService := NewTaskRunService(NewTaskEventService())
-	blockedTaskRun := pausedTaskRunForTest(t, taskRunService, TaskStatusBlocked, "max_iterations")
+	blockedTaskRun := pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusBlocked, "max_iterations")
 
 	resumedTaskRun, errorValue := taskRunService.AdvanceTaskRun(blockedTaskRun.TaskRunID, "assistant")
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if resumedTaskRun.Status != TaskStatusRunning {
+	if resumedTaskRun.Status != agentcontract.TaskStatusRunning {
 		t.Fatalf("status = %s, want running", resumedTaskRun.Status)
 	}
 	if resumedTaskRun.CurrentAttemptID == blockedTaskRun.CurrentAttemptID {
@@ -156,26 +158,26 @@ func TestAdvanceTaskRunAllowsBlockedResume(t *testing.T) {
 func TestAdvanceTaskRunRejectsTerminalStatuses(t *testing.T) {
 	testCases := []struct {
 		name      string
-		terminate func(*TaskRunService, string) (TaskRun, error)
+		terminate func(*TaskRunService, string) (agentcontract.TaskRun, error)
 	}{
 		{
 			name: "completed",
-			terminate: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+			terminate: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
 				if _, errorValue := taskRunService.AdvanceTaskRun(taskRunID, "assistant"); errorValue != nil {
-					return TaskRun{}, errorValue
+					return agentcontract.TaskRun{}, errorValue
 				}
 				return taskRunService.CompleteTaskRun(taskRunID, "done")
 			},
 		},
 		{
 			name: "failed",
-			terminate: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+			terminate: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
 				return taskRunService.FailTaskRun(taskRunID, "failed")
 			},
 		},
 		{
 			name: "cancelled",
-			terminate: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+			terminate: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
 				return taskRunService.CancelTaskRunWithReason(taskRunID, "person-1", "cancelled")
 			},
 		},
@@ -220,10 +222,10 @@ func TestAdvanceTaskRunAllowsPlannedAndWaitingTaskRuns(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if runningTaskRun.Status != TaskStatusRunning {
+	if runningTaskRun.Status != agentcontract.TaskStatusRunning {
 		t.Fatalf("status = %s, want running", runningTaskRun.Status)
 	}
-	waitingTaskRun, errorValue := taskRunService.PauseTaskRun(plannedTaskRun.TaskRunID, TaskStatusWaitingUserInput, "ask input")
+	waitingTaskRun, errorValue := taskRunService.PauseTaskRun(plannedTaskRun.TaskRunID, agentcontract.TaskStatusWaitingUserInput, "ask input")
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -233,7 +235,7 @@ func TestAdvanceTaskRunAllowsPlannedAndWaitingTaskRuns(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if resumedTaskRun.Status != TaskStatusRunning {
+	if resumedTaskRun.Status != agentcontract.TaskStatusRunning {
 		t.Fatalf("status = %s, want running", resumedTaskRun.Status)
 	}
 	if resumedTaskRun.CurrentAttemptID == runningTaskRun.CurrentAttemptID {
@@ -244,40 +246,40 @@ func TestAdvanceTaskRunAllowsPlannedAndWaitingTaskRuns(t *testing.T) {
 func TestCompleteTaskRunTransitionAllowsActiveTaskRuns(t *testing.T) {
 	testCases := []struct {
 		name           string
-		prepareTaskRun func(*testing.T, *TaskRunService) TaskRun
+		prepareTaskRun func(*testing.T, *TaskRunService) agentcontract.TaskRun
 		hasTaskAttempt bool
 	}{
 		{
 			name: "planned",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return taskRunService.CreateTaskRun("person-1", "direct-1", "planned")
 			},
 		},
 		{
 			name: "running",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return runningTaskRunForTest(t, taskRunService, "running")
 			},
 			hasTaskAttempt: true,
 		},
 		{
 			name: "waiting user input",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusWaitingUserInput, "waiting user input")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusWaitingUserInput, "waiting user input")
 			},
 			hasTaskAttempt: true,
 		},
 		{
 			name: "waiting approval",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusWaitingApproval, "waiting approval")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusWaitingApproval, "waiting approval")
 			},
 			hasTaskAttempt: true,
 		},
 		{
 			name: "blocked",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusBlocked, "blocked")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusBlocked, "blocked")
 			},
 			hasTaskAttempt: true,
 		},
@@ -293,16 +295,16 @@ func TestCompleteTaskRunTransitionAllowsActiveTaskRuns(t *testing.T) {
 			if errorValue != nil {
 				t.Fatal(errorValue)
 			}
-			if completedTaskRun.Status != TaskStatusCompleted || completedTaskRun.Result != "done" || completedTaskRun.FailureReason != "" {
+			if completedTaskRun.Status != agentcontract.TaskStatusCompleted || completedTaskRun.Result != "done" || completedTaskRun.FailureReason != "" {
 				t.Fatalf("completed task run = %+v, want completed result without failure reason", completedTaskRun)
 			}
 			storedTaskRun := taskRunService.taskRuns[taskRun.TaskRunID]
-			if storedTaskRun.Status != TaskStatusCompleted || storedTaskRun.Result != "done" {
+			if storedTaskRun.Status != agentcontract.TaskStatusCompleted || storedTaskRun.Result != "done" {
 				t.Fatalf("stored task run = %+v, want completed result", storedTaskRun)
 			}
 			if testCase.hasTaskAttempt {
 				taskAttempt := taskRunService.taskAttempts[completedTaskRun.CurrentAttemptID]
-				if taskAttempt.Status != TaskAttemptStatusCompleted || taskAttempt.FinishedAt == nil || taskAttempt.FailureReason != "" {
+				if taskAttempt.Status != agentcontract.TaskAttemptStatusCompleted || taskAttempt.FinishedAt == nil || taskAttempt.FailureReason != "" {
 					t.Fatalf("attempt = %+v, want completed attempt without failure reason", taskAttempt)
 				}
 			}
@@ -316,19 +318,19 @@ func TestCompleteTaskRunTransitionAllowsActiveTaskRuns(t *testing.T) {
 func TestCompleteTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 	testCases := []struct {
 		name           string
-		prepareTaskRun func(*testing.T, *TaskRunService) TaskRun
-		expectedStatus TaskStatus
+		prepareTaskRun func(*testing.T, *TaskRunService) agentcontract.TaskRun
+		expectedStatus agentcontract.TaskStatus
 	}{
 		{
 			name: "interrupted",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return inactiveInterruptedTaskRunForTest(t, taskRunService)
 			},
-			expectedStatus: TaskStatusInterrupted,
+			expectedStatus: agentcontract.TaskStatusInterrupted,
 		},
 		{
 			name: "completed",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "completed")
 				completedTaskRun, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "done")
 				if errorValue != nil {
@@ -336,11 +338,11 @@ func TestCompleteTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 				}
 				return completedTaskRun
 			},
-			expectedStatus: TaskStatusCompleted,
+			expectedStatus: agentcontract.TaskStatusCompleted,
 		},
 		{
 			name: "failed",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "failed")
 				failedTaskRun, errorValue := taskRunService.FailTaskRun(taskRun.TaskRunID, "failed")
 				if errorValue != nil {
@@ -348,11 +350,11 @@ func TestCompleteTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 				}
 				return failedTaskRun
 			},
-			expectedStatus: TaskStatusFailed,
+			expectedStatus: agentcontract.TaskStatusFailed,
 		},
 		{
 			name: "cancelled",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "cancelled")
 				cancelledTaskRun, errorValue := taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, "person-1", "cancelled")
 				if errorValue != nil {
@@ -360,7 +362,7 @@ func TestCompleteTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 				}
 				return cancelledTaskRun
 			},
-			expectedStatus: TaskStatusCancelled,
+			expectedStatus: agentcontract.TaskStatusCancelled,
 		},
 	}
 
@@ -372,7 +374,7 @@ func TestCompleteTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 
 			completedTaskRun, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "late result")
 
-			assertIllegalTaskRunTransition(t, errorValue, testCase.expectedStatus, TaskStatusCompleted)
+			assertIllegalTaskRunTransition(t, errorValue, testCase.expectedStatus, agentcontract.TaskStatusCompleted)
 			if completedTaskRun.TaskRunID != "" {
 				t.Fatalf("completed task run = %+v, want zero value", completedTaskRun)
 			}
@@ -395,12 +397,12 @@ func TestPauseTaskRunTransitionKeepsTaskAttemptAndEventConsistent(t *testing.T) 
 		t.Fatal(errorValue)
 	}
 
-	waitingTaskRun, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, TaskStatusWaitingUserInput, "ask input")
+	waitingTaskRun, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusWaitingUserInput, "ask input")
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if waitingTaskRun.Status != TaskStatusWaitingUserInput {
+	if waitingTaskRun.Status != agentcontract.TaskStatusWaitingUserInput {
 		t.Fatalf("status = %s, want waiting_user_input", waitingTaskRun.Status)
 	}
 	storedTaskRun := taskRunService.taskRuns[taskRun.TaskRunID]
@@ -408,13 +410,13 @@ func TestPauseTaskRunTransitionKeepsTaskAttemptAndEventConsistent(t *testing.T) 
 		t.Fatalf("stored task run = %+v, want waiting task run", storedTaskRun)
 	}
 	taskAttempt := taskRunService.taskAttempts[runningTaskRun.CurrentAttemptID]
-	if taskAttempt.Status != TaskAttemptStatusInterrupted || taskAttempt.FinishedAt == nil {
+	if taskAttempt.Status != agentcontract.TaskAttemptStatusInterrupted || taskAttempt.FinishedAt == nil {
 		t.Fatalf("attempt = %+v, want interrupted finished attempt", taskAttempt)
 	}
 	if taskRunService.IsTaskRunActuallyRunning(waitingTaskRun) {
 		t.Fatal("expected waiting task run to leave active attempt registry")
 	}
-	if !taskEventsContain(taskRunService.ListTaskEvent(taskRun.TaskRunID), TaskEventTaskPaused, "ask input") {
+	if !taskEventsContain(taskRunService.ListTaskEvent(taskRun.TaskRunID), agentcontract.TaskEventTaskPaused, "ask input") {
 		t.Fatal("expected task.paused event")
 	}
 }
@@ -422,22 +424,22 @@ func TestPauseTaskRunTransitionKeepsTaskAttemptAndEventConsistent(t *testing.T) 
 func TestTerminalTransitionEventNamesTheStatusItReached(t *testing.T) {
 	testCases := []struct {
 		name              string
-		reachTerminal     func(*TaskRunService, string) (TaskRun, error)
+		reachTerminal     func(*TaskRunService, string) (agentcontract.TaskRun, error)
 		expectedEventName string
 	}{
 		{
 			name: "failed",
-			reachTerminal: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+			reachTerminal: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
 				return taskRunService.FailTaskRun(taskRunID, "language model unavailable")
 			},
-			expectedEventName: TaskEventTaskFailed,
+			expectedEventName: agentcontract.TaskEventTaskFailed,
 		},
 		{
 			name: "blocked",
-			reachTerminal: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
-				return taskRunService.PauseTaskRun(taskRunID, TaskStatusBlocked, "max_elapsed")
+			reachTerminal: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
+				return taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusBlocked, "max_elapsed")
 			},
-			expectedEventName: TaskEventTaskBlocked,
+			expectedEventName: agentcontract.TaskEventTaskBlocked,
 		},
 	}
 	for _, testCase := range testCases {
@@ -456,7 +458,7 @@ func TestTerminalTransitionEventNamesTheStatusItReached(t *testing.T) {
 			if countTaskEvents(taskEvents, testCase.expectedEventName) != 1 {
 				t.Fatalf("expected one %s event, got %+v", testCase.expectedEventName, taskEvents)
 			}
-			if countTaskEvents(taskEvents, TaskEventTaskPaused) != 0 {
+			if countTaskEvents(taskEvents, agentcontract.TaskEventTaskPaused) != 0 {
 				t.Fatalf("a %s run must not report itself paused, got %+v", testCase.name, taskEvents)
 			}
 		})
@@ -466,41 +468,41 @@ func TestTerminalTransitionEventNamesTheStatusItReached(t *testing.T) {
 func TestTaskRunTerminalTransitionsCloseCurrentAttempt(t *testing.T) {
 	testCases := []struct {
 		name                  string
-		transition            func(*TaskRunService, string) (TaskRun, error)
-		expectedTaskStatus    TaskStatus
-		expectedAttemptStatus TaskAttemptStatus
+		transition            func(*TaskRunService, string) (agentcontract.TaskRun, error)
+		expectedTaskStatus    agentcontract.TaskStatus
+		expectedAttemptStatus agentcontract.TaskAttemptStatus
 	}{
 		{
 			name: "complete",
-			transition: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+			transition: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
 				return taskRunService.CompleteTaskRun(taskRunID, "done")
 			},
-			expectedTaskStatus:    TaskStatusCompleted,
-			expectedAttemptStatus: TaskAttemptStatusCompleted,
+			expectedTaskStatus:    agentcontract.TaskStatusCompleted,
+			expectedAttemptStatus: agentcontract.TaskAttemptStatusCompleted,
 		},
 		{
 			name: "fail",
-			transition: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+			transition: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
 				return taskRunService.FailTaskRun(taskRunID, "failed")
 			},
-			expectedTaskStatus:    TaskStatusFailed,
-			expectedAttemptStatus: TaskAttemptStatusFailed,
+			expectedTaskStatus:    agentcontract.TaskStatusFailed,
+			expectedAttemptStatus: agentcontract.TaskAttemptStatusFailed,
 		},
 		{
 			name: "cancel",
-			transition: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+			transition: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
 				return taskRunService.CancelTaskRunWithReason(taskRunID, "person-1", "cancelled")
 			},
-			expectedTaskStatus:    TaskStatusCancelled,
-			expectedAttemptStatus: TaskAttemptStatusCancelled,
+			expectedTaskStatus:    agentcontract.TaskStatusCancelled,
+			expectedAttemptStatus: agentcontract.TaskAttemptStatusCancelled,
 		},
 		{
 			name: "pause",
-			transition: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
-				return taskRunService.PauseTaskRun(taskRunID, TaskStatusWaitingUserInput, "ask input")
+			transition: func(taskRunService *TaskRunService, taskRunID string) (agentcontract.TaskRun, error) {
+				return taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingUserInput, "ask input")
 			},
-			expectedTaskStatus:    TaskStatusWaitingUserInput,
-			expectedAttemptStatus: TaskAttemptStatusInterrupted,
+			expectedTaskStatus:    agentcontract.TaskStatusWaitingUserInput,
+			expectedAttemptStatus: agentcontract.TaskAttemptStatusInterrupted,
 		},
 	}
 
@@ -538,36 +540,36 @@ func TestTaskRunTerminalTransitionsCloseCurrentAttempt(t *testing.T) {
 func TestCancelTaskRunTransitionAllowsActiveTaskRuns(t *testing.T) {
 	testCases := []struct {
 		name           string
-		prepareTaskRun func(*testing.T, *TaskRunService) TaskRun
+		prepareTaskRun func(*testing.T, *TaskRunService) agentcontract.TaskRun
 	}{
 		{
 			name: "planned",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return taskRunService.CreateTaskRun("person-1", "direct-1", "planned")
 			},
 		},
 		{
 			name: "running",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return runningTaskRunForTest(t, taskRunService, "running")
 			},
 		},
 		{
 			name: "waiting user input",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusWaitingUserInput, "waiting user input")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusWaitingUserInput, "waiting user input")
 			},
 		},
 		{
 			name: "waiting approval",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusWaitingApproval, "waiting approval")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusWaitingApproval, "waiting approval")
 			},
 		},
 		{
 			name: "blocked",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusBlocked, "blocked")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusBlocked, "blocked")
 			},
 		},
 	}
@@ -582,16 +584,16 @@ func TestCancelTaskRunTransitionAllowsActiveTaskRuns(t *testing.T) {
 			if errorValue != nil {
 				t.Fatal(errorValue)
 			}
-			if cancelledTaskRun.Status != TaskStatusCancelled || cancelledTaskRun.FailureReason != "user stop" {
+			if cancelledTaskRun.Status != agentcontract.TaskStatusCancelled || cancelledTaskRun.FailureReason != "user stop" {
 				t.Fatalf("cancelled task run = %+v, want cancelled with reason", cancelledTaskRun)
 			}
 			storedTaskRun := taskRunService.taskRuns[taskRun.TaskRunID]
-			if storedTaskRun.Status != TaskStatusCancelled || storedTaskRun.FailureReason != "user stop" {
+			if storedTaskRun.Status != agentcontract.TaskStatusCancelled || storedTaskRun.FailureReason != "user stop" {
 				t.Fatalf("stored task run = %+v, want cancelled with reason", storedTaskRun)
 			}
 			if cancelledTaskRun.CurrentAttemptID != "" {
 				taskAttempt := taskRunService.taskAttempts[cancelledTaskRun.CurrentAttemptID]
-				if taskAttempt.Status != TaskAttemptStatusCancelled || taskAttempt.FinishedAt == nil || taskAttempt.FailureReason != "user stop" {
+				if taskAttempt.Status != agentcontract.TaskAttemptStatusCancelled || taskAttempt.FinishedAt == nil || taskAttempt.FailureReason != "user stop" {
 					t.Fatalf("attempt = %+v, want cancelled attempt with reason", taskAttempt)
 				}
 			}
@@ -605,19 +607,19 @@ func TestCancelTaskRunTransitionAllowsActiveTaskRuns(t *testing.T) {
 func TestCancelTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 	testCases := []struct {
 		name           string
-		prepareTaskRun func(*testing.T, *TaskRunService) TaskRun
-		expectedStatus TaskStatus
+		prepareTaskRun func(*testing.T, *TaskRunService) agentcontract.TaskRun
+		expectedStatus agentcontract.TaskStatus
 	}{
 		{
 			name: "interrupted",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return inactiveInterruptedTaskRunForTest(t, taskRunService)
 			},
-			expectedStatus: TaskStatusInterrupted,
+			expectedStatus: agentcontract.TaskStatusInterrupted,
 		},
 		{
 			name: "completed",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "completed")
 				completedTaskRun, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "done")
 				if errorValue != nil {
@@ -625,11 +627,11 @@ func TestCancelTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 				}
 				return completedTaskRun
 			},
-			expectedStatus: TaskStatusCompleted,
+			expectedStatus: agentcontract.TaskStatusCompleted,
 		},
 		{
 			name: "failed",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "failed")
 				failedTaskRun, errorValue := taskRunService.FailTaskRun(taskRun.TaskRunID, "failed")
 				if errorValue != nil {
@@ -637,11 +639,11 @@ func TestCancelTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 				}
 				return failedTaskRun
 			},
-			expectedStatus: TaskStatusFailed,
+			expectedStatus: agentcontract.TaskStatusFailed,
 		},
 		{
 			name: "cancelled",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "cancelled")
 				cancelledTaskRun, errorValue := taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, "person-1", "cancelled")
 				if errorValue != nil {
@@ -649,7 +651,7 @@ func TestCancelTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 				}
 				return cancelledTaskRun
 			},
-			expectedStatus: TaskStatusCancelled,
+			expectedStatus: agentcontract.TaskStatusCancelled,
 		},
 	}
 
@@ -661,7 +663,7 @@ func TestCancelTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 
 			cancelledTaskRun, errorValue := taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, "person-1", "late stop")
 
-			assertIllegalTaskRunTransition(t, errorValue, testCase.expectedStatus, TaskStatusCancelled)
+			assertIllegalTaskRunTransition(t, errorValue, testCase.expectedStatus, agentcontract.TaskStatusCancelled)
 			if cancelledTaskRun.TaskRunID != "" {
 				t.Fatalf("cancelled task run = %+v, want zero value", cancelledTaskRun)
 			}
@@ -686,7 +688,7 @@ func TestInterruptOrphanedRuntimeTaskRunsMarksRuntimeOwnedTasksInterrupted(t *te
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if _, errorValue := taskRunService.PauseTaskRun(waitingTaskRun.TaskRunID, TaskStatusWaitingUserInput, "ask input"); errorValue != nil {
+	if _, errorValue := taskRunService.PauseTaskRun(waitingTaskRun.TaskRunID, agentcontract.TaskStatusWaitingUserInput, "ask input"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	taskEventService.AppendTaskEvent(runningTaskRun.TaskRunID, "tool.site_build.requested", `{"observationID":"observation-1","toolName":"site_build"}`)
@@ -699,7 +701,7 @@ func TestInterruptOrphanedRuntimeTaskRunsMarksRuntimeOwnedTasksInterrupted(t *te
 	}
 	for _, taskRunID := range []string{plannedTaskRun.TaskRunID, runningTaskRun.TaskRunID} {
 		taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
-		if !isFound || taskRun.Status != TaskStatusInterrupted {
+		if !isFound || taskRun.Status != agentcontract.TaskStatusInterrupted {
 			t.Fatalf("task %s status = %+v, found=%v", taskRunID, taskRun.Status, isFound)
 		}
 		if !taskEventsContain(taskRunService.ListTaskEvent(taskRunID), "task.interrupted", "runtime restarted") {
@@ -707,14 +709,14 @@ func TestInterruptOrphanedRuntimeTaskRunsMarksRuntimeOwnedTasksInterrupted(t *te
 		}
 	}
 	taskAttempt := taskRunService.taskAttempts[runningTaskRun.CurrentAttemptID]
-	if taskAttempt.Status != TaskAttemptStatusInterrupted {
+	if taskAttempt.Status != agentcontract.TaskAttemptStatusInterrupted {
 		t.Fatalf("attempt status = %s, want interrupted", taskAttempt.Status)
 	}
 	if !taskEventsContain(taskRunService.ListTaskEvent(runningTaskRun.TaskRunID), "tool.site_build.cancelled", "cancelled_by_attempt_end") {
 		t.Fatal("expected open tool request to be cancelled")
 	}
 	taskRun, isFound := taskRunService.FindTaskRun(waitingTaskRun.TaskRunID)
-	if !isFound || taskRun.Status != TaskStatusWaitingUserInput {
+	if !isFound || taskRun.Status != agentcontract.TaskStatusWaitingUserInput {
 		t.Fatalf("waiting task status = %+v, found=%v", taskRun.Status, isFound)
 	}
 }
@@ -722,20 +724,20 @@ func TestInterruptOrphanedRuntimeTaskRunsMarksRuntimeOwnedTasksInterrupted(t *te
 func TestInterruptInactiveTaskRunTransitionAllowsInactiveRuntimeTaskRuns(t *testing.T) {
 	testCases := []struct {
 		name             string
-		prepareTaskRun   func(*testing.T, *TaskRunService) TaskRun
+		prepareTaskRun   func(*testing.T, *TaskRunService) agentcontract.TaskRun
 		hasTaskAttempt   bool
 		expectedTaskBody string
 	}{
 		{
 			name: "planned",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return taskRunService.CreateTaskRun("person-1", "direct-1", "planned")
 			},
 			expectedTaskBody: "runtime restarted",
 		},
 		{
 			name: "running inactive",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "running")
 				delete(taskRunService.activeAttempts, taskRun.CurrentAttemptID)
 				return taskRun
@@ -755,16 +757,16 @@ func TestInterruptInactiveTaskRunTransitionAllowsInactiveRuntimeTaskRuns(t *test
 			if !isInterrupted {
 				t.Fatal("expected task run to be interrupted")
 			}
-			if interruptedTaskRun.Status != TaskStatusInterrupted || interruptedTaskRun.FailureReason != "runtime restarted" {
+			if interruptedTaskRun.Status != agentcontract.TaskStatusInterrupted || interruptedTaskRun.FailureReason != "runtime restarted" {
 				t.Fatalf("interrupted task run = %+v, want interrupted with reason", interruptedTaskRun)
 			}
 			storedTaskRun := taskRunService.taskRuns[taskRun.TaskRunID]
-			if storedTaskRun.Status != TaskStatusInterrupted || storedTaskRun.FailureReason != "runtime restarted" {
+			if storedTaskRun.Status != agentcontract.TaskStatusInterrupted || storedTaskRun.FailureReason != "runtime restarted" {
 				t.Fatalf("stored task run = %+v, want interrupted with reason", storedTaskRun)
 			}
 			if testCase.hasTaskAttempt {
 				taskAttempt := taskRunService.taskAttempts[interruptedTaskRun.CurrentAttemptID]
-				if taskAttempt.Status != TaskAttemptStatusInterrupted || taskAttempt.FinishedAt == nil || taskAttempt.FailureReason != "runtime restarted" {
+				if taskAttempt.Status != agentcontract.TaskAttemptStatusInterrupted || taskAttempt.FinishedAt == nil || taskAttempt.FailureReason != "runtime restarted" {
 					t.Fatalf("attempt = %+v, want interrupted attempt with reason", taskAttempt)
 				}
 			}
@@ -778,40 +780,40 @@ func TestInterruptInactiveTaskRunTransitionAllowsInactiveRuntimeTaskRuns(t *test
 func TestInterruptInactiveTaskRunTransitionRejectsIllegalSourceStates(t *testing.T) {
 	testCases := []struct {
 		name           string
-		prepareTaskRun func(*testing.T, *TaskRunService) TaskRun
-		expectedStatus TaskStatus
+		prepareTaskRun func(*testing.T, *TaskRunService) agentcontract.TaskRun
+		expectedStatus agentcontract.TaskStatus
 	}{
 		{
 			name: "running active",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return runningTaskRunForTest(t, taskRunService, "running")
 			},
-			expectedStatus: TaskStatusRunning,
+			expectedStatus: agentcontract.TaskStatusRunning,
 		},
 		{
 			name: "waiting user input",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusWaitingUserInput, "waiting user input")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusWaitingUserInput, "waiting user input")
 			},
-			expectedStatus: TaskStatusWaitingUserInput,
+			expectedStatus: agentcontract.TaskStatusWaitingUserInput,
 		},
 		{
 			name: "blocked",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
-				return pausedTaskRunForTest(t, taskRunService, TaskStatusBlocked, "blocked")
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
+				return pausedTaskRunForTest(t, taskRunService, agentcontract.TaskStatusBlocked, "blocked")
 			},
-			expectedStatus: TaskStatusBlocked,
+			expectedStatus: agentcontract.TaskStatusBlocked,
 		},
 		{
 			name: "interrupted",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				return inactiveInterruptedTaskRunForTest(t, taskRunService)
 			},
-			expectedStatus: TaskStatusInterrupted,
+			expectedStatus: agentcontract.TaskStatusInterrupted,
 		},
 		{
 			name: "completed",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "completed")
 				completedTaskRun, errorValue := taskRunService.CompleteTaskRun(taskRun.TaskRunID, "done")
 				if errorValue != nil {
@@ -819,11 +821,11 @@ func TestInterruptInactiveTaskRunTransitionRejectsIllegalSourceStates(t *testing
 				}
 				return completedTaskRun
 			},
-			expectedStatus: TaskStatusCompleted,
+			expectedStatus: agentcontract.TaskStatusCompleted,
 		},
 		{
 			name: "failed",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "failed")
 				failedTaskRun, errorValue := taskRunService.FailTaskRun(taskRun.TaskRunID, "failed")
 				if errorValue != nil {
@@ -831,11 +833,11 @@ func TestInterruptInactiveTaskRunTransitionRejectsIllegalSourceStates(t *testing
 				}
 				return failedTaskRun
 			},
-			expectedStatus: TaskStatusFailed,
+			expectedStatus: agentcontract.TaskStatusFailed,
 		},
 		{
 			name: "cancelled",
-			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) TaskRun {
+			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "cancelled")
 				cancelledTaskRun, errorValue := taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, "person-1", "cancelled")
 				if errorValue != nil {
@@ -843,7 +845,7 @@ func TestInterruptInactiveTaskRunTransitionRejectsIllegalSourceStates(t *testing
 				}
 				return cancelledTaskRun
 			},
-			expectedStatus: TaskStatusCancelled,
+			expectedStatus: agentcontract.TaskStatusCancelled,
 		},
 	}
 
@@ -922,10 +924,10 @@ func TestSelectInterruptedTaskRunsForAutoResumeExcludesOldTasks(t *testing.T) {
 func TestSelectInterruptedTaskRunsForAutoResumeExcludesWaitingStatuses(t *testing.T) {
 	taskRunService := NewTaskRunService(NewTaskEventService())
 	waitingTaskRun := taskRunService.CreateTaskRun("person-1", "direct-1", "waiting")
-	waitingTaskRun.Status = TaskStatusWaitingApproval
+	waitingTaskRun.Status = agentcontract.TaskStatusWaitingApproval
 	waitingTaskRun.UpdatedAt = time.Now()
 	taskRunService.taskRuns[waitingTaskRun.TaskRunID] = waitingTaskRun
-	taskRunService.AppendTaskEvent(waitingTaskRun.TaskRunID, TaskEventTaskInterrupted, "runtime restarted")
+	taskRunService.AppendTaskEvent(waitingTaskRun.TaskRunID, agentcontract.TaskEventTaskInterrupted, "runtime restarted")
 
 	selection := taskRunService.SelectInterruptedTaskRunsForAutoResume(time.Now(), 5)
 
@@ -934,7 +936,7 @@ func TestSelectInterruptedTaskRunsForAutoResumeExcludesWaitingStatuses(t *testin
 	}
 }
 
-func interruptedTaskRunForTest(t *testing.T, taskRunService *TaskRunService, updatedAt time.Time) TaskRun {
+func interruptedTaskRunForTest(t *testing.T, taskRunService *TaskRunService, updatedAt time.Time) agentcontract.TaskRun {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "direct-1", "long task")
 	runningTaskRun, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant")
@@ -951,7 +953,7 @@ func interruptedTaskRunForTest(t *testing.T, taskRunService *TaskRunService, upd
 	return interruptedTaskRun
 }
 
-func runningTaskRunForTest(t *testing.T, taskRunService *TaskRunService, prompt string) TaskRun {
+func runningTaskRunForTest(t *testing.T, taskRunService *TaskRunService, prompt string) agentcontract.TaskRun {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "direct-1", prompt)
 	runningTaskRun, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant")
@@ -961,7 +963,7 @@ func runningTaskRunForTest(t *testing.T, taskRunService *TaskRunService, prompt 
 	return runningTaskRun
 }
 
-func pausedTaskRunForTest(t *testing.T, taskRunService *TaskRunService, status TaskStatus, prompt string) TaskRun {
+func pausedTaskRunForTest(t *testing.T, taskRunService *TaskRunService, status agentcontract.TaskStatus, prompt string) agentcontract.TaskRun {
 	t.Helper()
 	taskRun := runningTaskRunForTest(t, taskRunService, prompt)
 	pausedTaskRun, errorValue := taskRunService.PauseTaskRun(taskRun.TaskRunID, status, string(status))
@@ -971,7 +973,7 @@ func pausedTaskRunForTest(t *testing.T, taskRunService *TaskRunService, status T
 	return pausedTaskRun
 }
 
-func inactiveInterruptedTaskRunForTest(t *testing.T, taskRunService *TaskRunService) TaskRun {
+func inactiveInterruptedTaskRunForTest(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 	t.Helper()
 	taskRun := runningTaskRunForTest(t, taskRunService, "interrupted")
 	delete(taskRunService.activeAttempts, taskRun.CurrentAttemptID)
@@ -982,7 +984,7 @@ func inactiveInterruptedTaskRunForTest(t *testing.T, taskRunService *TaskRunServ
 	return interruptedTaskRun
 }
 
-func assertIllegalTaskRunTransition(t *testing.T, errorValue error, currentStatus TaskStatus, toState TaskStatus) {
+func assertIllegalTaskRunTransition(t *testing.T, errorValue error, currentStatus agentcontract.TaskStatus, toState agentcontract.TaskStatus) {
 	t.Helper()
 	var transitionError ErrIllegalTransition
 	if !errors.As(errorValue, &transitionError) {
@@ -993,7 +995,7 @@ func assertIllegalTaskRunTransition(t *testing.T, errorValue error, currentStatu
 	}
 }
 
-func countTaskEvents(taskEvents []TaskEvent, name string) int {
+func countTaskEvents(taskEvents []agentcontract.TaskEvent, name string) int {
 	count := 0
 	for _, taskEvent := range taskEvents {
 		if taskEvent.Name == name {
@@ -1003,7 +1005,7 @@ func countTaskEvents(taskEvents []TaskEvent, name string) int {
 	return count
 }
 
-func taskEventsContain(taskEvents []TaskEvent, name string, bodyFragment string) bool {
+func taskEventsContain(taskEvents []agentcontract.TaskEvent, name string, bodyFragment string) bool {
 	for _, taskEvent := range taskEvents {
 		if taskEvent.Name == name && (bodyFragment == "" || strings.Contains(taskEvent.Body, bodyFragment)) {
 			return true
@@ -1023,7 +1025,7 @@ func TestClaimInterruptedTaskRunAutoResumeAllowsRepeatedPlannedShutdownResume(t 
 	if len(interruptedTaskRuns) != 1 {
 		t.Fatalf("interrupted count = %d, want 1", len(interruptedTaskRuns))
 	}
-	if interruptedTaskRuns[0].FailureReason != TaskInterruptReasonPlannedShutdown {
+	if interruptedTaskRuns[0].FailureReason != agentcontract.TaskInterruptReasonPlannedShutdown {
 		t.Fatalf("failure reason = %q, want planned_shutdown", interruptedTaskRuns[0].FailureReason)
 	}
 	if !taskRunService.ClaimInterruptedTaskRunAutoResume(taskRun.TaskRunID, "runtime_restart") {
@@ -1043,7 +1045,7 @@ func TestClaimInterruptedTaskRunAutoResumeKeepsOneShotPolicyForCrashInterruption
 		t.Fatal(advanceError)
 	}
 	delete(taskRunService.activeAttempts, taskRun.CurrentAttemptID)
-	if len(taskRunService.InterruptOrphanedRuntimeTaskRuns(TaskInterruptReasonRuntimeRestart)) != 1 {
+	if len(taskRunService.InterruptOrphanedRuntimeTaskRuns(agentcontract.TaskInterruptReasonRuntimeRestart)) != 1 {
 		t.Fatal("expected crash interruption")
 	}
 	if !taskRunService.ClaimInterruptedTaskRunAutoResume(taskRun.TaskRunID, "runtime_restart") {
@@ -1067,12 +1069,12 @@ func TestInterruptRuntimeTaskRunsForPlannedShutdownIncludesActivelyRunningTasks(
 	if len(taskRunService.InterruptRuntimeTaskRunsForPlannedShutdown()) != 1 {
 		t.Fatal("expected actively running task to be interrupted for planned shutdown")
 	}
-	if !taskEventsContain(taskRunService.ListTaskEvent(taskRun.TaskRunID), "task.interrupted", TaskInterruptReasonPlannedShutdown) {
+	if !taskEventsContain(taskRunService.ListTaskEvent(taskRun.TaskRunID), "task.interrupted", agentcontract.TaskInterruptReasonPlannedShutdown) {
 		t.Fatal("expected planned shutdown interruption event")
 	}
 }
 
-func mustFindTaskRun(t *testing.T, taskRunService *TaskRunService, taskRunID string) TaskRun {
+func mustFindTaskRun(t *testing.T, taskRunService *TaskRunService, taskRunID string) agentcontract.TaskRun {
 	t.Helper()
 	taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
 	if !isFound {
@@ -1093,7 +1095,7 @@ func TestRecordTaskRunResultPersistsResultWithoutTransition(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if recordedTaskRun.Status != TaskStatusFailed || recordedTaskRun.Result != "failure notice sent to the user" {
+	if recordedTaskRun.Status != agentcontract.TaskStatusFailed || recordedTaskRun.Result != "failure notice sent to the user" {
 		t.Fatalf("recorded task run = %+v, want failed status with persisted result", recordedTaskRun)
 	}
 	storedTaskRun, isFound := taskRunService.FindTaskRun(taskRun.TaskRunID)
@@ -1112,7 +1114,7 @@ func TestRecordTaskRunResultRejectsUnknownTaskRun(t *testing.T) {
 	}
 }
 
-func staleTestTaskRun(t *testing.T, taskRunService *TaskRunService, status TaskStatus, age time.Duration) TaskRun {
+func staleTestTaskRun(t *testing.T, taskRunService *TaskRunService, status agentcontract.TaskStatus, age time.Duration) agentcontract.TaskRun {
 	t.Helper()
 	taskRun := taskRunService.CreateTaskRun("person-1", "direct-1", "stale candidate")
 	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
@@ -1130,20 +1132,20 @@ func staleTestTaskRun(t *testing.T, taskRunService *TaskRunService, status TaskS
 func TestStaleUnattendedTaskRunReasonByStatusAndAge(t *testing.T) {
 	now := time.Now()
 	cases := []struct {
-		status TaskStatus
+		status agentcontract.TaskStatus
 		age    time.Duration
 		reason string
 	}{
-		{TaskStatusBlocked, 25 * time.Hour, "blocked_expired"},
-		{TaskStatusBlocked, time.Hour, ""},
-		{TaskStatusWaitingApproval, 73 * time.Hour, "waiting_expired"},
-		{TaskStatusWaitingApproval, 25 * time.Hour, ""},
-		{TaskStatusWaitingUserInput, 73 * time.Hour, "waiting_expired"},
-		{TaskStatusRunning, 100 * time.Hour, ""},
-		{TaskStatusFailed, 100 * time.Hour, ""},
+		{agentcontract.TaskStatusBlocked, 25 * time.Hour, "blocked_expired"},
+		{agentcontract.TaskStatusBlocked, time.Hour, ""},
+		{agentcontract.TaskStatusWaitingApproval, 73 * time.Hour, "waiting_expired"},
+		{agentcontract.TaskStatusWaitingApproval, 25 * time.Hour, ""},
+		{agentcontract.TaskStatusWaitingUserInput, 73 * time.Hour, "waiting_expired"},
+		{agentcontract.TaskStatusRunning, 100 * time.Hour, ""},
+		{agentcontract.TaskStatusFailed, 100 * time.Hour, ""},
 	}
 	for _, testCase := range cases {
-		taskRun := TaskRun{Status: testCase.status, UpdatedAt: now.Add(-testCase.age)}
+		taskRun := agentcontract.TaskRun{Status: testCase.status, UpdatedAt: now.Add(-testCase.age)}
 		if reason := StaleUnattendedTaskRunReason(taskRun, now); reason != testCase.reason {
 			t.Fatalf("status %s age %s: reason = %q, want %q", testCase.status, testCase.age, reason, testCase.reason)
 		}
@@ -1152,9 +1154,9 @@ func TestStaleUnattendedTaskRunReasonByStatusAndAge(t *testing.T) {
 
 func TestSelectStaleUnattendedTaskRunsOldestFirst(t *testing.T) {
 	taskRunService := NewTaskRunService(NewTaskEventService())
-	fresh := staleTestTaskRun(t, taskRunService, TaskStatusBlocked, time.Hour)
-	older := staleTestTaskRun(t, taskRunService, TaskStatusBlocked, 48*time.Hour)
-	oldest := staleTestTaskRun(t, taskRunService, TaskStatusWaitingApproval, 96*time.Hour)
+	fresh := staleTestTaskRun(t, taskRunService, agentcontract.TaskStatusBlocked, time.Hour)
+	older := staleTestTaskRun(t, taskRunService, agentcontract.TaskStatusBlocked, 48*time.Hour)
+	oldest := staleTestTaskRun(t, taskRunService, agentcontract.TaskStatusWaitingApproval, 96*time.Hour)
 	selected := taskRunService.SelectStaleUnattendedTaskRuns(time.Now())
 	if len(selected) != 2 {
 		t.Fatalf("selected %d stale runs, want 2", len(selected))
@@ -1171,9 +1173,9 @@ func TestSelectStaleUnattendedTaskRunsOldestFirst(t *testing.T) {
 
 func TestAnInterruptNobodyResumesEventuallyExpires(t *testing.T) {
 	now := time.Now()
-	abandoned := TaskRun{
+	abandoned := agentcontract.TaskRun{
 		TaskRunID:     "task-1",
-		Status:        TaskStatusInterrupted,
+		Status:        agentcontract.TaskStatusInterrupted,
 		FailureReason: "runtime no longer owns this execution",
 		UpdatedAt:     now.Add(-staleBlockedTaskRunAge - time.Hour),
 	}
@@ -1185,10 +1187,10 @@ func TestAnInterruptNobodyResumesEventuallyExpires(t *testing.T) {
 
 func TestAnInterruptWaitingToResumeIsLeftAlone(t *testing.T) {
 	now := time.Now()
-	resumable := TaskRun{
+	resumable := agentcontract.TaskRun{
 		TaskRunID:     "task-1",
-		Status:        TaskStatusInterrupted,
-		FailureReason: TaskInterruptReasonRuntimeRestart,
+		Status:        agentcontract.TaskStatusInterrupted,
+		FailureReason: agentcontract.TaskInterruptReasonRuntimeRestart,
 		UpdatedAt:     now.Add(-staleBlockedTaskRunAge - time.Hour),
 	}
 

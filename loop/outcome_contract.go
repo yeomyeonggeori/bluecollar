@@ -1,10 +1,9 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
-
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func expectedResultsIncludeSiteRequirement(results []ExpectedResult) bool {
@@ -859,7 +858,7 @@ func activeGoalFromExecutionPlan(taskRunID string, executionPlan ExecutionPlan, 
 	}
 }
 
-func activeGoalFromIntakeOnly(taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status taskstate.TaskStatus) ActiveGoal {
+func activeGoalFromIntakeOnly(taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
 	return ActiveGoal{
 		GoalID:              strings.TrimSpace(taskRunID),
 		TaskRunID:           strings.TrimSpace(taskRunID),
@@ -869,33 +868,33 @@ func activeGoalFromIntakeOnly(taskRunID string, request AgentRequest, intakeDeci
 	}
 }
 
-func activeGoalStatusForTaskStatus(status taskstate.TaskStatus) ActiveGoalStatus {
+func activeGoalStatusForTaskStatus(status agentcontract.TaskStatus) ActiveGoalStatus {
 	switch status {
-	case taskstate.TaskStatusWaitingUserInput:
+	case agentcontract.TaskStatusWaitingUserInput:
 		return ActiveGoalStatusWaitingUserInput
-	case taskstate.TaskStatusWaitingApproval:
+	case agentcontract.TaskStatusWaitingApproval:
 		return ActiveGoalStatusWaitingApproval
-	case taskstate.TaskStatusCompleted:
+	case agentcontract.TaskStatusCompleted:
 		return ActiveGoalStatusCompleted
-	case taskstate.TaskStatusBlocked, taskstate.TaskStatusFailed, taskstate.TaskStatusCancelled:
+	case agentcontract.TaskStatusBlocked, agentcontract.TaskStatusFailed, agentcontract.TaskStatusCancelled:
 		return ActiveGoalStatusBlocked
 	default:
 		return ActiveGoalStatusActive
 	}
 }
 
-func activeGoalEventNameForTaskStatus(status taskstate.TaskStatus) string {
+func activeGoalEventNameForTaskStatus(status agentcontract.TaskStatus) string {
 	switch status {
-	case taskstate.TaskStatusWaitingUserInput:
-		return taskstate.TaskEventAgentGoalWaitingUserInput
-	case taskstate.TaskStatusWaitingApproval:
-		return taskstate.TaskEventAgentGoalWaitingApproval
-	case taskstate.TaskStatusCompleted:
-		return taskstate.TaskEventAgentGoalCompleted
-	case taskstate.TaskStatusBlocked, taskstate.TaskStatusFailed, taskstate.TaskStatusCancelled:
-		return taskstate.TaskEventAgentGoalBlocked
+	case agentcontract.TaskStatusWaitingUserInput:
+		return agentcontract.TaskEventAgentGoalWaitingUserInput
+	case agentcontract.TaskStatusWaitingApproval:
+		return agentcontract.TaskEventAgentGoalWaitingApproval
+	case agentcontract.TaskStatusCompleted:
+		return agentcontract.TaskEventAgentGoalCompleted
+	case agentcontract.TaskStatusBlocked, agentcontract.TaskStatusFailed, agentcontract.TaskStatusCancelled:
+		return agentcontract.TaskEventAgentGoalBlocked
 	default:
-		return taskstate.TaskEventAgentGoalUpdated
+		return agentcontract.TaskEventAgentGoalUpdated
 	}
 }
 

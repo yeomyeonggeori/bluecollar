@@ -10,17 +10,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 type TaskRunRepository interface {
-	SaveTaskRun(TaskRun) error
-	StartTaskRunAttempt(TaskRun, TaskAttempt) error
-	FinishTaskRunAttempt(TaskRun, TaskAttempt) error
-	TransitionTaskRun(TaskRunTransition) (TaskRun, error)
-	FindTaskRun(string) (TaskRun, bool, error)
-	FindTaskAttempt(string) (TaskAttempt, bool, error)
-	ListTaskRun() ([]TaskRun, error)
-	ListTaskRunByPersonID(string) ([]TaskRun, error)
+	SaveTaskRun(agentcontract.TaskRun) error
+	StartTaskRunAttempt(agentcontract.TaskRun, agentcontract.TaskAttempt) error
+	FinishTaskRunAttempt(agentcontract.TaskRun, agentcontract.TaskAttempt) error
+	TransitionTaskRun(agentcontract.TaskRunTransition) (agentcontract.TaskRun, error)
+	FindTaskRun(string) (agentcontract.TaskRun, bool, error)
+	FindTaskAttempt(string) (agentcontract.TaskAttempt, bool, error)
+	ListTaskRun() ([]agentcontract.TaskRun, error)
+	ListTaskRunByPersonID(string) ([]agentcontract.TaskRun, error)
 	DeleteTaskRun(string, []string) (bool, error)
 	DeleteTaskRunsBefore(time.Time, []string) ([]string, error)
 }
@@ -33,9 +35,9 @@ var (
 
 type ErrIllegalTransition struct {
 	TaskRunID     string
-	CurrentStatus TaskStatus
-	FromStates    []TaskStatus
-	ToState       TaskStatus
+	CurrentStatus agentcontract.TaskStatus
+	FromStates    []agentcontract.TaskStatus
+	ToState       agentcontract.TaskStatus
 }
 
 func (transitionError ErrIllegalTransition) Error() string {
@@ -44,14 +46,14 @@ func (transitionError ErrIllegalTransition) Error() string {
 
 type TaskRunService struct {
 	mutex                    sync.RWMutex
-	taskRuns                 map[string]TaskRun
-	taskAttempts             map[string]TaskAttempt
+	taskRuns                 map[string]agentcontract.TaskRun
+	taskAttempts             map[string]agentcontract.TaskAttempt
 	activeAttempts           map[string]activeTaskAttempt
 	taskEventService         *TaskEventService
 	repository               TaskRunRepository
 	runnerID                 string
 	transitionObserverMutex  sync.RWMutex
-	transitionObservers      map[int]func(TaskRun)
+	transitionObservers      map[int]func(agentcontract.TaskRun)
 	nextTransitionObserverID int
 }
 
@@ -63,18 +65,18 @@ type activeTaskAttempt struct {
 }
 
 type InterruptedTaskResumeSelection struct {
-	SelectedTaskRuns []TaskRun
-	SkippedTaskRuns  []TaskRun
+	SelectedTaskRuns []agentcontract.TaskRun
+	SkippedTaskRuns  []agentcontract.TaskRun
 }
 
 func NewTaskRunService(taskEventService *TaskEventService) *TaskRunService {
 	return &TaskRunService{
-		taskRuns:            map[string]TaskRun{},
-		taskAttempts:        map[string]TaskAttempt{},
+		taskRuns:            map[string]agentcontract.TaskRun{},
+		taskAttempts:        map[string]agentcontract.TaskAttempt{},
 		activeAttempts:      map[string]activeTaskAttempt{},
 		taskEventService:    taskEventService,
 		runnerID:            defaultTaskRunnerID(),
-		transitionObservers: map[int]func(TaskRun){},
+		transitionObservers: map[int]func(agentcontract.TaskRun){},
 	}
 }
 
@@ -82,23 +84,23 @@ func (taskRunService *TaskRunService) UseRepository(repository TaskRunRepository
 	taskRunService.repository = repository
 }
 
-func (taskRunService *TaskRunService) CreateTaskRun(requesterPersonID string, originConversationID string, prompt string) TaskRun {
+func (taskRunService *TaskRunService) CreateTaskRun(requesterPersonID string, originConversationID string, prompt string) agentcontract.TaskRun {
 	return taskRunService.CreateTaskRunWithOrigin(requesterPersonID, TaskRunOrigin{ConversationID: originConversationID}, prompt)
 }
 
-func (taskRunService *TaskRunService) CreateTaskRunWithOrigin(requesterPersonID string, origin TaskRunOrigin, prompt string) TaskRun {
+func (taskRunService *TaskRunService) CreateTaskRunWithOrigin(requesterPersonID string, origin TaskRunOrigin, prompt string) agentcontract.TaskRun {
 	taskRun, _ := taskRunService.CreateTaskRunWithOriginAndError(requesterPersonID, origin, prompt)
 	return taskRun
 }
 
-func (taskRunService *TaskRunService) CreateTaskRunWithOriginAndError(requesterPersonID string, origin TaskRunOrigin, prompt string) (TaskRun, error) {
-	taskRun := TaskRun{
+func (taskRunService *TaskRunService) CreateTaskRunWithOriginAndError(requesterPersonID string, origin TaskRunOrigin, prompt string) (agentcontract.TaskRun, error) {
+	taskRun := agentcontract.TaskRun{
 		TaskRunID:            NewIdentifier(),
 		RequesterPersonID:    requesterPersonID,
 		OriginConversationID: strings.TrimSpace(origin.ConversationID),
 		OriginReplyTargetID:  strings.TrimSpace(origin.ReplyTargetID),
 		OriginIsThread:       origin.IsThread,
-		Status:               TaskStatusPlanned,
+		Status:               agentcontract.TaskStatusPlanned,
 		Prompt:               prompt,
 		CreatedAt:            time.Now(),
 		UpdatedAt:            time.Now(),
@@ -111,7 +113,7 @@ func (taskRunService *TaskRunService) CreateTaskRunWithOriginAndError(requesterP
 		return taskRun, errorValue
 	}
 
-	if _, errorValue := taskRunService.taskEventService.AppendTaskEventWithError(taskRun.TaskRunID, TaskEventTaskCreated, prompt); errorValue != nil {
+	if _, errorValue := taskRunService.taskEventService.AppendTaskEventWithError(taskRun.TaskRunID, agentcontract.TaskEventTaskCreated, prompt); errorValue != nil {
 		return taskRun, errorValue
 	}
 	return taskRun, nil
@@ -121,7 +123,7 @@ func (taskRunService *TaskRunService) AppendTaskEvent(taskRunID string, name str
 	taskRunService.taskEventService.AppendTaskEvent(taskRunID, name, body)
 }
 
-func (taskRunService *TaskRunService) AppendTaskEventWithError(taskRunID string, name string, body string) (TaskEvent, error) {
+func (taskRunService *TaskRunService) AppendTaskEventWithError(taskRunID string, name string, body string) (agentcontract.TaskEvent, error) {
 	return taskRunService.taskEventService.AppendTaskEventWithError(taskRunID, name, body)
 }
 
@@ -129,7 +131,7 @@ func (taskRunService *TaskRunService) RegisterTaskRunObserver(taskRunID string, 
 	return taskRunService.taskEventService.RegisterTaskRunObserver(taskRunID, observer)
 }
 
-func (taskRunService *TaskRunService) RegisterTaskRunTransitionObserver(observer func(TaskRun)) func() {
+func (taskRunService *TaskRunService) RegisterTaskRunTransitionObserver(observer func(agentcontract.TaskRun)) func() {
 	if observer == nil {
 		return func() {}
 	}
@@ -145,9 +147,9 @@ func (taskRunService *TaskRunService) RegisterTaskRunTransitionObserver(observer
 	}
 }
 
-func (taskRunService *TaskRunService) notifyTaskRunTransitionObservers(taskRun TaskRun) {
+func (taskRunService *TaskRunService) notifyTaskRunTransitionObservers(taskRun agentcontract.TaskRun) {
 	taskRunService.transitionObserverMutex.RLock()
-	observers := make([]func(TaskRun), 0, len(taskRunService.transitionObservers))
+	observers := make([]func(agentcontract.TaskRun), 0, len(taskRunService.transitionObservers))
 	for _, observer := range taskRunService.transitionObservers {
 		observers = append(observers, observer)
 	}
@@ -219,36 +221,36 @@ func (taskRunService *TaskRunService) RegisterTaskRunTool(taskRunID string, obse
 
 func (taskRunService *TaskRunService) IsTaskRunCancelled(taskRunID string) bool {
 	taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
-	return isFound && taskRun.Status == TaskStatusCancelled
+	return isFound && taskRun.Status == agentcontract.TaskStatusCancelled
 }
 
-func (taskRunService *TaskRunService) ListTaskEvent(taskRunID string) []TaskEvent {
+func (taskRunService *TaskRunService) ListTaskEvent(taskRunID string) []agentcontract.TaskEvent {
 	return taskRunService.taskEventService.ListTaskEvent(taskRunID)
 }
 
-func (taskRunService *TaskRunService) AdvanceTaskRun(taskRunID string, currentAgentProfileName string) (TaskRun, error) {
+func (taskRunService *TaskRunService) AdvanceTaskRun(taskRunID string, currentAgentProfileName string) (agentcontract.TaskRun, error) {
 	now := time.Now()
-	taskAttempt := TaskAttempt{
+	taskAttempt := agentcontract.TaskAttempt{
 		TaskAttemptID: NewIdentifier(),
 		TaskRunID:     taskRunID,
 		RunnerID:      taskRunService.runnerID,
-		Status:        TaskAttemptStatusRunning,
+		Status:        agentcontract.TaskAttemptStatusRunning,
 		StartedAt:     now,
 	}
-	return taskRunService.TransitionTaskRun(TaskRunTransition{
+	return taskRunService.TransitionTaskRun(agentcontract.TaskRunTransition{
 		TaskRunID:               taskRunID,
 		FromStates:              advanceTaskRunFromStates(),
-		ToState:                 TaskStatusRunning,
+		ToState:                 agentcontract.TaskStatusRunning,
 		CurrentAgentProfileName: currentAgentProfileName,
 		StartedAttempt:          &taskAttempt,
-		Event:                   newTaskRunTransitionEvent(taskRunID, TaskStatusRunning, currentAgentProfileName, now),
+		Event:                   newTaskRunTransitionEvent(taskRunID, agentcontract.TaskStatusRunning, currentAgentProfileName, now),
 		UpdatedAt:               now,
 	})
 }
 
-func (taskRunService *TaskRunService) PauseTaskRun(taskRunID string, status TaskStatus, reason string) (TaskRun, error) {
+func (taskRunService *TaskRunService) PauseTaskRun(taskRunID string, status agentcontract.TaskStatus, reason string) (agentcontract.TaskRun, error) {
 	now := time.Now()
-	return taskRunService.TransitionTaskRun(TaskRunTransition{
+	return taskRunService.TransitionTaskRun(agentcontract.TaskRunTransition{
 		TaskRunID:             taskRunID,
 		FromStates:            pauseTaskRunFromStates(),
 		ToState:               status,
@@ -261,31 +263,31 @@ func (taskRunService *TaskRunService) PauseTaskRun(taskRunID string, status Task
 	})
 }
 
-func (taskRunService *TaskRunService) FailTaskRun(taskRunID string, reason string) (TaskRun, error) {
+func (taskRunService *TaskRunService) FailTaskRun(taskRunID string, reason string) (agentcontract.TaskRun, error) {
 	now := time.Now()
-	return taskRunService.TransitionTaskRun(TaskRunTransition{
+	return taskRunService.TransitionTaskRun(agentcontract.TaskRunTransition{
 		TaskRunID:             taskRunID,
 		FromStates:            failTaskRunFromStates(),
-		ToState:               TaskStatusFailed,
+		ToState:               agentcontract.TaskStatusFailed,
 		FailureReason:         reason,
 		FinishCurrentAttempt:  true,
-		FinishedAttemptStatus: TaskAttemptStatusFailed,
+		FinishedAttemptStatus: agentcontract.TaskAttemptStatusFailed,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusFailed, reason, now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, agentcontract.TaskStatusFailed, reason, now),
 		UpdatedAt:             now,
 	})
 }
 
-func (taskRunService *TaskRunService) TransitionTaskRun(transition TaskRunTransition) (TaskRun, error) {
+func (taskRunService *TaskRunService) TransitionTaskRun(transition agentcontract.TaskRunTransition) (agentcontract.TaskRun, error) {
 	taskRun, errorValue := taskRunService.transitionTaskRunExclusively(transition)
 	if errorValue != nil {
-		return TaskRun{}, errorValue
+		return agentcontract.TaskRun{}, errorValue
 	}
 	taskRunService.notifyTaskRunTransitionObservers(taskRun)
 	return taskRun, nil
 }
 
-func (taskRunService *TaskRunService) transitionTaskRunExclusively(transition TaskRunTransition) (TaskRun, error) {
+func (taskRunService *TaskRunService) transitionTaskRunExclusively(transition agentcontract.TaskRunTransition) (agentcontract.TaskRun, error) {
 	taskRunService.mutex.Lock()
 	defer taskRunService.mutex.Unlock()
 
@@ -293,7 +295,7 @@ func (taskRunService *TaskRunService) transitionTaskRunExclusively(transition Ta
 	if taskRunService.repository != nil {
 		taskRun, errorValue := taskRunService.repository.TransitionTaskRun(normalizedTransition)
 		if errorValue != nil {
-			return TaskRun{}, errorValue
+			return agentcontract.TaskRun{}, errorValue
 		}
 		taskRunService.applyTransitionCacheLocked(normalizedTransition, taskRun)
 		return taskRun, nil
@@ -301,7 +303,7 @@ func (taskRunService *TaskRunService) transitionTaskRunExclusively(transition Ta
 	return taskRunService.transitionTaskRunInMemoryLocked(normalizedTransition)
 }
 
-func (taskRunService *TaskRunService) normalizeTaskRunTransition(transition TaskRunTransition) TaskRunTransition {
+func (taskRunService *TaskRunService) normalizeTaskRunTransition(transition agentcontract.TaskRunTransition) agentcontract.TaskRunTransition {
 	if transition.UpdatedAt.IsZero() {
 		transition.UpdatedAt = time.Now()
 	}
@@ -323,16 +325,16 @@ func (taskRunService *TaskRunService) normalizeTaskRunTransition(transition Task
 	return transition
 }
 
-func (taskRunService *TaskRunService) transitionTaskRunInMemoryLocked(transition TaskRunTransition) (TaskRun, error) {
+func (taskRunService *TaskRunService) transitionTaskRunInMemoryLocked(transition agentcontract.TaskRunTransition) (agentcontract.TaskRun, error) {
 	taskRun, isFound := taskRunService.findTaskRunForMutation(transition.TaskRunID)
 	if !isFound {
-		return TaskRun{}, errors.New("task run not found")
+		return agentcontract.TaskRun{}, errors.New("task run not found")
 	}
 	if !taskStatusAllowed(taskRun.Status, transition.FromStates) {
-		return TaskRun{}, ErrIllegalTransition{
+		return agentcontract.TaskRun{}, ErrIllegalTransition{
 			TaskRunID:     transition.TaskRunID,
 			CurrentStatus: taskRun.Status,
-			FromStates:    append([]TaskStatus{}, transition.FromStates...),
+			FromStates:    append([]agentcontract.TaskStatus{}, transition.FromStates...),
 			ToState:       transition.ToState,
 		}
 	}
@@ -344,13 +346,13 @@ func (taskRunService *TaskRunService) transitionTaskRunInMemoryLocked(transition
 	return taskRun, nil
 }
 
-func (taskRunService *TaskRunService) applyTransitionCacheLocked(transition TaskRunTransition, taskRun TaskRun) {
+func (taskRunService *TaskRunService) applyTransitionCacheLocked(transition agentcontract.TaskRunTransition, taskRun agentcontract.TaskRun) {
 	taskRunService.taskRuns[taskRun.TaskRunID] = taskRun
 	taskRunService.applyTransitionAttemptCacheLocked(transition, taskRun)
 	taskRunService.recordTransitionEvent(transition)
 }
 
-func (taskRunService *TaskRunService) applyTransitionAttemptCacheLocked(transition TaskRunTransition, taskRun TaskRun) {
+func (taskRunService *TaskRunService) applyTransitionAttemptCacheLocked(transition agentcontract.TaskRunTransition, taskRun agentcontract.TaskRun) {
 	if transition.StartedAttempt != nil {
 		taskRunService.taskAttempts[transition.StartedAttempt.TaskAttemptID] = *transition.StartedAttempt
 		taskRunService.activeAttempts[transition.StartedAttempt.TaskAttemptID] = activeTaskAttempt{TaskRunID: taskRun.TaskRunID}
@@ -372,14 +374,14 @@ func (taskRunService *TaskRunService) applyTransitionAttemptCacheLocked(transiti
 	taskRunService.closeOpenToolRequests(taskRun.TaskRunID, taskAttemptID, "cancelled_by_attempt_end")
 }
 
-func (taskRunService *TaskRunService) recordTransitionEvent(transition TaskRunTransition) {
+func (taskRunService *TaskRunService) recordTransitionEvent(transition agentcontract.TaskRunTransition) {
 	if transition.Event == nil {
 		return
 	}
 	taskRunService.taskEventService.RecordTaskEvent(*transition.Event)
 }
 
-func applyTaskRunTransition(taskRun TaskRun, transition TaskRunTransition) TaskRun {
+func applyTaskRunTransition(taskRun agentcontract.TaskRun, transition agentcontract.TaskRunTransition) agentcontract.TaskRun {
 	taskRun.Status = transition.ToState
 	taskRun.UpdatedAt = transition.UpdatedAt
 	if transition.StartedAttempt != nil {
@@ -396,7 +398,7 @@ func applyTaskRunTransition(taskRun TaskRun, transition TaskRunTransition) TaskR
 	return taskRun
 }
 
-func taskStatusAllowed(status TaskStatus, allowedStatuses []TaskStatus) bool {
+func taskStatusAllowed(status agentcontract.TaskStatus, allowedStatuses []agentcontract.TaskStatus) bool {
 	for _, allowedStatus := range allowedStatuses {
 		if status == allowedStatus {
 			return true
@@ -405,8 +407,8 @@ func taskStatusAllowed(status TaskStatus, allowedStatuses []TaskStatus) bool {
 	return false
 }
 
-func newTaskRunTransitionEvent(taskRunID string, status TaskStatus, body string, createdAt time.Time) *TaskEvent {
-	return &TaskEvent{
+func newTaskRunTransitionEvent(taskRunID string, status agentcontract.TaskStatus, body string, createdAt time.Time) *agentcontract.TaskEvent {
+	return &agentcontract.TaskEvent{
 		TaskEventID: NewIdentifier(),
 		TaskRunID:   taskRunID,
 		Name:        taskRunTransitionEventName(status),
@@ -415,92 +417,92 @@ func newTaskRunTransitionEvent(taskRunID string, status TaskStatus, body string,
 	}
 }
 
-func taskRunTransitionEventName(status TaskStatus) string {
+func taskRunTransitionEventName(status agentcontract.TaskStatus) string {
 	switch status {
-	case TaskStatusRunning:
-		return TaskEventTaskRunning
-	case TaskStatusBlocked:
-		return TaskEventTaskBlocked
-	case TaskStatusInterrupted:
-		return TaskEventTaskInterrupted
-	case TaskStatusCompleted:
-		return TaskEventTaskCompleted
-	case TaskStatusFailed:
-		return TaskEventTaskFailed
-	case TaskStatusCancelled:
-		return TaskEventTaskCancelled
+	case agentcontract.TaskStatusRunning:
+		return agentcontract.TaskEventTaskRunning
+	case agentcontract.TaskStatusBlocked:
+		return agentcontract.TaskEventTaskBlocked
+	case agentcontract.TaskStatusInterrupted:
+		return agentcontract.TaskEventTaskInterrupted
+	case agentcontract.TaskStatusCompleted:
+		return agentcontract.TaskEventTaskCompleted
+	case agentcontract.TaskStatusFailed:
+		return agentcontract.TaskEventTaskFailed
+	case agentcontract.TaskStatusCancelled:
+		return agentcontract.TaskEventTaskCancelled
 	default:
-		return TaskEventTaskPaused
+		return agentcontract.TaskEventTaskPaused
 	}
 }
 
-func advanceTaskRunFromStates() []TaskStatus {
-	return []TaskStatus{
-		TaskStatusPlanned,
-		TaskStatusRunning,
-		TaskStatusWaitingUserInput,
-		TaskStatusWaitingApproval,
-		TaskStatusBlocked,
-		TaskStatusInterrupted,
+func advanceTaskRunFromStates() []agentcontract.TaskStatus {
+	return []agentcontract.TaskStatus{
+		agentcontract.TaskStatusPlanned,
+		agentcontract.TaskStatusRunning,
+		agentcontract.TaskStatusWaitingUserInput,
+		agentcontract.TaskStatusWaitingApproval,
+		agentcontract.TaskStatusBlocked,
+		agentcontract.TaskStatusInterrupted,
 	}
 }
 
-func pauseTaskRunFromStates() []TaskStatus {
-	return []TaskStatus{
-		TaskStatusPlanned,
-		TaskStatusRunning,
-		TaskStatusWaitingUserInput,
-		TaskStatusWaitingApproval,
-		TaskStatusBlocked,
-		TaskStatusInterrupted,
+func pauseTaskRunFromStates() []agentcontract.TaskStatus {
+	return []agentcontract.TaskStatus{
+		agentcontract.TaskStatusPlanned,
+		agentcontract.TaskStatusRunning,
+		agentcontract.TaskStatusWaitingUserInput,
+		agentcontract.TaskStatusWaitingApproval,
+		agentcontract.TaskStatusBlocked,
+		agentcontract.TaskStatusInterrupted,
 	}
 }
 
-func failTaskRunFromStates() []TaskStatus {
+func failTaskRunFromStates() []agentcontract.TaskStatus {
 	return pauseTaskRunFromStates()
 }
 
-func completeTaskRunFromStates() []TaskStatus {
-	return []TaskStatus{
-		TaskStatusPlanned,
-		TaskStatusRunning,
-		TaskStatusWaitingUserInput,
-		TaskStatusWaitingApproval,
-		TaskStatusBlocked,
+func completeTaskRunFromStates() []agentcontract.TaskStatus {
+	return []agentcontract.TaskStatus{
+		agentcontract.TaskStatusPlanned,
+		agentcontract.TaskStatusRunning,
+		agentcontract.TaskStatusWaitingUserInput,
+		agentcontract.TaskStatusWaitingApproval,
+		agentcontract.TaskStatusBlocked,
 	}
 }
 
-func cancelTaskRunFromStates() []TaskStatus {
-	return []TaskStatus{
-		TaskStatusPlanned,
-		TaskStatusRunning,
-		TaskStatusWaitingUserInput,
-		TaskStatusWaitingApproval,
-		TaskStatusBlocked,
+func cancelTaskRunFromStates() []agentcontract.TaskStatus {
+	return []agentcontract.TaskStatus{
+		agentcontract.TaskStatusPlanned,
+		agentcontract.TaskStatusRunning,
+		agentcontract.TaskStatusWaitingUserInput,
+		agentcontract.TaskStatusWaitingApproval,
+		agentcontract.TaskStatusBlocked,
 	}
 }
 
-func interruptInactiveTaskRunFromStates() []TaskStatus {
-	return []TaskStatus{
-		TaskStatusPlanned,
-		TaskStatusRunning,
+func interruptInactiveTaskRunFromStates() []agentcontract.TaskStatus {
+	return []agentcontract.TaskStatus{
+		agentcontract.TaskStatusPlanned,
+		agentcontract.TaskStatusRunning,
 	}
 }
 
-func (taskRunService *TaskRunService) ResumeTaskRun(taskRunID string) (TaskRun, error) {
+func (taskRunService *TaskRunService) ResumeTaskRun(taskRunID string) (agentcontract.TaskRun, error) {
 	return taskRunService.AdvanceTaskRun(taskRunID, "planner")
 }
 
-func (taskRunService *TaskRunService) CancelTaskRun(taskRunID string, requesterPersonID string) (TaskRun, error) {
+func (taskRunService *TaskRunService) CancelTaskRun(taskRunID string, requesterPersonID string) (agentcontract.TaskRun, error) {
 	return taskRunService.cancelTaskRun(taskRunID, requesterPersonID, requesterPersonID)
 }
 
-func (taskRunService *TaskRunService) CancelTaskRunWithReason(taskRunID string, requesterPersonID string, reason string) (TaskRun, error) {
+func (taskRunService *TaskRunService) CancelTaskRunWithReason(taskRunID string, requesterPersonID string, reason string) (agentcontract.TaskRun, error) {
 	return taskRunService.cancelTaskRun(taskRunID, requesterPersonID, reason)
 }
 
-func (taskRunService *TaskRunService) CancelWaitingTaskRuns(requesterPersonID string, originConversationID string, reason string) []TaskRun {
-	cancelledTaskRuns := []TaskRun{}
+func (taskRunService *TaskRunService) CancelWaitingTaskRuns(requesterPersonID string, originConversationID string, reason string) []agentcontract.TaskRun {
+	cancelledTaskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRunService.ListTaskRunByPersonID(requesterPersonID) {
 		if !taskRunIsWaiting(taskRun) {
 			continue
@@ -512,14 +514,14 @@ func (taskRunService *TaskRunService) CancelWaitingTaskRuns(requesterPersonID st
 		if errorValue != nil {
 			continue
 		}
-		taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, TaskEventTaskWaitCancelled, reason)
+		taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskWaitCancelled, reason)
 		cancelledTaskRuns = append(cancelledTaskRuns, cancelledTaskRun)
 	}
 	return cancelledTaskRuns
 }
 
-func (taskRunService *TaskRunService) CancelActiveTaskRuns(request TaskRunCancelRequest) []TaskRun {
-	cancelledTaskRuns := []TaskRun{}
+func (taskRunService *TaskRunService) CancelActiveTaskRuns(request TaskRunCancelRequest) []agentcontract.TaskRun {
+	cancelledTaskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRunService.taskRunsForCancelRequest(request) {
 		if !taskRunMatchesCancelRequest(taskRun, request) {
 			continue
@@ -533,8 +535,8 @@ func (taskRunService *TaskRunService) CancelActiveTaskRuns(request TaskRunCancel
 	return cancelledTaskRuns
 }
 
-func (taskRunService *TaskRunService) InterruptOrphanedRuntimeTaskRuns(reason string) []TaskRun {
-	interruptedTaskRuns := []TaskRun{}
+func (taskRunService *TaskRunService) InterruptOrphanedRuntimeTaskRuns(reason string) []agentcontract.TaskRun {
+	interruptedTaskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRunService.ListTaskRun() {
 		if !taskRunIsRuntimeOwned(taskRun) {
 			continue
@@ -548,22 +550,22 @@ func (taskRunService *TaskRunService) InterruptOrphanedRuntimeTaskRuns(reason st
 	return interruptedTaskRuns
 }
 
-func (taskRunService *TaskRunService) InterruptRuntimeTaskRunsForPlannedShutdown() []TaskRun {
-	interruptedTaskRuns := []TaskRun{}
+func (taskRunService *TaskRunService) InterruptRuntimeTaskRunsForPlannedShutdown() []agentcontract.TaskRun {
+	interruptedTaskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRunService.ListTaskRun() {
 		if !taskRunIsRuntimeOwned(taskRun) {
 			continue
 		}
 		now := time.Now()
-		interruptedTaskRun, errorValue := taskRunService.TransitionTaskRun(TaskRunTransition{
+		interruptedTaskRun, errorValue := taskRunService.TransitionTaskRun(agentcontract.TaskRunTransition{
 			TaskRunID:             taskRun.TaskRunID,
 			FromStates:            interruptInactiveTaskRunFromStates(),
-			ToState:               TaskStatusInterrupted,
-			FailureReason:         TaskInterruptReasonPlannedShutdown,
+			ToState:               agentcontract.TaskStatusInterrupted,
+			FailureReason:         agentcontract.TaskInterruptReasonPlannedShutdown,
 			FinishCurrentAttempt:  true,
-			FinishedAttemptStatus: TaskAttemptStatusInterrupted,
+			FinishedAttemptStatus: agentcontract.TaskAttemptStatusInterrupted,
 			RunnerID:              taskRunService.runnerID,
-			Event:                 newTaskRunTransitionEvent(taskRun.TaskRunID, TaskStatusInterrupted, TaskInterruptReasonPlannedShutdown, now),
+			Event:                 newTaskRunTransitionEvent(taskRun.TaskRunID, agentcontract.TaskStatusInterrupted, agentcontract.TaskInterruptReasonPlannedShutdown, now),
 			UpdatedAt:             now,
 		})
 		if errorValue != nil {
@@ -574,29 +576,29 @@ func (taskRunService *TaskRunService) InterruptRuntimeTaskRunsForPlannedShutdown
 	return interruptedTaskRuns
 }
 
-func (taskRunService *TaskRunService) InterruptInactiveTaskRun(taskRunID string, reason string) (TaskRun, bool) {
+func (taskRunService *TaskRunService) InterruptInactiveTaskRun(taskRunID string, reason string) (agentcontract.TaskRun, bool) {
 	taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
 	if !isFound {
-		return TaskRun{}, false
+		return agentcontract.TaskRun{}, false
 	}
-	if taskRun.Status == TaskStatusRunning && taskRunService.IsTaskRunActuallyRunning(taskRun) {
-		return TaskRun{}, false
+	if taskRun.Status == agentcontract.TaskStatusRunning && taskRunService.IsTaskRunActuallyRunning(taskRun) {
+		return agentcontract.TaskRun{}, false
 	}
 
 	now := time.Now()
-	interruptedTaskRun, errorValue := taskRunService.TransitionTaskRun(TaskRunTransition{
+	interruptedTaskRun, errorValue := taskRunService.TransitionTaskRun(agentcontract.TaskRunTransition{
 		TaskRunID:             taskRunID,
 		FromStates:            interruptInactiveTaskRunFromStates(),
-		ToState:               TaskStatusInterrupted,
+		ToState:               agentcontract.TaskStatusInterrupted,
 		FailureReason:         reason,
 		FinishCurrentAttempt:  true,
-		FinishedAttemptStatus: TaskAttemptStatusInterrupted,
+		FinishedAttemptStatus: agentcontract.TaskAttemptStatusInterrupted,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusInterrupted, reason, now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, agentcontract.TaskStatusInterrupted, reason, now),
 		UpdatedAt:             now,
 	})
 	if errorValue != nil {
-		return TaskRun{}, false
+		return agentcontract.TaskRun{}, false
 	}
 	return interruptedTaskRun, true
 }
@@ -617,14 +619,14 @@ func (taskRunService *TaskRunService) SelectInterruptedTaskRunsForAutoResume(now
 
 func (taskRunService *TaskRunService) ClaimInterruptedTaskRunAutoResume(taskRunID string, reason string) bool {
 	taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
-	if !isFound || taskRun.Status != TaskStatusInterrupted {
+	if !isFound || taskRun.Status != agentcontract.TaskStatusInterrupted {
 		return false
 	}
 	attemptCount := taskRunService.autoResumeAttemptCount(taskRun.TaskRunID)
 	if attemptCount > 0 && !taskRunWasInterruptedByPlannedShutdown(taskRun) {
 		return false
 	}
-	taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, TaskEventTaskAutoResumeAttempted, marshalTaskRunServiceEventBody(map[string]any{
+	taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskAutoResumeAttempted, marshalTaskRunServiceEventBody(map[string]any{
 		"attemptCount": attemptCount + 1,
 		"reason":       strings.TrimSpace(reason),
 	}))
@@ -632,12 +634,12 @@ func (taskRunService *TaskRunService) ClaimInterruptedTaskRunAutoResume(taskRunI
 }
 
 func (taskRunService *TaskRunService) MarkInterruptedTaskRunAutoResumeSkipped(taskRunID string, reason string) {
-	taskRunService.taskEventService.AppendTaskEvent(taskRunID, TaskEventTaskAutoResumeSkipped, marshalTaskRunServiceEventBody(map[string]string{
+	taskRunService.taskEventService.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskAutoResumeSkipped, marshalTaskRunServiceEventBody(map[string]string{
 		"reason": strings.TrimSpace(reason),
 	}))
 }
 
-func (taskRunService *TaskRunService) IsTaskRunActuallyRunning(taskRun TaskRun) bool {
+func (taskRunService *TaskRunService) IsTaskRunActuallyRunning(taskRun agentcontract.TaskRun) bool {
 	taskRunService.mutex.RLock()
 	defer taskRunService.mutex.RUnlock()
 	return taskRunService.taskRunHasActiveAttemptLocked(taskRun)
@@ -650,7 +652,7 @@ func (taskRunService *TaskRunService) CloseOpenToolRequests(taskRunID string, re
 func (taskRunService *TaskRunService) closeOpenToolRequests(taskRunID string, taskAttemptID string, reason string) {
 	openRequests := openToolRequests(taskRunService.taskEventService.ListTaskEvent(taskRunID))
 	for _, openRequest := range openRequests {
-		taskRunService.taskEventService.AppendTaskEvent(taskRunID, ToolTaskEventName(openRequest.ToolName, ToolTaskEventCancelledSuffix), marshalTaskRunServiceEventBody(map[string]string{
+		taskRunService.taskEventService.AppendTaskEvent(taskRunID, agentcontract.ToolTaskEventName(openRequest.ToolName, agentcontract.ToolTaskEventCancelledSuffix), marshalTaskRunServiceEventBody(map[string]string{
 			"observationID":  openRequest.ObservationID,
 			"toolName":       openRequest.ToolName,
 			"taskAttemptID":  taskAttemptID,
@@ -660,9 +662,9 @@ func (taskRunService *TaskRunService) closeOpenToolRequests(taskRunID string, ta
 	}
 }
 
-func (taskRunService *TaskRunService) taskRunsForCancelRequest(request TaskRunCancelRequest) []TaskRun {
+func (taskRunService *TaskRunService) taskRunsForCancelRequest(request TaskRunCancelRequest) []agentcontract.TaskRun {
 	if len(request.TaskRunIDs) > 0 {
-		taskRuns := []TaskRun{}
+		taskRuns := []agentcontract.TaskRun{}
 		for _, taskRunID := range trimUniqueTaskRunIDs(request.TaskRunIDs) {
 			taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
 			if isFound {
@@ -677,7 +679,7 @@ func (taskRunService *TaskRunService) taskRunsForCancelRequest(request TaskRunCa
 	return taskRunService.ListTaskRun()
 }
 
-func taskRunMatchesCancelRequest(taskRun TaskRun, request TaskRunCancelRequest) bool {
+func taskRunMatchesCancelRequest(taskRun agentcontract.TaskRun, request TaskRunCancelRequest) bool {
 	if !taskRunIsActive(taskRun) {
 		return false
 	}
@@ -699,49 +701,49 @@ func taskRunMatchesCancelRequest(taskRun TaskRun, request TaskRunCancelRequest) 
 	return true
 }
 
-func taskRunIsActive(taskRun TaskRun) bool {
+func taskRunIsActive(taskRun agentcontract.TaskRun) bool {
 	switch taskRun.Status {
-	case TaskStatusPlanned, TaskStatusRunning, TaskStatusWaitingApproval, TaskStatusWaitingUserInput, TaskStatusBlocked:
+	case agentcontract.TaskStatusPlanned, agentcontract.TaskStatusRunning, agentcontract.TaskStatusWaitingApproval, agentcontract.TaskStatusWaitingUserInput, agentcontract.TaskStatusBlocked:
 		return true
 	default:
 		return false
 	}
 }
 
-func taskRunIsWaiting(taskRun TaskRun) bool {
-	return taskRun.Status == TaskStatusWaitingApproval || taskRun.Status == TaskStatusWaitingUserInput
+func taskRunIsWaiting(taskRun agentcontract.TaskRun) bool {
+	return taskRun.Status == agentcontract.TaskStatusWaitingApproval || taskRun.Status == agentcontract.TaskStatusWaitingUserInput
 }
 
-func taskRunIsRuntimeOwned(taskRun TaskRun) bool {
-	return taskRun.Status == TaskStatusPlanned || taskRun.Status == TaskStatusRunning
+func taskRunIsRuntimeOwned(taskRun agentcontract.TaskRun) bool {
+	return taskRun.Status == agentcontract.TaskStatusPlanned || taskRun.Status == agentcontract.TaskStatusRunning
 }
 
 const staleBlockedTaskRunAge = 24 * time.Hour
 const staleWaitingTaskRunAge = 72 * time.Hour
 
-func StaleUnattendedTaskRunReason(taskRun TaskRun, now time.Time) string {
+func StaleUnattendedTaskRunReason(taskRun agentcontract.TaskRun, now time.Time) string {
 	switch taskRun.Status {
-	case TaskStatusBlocked:
+	case agentcontract.TaskStatusBlocked:
 		if now.Sub(taskRun.UpdatedAt) > staleBlockedTaskRunAge {
 			return "blocked_expired"
 		}
-	case TaskStatusWaitingApproval, TaskStatusWaitingUserInput:
+	case agentcontract.TaskStatusWaitingApproval, agentcontract.TaskStatusWaitingUserInput:
 		if now.Sub(taskRun.UpdatedAt) > staleWaitingTaskRunAge {
 			return "waiting_expired"
 		}
-	case TaskStatusInterrupted:
-		if !TaskRunWasInterruptedByRuntimeRestart(taskRun) && now.Sub(taskRun.UpdatedAt) > staleBlockedTaskRunAge {
+	case agentcontract.TaskStatusInterrupted:
+		if !agentcontract.TaskRunWasInterruptedByRuntimeRestart(taskRun) && now.Sub(taskRun.UpdatedAt) > staleBlockedTaskRunAge {
 			return "interrupted_expired"
 		}
 	}
 	return ""
 }
 
-func (taskRunService *TaskRunService) SelectStaleUnattendedTaskRuns(now time.Time) []TaskRun {
+func (taskRunService *TaskRunService) SelectStaleUnattendedTaskRuns(now time.Time) []agentcontract.TaskRun {
 	if now.IsZero() {
 		now = time.Now()
 	}
-	taskRuns := []TaskRun{}
+	taskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRunService.ListTaskRun() {
 		if StaleUnattendedTaskRunReason(taskRun, now) == "" {
 			continue
@@ -754,8 +756,8 @@ func (taskRunService *TaskRunService) SelectStaleUnattendedTaskRuns(now time.Tim
 	return taskRuns
 }
 
-func (taskRunService *TaskRunService) interruptedTaskRunsEligibleForAutoResume(now time.Time) []TaskRun {
-	taskRuns := []TaskRun{}
+func (taskRunService *TaskRunService) interruptedTaskRunsEligibleForAutoResume(now time.Time) []agentcontract.TaskRun {
+	taskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRunService.ListTaskRun() {
 		if !taskRunService.canAutoResumeInterruptedTaskRun(taskRun, now) {
 			continue
@@ -768,8 +770,8 @@ func (taskRunService *TaskRunService) interruptedTaskRunsEligibleForAutoResume(n
 	return taskRuns
 }
 
-func (taskRunService *TaskRunService) canAutoResumeInterruptedTaskRun(taskRun TaskRun, now time.Time) bool {
-	if taskRun.Status != TaskStatusInterrupted {
+func (taskRunService *TaskRunService) canAutoResumeInterruptedTaskRun(taskRun agentcontract.TaskRun, now time.Time) bool {
+	if taskRun.Status != agentcontract.TaskStatusInterrupted {
 		return false
 	}
 	if now.Sub(taskRun.UpdatedAt) > 24*time.Hour {
@@ -781,13 +783,13 @@ func (taskRunService *TaskRunService) canAutoResumeInterruptedTaskRun(taskRun Ta
 	return taskRunService.taskRunHasInterruptedMarker(taskRun.TaskRunID)
 }
 
-func taskRunWasInterruptedByPlannedShutdown(taskRun TaskRun) bool {
-	return taskRun.Status == TaskStatusInterrupted && taskRun.FailureReason == TaskInterruptReasonPlannedShutdown
+func taskRunWasInterruptedByPlannedShutdown(taskRun agentcontract.TaskRun) bool {
+	return taskRun.Status == agentcontract.TaskStatusInterrupted && taskRun.FailureReason == agentcontract.TaskInterruptReasonPlannedShutdown
 }
 
 func (taskRunService *TaskRunService) taskRunHasInterruptedMarker(taskRunID string) bool {
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == TaskEventTaskInterrupted {
+		if taskEvent.Name == agentcontract.TaskEventTaskInterrupted {
 			return true
 		}
 	}
@@ -797,7 +799,7 @@ func (taskRunService *TaskRunService) taskRunHasInterruptedMarker(taskRunID stri
 func (taskRunService *TaskRunService) autoResumeAttemptCount(taskRunID string) int {
 	count := 0
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == TaskEventTaskAutoResumeAttempted {
+		if taskEvent.Name == agentcontract.TaskEventTaskAutoResumeAttempted {
 			count++
 		}
 	}
@@ -827,25 +829,25 @@ func containsTrimmedString(values []string, expectedValue string) bool {
 	return false
 }
 
-func (taskRunService *TaskRunService) CompleteTaskRun(taskRunID string, result string) (TaskRun, error) {
+func (taskRunService *TaskRunService) CompleteTaskRun(taskRunID string, result string) (agentcontract.TaskRun, error) {
 	now := time.Now()
-	return taskRunService.TransitionTaskRun(TaskRunTransition{
+	return taskRunService.TransitionTaskRun(agentcontract.TaskRunTransition{
 		TaskRunID:             taskRunID,
 		FromStates:            completeTaskRunFromStates(),
-		ToState:               TaskStatusCompleted,
+		ToState:               agentcontract.TaskStatusCompleted,
 		Result:                result,
 		FinishCurrentAttempt:  true,
-		FinishedAttemptStatus: TaskAttemptStatusCompleted,
+		FinishedAttemptStatus: agentcontract.TaskAttemptStatusCompleted,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusCompleted, result, now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, agentcontract.TaskStatusCompleted, result, now),
 		UpdatedAt:             now,
 	})
 }
 
-func (taskRunService *TaskRunService) RecordTaskRunResult(taskRunID string, result string) (TaskRun, error) {
+func (taskRunService *TaskRunService) RecordTaskRunResult(taskRunID string, result string) (agentcontract.TaskRun, error) {
 	taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
 	if !isFound {
-		return TaskRun{}, ErrTaskRunNotFound
+		return agentcontract.TaskRun{}, ErrTaskRunNotFound
 	}
 	taskRun.Result = result
 	taskRun.UpdatedAt = time.Now()
@@ -853,14 +855,14 @@ func (taskRunService *TaskRunService) RecordTaskRunResult(taskRunID string, resu
 	defer taskRunService.mutex.Unlock()
 	if taskRunService.repository != nil {
 		if errorValue := taskRunService.repository.SaveTaskRun(taskRun); errorValue != nil {
-			return TaskRun{}, errorValue
+			return agentcontract.TaskRun{}, errorValue
 		}
 	}
 	taskRunService.taskRuns[taskRunID] = taskRun
 	return taskRun, nil
 }
 
-func (taskRunService *TaskRunService) FindTaskRun(taskRunID string) (TaskRun, bool) {
+func (taskRunService *TaskRunService) FindTaskRun(taskRunID string) (agentcontract.TaskRun, bool) {
 	if taskRunService.repository != nil {
 		taskRun, isFound, errorValue := taskRunService.repository.FindTaskRun(taskRunID)
 		if errorValue == nil {
@@ -874,7 +876,7 @@ func (taskRunService *TaskRunService) FindTaskRun(taskRunID string) (TaskRun, bo
 	return taskRun, isFound
 }
 
-func (taskRunService *TaskRunService) ListTaskRun() []TaskRun {
+func (taskRunService *TaskRunService) ListTaskRun() []agentcontract.TaskRun {
 	if taskRunService.repository != nil {
 		taskRuns, errorValue := taskRunService.repository.ListTaskRun()
 		if errorValue == nil {
@@ -884,7 +886,7 @@ func (taskRunService *TaskRunService) ListTaskRun() []TaskRun {
 	taskRunService.mutex.RLock()
 	defer taskRunService.mutex.RUnlock()
 
-	taskRuns := make([]TaskRun, 0, len(taskRunService.taskRuns))
+	taskRuns := make([]agentcontract.TaskRun, 0, len(taskRunService.taskRuns))
 	for _, taskRun := range taskRunService.taskRuns {
 		taskRuns = append(taskRuns, taskRun)
 	}
@@ -892,14 +894,14 @@ func (taskRunService *TaskRunService) ListTaskRun() []TaskRun {
 	return taskRuns
 }
 
-func (taskRunService *TaskRunService) ListTaskRunByPersonID(personID string) []TaskRun {
+func (taskRunService *TaskRunService) ListTaskRunByPersonID(personID string) []agentcontract.TaskRun {
 	if taskRunService.repository != nil {
 		taskRuns, errorValue := taskRunService.repository.ListTaskRunByPersonID(personID)
 		if errorValue == nil {
 			return taskRuns
 		}
 	}
-	taskRuns := []TaskRun{}
+	taskRuns := []agentcontract.TaskRun{}
 	for _, taskRun := range taskRunService.ListTaskRun() {
 		if taskRun.RequesterPersonID == personID {
 			taskRuns = append(taskRuns, taskRun)
@@ -908,65 +910,65 @@ func (taskRunService *TaskRunService) ListTaskRunByPersonID(personID string) []T
 	return taskRuns
 }
 
-func (taskRunService *TaskRunService) DeleteTerminalTaskRun(taskRunID string, requesterPersonID string) (TaskRun, error) {
+func (taskRunService *TaskRunService) DeleteTerminalTaskRun(taskRunID string, requesterPersonID string) (agentcontract.TaskRun, error) {
 	taskRun, isFound := taskRunService.FindTaskRun(strings.TrimSpace(taskRunID))
 	if !isFound {
-		return TaskRun{}, ErrTaskRunNotFound
+		return agentcontract.TaskRun{}, ErrTaskRunNotFound
 	}
 	if requesterPersonID != "" && taskRun.RequesterPersonID != requesterPersonID {
-		return TaskRun{}, ErrTaskRunAccessDenied
+		return agentcontract.TaskRun{}, ErrTaskRunAccessDenied
 	}
 	if !isTerminalTaskRunStatus(taskRun.Status) {
-		return TaskRun{}, ErrTaskRunNotDeletable
+		return agentcontract.TaskRun{}, ErrTaskRunNotDeletable
 	}
 	if taskRunService.repository != nil {
 		wasDeleted, errorValue := taskRunService.repository.DeleteTaskRun(taskRun.TaskRunID, terminalTaskRunStatusStrings())
 		if errorValue != nil {
-			return TaskRun{}, errorValue
+			return agentcontract.TaskRun{}, errorValue
 		}
 		if !wasDeleted {
-			return TaskRun{}, ErrTaskRunNotFound
+			return agentcontract.TaskRun{}, ErrTaskRunNotFound
 		}
 		taskRunService.evictTaskRunIDs([]string{taskRun.TaskRunID})
 		return taskRun, nil
 	}
 	if !taskRunService.deleteTerminalTaskRunFromMemory(taskRun.TaskRunID) {
-		return TaskRun{}, ErrTaskRunNotFound
+		return agentcontract.TaskRun{}, ErrTaskRunNotFound
 	}
 	return taskRun, nil
 }
 
-func (taskRunService *TaskRunService) saveTaskRun(taskRun TaskRun) error {
+func (taskRunService *TaskRunService) saveTaskRun(taskRun agentcontract.TaskRun) error {
 	if taskRunService.repository == nil {
 		return nil
 	}
 	return taskRunService.repository.SaveTaskRun(taskRun)
 }
 
-func (taskRunService *TaskRunService) cancelTaskRun(taskRunID string, requesterPersonID string, reason string) (TaskRun, error) {
+func (taskRunService *TaskRunService) cancelTaskRun(taskRunID string, requesterPersonID string, reason string) (agentcontract.TaskRun, error) {
 	taskRun, isFound := taskRunService.FindTaskRun(taskRunID)
 	if !isFound {
-		return TaskRun{}, errors.New("task run not found")
+		return agentcontract.TaskRun{}, errors.New("task run not found")
 	}
 	if requesterPersonID != "" && taskRun.RequesterPersonID != requesterPersonID {
-		return TaskRun{}, errors.New("task run access denied")
+		return agentcontract.TaskRun{}, errors.New("task run access denied")
 	}
 
 	cancelFunction := taskRunService.cancelFunctionForTaskRun(taskRun)
 	now := time.Now()
-	cancelledTaskRun, errorValue := taskRunService.TransitionTaskRun(TaskRunTransition{
+	cancelledTaskRun, errorValue := taskRunService.TransitionTaskRun(agentcontract.TaskRunTransition{
 		TaskRunID:             taskRunID,
 		FromStates:            cancelTaskRunFromStates(),
-		ToState:               TaskStatusCancelled,
+		ToState:               agentcontract.TaskStatusCancelled,
 		FailureReason:         strings.TrimSpace(reason),
 		FinishCurrentAttempt:  true,
-		FinishedAttemptStatus: TaskAttemptStatusCancelled,
+		FinishedAttemptStatus: agentcontract.TaskAttemptStatusCancelled,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusCancelled, firstNonEmptyTaskRunString(reason, requesterPersonID), now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, agentcontract.TaskStatusCancelled, firstNonEmptyTaskRunString(reason, requesterPersonID), now),
 		UpdatedAt:             now,
 	})
 	if errorValue != nil {
-		return TaskRun{}, errorValue
+		return agentcontract.TaskRun{}, errorValue
 	}
 	if cancelFunction != nil {
 		cancelFunction()
@@ -974,7 +976,7 @@ func (taskRunService *TaskRunService) cancelTaskRun(taskRunID string, requesterP
 	return cancelledTaskRun, nil
 }
 
-func (taskRunService *TaskRunService) cancelFunctionForTaskRun(taskRun TaskRun) context.CancelFunc {
+func (taskRunService *TaskRunService) cancelFunctionForTaskRun(taskRun agentcontract.TaskRun) context.CancelFunc {
 	taskRunService.mutex.RLock()
 	defer taskRunService.mutex.RUnlock()
 	if !taskRunService.taskRunHasActiveAttemptLocked(taskRun) {
@@ -984,14 +986,14 @@ func (taskRunService *TaskRunService) cancelFunctionForTaskRun(taskRun TaskRun) 
 	return activeAttempt.CancelFunction
 }
 
-func (taskRunService *TaskRunService) startTaskRunAttempt(taskRun TaskRun, taskAttempt TaskAttempt) error {
+func (taskRunService *TaskRunService) startTaskRunAttempt(taskRun agentcontract.TaskRun, taskAttempt agentcontract.TaskAttempt) error {
 	if taskRunService.repository == nil {
 		return nil
 	}
 	return taskRunService.repository.StartTaskRunAttempt(taskRun, taskAttempt)
 }
 
-func (taskRunService *TaskRunService) finishCurrentAttemptLocked(taskRun TaskRun, status TaskAttemptStatus, reason string) (context.CancelFunc, error) {
+func (taskRunService *TaskRunService) finishCurrentAttemptLocked(taskRun agentcontract.TaskRun, status agentcontract.TaskAttemptStatus, reason string) (context.CancelFunc, error) {
 	taskAttemptID := strings.TrimSpace(taskRun.CurrentAttemptID)
 	if taskAttemptID == "" {
 		if errorValue := taskRunService.saveTaskRun(taskRun); errorValue != nil {
@@ -1015,7 +1017,7 @@ func (taskRunService *TaskRunService) finishCurrentAttemptLocked(taskRun TaskRun
 	return activeAttempt.CancelFunction, nil
 }
 
-func (taskRunService *TaskRunService) findTaskAttemptForMutation(taskAttemptID string, taskRunID string) TaskAttempt {
+func (taskRunService *TaskRunService) findTaskAttemptForMutation(taskAttemptID string, taskRunID string) agentcontract.TaskAttempt {
 	taskAttempt, isFound := taskRunService.taskAttempts[taskAttemptID]
 	if isFound {
 		return taskAttempt
@@ -1027,24 +1029,24 @@ func (taskRunService *TaskRunService) findTaskAttemptForMutation(taskAttemptID s
 			return taskAttempt
 		}
 	}
-	return TaskAttempt{
+	return agentcontract.TaskAttempt{
 		TaskAttemptID: taskAttemptID,
 		TaskRunID:     taskRunID,
 		RunnerID:      taskRunService.runnerID,
-		Status:        TaskAttemptStatusRunning,
+		Status:        agentcontract.TaskAttemptStatusRunning,
 		StartedAt:     time.Now(),
 	}
 }
 
-func (taskRunService *TaskRunService) finishTaskRunAttempt(taskRun TaskRun, taskAttempt TaskAttempt) error {
+func (taskRunService *TaskRunService) finishTaskRunAttempt(taskRun agentcontract.TaskRun, taskAttempt agentcontract.TaskAttempt) error {
 	if taskRunService.repository == nil {
 		return nil
 	}
 	return taskRunService.repository.FinishTaskRunAttempt(taskRun, taskAttempt)
 }
 
-func (taskRunService *TaskRunService) taskRunHasActiveAttemptLocked(taskRun TaskRun) bool {
-	if taskRun.Status != TaskStatusRunning {
+func (taskRunService *TaskRunService) taskRunHasActiveAttemptLocked(taskRun agentcontract.TaskRun) bool {
+	if taskRun.Status != agentcontract.TaskStatusRunning {
 		return false
 	}
 	taskAttemptID := strings.TrimSpace(taskRun.CurrentAttemptID)
@@ -1055,16 +1057,16 @@ func (taskRunService *TaskRunService) taskRunHasActiveAttemptLocked(taskRun Task
 	return isFound && activeAttempt.TaskRunID == taskRun.TaskRunID
 }
 
-func taskAttemptStatusForTaskStatus(status TaskStatus) TaskAttemptStatus {
+func taskAttemptStatusForTaskStatus(status agentcontract.TaskStatus) agentcontract.TaskAttemptStatus {
 	switch status {
-	case TaskStatusCompleted:
-		return TaskAttemptStatusCompleted
-	case TaskStatusCancelled:
-		return TaskAttemptStatusCancelled
-	case TaskStatusFailed:
-		return TaskAttemptStatusFailed
+	case agentcontract.TaskStatusCompleted:
+		return agentcontract.TaskAttemptStatusCompleted
+	case agentcontract.TaskStatusCancelled:
+		return agentcontract.TaskAttemptStatusCancelled
+	case agentcontract.TaskStatusFailed:
+		return agentcontract.TaskAttemptStatusFailed
 	default:
-		return TaskAttemptStatusInterrupted
+		return agentcontract.TaskAttemptStatusInterrupted
 	}
 }
 
@@ -1078,24 +1080,24 @@ type toolEventBody struct {
 	ToolName      string `json:"toolName"`
 }
 
-func openToolRequests(taskEvents []TaskEvent) []openToolRequest {
+func openToolRequests(taskEvents []agentcontract.TaskEvent) []openToolRequest {
 	requests := []openToolRequest{}
 	closedObservationIDs := map[string]bool{}
 	for _, taskEvent := range taskEvents {
-		toolName, isToolEvent := ToolTaskEventToolName(taskEvent.Name, ".requested")
+		toolName, isToolEvent := agentcontract.ToolTaskEventToolName(taskEvent.Name, ".requested")
 		if isToolEvent {
 			body := parseToolEventBody(taskEvent.Body)
 			requests = append(requests, openToolRequest{ObservationID: firstNonEmptyTaskRunString(body.ObservationID, taskEvent.TaskEventID), ToolName: firstNonEmptyTaskRunString(body.ToolName, toolName)})
 			continue
 		}
-		if _, isResult := ToolTaskEventToolName(taskEvent.Name, ".result"); isResult {
+		if _, isResult := agentcontract.ToolTaskEventToolName(taskEvent.Name, ".result"); isResult {
 			body := parseToolEventBody(taskEvent.Body)
 			if body.ObservationID != "" {
 				closedObservationIDs[body.ObservationID] = true
 			}
 			continue
 		}
-		if _, isCancelled := ToolTaskEventToolName(taskEvent.Name, ".cancelled"); isCancelled {
+		if _, isCancelled := agentcontract.ToolTaskEventToolName(taskEvent.Name, ".cancelled"); isCancelled {
 			body := parseToolEventBody(taskEvent.Body)
 			if body.ObservationID != "" {
 				closedObservationIDs[body.ObservationID] = true
@@ -1140,14 +1142,14 @@ func firstNonEmptyTaskRunString(values ...string) string {
 	return ""
 }
 
-func (taskRunService *TaskRunService) findTaskRunForMutation(taskRunID string) (TaskRun, bool) {
+func (taskRunService *TaskRunService) findTaskRunForMutation(taskRunID string) (agentcontract.TaskRun, bool) {
 	taskRun, isFound := taskRunService.taskRuns[taskRunID]
 	if isFound || taskRunService.repository == nil {
 		return taskRun, isFound
 	}
 	taskRun, isFound, errorValue := taskRunService.repository.FindTaskRun(taskRunID)
 	if errorValue != nil || !isFound {
-		return TaskRun{}, false
+		return agentcontract.TaskRun{}, false
 	}
 	taskRunService.taskRuns[taskRunID] = taskRun
 	return taskRun, true
@@ -1223,14 +1225,14 @@ func (taskRunService *TaskRunService) evictTaskRunIDsLocked(taskRunIDs []string)
 
 func terminalTaskRunStatusStrings() []string {
 	return []string{
-		string(TaskStatusCompleted),
-		string(TaskStatusFailed),
-		string(TaskStatusCancelled),
-		string(TaskStatusBlocked),
+		string(agentcontract.TaskStatusCompleted),
+		string(agentcontract.TaskStatusFailed),
+		string(agentcontract.TaskStatusCancelled),
+		string(agentcontract.TaskStatusBlocked),
 	}
 }
 
-func isTerminalTaskRunStatus(status TaskStatus) bool {
+func isTerminalTaskRunStatus(status agentcontract.TaskStatus) bool {
 	for _, terminalStatus := range terminalTaskRunStatusStrings() {
 		if string(status) == terminalStatus {
 			return true

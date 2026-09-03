@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -139,7 +139,7 @@ func TestAResumedTurnKeepsWhatItLearnedBeforeThePause(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the continuation to finish from restored evidence, got %+v", result)
 	}
 	if searchCallCount != 0 || deleteCallCount != 0 {
