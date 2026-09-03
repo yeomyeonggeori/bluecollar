@@ -14,13 +14,6 @@ const (
 	approvalUnmatchedObservationNote = "This is not the call that was held for approval. The held call is still waiting, and what ran here was recorded as its own effect."
 )
 
-type heldCallRecord struct {
-	ApprovalToken string `json:"approvalToken"`
-	ToolName      string `json:"toolName"`
-	ToolInputKey  string `json:"toolInputKey"`
-	ObservationID string `json:"observationID"`
-}
-
 func newApprovalToken() string {
 	buffer := make([]byte, 16)
 	if _, errorValue := rand.Read(buffer); errorValue != nil {
@@ -30,10 +23,10 @@ func newApprovalToken() string {
 }
 
 func (agentTurnRunner *AgentTurnRunner) mintHeldCallApproval(taskRunID string, observation turnObservation) {
-	heldCall := heldCallRecord{
+	heldCall := HeldCall{
 		ApprovalToken: newApprovalToken(),
 		ToolName:      strings.TrimSpace(observation.Tool),
-		ToolInputKey:  canonicalToolCallKey(observation.Tool, observation.ToolInput),
+		ToolInput:     observation.ToolInput,
 		ObservationID: observation.ObservationID,
 	}
 	if heldCall.ApprovalToken == "" {
@@ -42,24 +35,24 @@ func (agentTurnRunner *AgentTurnRunner) mintHeldCallApproval(taskRunID string, o
 	agentTurnRunner.appendEvent(taskRunID, approvalHeldCallEventName, marshalEventBody(heldCall))
 }
 
-func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID string) []heldCallRecord {
-	heldCalls := []heldCallRecord{}
+func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID string) []HeldCall {
+	heldCalls := []HeldCall{}
 	spentTokens := map[string]bool{}
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
 		switch taskEvent.Name {
 		case approvalHeldCallEventName:
-			heldCall := heldCallRecord{}
+			heldCall := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &heldCall) == nil && heldCall.ApprovalToken != "" {
 				heldCalls = append(heldCalls, heldCall)
 			}
 		case approvalExecutedEventName:
-			executed := heldCallRecord{}
+			executed := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &executed) == nil {
 				spentTokens[executed.ApprovalToken] = true
 			}
 		}
 	}
-	awaiting := []heldCallRecord{}
+	awaiting := []HeldCall{}
 	for _, heldCall := range heldCalls {
 		if !spentTokens[heldCall.ApprovalToken] {
 			awaiting = append(awaiting, heldCall)
@@ -68,7 +61,7 @@ func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID stri
 	return awaiting
 }
 
-func toolWasHeldForApproval(heldCalls []heldCallRecord, toolName string) bool {
+func toolWasHeldForApproval(heldCalls []HeldCall, toolName string) bool {
 	trimmedToolName := strings.TrimSpace(toolName)
 	for _, heldCall := range heldCalls {
 		if heldCall.ToolName == trimmedToolName {
@@ -78,24 +71,24 @@ func toolWasHeldForApproval(heldCalls []heldCallRecord, toolName string) bool {
 	return false
 }
 
-func heldCallForCarriedOutCall(heldCalls []heldCallRecord, carriedOutCall CarriedOutCall) (heldCallRecord, bool) {
+func heldCallForCarriedOutCall(heldCalls []HeldCall, carriedOutCall CarriedOutCall) (HeldCall, bool) {
 	approvalToken := strings.TrimSpace(carriedOutCall.ApprovalToken)
 	if approvalToken == "" {
-		return heldCallRecord{}, false
+		return HeldCall{}, false
 	}
 	toolInputKey := canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput)
 	for _, heldCall := range heldCalls {
-		if heldCall.ApprovalToken == approvalToken && heldCall.ToolInputKey == toolInputKey {
+		if heldCall.ApprovalToken == approvalToken && heldCall.CanonicalCallKey() == toolInputKey {
 			return heldCall, true
 		}
 	}
-	return heldCallRecord{}, false
+	return HeldCall{}, false
 }
 
 // The effect already happened, so the tool's own result is left exactly as it is.
 // What a mismatch changes is the bookkeeping around it: the hold stays unspent and
 // the ledger says so.
-func (agentTurnRunner *AgentTurnRunner) settleHeldCallApproval(taskRunID string, heldCalls []heldCallRecord, carriedOutCall CarriedOutCall) (didDriftFromItsHold bool) {
+func (agentTurnRunner *AgentTurnRunner) settleHeldCallApproval(taskRunID string, heldCalls []HeldCall, carriedOutCall CarriedOutCall) (didDriftFromItsHold bool) {
 	if !toolWasHeldForApproval(heldCalls, carriedOutCall.ToolName) {
 		return false
 	}
@@ -120,7 +113,7 @@ func observationNotingApprovalDrift(observation turnObservation) turnObservation
 	return observation
 }
 
-func heldCallObservationIDs(heldCalls []heldCallRecord) []string {
+func heldCallObservationIDs(heldCalls []HeldCall) []string {
 	observationIDs := make([]string, 0, len(heldCalls))
 	for _, heldCall := range heldCalls {
 		observationIDs = append(observationIDs, heldCall.ObservationID)

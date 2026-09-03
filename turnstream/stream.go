@@ -92,7 +92,7 @@ func decodeEvent(rawTurnEvent taskstate.RawTurnEvent) (Event, bool) {
 		checkpoint := decodeBody[checkpointEventBody](rawTurnEvent.Body)
 		return Event{Kind: EventReply, Message: checkpoint.Message, ToolName: checkpoint.ToolName}, true
 	case rawTurnEvent.Name == "approval.pending_call":
-		heldCall := decodeBody[heldCallEventBody](rawTurnEvent.Body)
+		heldCall := decodeBody[agentcontract.HeldCall](rawTurnEvent.Body)
 		return Event{Kind: EventApproval, ToolName: heldCall.ToolName, Message: heldCall.Confirmation}, true
 	case isToolResultEventName(rawTurnEvent.Name):
 		return Event{Kind: EventTool, ToolName: toolResultEventToolName(rawTurnEvent.Body), Body: rawTurnEvent.Body}, true
@@ -103,11 +103,6 @@ func decodeEvent(rawTurnEvent taskstate.RawTurnEvent) (Event, bool) {
 type checkpointEventBody struct {
 	ToolName string `json:"toolName"`
 	Message  string `json:"message"`
-}
-
-type heldCallEventBody struct {
-	ToolName     string `json:"toolName"`
-	Confirmation string `json:"confirmation"`
 }
 
 type toolResultEventBody struct {

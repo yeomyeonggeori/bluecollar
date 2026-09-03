@@ -43,6 +43,8 @@ type (
 	ExecutionPlan                           = agentcontract.ExecutionPlan
 	ExpectedResult                          = agentcontract.ExpectedResult
 	FailureNotice                           = agentcontract.FailureNotice
+	HarnessSession                          = agentcontract.HarnessSession
+	HeldCall                                = agentcontract.HeldCall
 	InstructionBundle                       = agentcontract.InstructionBundle
 	InstructionSource                       = agentcontract.InstructionSource
 	IntakeClassification                    = agentcontract.IntakeClassification

@@ -11,10 +11,10 @@ import (
 )
 
 func TestAHeldCallIsSettledOnlyByTheTokenTheLoopMintedForIt(t *testing.T) {
-	heldCalls := []heldCallRecord{{
+	heldCalls := []HeldCall{{
 		ApprovalToken: "token-1",
 		ToolName:      "message_send",
-		ToolInputKey:  canonicalToolCallKey("message_send", json.RawMessage(`{"to":["alice"],"message":"회의록"}`)),
+		ToolInput:     json.RawMessage(`{"to":["alice"],"message":"회의록"}`),
 		ObservationID: "obs-1",
 	}}
 

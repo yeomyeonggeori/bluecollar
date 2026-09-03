@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
@@ -531,22 +532,11 @@ func parseToolInputDocument(toolName string, toolInput json.RawMessage) (map[str
 }
 
 func canonicalToolCallKey(toolName string, toolInput json.RawMessage) string {
-	return strings.TrimSpace(toolName) + "\x00" + canonicalToolInput(toolInput)
+	return agentcontract.CanonicalToolCallKey(toolName, toolInput)
 }
 
 func canonicalToolInput(toolInput json.RawMessage) string {
-	if len(toolInput) == 0 {
-		return "{}"
-	}
-	var document any
-	if errorValue := json.Unmarshal(toolInput, &document); errorValue != nil {
-		return strings.TrimSpace(string(toolInput))
-	}
-	content, errorValue := json.Marshal(document)
-	if errorValue != nil {
-		return strings.TrimSpace(string(toolInput))
-	}
-	return string(content)
+	return agentcontract.CanonicalToolInput(toolInput)
 }
 
 // terminalRerunAfterWorkspaceMutation frees an identical shell command
