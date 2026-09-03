@@ -37,7 +37,6 @@ type (
 	ClarificationOption                     = agentcontract.ClarificationOption
 	CompanyContext                          = agentcontract.CompanyContext
 	PlanStep                                = toolcontract.PlanStep
-	ToolConflictResolution                  = toolcontract.ToolConflictResolution
 	ConfirmationReplyDecision               = agentcontract.ConfirmationReplyDecision
 	ContractToolWorkingSet                  = agentcontract.ContractToolWorkingSet
 	DeliverableKind                         = agentcontract.DeliverableKind
@@ -126,8 +125,6 @@ const (
 	ResponseLanguageKorean             = toolcontract.ResponseLanguageKorean
 	ResponseLanguageSameAsConversation = toolcontract.ResponseLanguageSameAsConversation
 
-	ToolConflictResolutionAllowDuplicate = toolcontract.ToolConflictResolutionAllowDuplicate
-
 	TaskControlIntentNone    = agentcontract.TaskControlIntentNone
 	TaskControlIntentStop    = agentcontract.TaskControlIntentStop
 	TaskControlIntentStopAll = agentcontract.TaskControlIntentStopAll
@@ -187,16 +184,14 @@ var (
 	NormalizePlan                        = toolcontract.NormalizePlan
 	normalizePlanSteps                   = toolcontract.NormalizePlanSteps
 
-	ObservationIDFromContext          = toolcontract.ObservationIDFromContext
-	ResponseLanguageFromContext       = toolcontract.ResponseLanguageFromContext
-	TaskRunIDFromContext              = toolcontract.TaskRunIDFromContext
-	ToolConflictResolutionFromContext = toolcontract.ToolConflictResolutionFromContext
-	UserFacingMessageFromContext      = toolcontract.UserFacingMessageFromContext
-	WithObservationID                 = toolcontract.WithObservationID
-	WithResponseLanguage              = toolcontract.WithResponseLanguage
-	WithTaskRunID                     = toolcontract.WithTaskRunID
-	WithToolConflictResolution        = toolcontract.WithToolConflictResolution
-	WithUserFacingMessage             = toolcontract.WithUserFacingMessage
+	ObservationIDFromContext     = toolcontract.ObservationIDFromContext
+	ResponseLanguageFromContext  = toolcontract.ResponseLanguageFromContext
+	TaskRunIDFromContext         = toolcontract.TaskRunIDFromContext
+	UserFacingMessageFromContext = toolcontract.UserFacingMessageFromContext
+	WithObservationID            = toolcontract.WithObservationID
+	WithResponseLanguage         = toolcontract.WithResponseLanguage
+	WithTaskRunID                = toolcontract.WithTaskRunID
+	WithUserFacingMessage        = toolcontract.WithUserFacingMessage
 
 	appendUniqueStrings         = agentcontract.AppendUniqueStrings
 	taskLevelRank               = agentcontract.TaskLevelRank
