@@ -247,7 +247,7 @@ func CanonicalFailureCode(code FailureCode) string {
 		return FailureCodes.AccessDenied.String()
 	case "conflict":
 		return FailureCodes.Conflict.String()
-	case "tool.not_registered", "not_found", "recipient_not_found":
+	case "tool.not_registered", "not_found", "recipient_not_found", "task_not_found", "calendar_event_not_found", "person_not_found", "task_participant_not_found":
 		return FailureCodes.NotFound.String()
 	case "tool.failed", "tool_failed", "operation_failed":
 		return FailureCodes.OperationFailed.String()

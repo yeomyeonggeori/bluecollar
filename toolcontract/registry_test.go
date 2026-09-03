@@ -93,6 +93,23 @@ func TestFailureCodeCollapsesUnknownCodesToOperationFailed(t *testing.T) {
 	}
 }
 
+func TestCapabilityToolNotFoundCodesReachTheModelAsNotFound(t *testing.T) {
+	notFoundCodes := []string{
+		"task_not_found",
+		"calendar_event_not_found",
+		"person_not_found",
+		"task_participant_not_found",
+	}
+
+	for _, notFoundCode := range notFoundCodes {
+		result := ToolFailureResult(FailureNotFound, FailureCode(notFoundCode), "target_resolution", "target not found")
+
+		if result.FailureCode() != FailureCodes.NotFound.String() {
+			t.Fatalf("%s: expected %q, got %q", notFoundCode, FailureCodes.NotFound.String(), result.FailureCode())
+		}
+	}
+}
+
 func TestToolSetDescriptionsUseDescriptorDescription(t *testing.T) {
 	toolSet := NewToolSet([]string{"task_update"})
 	registerTestTool(toolSet, ToolDefinition{
