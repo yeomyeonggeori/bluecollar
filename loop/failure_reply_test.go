@@ -212,13 +212,13 @@ func assertFailureNoticeEventsBeforeTerminalStatus(t *testing.T, taskEvents []ta
 	t.Helper()
 	eventIndexes := map[string]int{}
 	for eventIndex, taskEvent := range taskEvents {
-		if taskEvent.Name == "agent.failure_report" || taskEvent.Name == "agent.failure_reply" || taskEvent.Name == "task.paused" {
+		if taskEvent.Name == taskstate.TaskEventAgentFailureReport || taskEvent.Name == taskstate.TaskEventAgentFailureReply || taskEvent.Name == taskstate.TaskEventTaskFailed {
 			eventIndexes[taskEvent.Name] = eventIndex
 		}
 	}
-	failureReportIndex, hasFailureReport := eventIndexes["agent.failure_report"]
-	failureReplyIndex, hasFailureReply := eventIndexes["agent.failure_reply"]
-	terminalStatusIndex, hasTerminalStatus := eventIndexes["task.paused"]
+	failureReportIndex, hasFailureReport := eventIndexes[taskstate.TaskEventAgentFailureReport]
+	failureReplyIndex, hasFailureReply := eventIndexes[taskstate.TaskEventAgentFailureReply]
+	terminalStatusIndex, hasTerminalStatus := eventIndexes[taskstate.TaskEventTaskFailed]
 	if !hasFailureReport || !hasFailureReply || !hasTerminalStatus {
 		t.Fatalf("expected failure notice and terminal events, got %+v", eventIndexes)
 	}
@@ -513,7 +513,7 @@ func TestAgentTurnRunnerDeliversSafeDegradedFailureReplyWithoutStageAndCode(t *t
 		return structuredFailureToolResult("recipient not found", "approved active Mattermost recipient was not found", "recipient_not_found", "recipient_resolve", false, false), nil
 	})
 	existingTaskRun := services.taskRunService.CreateTaskRunWithOrigin("person-1", taskstate.TaskRunOrigin{ConversationID: "conversation-1"}, "정국에게 DM 보내줘")
-	services.taskEventService.AppendTaskEvent(existingTaskRun.TaskRunID, "agent.no_progress_loop_paused", "previous stall pause")
+	services.taskEventService.AppendTaskEvent(existingTaskRun.TaskRunID, taskstate.TaskEventAgentNoProgressLoopPaused, "previous stall pause")
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
 		RequesterPersonID: "person-1",

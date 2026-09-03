@@ -600,7 +600,7 @@ func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T)
 		if errorValue != nil {
 			return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "ask_choice", errorValue.Error()), nil
 		}
-		services.taskRunService.AppendTaskEvent(taskRunID, "ask.requested", string(invocation.Input))
+		services.taskRunService.AppendTaskEvent(taskRunID, taskstate.TaskEventAskRequested, string(invocation.Input))
 		return testToolSuccess(`{"kind":"choice_single","question":"아래 세 가지 중 하나를 선택해 주세요."}`), nil
 	})
 

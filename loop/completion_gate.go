@@ -115,7 +115,7 @@ func (agentTurnRunner *AgentTurnRunner) attachCompletionArtifactsFromEffect(ctx 
 	}
 	observations = append(observations, observation)
 	attachments = appendObservationAttachments(attachments, observation)
-	agentTurnRunner.appendEvent(taskRunID, "agent.completion_state_transition", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionStateTransition, marshalEventBody(map[string]any{
 		"action":        completionActionAttachExistingArtifacts,
 		"observationID": observation.ObservationID,
 		"artifactCount": len(state.AttachmentPaths),
@@ -134,7 +134,7 @@ func (agentTurnRunner *AgentTurnRunner) blockInvalidCompletionArtifacts(taskRunI
 	observation.RelatedPaths = appendUniqueStrings(completionValidityPaths(state))
 	observations = append(observations, observation)
 	agentTurnRunner.appendValidityReview(taskRunID, "completion_state", state.ValidityState)
-	agentTurnRunner.appendEvent(taskRunID, "agent.completion_required", marshalEventBody(observation))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionRequired, marshalEventBody(observation))
 	return completionTransition{
 		Observations:  observations,
 		Attachments:   attachments,
@@ -150,7 +150,7 @@ func (agentTurnRunner *AgentTurnRunner) blockInvalidCompletionArtifactsFromTrans
 	observation.RelatedPaths = appendUniqueStrings(completionValidityPaths(state))
 	nextObservations[len(nextObservations)-1] = observation
 	agentTurnRunner.appendValidityReview(taskRunID, "completion_state", state.ValidityState)
-	agentTurnRunner.appendEvent(taskRunID, "agent.completion_required", marshalEventBody(observation))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionRequired, marshalEventBody(observation))
 	return completionTransition{
 		Observations:  nextObservations,
 		Attachments:   attachments,
@@ -193,7 +193,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeCompletionState(ctx context.Cont
 		var errorValue error
 		modelWording, errorValue = generateCompletionReply(ctx, chatCompleter, request, requirements, observations)
 		if errorValue != nil {
-			agentTurnRunner.appendEvent(taskRunID, "agent.completion_reply_failed", marshalEventBody(map[string]string{"error": errorValue.Error()}))
+			agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionReplyFailed, marshalEventBody(map[string]string{"error": errorValue.Error()}))
 			if ctx.Err() != nil || errors.Is(errorValue, context.Canceled) || errors.Is(errorValue, context.DeadlineExceeded) {
 				return completionTransition{Observations: observations, Attachments: attachments}
 			}
@@ -205,18 +205,18 @@ func (agentTurnRunner *AgentTurnRunner) finalizeCompletionState(ctx context.Cont
 	agentTurnRunner.appendValidityReview(taskRunID, "completion_state", completionGateResult.ValidityState)
 	if !completionGateResult.IsSatisfied {
 		if canDeliverBestEffortOnJudgeRejection(ctx, completionGateResult, modelWording) {
-			agentTurnRunner.appendEvent(taskRunID, "agent.completion_state_best_effort", marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
+			agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionStateBestEffort, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
 			return agentTurnRunner.finalizeCompletionTransition(ctx, taskRunID, taskStepID, request, observations, attachments, completionGateResult, appendCompletionGateCaveat(modelWording, completionGateResult.Message))
 		}
-		agentTurnRunner.appendEvent(taskRunID, "agent.completion_state_rejected", marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionStateRejected, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
 		observation := newFailureObservation(nextObservationIDForObservations(observations), "policy", "", completionGateResult.Message, toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "completion_state")
 		observation = withCompletionGateRecoveryPacket(observation, completionGateResult)
 		observations = append(observations, observation)
-		agentTurnRunner.appendEvent(taskRunID, "agent.completion_required", marshalEventBody(observation))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionRequired, marshalEventBody(observation))
 		return completionTransition{Observations: observations, Attachments: attachments}
 	}
 	agentTurnRunner.appendQualityReview(taskRunID, criteria, actionDocument.QualityReview, observations)
-	agentTurnRunner.appendEvent(taskRunID, "agent.completion_state_finalized", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionStateFinalized, marshalEventBody(map[string]any{
 		"attachmentCount": len(completionGateResult.Attachments),
 		"evidenceCount":   len(state.EvidenceReferences),
 		"evidence":        state.EvidenceReferences,
@@ -255,7 +255,7 @@ func (agentTurnRunner *AgentTurnRunner) completeTaskRunBestEffort(ctx context.Co
 	agentTurnRunner.saveStep(taskRunID, taskStepID, taskstate.TaskStatusCompleted, stepAction, finalReply)
 	completedTaskRun, completionError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, finalReply)
 	if completionError != nil {
-		agentTurnRunner.appendEvent(taskRunID, "agent.completion_persist_failed", marshalEventBody(map[string]string{"error": completionError.Error()}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionPersistFailed, marshalEventBody(map[string]string{"error": completionError.Error()}))
 	}
 	return AgentTurnResult{
 		TaskRun:         completedTaskRun,
@@ -897,9 +897,9 @@ func expectedResultRecoveryEvidence(result completionGateResult) []string {
 
 func completionGateEventName(observation turnObservation) string {
 	if observation.Action == "evidence_missing" {
-		return "agent.evidence_missing"
+		return taskstate.TaskEventAgentEvidenceMissing
 	}
-	return "agent.completion_required"
+	return taskstate.TaskEventAgentCompletionRequired
 }
 
 func evidenceMissingGuidance(evidenceKind string, message string) string {

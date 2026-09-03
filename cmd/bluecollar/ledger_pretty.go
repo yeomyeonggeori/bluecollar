@@ -31,41 +31,40 @@ func ledgerLine(ink string, glyph string, label string, value string) string {
 func prettyLedgerLine(taskEvent taskstate.TaskEvent) string {
 	body := decodedEventBody(taskEvent.Body)
 	switch taskEvent.Name {
-	case "task.created":
+	case taskstate.TaskEventTaskCreated:
 		return ledgerLine(inkTask, "●", "task", quotedRequest(taskEvent.Body))
-	case "task.running", "agent.intake", "agent.goal.completed", "agent.step_working_set":
+	case taskstate.TaskEventTaskRunning, taskstate.TaskEventAgentIntake, taskstate.TaskEventAgentGoalCompleted, taskstate.TaskEventAgentStepWorkingSet:
 		return ""
-	case "agent.conversation_budget":
+	case taskstate.TaskEventAgentConversationBudget:
 		return ledgerLine(inkFaint, "", "context", inkFaint+withThousands(body["contextWindowTokens"])+" tokens"+styleReset)
-	case "agent.instructions_loaded":
+	case taskstate.TaskEventAgentInstructionsLoaded:
 		return ledgerLine(inkFaint, "", "contract", inkFaint+clippedTo(goalInstruction(body), 96)+styleReset)
-	case "llm.call":
+	case taskstate.TaskEventLLMCall:
 		return ledgerLine(inkModel, "◆", "llm", llmCallSummary(body))
-	case "agent.action":
+	case taskstate.TaskEventAgentAction:
 		return ledgerLine(inkAgent, "◇", "action", actionSummary(body))
-	case "agent.execution_state":
+	case taskstate.TaskEventAgentExecutionState:
 		return ledgerLine(inkFaint, "", "plan", inkFaint+clippedTo(stringField(body, "goal"), 96)+styleReset)
-	case "agent.evidence_missing":
+	case taskstate.TaskEventAgentEvidenceMissing:
 		return ledgerLine(inkGate, "●", "gate", inkGate+"finish refused: evidence missing"+styleReset)
-	case "agent.completion_required":
+	case taskstate.TaskEventAgentCompletionRequired:
 		output, _ := body["output"].(map[string]any)
 		return ledgerLine(inkFaint, "", "gate", inkFaint+clippedTo(collapsedWhitespace(stringField(output, "content")), 96)+styleReset)
-	case "completion_judge.verdict":
+	case taskstate.TaskEventCompletionJudgeVerdict:
 		return ledgerLine(inkGate, "●", "judge", judgeSummary(body))
-	case "completion_judge.degraded":
+	case taskstate.TaskEventCompletionJudgeDegraded:
 		return ledgerLine(inkFaint, "", "judge", inkFaint+"unavailable, accepting the deterministic gate"+styleReset)
-	case "agent.budget_extended_one_level":
+	case taskstate.TaskEventAgentBudgetExtendedOneLevel:
 		return ledgerLine(inkFaint, "", "budget", inkFaint+"extended one level → "+stringField(body, "grantedLevel")+styleReset)
-	case "task.completed":
+	case taskstate.TaskEventTaskCompleted:
 		return ledgerLine(inkTool, "✓", "done", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
-	case "task.failed":
+	case taskstate.TaskEventTaskFailed:
 		return ledgerLine(inkFault, "✗", "failed", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
 	}
-	if strings.HasPrefix(taskEvent.Name, "tool.") && strings.HasSuffix(taskEvent.Name, ".requested") {
-		toolName := strings.TrimSuffix(strings.TrimPrefix(taskEvent.Name, "tool."), ".requested")
+	if toolName, isToolRequest := taskstate.ToolTaskEventToolName(taskEvent.Name, taskstate.ToolTaskEventRequestedSuffix); isToolRequest {
 		return ledgerLine(inkTool, "▸", toolName, toolRequestSummary(body))
 	}
-	if strings.HasPrefix(taskEvent.Name, "tool.") && strings.HasSuffix(taskEvent.Name, ".result") {
+	if _, isToolResult := taskstate.ToolTaskEventToolName(taskEvent.Name, taskstate.ToolTaskEventResultSuffix); isToolResult {
 		return ledgerLine(inkFaint, "", "", toolResultSummary(body))
 	}
 	return ledgerLine(inkFaint, "", "", styledEventName(taskEvent.Name)+"  "+styledEventBody(clippedForTerminal(collapsedWhitespace(taskEvent.Body))))

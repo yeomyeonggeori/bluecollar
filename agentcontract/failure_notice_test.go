@@ -214,8 +214,8 @@ func TestFailureNoticeGeneratorRejectsUngroundedGeneratedReply(t *testing.T) {
 	notice, status := generator.Generate(context.Background(), FailureReport{
 		Phase:              "stall",
 		StopReason:         "stopped after repeated model actions without workspace progress",
-		FailedOperation:    "site.build",
-		SafeFailureSummary: "site.build could not create the build scaffold",
+		FailedOperation:    "site_build",
+		SafeFailureSummary: "site_build could not create the build scaffold",
 		OriginalRequest:    "더 해 괜찮아",
 		ResponseLanguage:   toolcontract.ResponseLanguageKorean,
 		DiagnosticEventID:  "task-1:stall",
@@ -236,7 +236,7 @@ func TestFailureNoticePromptUsesCompactContextOnly(t *testing.T) {
 	report := FailureReport{
 		Phase:              "failure",
 		StopReason:         "tool failed",
-		FailedOperation:    "site.build",
+		FailedOperation:    "site_build",
 		SafeFailureSummary: "build tool could not write the requested output",
 		OriginalRequest:    "발표자료 만들어줘",
 		ResponseLanguage:   toolcontract.ResponseLanguageKorean,

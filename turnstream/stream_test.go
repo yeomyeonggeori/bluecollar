@@ -46,9 +46,9 @@ func collectEvents(stream *Stream) []Event {
 
 func TestAnyHarnessThatWritesTheLedgerIsStreamedWithoutImplementingAStreamingPort(t *testing.T) {
 	streamer := streamerFixture(t, func(taskRunStore taskstate.TaskRunStore, taskRunID string) {
-		taskRunStore.AppendTaskEvent(taskRunID, "agent.checkpoint.sent", `{"message":"작업 시작합니다"}`)
+		taskRunStore.AppendTaskEvent(taskRunID, taskstate.TaskEventAgentCheckpointSent, `{"message":"작업 시작합니다"}`)
 		taskRunStore.AppendTaskEvent(taskRunID, "tool.file_read.result", `{"tool":"file_read"}`)
-		taskRunStore.AppendTaskEvent(taskRunID, "approval.pending_call", `{"toolName":"calendar_delete","confirmation":"지울까요?"}`)
+		taskRunStore.AppendTaskEvent(taskRunID, taskstate.TaskEventApprovalPendingCall, `{"toolName":"calendar_delete","confirmation":"지울까요?"}`)
 	})
 
 	stream := streamer.StreamTurn(context.Background(), agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", Prompt: "해줘"})
@@ -71,7 +71,7 @@ func TestAnyHarnessThatWritesTheLedgerIsStreamedWithoutImplementingAStreamingPor
 func TestTheTurnResultSurvivesAConsumerThatNeverReadsProgress(t *testing.T) {
 	streamer := streamerFixture(t, func(taskRunStore taskstate.TaskRunStore, taskRunID string) {
 		for index := 0; index < eventBuffer*3; index++ {
-			taskRunStore.AppendTaskEvent(taskRunID, "agent.checkpoint.sent", `{"message":"진행중"}`)
+			taskRunStore.AppendTaskEvent(taskRunID, taskstate.TaskEventAgentCheckpointSent, `{"message":"진행중"}`)
 		}
 	})
 

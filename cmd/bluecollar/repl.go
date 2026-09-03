@@ -77,7 +77,7 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 	request.ExistingTaskRunID = taskRun.TaskRunID
 	unregisterLedgerPrinter := session.taskRunService.RegisterTaskRunObserver(taskRun.TaskRunID, printLedgerEvent)
 	defer unregisterLedgerPrinter()
-	printLedgerEvent(taskstate.RawTurnEvent{TaskRunID: taskRun.TaskRunID, Name: "task.created", Body: prompt})
+	printLedgerEvent(taskstate.RawTurnEvent{TaskRunID: taskRun.TaskRunID, Name: taskstate.TaskEventTaskCreated, Body: prompt})
 
 	result, errorValue := session.kernel.RunTurn(ctx, request)
 	writeMetrics(session.options.metricsPath, session.taskRunService, result.TaskRun.TaskRunID)

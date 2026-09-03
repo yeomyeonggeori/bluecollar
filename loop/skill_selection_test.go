@@ -782,7 +782,7 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 				Description:    "Create, update, build, and publish website prototypes with public URLs.",
 				WhenToUse:      "Use for website, homepage, web app, landing page, deploy, and publish requests.",
 				Prompt:         "Follow website build and publish workflow.",
-				ToolReferences: []string{"file_write", "shell", "site_serve", "site.build", "site_serve"},
+				ToolReferences: []string{"file_write", "shell", "site_serve", "site_build", "site_serve"},
 				Source:         InstructionSource{Path: "skills/public-web-builder/SKILL.md", SkillName: "public-web-builder"},
 			},
 			{
@@ -816,7 +816,7 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 			"file.promote",
 			"file_deliver",
 			"site_serve",
-			"site.build",
+			"site_build",
 			"site_serve",
 		}),
 		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{

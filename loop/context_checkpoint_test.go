@@ -29,7 +29,7 @@ func unreadableTaskEvent(taskEventID string) taskstate.TaskEvent {
 func checkpointTaskEvent(summary TaskContextSummary) taskstate.TaskEvent {
 	return taskstate.TaskEvent{
 		TaskEventID: "event-checkpoint",
-		Name:        taskContextSummaryEventName,
+		Name:        taskstate.TaskEventAgentContextSummary,
 		Body:        marshalEventBody(summary),
 	}
 }
@@ -236,7 +236,7 @@ func TestACompactedRunResumesToExactlyWhatTheModelWasLastShown(t *testing.T) {
 func requestedToolTaskEvent(taskEventID string, observationID string, toolName string) taskstate.TaskEvent {
 	return taskstate.TaskEvent{
 		TaskEventID: taskEventID,
-		Name:        "tool." + toolName + ".requested",
+		Name:        taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix),
 		Body:        marshalEventBody(map[string]any{"observationID": observationID, "toolName": toolName, "input": map[string]string{"to": "이샘플"}}),
 	}
 }

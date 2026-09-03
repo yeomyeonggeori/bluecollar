@@ -887,15 +887,15 @@ func activeGoalStatusForTaskStatus(status taskstate.TaskStatus) ActiveGoalStatus
 func activeGoalEventNameForTaskStatus(status taskstate.TaskStatus) string {
 	switch status {
 	case taskstate.TaskStatusWaitingUserInput:
-		return "agent.goal.waiting_user_input"
+		return taskstate.TaskEventAgentGoalWaitingUserInput
 	case taskstate.TaskStatusWaitingApproval:
-		return "agent.goal.waiting_approval"
+		return taskstate.TaskEventAgentGoalWaitingApproval
 	case taskstate.TaskStatusCompleted:
-		return "agent.goal.completed"
+		return taskstate.TaskEventAgentGoalCompleted
 	case taskstate.TaskStatusBlocked, taskstate.TaskStatusFailed, taskstate.TaskStatusCancelled:
-		return "agent.goal.blocked"
+		return taskstate.TaskEventAgentGoalBlocked
 	default:
-		return "agent.goal.updated"
+		return taskstate.TaskEventAgentGoalUpdated
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 const (
@@ -114,11 +115,11 @@ func standingJudgeRejection(observations []turnObservation) (completionGateResul
 
 func (agentTurnRunner *AgentTurnRunner) evaluateCompletionJudge(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) completionGateResult {
 	if standingRejection, isStanding := standingJudgeRejection(observations); isStanding {
-		agentTurnRunner.appendEvent(taskRunID, "completion_judge.standing_verdict", marshalEventBody(map[string]string{"reason": standingRejection.Message}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventCompletionJudgeStandingVerdict, marshalEventBody(map[string]string{"reason": standingRejection.Message}))
 		return standingRejection
 	}
 	if agentTurnRunner.languageModel == nil {
-		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": "completion judge language model was not configured"}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventCompletionJudgeDegraded, marshalEventBody(map[string]string{"error": "completion judge language model was not configured"}))
 		return completionGateResult{IsSatisfied: true}
 	}
 	verdict, isUsable := agentTurnRunner.completionJudgeVerdictFor(ctx, taskRunID, request, observations, attachments, actionDocument, nil)
@@ -126,7 +127,7 @@ func (agentTurnRunner *AgentTurnRunner) evaluateCompletionJudge(ctx context.Cont
 		return completionGateResult{IsSatisfied: true}
 	}
 	if requestedIDs := knownObservationIDs(observations, verdict.NeedObservationIDs); len(requestedIDs) > 0 {
-		agentTurnRunner.appendEvent(taskRunID, "completion_judge.expanded", marshalEventBody(map[string]any{"observationIDs": requestedIDs}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventCompletionJudgeExpanded, marshalEventBody(map[string]any{"observationIDs": requestedIDs}))
 		if expandedVerdict, isExpandedUsable := agentTurnRunner.completionJudgeVerdictFor(ctx, taskRunID, request, observations, attachments, actionDocument, requestedIDs); isExpandedUsable {
 			verdict = expandedVerdict
 		}
@@ -145,15 +146,15 @@ func (agentTurnRunner *AgentTurnRunner) evaluateCompletionJudge(ctx context.Cont
 func (agentTurnRunner *AgentTurnRunner) completionJudgeVerdictFor(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument, expandedObservationIDs []string) (completionJudgeVerdict, bool) {
 	response, errorValue := agentTurnRunner.languageModel.GenerateStructuredResponse(ctx, completionJudgeRequest(request, observations, attachments, actionDocument, expandedObservationIDs))
 	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": errorValue.Error()}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventCompletionJudgeDegraded, marshalEventBody(map[string]string{"error": errorValue.Error()}))
 		return completionJudgeVerdict{}, false
 	}
 	verdict, errorValue := parseCompletionJudgeVerdict(response.Content)
 	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, "completion_judge.degraded", marshalEventBody(map[string]string{"error": errorValue.Error()}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventCompletionJudgeDegraded, marshalEventBody(map[string]string{"error": errorValue.Error()}))
 		return completionJudgeVerdict{}, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, "completion_judge.verdict", marshalEventBody(verdict))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventCompletionJudgeVerdict, marshalEventBody(verdict))
 	return verdict, true
 }
 

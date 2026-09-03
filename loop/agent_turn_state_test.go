@@ -1274,7 +1274,7 @@ func TestBuildAgentActionRequestGenerationOptionsDoNotChangeSchema(t *testing.T)
 
 func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 	events := []taskstate.TaskEvent{{
-		Name: taskContextSummaryEventName,
+		Name: taskstate.TaskEventAgentContextSummary,
 		Body: marshalEventBody(TaskContextSummary{
 			ObservationID:                 "context-summary-001",
 			CompactedThroughObservationID: "obs-007",

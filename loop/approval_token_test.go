@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -54,7 +55,7 @@ func TestACarriedOutCallThatWasNeverHeldIsRecordedAsItHappened(t *testing.T) {
 	}
 
 	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if taskEventsContain(taskEvents, approvalUnheldCallEventName, "message_send") {
+	if taskEventsContain(taskEvents, taskstate.TaskEventApprovalUnheldCallCarriedOut, "message_send") {
 		t.Fatal("a host that never held this call is not carrying back an approval it does not have; nothing changed for it")
 	}
 	if !taskEventsContain(taskEvents, "tool.message_send.result", "sent to alice") {

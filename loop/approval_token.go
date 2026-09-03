@@ -4,15 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"strings"
 )
 
-const (
-	approvalHeldCallEventName        = "approval.held_call"
-	approvalExecutedEventName        = "approval.executed"
-	approvalUnheldCallEventName      = "approval.unheld_call_carried_out"
-	approvalUnmatchedObservationNote = "This is not the call that was held for approval. The held call is still waiting, and what ran here was recorded as its own effect."
-)
+const approvalUnmatchedObservationNote = "This is not the call that was held for approval. The held call is still waiting, and what ran here was recorded as its own effect."
 
 func newApprovalToken() string {
 	buffer := make([]byte, 16)
@@ -32,7 +28,7 @@ func (agentTurnRunner *AgentTurnRunner) mintHeldCallApproval(taskRunID string, o
 	if heldCall.ApprovalToken == "" {
 		return
 	}
-	agentTurnRunner.appendEvent(taskRunID, approvalHeldCallEventName, marshalEventBody(heldCall))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventApprovalHeldCall, marshalEventBody(heldCall))
 }
 
 func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID string) []HeldCall {
@@ -40,12 +36,12 @@ func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID stri
 	spentTokens := map[string]bool{}
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
 		switch taskEvent.Name {
-		case approvalHeldCallEventName:
+		case taskstate.TaskEventApprovalHeldCall:
 			heldCall := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &heldCall) == nil && heldCall.ApprovalToken != "" {
 				heldCalls = append(heldCalls, heldCall)
 			}
-		case approvalExecutedEventName:
+		case taskstate.TaskEventApprovalExecuted:
 			executed := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &executed) == nil {
 				spentTokens[executed.ApprovalToken] = true
@@ -94,10 +90,10 @@ func (agentTurnRunner *AgentTurnRunner) settleHeldCallApproval(taskRunID string,
 	}
 	heldCall, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall)
 	if isMatched {
-		agentTurnRunner.appendEvent(taskRunID, approvalExecutedEventName, marshalEventBody(heldCall))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventApprovalExecuted, marshalEventBody(heldCall))
 		return false
 	}
-	agentTurnRunner.appendEvent(taskRunID, approvalUnheldCallEventName, marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventApprovalUnheldCallCarriedOut, marshalEventBody(map[string]any{
 		"toolName":            strings.TrimSpace(carriedOutCall.ToolName),
 		"toolInputKey":        canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput),
 		"presentedToken":      strings.TrimSpace(carriedOutCall.ApprovalToken),

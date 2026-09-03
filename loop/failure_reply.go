@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 const recoveryDecisionMaxTokens = 1600
@@ -48,8 +49,8 @@ func (agentTurnRunner *AgentTurnRunner) appendUnavailableReplyEvents(taskRunID s
 		"reason":      reason,
 		"replyStatus": replyStatus,
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.recovery_generation_failed", marshalEventBody(body))
-	agentTurnRunner.appendEvent(taskRunID, "agent.llm_unavailable", marshalEventBody(body))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentRecoveryGenerationFailed, marshalEventBody(body))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentLLMUnavailable, marshalEventBody(body))
 }
 
 func (agentTurnRunner *AgentTurnRunner) generateRecoveryDecision(recoveryContext context.Context, request AgentTurnRequest, failureReason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState, phase string) (recoveryDecision, error) {
@@ -114,7 +115,7 @@ func (agentTurnRunner *AgentTurnRunner) generateFailureNotice(parentContext cont
 	status.Reason = noticeStatus.Reason
 	status.TextRecoveryError = noticeStatus.TextRecoveryError
 	status.LocalRecoveryError = noticeStatus.LocalRecoveryError
-	agentTurnRunner.appendEvent(taskRunID, "agent.failure_report", marshalEventBody(failureReportEventBody("failure", failureReport, noticeStatus)))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody("failure", failureReport, noticeStatus)))
 	return notice, status, notice.SendableMessage() != ""
 }
 
@@ -142,7 +143,7 @@ func (agentTurnRunner *AgentTurnRunner) generateStallPauseNotice(parentContext c
 	status.Reason = noticeStatus.Reason
 	status.TextRecoveryError = noticeStatus.TextRecoveryError
 	status.LocalRecoveryError = noticeStatus.LocalRecoveryError
-	agentTurnRunner.appendEvent(taskRunID, "agent.failure_report", marshalEventBody(failureReportEventBody("stall", failureReport, noticeStatus)))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody("stall", failureReport, noticeStatus)))
 	return notice, status, stallNoticeCanReachUser(notice, noticeStatus.Source)
 }
 
@@ -170,7 +171,7 @@ func (agentTurnRunner *AgentTurnRunner) generateLimitReachedNotice(parentContext
 	status.Reason = noticeStatus.Reason
 	status.TextRecoveryError = noticeStatus.TextRecoveryError
 	status.LocalRecoveryError = noticeStatus.LocalRecoveryError
-	agentTurnRunner.appendEvent(taskRunID, "agent.failure_report", marshalEventBody(failureReportEventBody("limit", failureReport, noticeStatus)))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody("limit", failureReport, noticeStatus)))
 	return notice, status, notice.SendableMessage() != ""
 }
 

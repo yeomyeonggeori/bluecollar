@@ -67,7 +67,7 @@ func TestRecoveryAttemptCountOnlyIncludesSpentInterventions(t *testing.T) {
 
 func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"site.build","toolInput":{"siteID":"site-1"}}`,
+		`{"action":"continue","toolName":"site_build","toolInput":{"siteID":"site-1"}}`,
 		`{"action":"continue","toolName":"file_read","toolInput":{"path":"home/sites/site-1/draft/app/src/App.tsx"}}`,
 		finishMessageDocument("Checked."),
 	}}
@@ -81,8 +81,8 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 			NoToolFallback: 0,
 		},
 	})
-	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_read", "file_edit"}, []string{"site.build"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site.build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_read", "file_edit"}, []string{"site_build"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "source failed"},
 			Failure: &toolcontract.ToolFailure{
@@ -111,7 +111,7 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 		ConversationID:    "conversation-1",
 		Prompt:            "look into the site build problem",
 		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"site.build", "file_read", "file_edit"},
+		PinnedToolNames:   []string{"site_build", "file_read", "file_edit"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected inspection recovery to continue: %v", errorValue)

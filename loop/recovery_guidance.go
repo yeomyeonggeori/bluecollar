@@ -19,7 +19,7 @@ func (agentTurnRunner *AgentTurnRunner) prepareRecoveryAttempt(ctx context.Conte
 	if !recoveryBudgetAllowsStep(state.Observations, agentTurnRunner.options.RecoveryBudget, recoveryStep, attemptKey) {
 		observation := recoveryBudgetExhaustedObservation(request.ToolSet, len(state.Observations)+1, failureDebt.LatestFailure, recoveryStep, effectiveToolName, firstNonEmptyString(request.ActiveGoal.OriginalInstruction, request.Prompt))
 		state.Observations = append(state.Observations, observation)
-		agentTurnRunner.appendEvent(taskRunID, "agent.recovery_budget_exhausted", marshalEventBody(observation))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentRecoveryBudgetExhausted, marshalEventBody(observation))
 		agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusCompleted, "recovery_budget_exhausted "+effectiveToolName, observation.ContentText())
 		if recoveryToolBudgetExhaustedForRequest(state.Observations, request.ToolSet, agentTurnRunner.options.RecoveryBudget, failureDebt) {
 			result := agentTurnRunner.runTerminalNoToolsStep(ctx, taskRunID, stepID, request, state, "recovery_tool_budget_exhausted")
@@ -28,7 +28,7 @@ func (agentTurnRunner *AgentTurnRunner) prepareRecoveryAttempt(ctx context.Conte
 		result, shouldStop := stopForNoProgress(stepID)
 		return "", noProgressToolCallActionOutcome(result, shouldStop)
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.recovery_attempt", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentRecoveryAttempt, marshalEventBody(map[string]any{
 		"status":       "started",
 		"recoveryStep": recoveryStep,
 		"toolName":     effectiveToolName,

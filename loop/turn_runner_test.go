@@ -116,7 +116,7 @@ func TestAgentTurnRunnerAppliesPendingSteeringEvent(t *testing.T) {
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "PDF 보고서를 작성한다")
-	services.taskEventService.AppendTaskEvent(taskRun.TaskRunID, "task.steer.requested", marshalEventBody(map[string]string{
+	services.taskEventService.AppendTaskEvent(taskRun.TaskRunID, taskstate.TaskEventTaskSteerRequested, marshalEventBody(map[string]string{
 		"messageID":   "message-steer",
 		"instruction": "PDF 대신 HTML로 작성한다.",
 		"reason":      "user corrected output format",
@@ -1125,15 +1125,15 @@ func assertProviderSafeNestedSchemaValue(t *testing.T, value any, isPropertiesMa
 
 func TestAgentTurnRunnerSiteLoopBuildsReviewsPublishesBeforeFinish(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"site_serve","toolInput":{"slug":"portfolio","title":"Portfolio"},"nextStepPlan":{"objective":"build the created site","expectedTools":["site.build","artifact_review"],"doneCriteria":["site build succeeds"],"risk":"draft may be incomplete","workingSetReason":"creation must lead into build and review"}}`,
-		`{"action":"continue","toolName":"site.build","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"review the built artifact","expectedTools":["artifact_review","site_serve"],"doneCriteria":["review passes"],"risk":"visual issues may block publish","workingSetReason":"build output needs review before publish"}}`,
+		`{"action":"continue","toolName":"site_serve","toolInput":{"slug":"portfolio","title":"Portfolio"},"nextStepPlan":{"objective":"build the created site","expectedTools":["site_build","artifact_review"],"doneCriteria":["site build succeeds"],"risk":"draft may be incomplete","workingSetReason":"creation must lead into build and review"}}`,
+		`{"action":"continue","toolName":"site_build","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"review the built artifact","expectedTools":["artifact_review","site_serve"],"doneCriteria":["review passes"],"risk":"visual issues may block publish","workingSetReason":"build output needs review before publish"}}`,
 		`{"action":"continue","toolName":"artifact_review","toolInput":{"path":"home/sites/site-1/app/dist/index.html"},"nextStepPlan":{"objective":"publish reviewed site","expectedTools":["site_serve","site_list"],"doneCriteria":["publish succeeds"],"risk":"publish may reject stale build","workingSetReason":"review evidence allows publish"}}`,
 		`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1","message":"Publish portfolio"},"nextStepPlan":{"objective":"confirm final status","expectedTools":["site_list"],"doneCriteria":["status shows published URL"],"risk":"status may not reflect latest version","workingSetReason":"final status is required evidence"}}`,
 		`{"action":"continue","toolName":"site_list","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish with status evidence","expectedTools":[],"doneCriteria":["finish with published URL"],"risk":"none","workingSetReason":"all required evidence has been collected"}}`,
-		`{"action":"finish","message":"같은 URL에 배포했습니다: https://portfolio.example","replyParts":[{"type":"text","text":"같은 URL에 배포했습니다: https://portfolio.example"}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-003","toolName":"site.build"},{"observationID":"obs-004","toolName":"artifact_review"},{"observationID":"obs-005","toolName":"site_serve"},{"observationID":"obs-006","toolName":"site_list"}]}`,
+		`{"action":"finish","message":"같은 URL에 배포했습니다: https://portfolio.example","replyParts":[{"type":"text","text":"같은 URL에 배포했습니다: https://portfolio.example"}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-003","toolName":"site_build"},{"observationID":"obs-004","toolName":"artifact_review"},{"observationID":"obs-005","toolName":"site_serve"},{"observationID":"obs-006","toolName":"site_list"}]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 8, MaxToolCallCount: 8})
-	toolRegistry := newTestCapabilityToolSet([]string{"site_list", "site_serve", "site.build", "artifact_review", "site_serve"})
+	toolRegistry := newTestCapabilityToolSet([]string{"site_list", "site_serve", "site_build", "artifact_review", "site_serve"})
 	toolCalls := []string{}
 	hasBuildQuality := false
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_list"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -1144,8 +1144,8 @@ func TestAgentTurnRunnerSiteLoopBuildsReviewsPublishesBeforeFinish(t *testing.T)
 		toolCalls = append(toolCalls, "site_serve")
 		return testToolSuccess(`{"siteID":"site-1","sourceWorkspacePath":"home/sites/site-1","appWorkspacePath":"home/sites/site-1/app","publishedURL":"https://portfolio.example"}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site.build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site.build")
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		toolCalls = append(toolCalls, "site_build")
 		hasBuildQuality = true
 		return testToolSuccess(`{"qualityPath":"home/sites/site-1/.internkim/build-quality.json","distPath":"home/sites/site-1/app/dist"}`), nil
 	})
@@ -1172,17 +1172,17 @@ func TestAgentTurnRunnerSiteLoopBuildsReviewsPublishesBeforeFinish(t *testing.T)
 		Prompt:                "개인 홈페이지 만들고 배포해줘",
 		ToolSet:               toolRegistry,
 		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"site_list", "site.build", "artifact_review", "site_serve"},
+		RequiredEvidenceTools: []string{"site_list", "site_build", "artifact_review", "site_serve"},
 		AvailableSkills: []SkillInstruction{{
 			Name:           "site-prototype",
-			ToolReferences: []string{"site_list", "site_serve", "site.build", "artifact_review", "site_serve"},
+			ToolReferences: []string{"site_list", "site_serve", "site_build", "artifact_review", "site_serve"},
 		}},
 		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected site loop to succeed: %v", errorValue)
 	}
-	expectedCalls := []string{"site_serve", "site.build", "artifact_review", "site_serve", "site_list"}
+	expectedCalls := []string{"site_serve", "site_build", "artifact_review", "site_serve", "site_list"}
 	if strings.Join(toolCalls, ",") != strings.Join(expectedCalls, ",") {
 		t.Fatalf("expected site tool loop %v, got %v", expectedCalls, toolCalls)
 	}
@@ -1199,7 +1199,7 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 		"site_serve",
 		"file_write",
 		"shell",
-		"site.build",
+		"site_build",
 		"artifact_review",
 		"site_serve",
 		"file_deliver",
@@ -1209,8 +1209,8 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 		ConversationID:        "conversation-1",
 		Prompt:                "김인턴 너의 개인 홈페이지 하나 만들어서 배포해봐.",
 		ToolSet:               toolRegistry,
-		PinnedToolNames:       []string{"site_list", "site_serve", "file_write", "site.build", "artifact_review", "site_serve"},
-		RequiredEvidenceTools: []string{"site_list", "site.build", "site_serve", "file_deliver"},
+		PinnedToolNames:       []string{"site_list", "site_serve", "file_write", "site_build", "artifact_review", "site_serve"},
+		RequiredEvidenceTools: []string{"site_list", "site_build", "site_serve", "file_deliver"},
 		AvailableSkills: []SkillInstruction{{
 			Name: "site-prototype",
 			ToolReferences: []string{
@@ -1218,7 +1218,7 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 				"site_serve",
 				"file_write",
 				"shell",
-				"site.build",
+				"site_build",
 				"artifact_review",
 				"site_serve",
 				"file_deliver",
@@ -1229,14 +1229,14 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 			OriginalInstruction: "김인턴 너의 개인 홈페이지 하나 만들어서 배포해봐.",
 			Status:              ActiveGoalStatusActive,
 			OutcomeContract: OutcomeContract{
-				RequiredEvidenceTools: []string{"site_list", "site.build", "site_serve", "file_deliver"},
+				RequiredEvidenceTools: []string{"site_list", "site_build", "site_serve", "file_deliver"},
 				ArtifactRequirement:   ArtifactRequirementRequired,
 			},
 		},
 	}
 
 	stepRequest := services.runner.requestForStep(context.Background(), request, agentTaskState{Request: request})
-	for _, toolName := range []string{"site_list", "site_serve", "file_write", "site.build", "artifact_review", "site_serve"} {
+	for _, toolName := range []string{"site_list", "site_serve", "file_write", "site_build", "artifact_review", "site_serve"} {
 		if !stepRequest.ToolSet.CanExpose(toolName) {
 			t.Fatalf("expected initial site working set to expose %s, got %+v", toolName, stepRequest.ToolExposure.ExposedToolIDs)
 		}
@@ -1246,21 +1246,21 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 func TestAgentTurnRunnerReselectsToolsAfterRejectedSiteFinish(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
-			`{"action":"continue","toolName":"site_serve","toolInput":{"slug":"portfolio","title":"Portfolio"},"nextStepPlan":{"objective":"build the draft before finishing","expectedTools":["site.build"],"doneCriteria":["build evidence exists"],"risk":"draft creation alone is not completion","workingSetReason":"site.build is required evidence"}}`,
+			`{"action":"continue","toolName":"site_serve","toolInput":{"slug":"portfolio","title":"Portfolio"},"nextStepPlan":{"objective":"build the draft before finishing","expectedTools":["site_build"],"doneCriteria":["build evidence exists"],"risk":"draft creation alone is not completion","workingSetReason":"site_build is required evidence"}}`,
 			`{"action":"finish","message":"초안이 만들어졌습니다.","replyParts":[{"type":"text","text":"초안이 만들어졌습니다."}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"site_serve"}]}`,
-			`{"action":"continue","toolName":"site.build","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish after build evidence","expectedTools":[],"doneCriteria":["build observation exists"],"risk":"none","workingSetReason":"required evidence has been collected"}}`,
-			finishMessageWithEvidence("빌드까지 완료했습니다.", "obs-003", "site.build", 0),
+			`{"action":"continue","toolName":"site_build","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish after build evidence","expectedTools":[],"doneCriteria":["build observation exists"],"risk":"none","workingSetReason":"required evidence has been collected"}}`,
+			finishMessageWithEvidence("빌드까지 완료했습니다.", "obs-003", "site_build", 0),
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 4})
-	toolRegistry := newTestCapabilityToolSet([]string{"site_serve", "site.build"})
+	toolRegistry := newTestCapabilityToolSet([]string{"site_serve", "site_build"})
 	toolCalls := []string{}
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_serve"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		toolCalls = append(toolCalls, "site_serve")
 		return testToolSuccess(`{"siteID":"site-1","status":"draft"}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site.build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site.build")
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		toolCalls = append(toolCalls, "site_build")
 		return testToolSuccess(`{"siteID":"site-1","distPath":"home/sites/site-1/app/dist"}`), nil
 	})
 
@@ -1270,10 +1270,10 @@ func TestAgentTurnRunnerReselectsToolsAfterRejectedSiteFinish(t *testing.T) {
 		Prompt:                "개인 홈페이지 만들고 배포해줘",
 		ToolSet:               toolRegistry,
 		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"site.build"},
+		RequiredEvidenceTools: []string{"site_build"},
 		AvailableSkills: []SkillInstruction{{
 			Name:           "site-prototype",
-			ToolReferences: []string{"site_serve", "site.build"},
+			ToolReferences: []string{"site_serve", "site_build"},
 		}},
 		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
 	})
@@ -1283,11 +1283,11 @@ func TestAgentTurnRunnerReselectsToolsAfterRejectedSiteFinish(t *testing.T) {
 	if result.TaskRun.Status != taskstate.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
-	if strings.Join(toolCalls, ",") != "site_serve,site.build" {
+	if strings.Join(toolCalls, ",") != "site_serve,site_build" {
 		t.Fatalf("expected create then build, got %+v", toolCalls)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.completion_required", "site.build") {
+	if !taskEventsContain(events, "agent.completion_required", "site_build") {
 		t.Fatal("expected early finish to be rejected by completion gate")
 	}
 	if !taskEventsContain(events, "agent.step_working_set", "selected_skills") {
@@ -1296,7 +1296,7 @@ func TestAgentTurnRunnerReselectsToolsAfterRejectedSiteFinish(t *testing.T) {
 }
 
 func TestAgentTurnRunnerRejectsFailAfterSiteSourceWriteBeforeBuildPublish(t *testing.T) {
-	// site.build was removed as a native/capability tool (commit d4a0e36):
+	// site_build was removed as a native/capability tool (commit d4a0e36):
 	// Blueclaw no longer owns site build logic, the build step is an ordinary
 	// shell, and only the publish step is guarded by the workflow
 	// recovery gate.

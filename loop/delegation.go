@@ -83,13 +83,13 @@ func (agentTurnRunner *AgentTurnRunner) runDelegatedTurn(ctx context.Context, ta
 			"this task has spent all "+strconv.Itoa(agentTurnRunner.options.DelegationLimit)+" of the delegations it is allowed, so the rest of the work happens here",
 			toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "delegate")
 	}
-	agentTurnRunner.appendEvent(taskRunID, "delegate.launched", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventDelegateLaunched, marshalEventBody(map[string]any{
 		"observationID":  observationID,
 		"instruction":    instruction,
 		"expectedResult": strings.TrimSpace(actionDocument.ExpectedResult),
 	}))
 	childResult, errorValue := agentTurnRunner.childRunner(state).RunTurn(ctx, childTurnRequest(state.Request, actionDocument))
-	agentTurnRunner.appendEvent(taskRunID, "delegate.finished", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventDelegateFinished, marshalEventBody(map[string]any{
 		"observationID":  observationID,
 		"childTaskRunID": childResult.TaskRun.TaskRunID,
 		"childStatus":    string(childResult.TaskRun.Status),

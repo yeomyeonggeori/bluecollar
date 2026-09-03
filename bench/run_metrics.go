@@ -2,7 +2,6 @@ package bench
 
 import (
 	"encoding/json"
-	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
@@ -49,10 +48,10 @@ type RunMetrics struct {
 }
 
 var terminalTaskEventStatuses = map[string]string{
-	"task.completed": string(taskstate.TaskStatusCompleted),
-	"task.failed":    string(taskstate.TaskStatusFailed),
-	"task.cancelled": string(taskstate.TaskStatusCancelled),
-	"task.blocked":   string(taskstate.TaskStatusBlocked),
+	taskstate.TaskEventTaskCompleted: string(taskstate.TaskStatusCompleted),
+	taskstate.TaskEventTaskFailed:    string(taskstate.TaskStatusFailed),
+	taskstate.TaskEventTaskCancelled: string(taskstate.TaskStatusCancelled),
+	taskstate.TaskEventTaskBlocked:   string(taskstate.TaskStatusBlocked),
 }
 
 func MeasureTaskRun(taskRunID string, taskEvents []taskstate.TaskEvent) RunMetrics {
@@ -73,15 +72,15 @@ func countTaskEvent(metrics *RunMetrics, taskEvent taskstate.TaskEvent) {
 		return
 	}
 	switch {
-	case taskEvent.Name == "agent.action":
+	case taskEvent.Name == taskstate.TaskEventAgentAction:
 		metrics.Turns++
-	case taskEvent.Name == "approval.pending_call":
+	case taskEvent.Name == taskstate.TaskEventApprovalPendingCall:
 		metrics.ApprovalHolds++
-	case taskEvent.Name == "agent.recovery_attempt":
+	case taskEvent.Name == taskstate.TaskEventAgentRecoveryAttempt:
 		metrics.RecoveryAttempts++
-	case taskEvent.Name == "llm.call":
+	case taskEvent.Name == taskstate.TaskEventLLMCall:
 		countLanguageModelCall(metrics, taskEvent.Body)
-	case taskEvent.Name == "agent.conversation_budget":
+	case taskEvent.Name == taskstate.TaskEventAgentConversationBudget:
 		readConversationBudget(metrics, taskEvent.Body)
 	case isToolRequestedEvent(taskEvent.Name):
 		metrics.ToolCalls++
@@ -137,11 +136,13 @@ func countToolResult(metrics *RunMetrics, body string) {
 }
 
 func isToolRequestedEvent(eventName string) bool {
-	return strings.HasPrefix(eventName, "tool.") && strings.HasSuffix(eventName, ".requested")
+	_, isToolRequest := taskstate.ToolTaskEventToolName(eventName, taskstate.ToolTaskEventRequestedSuffix)
+	return isToolRequest
 }
 
 func isToolResultEvent(eventName string) bool {
-	return strings.HasPrefix(eventName, "tool.") && strings.HasSuffix(eventName, ".result")
+	_, isToolResult := taskstate.ToolTaskEventToolName(eventName, taskstate.ToolTaskEventResultSuffix)
+	return isToolResult
 }
 
 func firstNonZeroCost(candidates ...float64) float64 {

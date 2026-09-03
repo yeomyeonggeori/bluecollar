@@ -414,8 +414,52 @@ func TestPauseTaskRunTransitionKeepsTaskAttemptAndEventConsistent(t *testing.T) 
 	if taskRunService.IsTaskRunActuallyRunning(waitingTaskRun) {
 		t.Fatal("expected waiting task run to leave active attempt registry")
 	}
-	if !taskEventsContain(taskRunService.ListTaskEvent(taskRun.TaskRunID), "task.paused", "ask input") {
+	if !taskEventsContain(taskRunService.ListTaskEvent(taskRun.TaskRunID), TaskEventTaskPaused, "ask input") {
 		t.Fatal("expected task.paused event")
+	}
+}
+
+func TestTerminalTransitionEventNamesTheStatusItReached(t *testing.T) {
+	testCases := []struct {
+		name              string
+		reachTerminal     func(*TaskRunService, string) (TaskRun, error)
+		expectedEventName string
+	}{
+		{
+			name: "failed",
+			reachTerminal: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+				return taskRunService.FailTaskRun(taskRunID, "language model unavailable")
+			},
+			expectedEventName: TaskEventTaskFailed,
+		},
+		{
+			name: "blocked",
+			reachTerminal: func(taskRunService *TaskRunService, taskRunID string) (TaskRun, error) {
+				return taskRunService.PauseTaskRun(taskRunID, TaskStatusBlocked, "max_elapsed")
+			},
+			expectedEventName: TaskEventTaskBlocked,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			taskRunService := NewTaskRunService(NewTaskEventService())
+			taskRun := taskRunService.CreateTaskRun("person-1", "direct-1", "long task")
+			if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
+				t.Fatal(errorValue)
+			}
+
+			if _, errorValue := testCase.reachTerminal(taskRunService, taskRun.TaskRunID); errorValue != nil {
+				t.Fatal(errorValue)
+			}
+
+			taskEvents := taskRunService.ListTaskEvent(taskRun.TaskRunID)
+			if countTaskEvents(taskEvents, testCase.expectedEventName) != 1 {
+				t.Fatalf("expected one %s event, got %+v", testCase.expectedEventName, taskEvents)
+			}
+			if countTaskEvents(taskEvents, TaskEventTaskPaused) != 0 {
+				t.Fatalf("a %s run must not report itself paused, got %+v", testCase.name, taskEvents)
+			}
+		})
 	}
 }
 
@@ -645,7 +689,7 @@ func TestInterruptOrphanedRuntimeTaskRunsMarksRuntimeOwnedTasksInterrupted(t *te
 	if _, errorValue := taskRunService.PauseTaskRun(waitingTaskRun.TaskRunID, TaskStatusWaitingUserInput, "ask input"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	taskEventService.AppendTaskEvent(runningTaskRun.TaskRunID, "tool.site.build.requested", `{"observationID":"observation-1","toolName":"site.build"}`)
+	taskEventService.AppendTaskEvent(runningTaskRun.TaskRunID, "tool.site_build.requested", `{"observationID":"observation-1","toolName":"site_build"}`)
 	delete(taskRunService.activeAttempts, runningTaskRun.CurrentAttemptID)
 
 	interruptedTaskRuns := taskRunService.InterruptOrphanedRuntimeTaskRuns("runtime restarted")
@@ -666,7 +710,7 @@ func TestInterruptOrphanedRuntimeTaskRunsMarksRuntimeOwnedTasksInterrupted(t *te
 	if taskAttempt.Status != TaskAttemptStatusInterrupted {
 		t.Fatalf("attempt status = %s, want interrupted", taskAttempt.Status)
 	}
-	if !taskEventsContain(taskRunService.ListTaskEvent(runningTaskRun.TaskRunID), "tool.site.build.cancelled", "cancelled_by_attempt_end") {
+	if !taskEventsContain(taskRunService.ListTaskEvent(runningTaskRun.TaskRunID), "tool.site_build.cancelled", "cancelled_by_attempt_end") {
 		t.Fatal("expected open tool request to be cancelled")
 	}
 	taskRun, isFound := taskRunService.FindTaskRun(waitingTaskRun.TaskRunID)
@@ -881,7 +925,7 @@ func TestSelectInterruptedTaskRunsForAutoResumeExcludesWaitingStatuses(t *testin
 	waitingTaskRun.Status = TaskStatusWaitingApproval
 	waitingTaskRun.UpdatedAt = time.Now()
 	taskRunService.taskRuns[waitingTaskRun.TaskRunID] = waitingTaskRun
-	taskRunService.AppendTaskEvent(waitingTaskRun.TaskRunID, "task.interrupted", "runtime restarted")
+	taskRunService.AppendTaskEvent(waitingTaskRun.TaskRunID, TaskEventTaskInterrupted, "runtime restarted")
 
 	selection := taskRunService.SelectInterruptedTaskRunsForAutoResume(time.Now(), 5)
 

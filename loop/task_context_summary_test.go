@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -63,7 +64,7 @@ func TestTaskContextCompactionReplacesOldPromptObservationsOnly(t *testing.T) {
 	if !strings.Contains(actionPrompt, "rolled summary") {
 		t.Fatalf("expected synthetic summary in action prompt, got %s", actionPrompt)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent("task-1"), taskContextSummaryEventName, "rolled summary") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent("task-1"), taskstate.TaskEventAgentContextSummary, "rolled summary") {
 		t.Fatalf("expected context summary event to be persisted")
 	}
 	if !strings.Contains(observations[0].ContentText(), "OLD_MARKER-001") {
@@ -171,10 +172,10 @@ func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) 
 	}
 
 	taskEvents := services.taskEventService.ListTaskEvent("task-1")
-	if taskEventsContain(taskEvents, taskContextSummaryEventName, "step step") {
+	if taskEventsContain(taskEvents, taskstate.TaskEventAgentContextSummary, "step step") {
 		t.Fatal("a summary bigger than the observations it replaces is not compaction; recording it grows the prompt and calls the work done")
 	}
-	if !taskEventsContain(taskEvents, contextCompactionFreedNothingEventName, "replacedCharacters") {
+	if !taskEventsContain(taskEvents, taskstate.TaskEventAgentContextCompactionFreedNothing, "replacedCharacters") {
 		t.Fatalf("a discarded pass has to say so, or the next reader sees a task that never tried: %d events", len(taskEvents))
 	}
 

@@ -205,7 +205,7 @@ func shouldCleanRestartRestoredTask(events []taskstate.TaskEvent) bool {
 	lastStallIndex := -1
 	for index, event := range events {
 		switch event.Name {
-		case "agent.no_progress_loop_stopped", "agent.no_progress_loop_paused", "agent.limit_stop":
+		case taskstate.TaskEventAgentNoProgressLoopStopped, taskstate.TaskEventAgentNoProgressLoopPaused, taskstate.TaskEventAgentLimitStop:
 			lastStallIndex = index
 		}
 	}
@@ -213,7 +213,7 @@ func shouldCleanRestartRestoredTask(events []taskstate.TaskEvent) bool {
 		return false
 	}
 	for index := lastStallIndex + 1; index < len(events); index++ {
-		if events[index].Name == "task.steer.requested" {
+		if events[index].Name == taskstate.TaskEventTaskSteerRequested {
 			return true
 		}
 	}
@@ -1381,7 +1381,8 @@ func qualityCriteriaForActionRequest(allowQualityCriteria bool) []qualityCriteri
 }
 
 func isToolResultTaskEvent(event taskstate.TaskEvent) bool {
-	return strings.HasPrefix(event.Name, "tool.") && strings.HasSuffix(event.Name, ".result")
+	_, isToolResult := taskstate.ToolTaskEventToolName(event.Name, taskstate.ToolTaskEventResultSuffix)
+	return isToolResult
 }
 
 func observationsFromTaskEvents(events []taskstate.TaskEvent) []turnObservation {
@@ -1414,7 +1415,7 @@ type requestedToolCall struct {
 }
 
 func requestedToolCallFromTaskEvent(event taskstate.TaskEvent) (requestedToolCall, bool) {
-	if !strings.HasPrefix(event.Name, "tool.") || !strings.HasSuffix(event.Name, ".requested") {
+	if _, isToolRequest := taskstate.ToolTaskEventToolName(event.Name, taskstate.ToolTaskEventRequestedSuffix); !isToolRequest {
 		return requestedToolCall{}, false
 	}
 	requestedCall := requestedToolCall{}

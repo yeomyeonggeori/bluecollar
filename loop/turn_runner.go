@@ -243,7 +243,7 @@ func (agentTurnRunner *AgentTurnRunner) UseToolResultImageSource(toolResultImage
 
 func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID string) llmCallObserver {
 	return func(record llmCallRecord) {
-		agentTurnRunner.appendEvent(taskRunID, "llm.call", marshalEventBody(record))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventLLMCall, marshalEventBody(record))
 		agentTurnRunner.noteModelInUse(record.Model)
 		agentTurnRunner.noteContextInUse(record.PromptTokens)
 	}
@@ -373,7 +373,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	taskRun := agentTurnRunner.taskRunForRequest(request)
 	isPausedTaskResume := taskRun.Status == taskstate.TaskStatusWaitingApproval || taskRun.Status == taskstate.TaskStatusWaitingUserInput
 	if request.TurnAnchorClamped {
-		agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.turn_anchor_clamped", marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentTurnAnchorClamped, marshalEventBody(map[string]any{
 			"phase":                       "execution",
 			"originalTurnStartedAtUnixMs": request.OriginalTurnStartedAt.UnixMilli(),
 			"clampedTurnStartedAtUnixMs":  request.TurnStartedAt.UnixMilli(),
@@ -494,13 +494,13 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			limitPressureWarnings = map[string]bool{}
 			grantedBudget := grantedBudgetObservation(state.Observations, agentTurnRunner.options)
 			state.Observations = append(state.Observations, grantedBudget)
-			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.budget_update_sent", marshalEventBody(grantedBudget))
+			agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentBudgetUpdateSent, marshalEventBody(grantedBudget))
 		}
 		if warning := agentTurnRunner.nextLimitPressureWarning(state, iteration-1, state.ToolCallCount, agentTurnRunner.turnElapsed(request.EffortStartedAt), len(state.Observations)+1, limitPressureWarnings); warning != nil {
 			if warning.Observation != nil {
 				state.Observations = append(state.Observations, *warning.Observation)
 			}
-			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.limit_pressure", marshalEventBody(warning.EventBody))
+			agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentLimitPressure, marshalEventBody(warning.EventBody))
 			limitPressureWarnings[warning.Stage] = true
 		}
 		stepID := fmt.Sprintf("%s:turn-%03d", taskRun.TaskRunID, iteration)
@@ -521,7 +521,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		}
 		iterationRequest := agentTurnRunner.requestForStep(workContext, request, state)
 		state.ShouldRestrictNextActionToTerminal = false
-		agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.step_working_set", marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentStepWorkingSet, marshalEventBody(map[string]any{
 			"step":     iteration,
 			"exposure": iterationRequest.ToolExposure,
 		}))
@@ -534,7 +534,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		}
 		if actionError != nil && isUnreadableModelActionError(actionError) {
 			state.Observations = append(state.Observations, unreadableActionObservation(state.Observations, actionError))
-			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.unreadable_action", marshalEventBody(map[string]string{"reason": actionError.Error()}))
+			agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentUnreadableAction, marshalEventBody(map[string]string{"reason": actionError.Error()}))
 			continue
 		}
 		if actionError != nil {
@@ -566,9 +566,9 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 
 		if !executionStateIsEmpty(actionDocument.ExecutionStateUpdate) {
 			state.ExecutionState = normalizeExecutionState(actionDocument.ExecutionStateUpdate)
-			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.execution_state", marshalEventBody(state.ExecutionState))
+			agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentExecutionState, marshalEventBody(state.ExecutionState))
 		}
-		agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.action", marshalEventBody(actionDocument))
+		agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentAction, marshalEventBody(actionDocument))
 		switch strings.TrimSpace(actionDocument.Action) {
 		case "set_quality_criteria":
 			state.QualityCriteria = normalizeQualityCriteria(actionDocument.QualityCriteria)
@@ -578,7 +578,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				Output:        toolcontract.ToolOutput{Content: marshalEventBody(map[string]any{"criteria": state.QualityCriteria})},
 			}
 			state.Observations = append(state.Observations, observation)
-			agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.quality_criteria", marshalEventBody(map[string]any{
+			agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentQualityCriteria, marshalEventBody(map[string]any{
 				"criteria": state.QualityCriteria,
 			}))
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "set_quality_criteria", marshalEventBody(map[string]any{"criteria": state.QualityCriteria}))
@@ -593,7 +593,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			agentTurnRunner.appendValidityReview(taskRun.TaskRunID, "finish", completionGateResult.ValidityState)
 			if !completionGateResult.IsSatisfied {
 				if candidateReply := finishActionMessage(actionDocument); canDeliverBestEffortOnJudgeRejection(workContext, completionGateResult, candidateReply) {
-					agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.completion_state_best_effort", marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
+					agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentCompletionStateBestEffort, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
 					result := agentTurnRunner.completeTaskRunBestEffort(workContext, taskRun.TaskRunID, stepID, "finish", request, state.Observations, completionGateResult, appendCompletionGateCaveat(candidateReply, completionGateResult.Message))
 					return result, nil
 				}
@@ -602,7 +602,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				state.Observations = append(state.Observations, observation)
 				agentTurnRunner.appendEvent(taskRun.TaskRunID, completionGateEventName(observation), marshalEventBody(observation))
 				if observation.Action == "evidence_missing" {
-					agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.completion_required", marshalEventBody(observation))
+					agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentCompletionRequired, marshalEventBody(observation))
 				}
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, observation.Action, observation.ContentText())
 				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
@@ -651,8 +651,8 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				observation := completionGateObservation(len(state.Observations)+1, recoverableResult, state.Request.ToolSet, state.Observations)
 				observation = withCompletionGateRecoveryPacket(observation, recoverableResult)
 				state.Observations = append(state.Observations, observation)
-				agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.recoverable_fail_rejected", marshalEventBody(observation))
-				agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.completion_required", marshalEventBody(observation))
+				agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentRecoverableFailRejected, marshalEventBody(observation))
+				agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentCompletionRequired, marshalEventBody(observation))
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "recoverable_fail_rejected", observation.ContentText())
 				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
 					if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
@@ -668,7 +668,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				if !failureReportResult.IsSatisfied {
 					observation := completionGateObservation(len(state.Observations)+1, failureReportResult, state.Request.ToolSet, state.Observations)
 					state.Observations = append(state.Observations, observation)
-					agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.failure_report_rejected", marshalEventBody(observation))
+					agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentFailureReportRejected, marshalEventBody(observation))
 					agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusCompleted, "failure_report_rejected", observation.ContentText())
 					if result, shouldStop := stopForNoProgress(stepID); shouldStop {
 						if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
@@ -678,7 +678,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 					}
 					continue
 				}
-				agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.failure_report_facts_used", marshalEventBody(actionDocument.UsedFailureFacts))
+				agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentFailureReportFactsUsed, marshalEventBody(actionDocument.UsedFailureFacts))
 			}
 			reason := firstNonEmptyString(actionDocument.Reason, "agent reported failure")
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, taskstate.TaskStatusFailed, "fail", reason)
@@ -699,7 +699,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 
 func (agentTurnRunner *AgentTurnRunner) failLaunchStep(ctx context.Context, taskRun taskstate.TaskRun, request AgentTurnRequest, stepName string, errorValue error) AgentTurnResult {
 	reason := errorString(errorValue)
-	agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.launch_step.error", marshalEventBody(map[string]string{
+	agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentLaunchStepError, marshalEventBody(map[string]string{
 		"phase":    "launch",
 		"stepName": strings.TrimSpace(stepName),
 		"error":    reason,
@@ -720,7 +720,7 @@ func (agentTurnRunner *AgentTurnRunner) failLaunchStep(ctx context.Context, task
 		ResponseLanguage:   request.ResponseLanguage,
 		DiagnosticEventID:  diagnosticEventID(request, taskRun.TaskRunID, "launch"),
 	})
-	agentTurnRunner.appendEvent(taskRun.TaskRunID, "agent.failure_reply", marshalEventBody(noticeStatus))
+	agentTurnRunner.appendEvent(taskRun.TaskRunID, taskstate.TaskEventAgentFailureReply, marshalEventBody(noticeStatus))
 	failedTaskRun = persistTaskRunResult(agentTurnRunner.taskRunService, failedTaskRun, failureNotice.SendableMessage())
 	return AgentTurnResult{TaskRun: failedTaskRun, UserNotice: failedTaskRun.Result, FailureNotice: failureNotice, ToolNames: toolNamesForEvent(request.ToolSet)}
 }
@@ -808,7 +808,7 @@ func updateCompletionIntent(state *agentTaskState, actionDocument turnActionDocu
 
 func (agentTurnRunner *AgentTurnRunner) applyPendingSteeringEvents(taskRunID string, observations []turnObservation, appliedEventIDs map[string]bool) []turnObservation {
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name != "task.steer.requested" || appliedEventIDs[taskEvent.TaskEventID] {
+		if taskEvent.Name != taskstate.TaskEventTaskSteerRequested || appliedEventIDs[taskEvent.TaskEventID] {
 			continue
 		}
 		var document struct {
@@ -831,7 +831,7 @@ func (agentTurnRunner *AgentTurnRunner) applyPendingSteeringEvents(taskRunID str
 		observation.Summary = "User steering instruction: " + instruction
 		observations = append(observations, observation)
 		appliedEventIDs[taskEvent.TaskEventID] = true
-		agentTurnRunner.appendEvent(taskRunID, "task.steer.applied", marshalEventBody(map[string]string{
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventTaskSteerApplied, marshalEventBody(map[string]string{
 			"sourceEventID": taskEvent.TaskEventID,
 			"observationID": observation.ObservationID,
 			"messageID":     strings.TrimSpace(document.MessageID),
@@ -843,7 +843,7 @@ func (agentTurnRunner *AgentTurnRunner) applyPendingSteeringEvents(taskRunID str
 func appliedSteerEventIDsFromTaskEvents(taskEvents []taskstate.TaskEvent) map[string]bool {
 	eventIDs := map[string]bool{}
 	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != "task.steer.applied" {
+		if taskEvent.Name != taskstate.TaskEventTaskSteerApplied {
 			continue
 		}
 		var document struct {
@@ -872,7 +872,7 @@ func (agentTurnRunner *AgentTurnRunner) taskRunForRequest(request AgentTurnReque
 // The window comes from the endpoint, and one that will not name it leaves every fitting decision
 // derived from a default an order of magnitude smaller.
 func (agentTurnRunner *AgentTurnRunner) appendConversationBudgetEvent(taskRunID string, contextWindowTokens int) {
-	agentTurnRunner.appendEvent(taskRunID, "agent.conversation_budget", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentConversationBudget, marshalEventBody(map[string]any{
 		"contextWindowTokens":        contextWindowTokens,
 		"windowWasDeclared":          contextWindowTokens > 0,
 		"compactionTriggerTokens":    compactionTriggerTokenThreshold(contextWindowTokens),
@@ -885,7 +885,7 @@ func (agentTurnRunner *AgentTurnRunner) appendTaskSourceEvent(taskRunID string, 
 	if trimmedSourceReference == "" {
 		return
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.task_source", marshalEventBody(map[string]string{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentTaskSource, marshalEventBody(map[string]string{
 		"sourceReference": trimmedSourceReference,
 	}))
 }
@@ -898,7 +898,7 @@ func (agentTurnRunner *AgentTurnRunner) pausedTaskResult(taskRunID string, obser
 	if taskRun.Status == taskstate.TaskStatusWaitingApproval {
 		reply := firstNonEmptyString(approvalObservationUserFacingMessage(observation), taskRun.FailureReason)
 		if reply == "" {
-			agentTurnRunner.appendEvent(taskRunID, "agent.approval_user_facing_message_missing", marshalEventBody(observation))
+			agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentApprovalUserFacingMessageMissing, marshalEventBody(observation))
 		}
 		return AgentTurnResult{TaskRun: taskRun, UserNotice: reply, Attachments: attachments, RecoveryActions: observation.RecoveryActions}, true
 	}
@@ -911,7 +911,7 @@ func (agentTurnRunner *AgentTurnRunner) cancelledTaskResult(taskRunID string, at
 	if !isFound || taskRun.Status != taskstate.TaskStatusCancelled {
 		return AgentTurnResult{}, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, "task.stop.outbox_suppressed", "task run was cancelled before reply delivery")
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventTaskStopOutboxSuppressed, "task run was cancelled before reply delivery")
 	return AgentTurnResult{TaskRun: taskRun, ReplySuppressed: true, Attachments: attachments}, true
 }
 
@@ -929,14 +929,14 @@ func (agentTurnRunner *AgentTurnRunner) sendCheckpointMessage(ctx context.Contex
 		return observations
 	}
 	if taskLevelWantsSingleFinalReply(request.TaskLevel) {
-		agentTurnRunner.appendEvent(taskRunID, "agent.checkpoint.skipped", marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCheckpointSkipped, marshalEventBody(map[string]any{
 			"toolName": actionDocument.ToolName,
 			"reason":   "task_level_xlow",
 		}))
 		return observations
 	}
 	if !checkpointMessageAllowed(message, observations) {
-		agentTurnRunner.appendEvent(taskRunID, "agent.checkpoint.skipped", marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCheckpointSkipped, marshalEventBody(map[string]any{
 			"toolName": actionDocument.ToolName,
 			"reason":   "rate_limited_or_duplicate",
 		}))
@@ -960,7 +960,7 @@ func (agentTurnRunner *AgentTurnRunner) sendCheckpointMessage(ctx context.Contex
 				"status":   "failed",
 				"error":    errorValue.Error(),
 			})
-			agentTurnRunner.appendEvent(taskRunID, "agent.checkpoint.failed", marshalEventBody(map[string]any{
+			agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCheckpointFailed, marshalEventBody(map[string]any{
 				"toolName": actionDocument.ToolName,
 				"error":    errorValue.Error(),
 			}))
@@ -971,7 +971,7 @@ func (agentTurnRunner *AgentTurnRunner) sendCheckpointMessage(ctx context.Contex
 			"toolName": actionDocument.ToolName,
 			"status":   "sent",
 		})
-		agentTurnRunner.appendEvent(taskRunID, "agent.checkpoint.sent", marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCheckpointSent, marshalEventBody(map[string]any{
 			"toolName": actionDocument.ToolName,
 			"message":  message,
 		}))
@@ -983,7 +983,7 @@ func (agentTurnRunner *AgentTurnRunner) sendCheckpointMessage(ctx context.Contex
 		"status":   "skipped",
 		"reason":   "missing_sender",
 	})
-	agentTurnRunner.appendEvent(taskRunID, "agent.checkpoint.skipped", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCheckpointSkipped, marshalEventBody(map[string]any{
 		"toolName": actionDocument.ToolName,
 		"reason":   "missing_sender",
 	}))
@@ -1152,7 +1152,7 @@ func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID strin
 	agentTurnRunner.options.MaxToolCallCount = grantedProfile.MaxToolCallCount
 	agentTurnRunner.options.MaxIterationCount = grantedProfile.MaxIterationCount
 	agentTurnRunner.setElapsedBudgetFromProfile(grantedProfile)
-	agentTurnRunner.appendEvent(taskRunID, "agent.budget_extended_one_level", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentBudgetExtendedOneLevel, marshalEventBody(map[string]any{
 		"grantedLevel":      string(grantedLevel),
 		"maxToolCallCount":  grantedProfile.MaxToolCallCount,
 		"maxIterationCount": grantedProfile.MaxIterationCount,
@@ -1380,7 +1380,7 @@ func (agentTurnRunner *AgentTurnRunner) appendValidityReview(taskRunID string, p
 		"checkedArtifacts": validityState.CheckedArtifacts,
 		"invalidArtifacts": validityState.InvalidArtifacts,
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.validity_review", marshalEventBody(body))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentValidityReview, marshalEventBody(body))
 }
 
 func (agentTurnRunner *AgentTurnRunner) appendQualityReview(taskRunID string, criteria []qualityCriterion, review []qualityReviewItem, observations []turnObservation) {
@@ -1388,7 +1388,7 @@ func (agentTurnRunner *AgentTurnRunner) appendQualityReview(taskRunID string, cr
 		return
 	}
 	qualityState := buildQualityState(criteria, review, observations)
-	agentTurnRunner.appendEvent(taskRunID, "agent.quality_review", marshalEventBody(qualityState))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentQualityReview, marshalEventBody(qualityState))
 }
 
 const maxStallRecoveryDirectivesPerEpisode = 4
@@ -1409,7 +1409,7 @@ func (agentTurnRunner *AgentTurnRunner) continueStalledRecoveryIfAllowed(taskRun
 	}
 	directive := stalledRecoveryDirectiveObservation(nextObservationIDForObservations(state.Observations), failureDebt)
 	state.Observations = append(state.Observations, directive)
-	agentTurnRunner.appendEvent(taskRunID, "agent.stall_recovery_directive", marshalEventBody(directive))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentStallRecoveryDirective, marshalEventBody(directive))
 	tracker.noteStallRecoveryDirective(state.Observations)
 	return true
 }
@@ -1427,7 +1427,7 @@ func (agentTurnRunner *AgentTurnRunner) steerStalledTurnTowardNextTool(taskRunID
 	}
 	directive := suggestedNextToolDirectiveObservation(nextObservationIDForObservations(state.Observations), suggestion)
 	state.Observations = append(state.Observations, directive)
-	agentTurnRunner.appendEvent(taskRunID, "agent.suggested_next_tool_directive", marshalEventBody(directive))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentSuggestedNextToolDirective, marshalEventBody(directive))
 	tracker.noteStallRecoveryDirective(state.Observations)
 	return true
 }
@@ -1438,7 +1438,7 @@ func (agentTurnRunner *AgentTurnRunner) steerStalledTurnTowardExit(taskRunID str
 	}
 	directive := stalledExitDirectiveObservation(nextObservationIDForObservations(state.Observations), state.Observations)
 	state.Observations = append(state.Observations, directive)
-	agentTurnRunner.appendEvent(taskRunID, "agent.stall_exit_directive", marshalEventBody(directive))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentStallExitDirective, marshalEventBody(directive))
 	tracker.noteStallRecoveryDirective(state.Observations)
 	return true
 }
@@ -1523,7 +1523,7 @@ func (agentTurnRunner *AgentTurnRunner) shouldPauseForStalledRecovery(taskRunID 
 		return false
 	}
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == "agent.no_progress_loop_paused" {
+		if taskEvent.Name == taskstate.TaskEventAgentNoProgressLoopPaused {
 			return false
 		}
 	}
@@ -1532,7 +1532,7 @@ func (agentTurnRunner *AgentTurnRunner) shouldPauseForStalledRecovery(taskRunID 
 
 func (agentTurnRunner *AgentTurnRunner) pauseTurnForStall(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, reason string, progressEvaluation actionProgressEvaluation, allowance recoveryAllowance, state agentTaskState) (AgentTurnResult, bool) {
 	notice, replyStatus, hasReply := agentTurnRunner.generateStallPauseNotice(ctx, taskRunID, request, reason, state.Observations, state.Attachments, state.ExecutionState)
-	agentTurnRunner.appendEvent(taskRunID, "agent.stall_pause_reply", marshalEventBody(replyStatus))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentStallPauseReply, marshalEventBody(replyStatus))
 	if !hasReply {
 		return AgentTurnResult{}, false
 	}
@@ -1540,12 +1540,12 @@ func (agentTurnRunner *AgentTurnRunner) pauseTurnForStall(ctx context.Context, t
 	if errorValue != nil {
 		return AgentTurnResult{}, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.no_progress_loop_paused", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentNoProgressLoopPaused, marshalEventBody(map[string]any{
 		"reason":             reason,
 		"progressEvaluation": progressEvaluation,
 		"recoveryAllowance":  allowance,
 	}))
-	agentTurnRunner.appendEvent(taskRunID, "agent.goal.waiting_user_input", marshalEventBody(stalledWaitingGoal(taskRunID, request)))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentGoalWaitingUserInput, marshalEventBody(stalledWaitingGoal(taskRunID, request)))
 	agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusWaitingUserInput, "no_progress_loop_paused", reason)
 	reply := notice.SendableMessage()
 	pausedTaskRun = persistTaskRunResult(agentTurnRunner.taskRunService, pausedTaskRun, reply)
@@ -1554,17 +1554,17 @@ func (agentTurnRunner *AgentTurnRunner) pauseTurnForStall(ctx context.Context, t
 
 func (agentTurnRunner *AgentTurnRunner) blockTurnForStall(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, reason string, progressEvaluation actionProgressEvaluation, allowance recoveryAllowance, state agentTaskState) (AgentTurnResult, bool) {
 	notice, replyStatus, hasReply := agentTurnRunner.generateStallPauseNotice(ctx, taskRunID, request, reason, state.Observations, state.Attachments, state.ExecutionState)
-	agentTurnRunner.appendEvent(taskRunID, "agent.stall_blocked_reply", marshalEventBody(replyStatus))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentStallBlockedReply, marshalEventBody(replyStatus))
 	blockedTaskRun, errorValue := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusBlocked, reason)
 	if errorValue != nil {
 		return AgentTurnResult{}, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.no_progress_loop_stopped", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentNoProgressLoopStopped, marshalEventBody(map[string]any{
 		"reason":             reason,
 		"progressEvaluation": progressEvaluation,
 		"recoveryAllowance":  allowance,
 	}))
-	agentTurnRunner.appendEvent(taskRunID, "agent.goal.blocked", marshalEventBody(blockedGoal(taskRunID, request, reason)))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentGoalBlocked, marshalEventBody(blockedGoal(taskRunID, request, reason)))
 	agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusBlocked, "no_progress_loop_stopped", reason)
 	if !hasReply {
 		agentTurnRunner.appendUnavailableReplyEvents(taskRunID, "stall", reason, replyStatus)
@@ -1621,7 +1621,7 @@ func (agentTurnRunner *AgentTurnRunner) failTurn(taskRunID string, request Agent
 
 func (agentTurnRunner *AgentTurnRunner) failTurnWithContext(ctx context.Context, taskRunID string, request AgentTurnRequest, reason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) (AgentTurnResult, error) {
 	failureNotice, replyStatus, hasReply := agentTurnRunner.generateFailureNotice(ctx, taskRunID, request, reason, observations, attachments, executionState)
-	agentTurnRunner.appendEvent(taskRunID, "agent.failure_reply", marshalEventBody(replyStatus))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureReply, marshalEventBody(replyStatus))
 	reply := failureNotice.SendableMessage()
 	if !hasReply {
 		agentTurnRunner.appendUnavailableReplyEvents(taskRunID, "failure", reason, replyStatus)
@@ -1952,15 +1952,15 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 	defer cancelFinalization()
 	actionDocument, errorValue := agentTurnRunner.finalizerAction(finalizationContext, request, observations, executionState)
 	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_failed", marshalEventBody(map[string]string{"error": errorValue.Error()}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFinalizerFailed, marshalEventBody(map[string]string{"error": errorValue.Error()}))
 		return AgentTurnResult{}, false
 	}
 	if ctx.Err() != nil || finalizationContext.Err() != nil {
 		return AgentTurnResult{}, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_action", marshalEventBody(actionDocument))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFinalizerAction, marshalEventBody(actionDocument))
 	if strings.TrimSpace(actionDocument.Action) != "finish" {
-		agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_rejected", marshalEventBody(map[string]string{"reason": "finalizer did not return finish"}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": "finalizer did not return finish"}))
 		return AgentTurnResult{}, false
 	}
 	if !completionEvidenceIncludesSuccessfulTool(observations, actionDocument.CompletionEvidence, requiredToolName) {
@@ -1972,20 +1972,20 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 	}
 	completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(finalizationContext, taskRunID, request, requirements, observations, nil, criteria, actionDocument)
 	if !completionGateResult.IsSatisfied {
-		agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_rejected", marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
 		return AgentTurnResult{}, false
 	}
 	agentTurnRunner.appendValidityReview(taskRunID, "limit_finalizer", completionGateResult.ValidityState)
 	agentTurnRunner.appendQualityReview(taskRunID, criteria, actionDocument.QualityReview, observations)
 	reply := finishActionMessage(actionDocument)
 	if reply == "" {
-		agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_rejected", marshalEventBody(map[string]string{"reason": "empty finish message"}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": "empty finish message"}))
 		return AgentTurnResult{}, false
 	}
 	reply = agentTurnRunner.prepareFinishMessageForPlatform(finalizationContext, request, reply)
 	completedTaskRun, completionError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, reply)
 	if completionError != nil {
-		agentTurnRunner.appendEvent(taskRunID, "agent.completion_persist_failed", marshalEventBody(map[string]string{"error": completionError.Error()}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentCompletionPersistFailed, marshalEventBody(map[string]string{"error": completionError.Error()}))
 	}
 	return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: completionGateResult.Attachments, RecoveryActions: recoveryActionsFromObservations(observations)}, true
 }
@@ -1995,10 +1995,10 @@ const omittedEvidenceRejectionReason = "finalizer omitted successful evidence fo
 func (agentTurnRunner *AgentTurnRunner) supplyOmittedCompletionEvidence(taskRunID string, observations []turnObservation, requiredToolName string) (completionEvidenceReference, bool) {
 	citedObservation, canCite := latestSuccessfulObservationForTool(observations, requiredToolName)
 	if !canCite || !agentTurnRunner.hasAlreadyRejectedFinalizerForOmittedEvidence(taskRunID) {
-		agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_rejected", marshalEventBody(map[string]string{"reason": omittedEvidenceRejectionReason}))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": omittedEvidenceRejectionReason}))
 		return completionEvidenceReference{}, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.finalizer_evidence_supplied", marshalEventBody(map[string]string{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFinalizerEvidenceSupplied, marshalEventBody(map[string]string{
 		"toolName":      strings.TrimSpace(citedObservation.Tool),
 		"observationID": citedObservation.ObservationID,
 	}))
@@ -2007,7 +2007,7 @@ func (agentTurnRunner *AgentTurnRunner) supplyOmittedCompletionEvidence(taskRunI
 
 func (agentTurnRunner *AgentTurnRunner) hasAlreadyRejectedFinalizerForOmittedEvidence(taskRunID string) bool {
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name != "agent.finalizer_rejected" {
+		if taskEvent.Name != taskstate.TaskEventAgentFinalizerRejected {
 			continue
 		}
 		rejection := map[string]string{}
@@ -2076,9 +2076,9 @@ func (agentTurnRunner *AgentTurnRunner) runTerminalNoToolsStep(ctx context.Conte
 		}
 		if !executionStateIsEmpty(actionDocument.ExecutionStateUpdate) {
 			state.ExecutionState = normalizeExecutionState(actionDocument.ExecutionStateUpdate)
-			agentTurnRunner.appendEvent(taskRunID, "agent.execution_state", marshalEventBody(state.ExecutionState))
+			agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentExecutionState, marshalEventBody(state.ExecutionState))
 		}
-		agentTurnRunner.appendEvent(taskRunID, "agent.terminal_no_tools_action", marshalEventBody(actionDocument))
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentTerminalNoToolsAction, marshalEventBody(actionDocument))
 		result, isComplete, validationMessage := agentTurnRunner.applyTerminalNoToolsAction(ctx, taskRunID, stepID, request, state, actionDocument)
 		if isComplete {
 			return result
@@ -2177,9 +2177,9 @@ func (agentTurnRunner *AgentTurnRunner) failTerminalNoToolsFailure(taskRunID str
 		return AgentTurnResult{}, false, validationMessage
 	}
 	failedTaskRun, _ := agentTurnRunner.taskRunService.FailTaskRun(taskRunID, reason)
-	agentTurnRunner.appendEvent(taskRunID, "agent.failure_report_facts_used", marshalEventBody(actionDocument.UsedFailureFacts))
-	agentTurnRunner.appendEvent(taskRunID, "agent.failure_report", marshalEventBody(failureReportEventBody("terminal_no_tools", failureReport, FailureNoticeGenerationStatus{Source: notice.Source})))
-	agentTurnRunner.appendEvent(taskRunID, "agent.failure_reply", marshalEventBody(FailureNoticeGenerationStatus{Source: notice.Source}))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureReportFactsUsed, marshalEventBody(actionDocument.UsedFailureFacts))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody("terminal_no_tools", failureReport, FailureNoticeGenerationStatus{Source: notice.Source})))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentFailureReply, marshalEventBody(FailureNoticeGenerationStatus{Source: notice.Source}))
 	agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusFailed, "terminal_no_tools_fail", reason)
 	reply := notice.SendableMessage()
 	failedTaskRun = persistTaskRunResult(agentTurnRunner.taskRunService, failedTaskRun, reply)
@@ -2202,14 +2202,14 @@ func failureNoticeFromTerminalAction(request AgentTurnRequest, taskRunID string,
 func (agentTurnRunner *AgentTurnRunner) recordTerminalNoToolsRejection(taskRunID string, stepID string, state *agentTaskState, reason string) {
 	observation := completionGateObservation(len(state.Observations)+1, completionGateResult{Message: strings.TrimSpace(reason)}, state.Request.ToolSet, state.Observations)
 	state.Observations = append(state.Observations, observation)
-	agentTurnRunner.appendEvent(taskRunID, "agent.terminal_no_tools_rejected", marshalEventBody(observation))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentTerminalNoToolsRejected, marshalEventBody(observation))
 	agentTurnRunner.saveStep(taskRunID, stepID, taskstate.TaskStatusCompleted, "terminal_no_tools_rejected", observation.ContentText())
 }
 
 func (agentTurnRunner *AgentTurnRunner) stopForElapsedLimit(ctx context.Context, taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState, usedIterationCount int, usedToolCallCount int) (AgentTurnResult, error) {
 	taskRun, isCompleted := agentTurnRunner.settleElapsedTaskRun(taskRunID, request, requirements, observations, attachments, usedIterationCount, usedToolCallCount)
 	reply, replyStatus := agentTurnRunner.generateElapsedClosingReply(ctx, request, requirements, observations, attachments, executionState, isCompleted)
-	agentTurnRunner.appendEvent(taskRunID, "agent.limit_reply", marshalEventBody(replyStatus))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentLimitReply, marshalEventBody(replyStatus))
 	if ctx.Err() != nil {
 		return AgentTurnResult{
 			TaskRun:                taskRun,
@@ -2236,7 +2236,7 @@ func (agentTurnRunner *AgentTurnRunner) stopForElapsedLimit(ctx context.Context,
 }
 
 func (agentTurnRunner *AgentTurnRunner) settleElapsedTaskRun(taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, usedIterationCount int, usedToolCallCount int) (taskstate.TaskRun, bool) {
-	agentTurnRunner.appendEvent(taskRunID, "agent.limit_stop", marshalEventBody(agentTurnRunner.limitStopEventBody("max_elapsed", observations, attachments, usedIterationCount, usedToolCallCount)))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentLimitStop, marshalEventBody(agentTurnRunner.limitStopEventBody("max_elapsed", observations, attachments, usedIterationCount, usedToolCallCount)))
 	if !elapsedTurnCanComplete(request, requirements, observations, attachments) {
 		blockedTaskRun, _ := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusBlocked, "max_elapsed")
 		return blockedTaskRun, false
@@ -2246,7 +2246,7 @@ func (agentTurnRunner *AgentTurnRunner) settleElapsedTaskRun(taskRunID string, r
 		blockedTaskRun, _ := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusBlocked, "max_elapsed")
 		return blockedTaskRun, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.limit_completed_from_evidence", marshalEventBody(map[string]string{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentLimitCompletedFromEvidence, marshalEventBody(map[string]string{
 		"reason": "max_elapsed",
 		"source": "typed_evidence",
 	}))
@@ -2321,7 +2321,7 @@ func (agentTurnRunner *AgentTurnRunner) replyFinalizationContext(parentContext c
 }
 
 func (agentTurnRunner *AgentTurnRunner) pauseForLimit(taskRunID string, reason string, observations []turnObservation, attachments []toolcontract.FileAttachment, usedIterationCount int, usedToolCallCount int) taskstate.TaskRun {
-	agentTurnRunner.appendEvent(taskRunID, "agent.limit_stop", marshalEventBody(agentTurnRunner.limitStopEventBody(reason, observations, attachments, usedIterationCount, usedToolCallCount)))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentLimitStop, marshalEventBody(agentTurnRunner.limitStopEventBody(reason, observations, attachments, usedIterationCount, usedToolCallCount)))
 	blockedTaskRun, _ := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, taskstate.TaskStatusBlocked, reason)
 	return blockedTaskRun
 }
@@ -2346,7 +2346,7 @@ func (agentTurnRunner *AgentTurnRunner) limitStopEventBody(reason string, observ
 func (agentTurnRunner *AgentTurnRunner) stopForLimit(ctx context.Context, taskRunID string, request AgentTurnRequest, reason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState, usedIterationCount int, usedToolCallCount int) (AgentTurnResult, error) {
 	blockedTaskRun := agentTurnRunner.pauseForLimit(taskRunID, reason, observations, attachments, usedIterationCount, usedToolCallCount)
 	failureNotice, replyStatus, hasReply := agentTurnRunner.generateLimitReachedNotice(ctx, taskRunID, request, reason, observations, nil, executionState)
-	agentTurnRunner.appendEvent(taskRunID, "agent.limit_reply", marshalEventBody(replyStatus))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentLimitReply, marshalEventBody(replyStatus))
 	if !hasReply {
 		agentTurnRunner.appendUnavailableReplyEvents(taskRunID, "limit", reason, replyStatus)
 		failureReport := buildFailureReport(request, taskRunID, "limit", reason, observations, attachments, executionState, recoveryDecision{})
@@ -2391,7 +2391,7 @@ func (agentTurnRunner *AgentTurnRunner) nextUnusedObservationID(taskRunID string
 func highestRecordedObservationIndex(taskEvents []taskstate.TaskEvent) int {
 	highestObservationIndex := 0
 	for _, taskEvent := range taskEvents {
-		if !strings.HasPrefix(taskEvent.Name, "tool.") || !strings.HasSuffix(taskEvent.Name, ".result") {
+		if !strings.HasPrefix(taskEvent.Name, taskstate.ToolTaskEventPrefix) || !strings.HasSuffix(taskEvent.Name, taskstate.ToolTaskEventResultSuffix) {
 			continue
 		}
 		var observation struct {
@@ -2455,7 +2455,7 @@ func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Contex
 		}
 		didDriftFromItsHold := agentTurnRunner.settleHeldCallApproval(taskRunID, heldCalls, carriedOutCall)
 		observationID := agentTurnRunner.nextUnusedObservationID(taskRunID, state.Observations)
-		agentTurnRunner.appendEvent(taskRunID, "tool."+toolName+".requested", marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, taskstate.ToolTaskEventName(toolName, taskstate.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
 			"observationID": observationID,
 			"toolName":      toolName,
 			"input":         json.RawMessage(carriedOutCall.ToolInput),

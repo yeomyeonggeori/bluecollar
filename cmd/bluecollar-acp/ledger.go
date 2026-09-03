@@ -26,7 +26,7 @@ func sendLedgerEvent(ctx context.Context, sender sessionUpdateSender, sessionID 
 
 func sessionUpdateForEvent(rawTurnEvent taskstate.RawTurnEvent) acp.SessionUpdate {
 	meta := ledgerMeta(rawTurnEvent)
-	if toolName, isRequest := toolNameOfEvent(rawTurnEvent.Name, ".requested"); isRequest {
+	if toolName, isRequest := taskstate.ToolTaskEventToolName(rawTurnEvent.Name, ".requested"); isRequest {
 		return acp.SessionUpdate{ToolCall: &acp.SessionUpdateToolCall{
 			ToolCallId: acp.ToolCallId(observationIDOfEvent(rawTurnEvent.Body)),
 			Title:      toolName,
@@ -35,7 +35,7 @@ func sessionUpdateForEvent(rawTurnEvent taskstate.RawTurnEvent) acp.SessionUpdat
 			Meta:       meta,
 		}}
 	}
-	if _, isResult := toolNameOfEvent(rawTurnEvent.Name, ".result"); isResult {
+	if _, isResult := taskstate.ToolTaskEventToolName(rawTurnEvent.Name, ".result"); isResult {
 		status := acp.ToolCallStatusCompleted
 		if isFailureEvent(rawTurnEvent.Body) {
 			status = acp.ToolCallStatusFailed
@@ -62,13 +62,6 @@ func ledgerMeta(rawTurnEvent taskstate.RawTurnEvent) map[string]any {
 		record.Body = quoted
 	}
 	return map[string]any{agentcontract.LedgerMetaKey: record}
-}
-
-func toolNameOfEvent(eventName string, suffix string) (string, bool) {
-	if !strings.HasPrefix(eventName, "tool.") || !strings.HasSuffix(eventName, suffix) {
-		return "", false
-	}
-	return strings.TrimSuffix(strings.TrimPrefix(eventName, "tool."), suffix), true
 }
 
 func observationIDOfEvent(body string) string {

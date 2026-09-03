@@ -111,7 +111,7 @@ func (taskRunService *TaskRunService) CreateTaskRunWithOriginAndError(requesterP
 		return taskRun, errorValue
 	}
 
-	if _, errorValue := taskRunService.taskEventService.AppendTaskEventWithError(taskRun.TaskRunID, "task.created", prompt); errorValue != nil {
+	if _, errorValue := taskRunService.taskEventService.AppendTaskEventWithError(taskRun.TaskRunID, TaskEventTaskCreated, prompt); errorValue != nil {
 		return taskRun, errorValue
 	}
 	return taskRun, nil
@@ -241,7 +241,7 @@ func (taskRunService *TaskRunService) AdvanceTaskRun(taskRunID string, currentAg
 		ToState:                 TaskStatusRunning,
 		CurrentAgentProfileName: currentAgentProfileName,
 		StartedAttempt:          &taskAttempt,
-		Event:                   newTaskRunTransitionEvent(taskRunID, "task.running", currentAgentProfileName, now),
+		Event:                   newTaskRunTransitionEvent(taskRunID, TaskStatusRunning, currentAgentProfileName, now),
 		UpdatedAt:               now,
 	})
 }
@@ -256,7 +256,7 @@ func (taskRunService *TaskRunService) PauseTaskRun(taskRunID string, status Task
 		FinishCurrentAttempt:  true,
 		FinishedAttemptStatus: taskAttemptStatusForTaskStatus(status),
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, "task.paused", reason, now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, status, reason, now),
 		UpdatedAt:             now,
 	})
 }
@@ -271,7 +271,7 @@ func (taskRunService *TaskRunService) FailTaskRun(taskRunID string, reason strin
 		FinishCurrentAttempt:  true,
 		FinishedAttemptStatus: TaskAttemptStatusFailed,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, "task.paused", reason, now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusFailed, reason, now),
 		UpdatedAt:             now,
 	})
 }
@@ -405,13 +405,32 @@ func taskStatusAllowed(status TaskStatus, allowedStatuses []TaskStatus) bool {
 	return false
 }
 
-func newTaskRunTransitionEvent(taskRunID string, name string, body string, createdAt time.Time) *TaskEvent {
+func newTaskRunTransitionEvent(taskRunID string, status TaskStatus, body string, createdAt time.Time) *TaskEvent {
 	return &TaskEvent{
 		TaskEventID: NewIdentifier(),
 		TaskRunID:   taskRunID,
-		Name:        name,
+		Name:        taskRunTransitionEventName(status),
 		Body:        body,
 		CreatedAt:   createdAt,
+	}
+}
+
+func taskRunTransitionEventName(status TaskStatus) string {
+	switch status {
+	case TaskStatusRunning:
+		return TaskEventTaskRunning
+	case TaskStatusBlocked:
+		return TaskEventTaskBlocked
+	case TaskStatusInterrupted:
+		return TaskEventTaskInterrupted
+	case TaskStatusCompleted:
+		return TaskEventTaskCompleted
+	case TaskStatusFailed:
+		return TaskEventTaskFailed
+	case TaskStatusCancelled:
+		return TaskEventTaskCancelled
+	default:
+		return TaskEventTaskPaused
 	}
 }
 
@@ -493,7 +512,7 @@ func (taskRunService *TaskRunService) CancelWaitingTaskRuns(requesterPersonID st
 		if errorValue != nil {
 			continue
 		}
-		taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, "task.wait_cancelled", reason)
+		taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, TaskEventTaskWaitCancelled, reason)
 		cancelledTaskRuns = append(cancelledTaskRuns, cancelledTaskRun)
 	}
 	return cancelledTaskRuns
@@ -544,7 +563,7 @@ func (taskRunService *TaskRunService) InterruptRuntimeTaskRunsForPlannedShutdown
 			FinishCurrentAttempt:  true,
 			FinishedAttemptStatus: TaskAttemptStatusInterrupted,
 			RunnerID:              taskRunService.runnerID,
-			Event:                 newTaskRunTransitionEvent(taskRun.TaskRunID, "task.interrupted", TaskInterruptReasonPlannedShutdown, now),
+			Event:                 newTaskRunTransitionEvent(taskRun.TaskRunID, TaskStatusInterrupted, TaskInterruptReasonPlannedShutdown, now),
 			UpdatedAt:             now,
 		})
 		if errorValue != nil {
@@ -573,7 +592,7 @@ func (taskRunService *TaskRunService) InterruptInactiveTaskRun(taskRunID string,
 		FinishCurrentAttempt:  true,
 		FinishedAttemptStatus: TaskAttemptStatusInterrupted,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, "task.interrupted", reason, now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusInterrupted, reason, now),
 		UpdatedAt:             now,
 	})
 	if errorValue != nil {
@@ -605,7 +624,7 @@ func (taskRunService *TaskRunService) ClaimInterruptedTaskRunAutoResume(taskRunI
 	if attemptCount > 0 && !taskRunWasInterruptedByPlannedShutdown(taskRun) {
 		return false
 	}
-	taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, "task.auto_resume_attempted", marshalTaskRunServiceEventBody(map[string]any{
+	taskRunService.taskEventService.AppendTaskEvent(taskRun.TaskRunID, TaskEventTaskAutoResumeAttempted, marshalTaskRunServiceEventBody(map[string]any{
 		"attemptCount": attemptCount + 1,
 		"reason":       strings.TrimSpace(reason),
 	}))
@@ -613,7 +632,7 @@ func (taskRunService *TaskRunService) ClaimInterruptedTaskRunAutoResume(taskRunI
 }
 
 func (taskRunService *TaskRunService) MarkInterruptedTaskRunAutoResumeSkipped(taskRunID string, reason string) {
-	taskRunService.taskEventService.AppendTaskEvent(taskRunID, "task.auto_resume_skipped", marshalTaskRunServiceEventBody(map[string]string{
+	taskRunService.taskEventService.AppendTaskEvent(taskRunID, TaskEventTaskAutoResumeSkipped, marshalTaskRunServiceEventBody(map[string]string{
 		"reason": strings.TrimSpace(reason),
 	}))
 }
@@ -631,7 +650,7 @@ func (taskRunService *TaskRunService) CloseOpenToolRequests(taskRunID string, re
 func (taskRunService *TaskRunService) closeOpenToolRequests(taskRunID string, taskAttemptID string, reason string) {
 	openRequests := openToolRequests(taskRunService.taskEventService.ListTaskEvent(taskRunID))
 	for _, openRequest := range openRequests {
-		taskRunService.taskEventService.AppendTaskEvent(taskRunID, "tool."+openRequest.ToolName+".cancelled", marshalTaskRunServiceEventBody(map[string]string{
+		taskRunService.taskEventService.AppendTaskEvent(taskRunID, ToolTaskEventName(openRequest.ToolName, ToolTaskEventCancelledSuffix), marshalTaskRunServiceEventBody(map[string]string{
 			"observationID":  openRequest.ObservationID,
 			"toolName":       openRequest.ToolName,
 			"taskAttemptID":  taskAttemptID,
@@ -768,7 +787,7 @@ func taskRunWasInterruptedByPlannedShutdown(taskRun TaskRun) bool {
 
 func (taskRunService *TaskRunService) taskRunHasInterruptedMarker(taskRunID string) bool {
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == "task.interrupted" {
+		if taskEvent.Name == TaskEventTaskInterrupted {
 			return true
 		}
 	}
@@ -778,7 +797,7 @@ func (taskRunService *TaskRunService) taskRunHasInterruptedMarker(taskRunID stri
 func (taskRunService *TaskRunService) autoResumeAttemptCount(taskRunID string) int {
 	count := 0
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == "task.auto_resume_attempted" {
+		if taskEvent.Name == TaskEventTaskAutoResumeAttempted {
 			count++
 		}
 	}
@@ -818,7 +837,7 @@ func (taskRunService *TaskRunService) CompleteTaskRun(taskRunID string, result s
 		FinishCurrentAttempt:  true,
 		FinishedAttemptStatus: TaskAttemptStatusCompleted,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, "task.completed", result, now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusCompleted, result, now),
 		UpdatedAt:             now,
 	})
 }
@@ -943,7 +962,7 @@ func (taskRunService *TaskRunService) cancelTaskRun(taskRunID string, requesterP
 		FinishCurrentAttempt:  true,
 		FinishedAttemptStatus: TaskAttemptStatusCancelled,
 		RunnerID:              taskRunService.runnerID,
-		Event:                 newTaskRunTransitionEvent(taskRunID, "task.cancelled", firstNonEmptyTaskRunString(reason, requesterPersonID), now),
+		Event:                 newTaskRunTransitionEvent(taskRunID, TaskStatusCancelled, firstNonEmptyTaskRunString(reason, requesterPersonID), now),
 		UpdatedAt:             now,
 	})
 	if errorValue != nil {
@@ -1063,20 +1082,20 @@ func openToolRequests(taskEvents []TaskEvent) []openToolRequest {
 	requests := []openToolRequest{}
 	closedObservationIDs := map[string]bool{}
 	for _, taskEvent := range taskEvents {
-		toolName, isToolEvent := toolEventName(taskEvent.Name, ".requested")
+		toolName, isToolEvent := ToolTaskEventToolName(taskEvent.Name, ".requested")
 		if isToolEvent {
 			body := parseToolEventBody(taskEvent.Body)
 			requests = append(requests, openToolRequest{ObservationID: firstNonEmptyTaskRunString(body.ObservationID, taskEvent.TaskEventID), ToolName: firstNonEmptyTaskRunString(body.ToolName, toolName)})
 			continue
 		}
-		if _, isResult := toolEventName(taskEvent.Name, ".result"); isResult {
+		if _, isResult := ToolTaskEventToolName(taskEvent.Name, ".result"); isResult {
 			body := parseToolEventBody(taskEvent.Body)
 			if body.ObservationID != "" {
 				closedObservationIDs[body.ObservationID] = true
 			}
 			continue
 		}
-		if _, isCancelled := toolEventName(taskEvent.Name, ".cancelled"); isCancelled {
+		if _, isCancelled := ToolTaskEventToolName(taskEvent.Name, ".cancelled"); isCancelled {
 			body := parseToolEventBody(taskEvent.Body)
 			if body.ObservationID != "" {
 				closedObservationIDs[body.ObservationID] = true
@@ -1090,15 +1109,6 @@ func openToolRequests(taskEvents []TaskEvent) []openToolRequest {
 		}
 	}
 	return openRequests
-}
-
-func toolEventName(eventName string, suffix string) (string, bool) {
-	trimmedName := strings.TrimSpace(eventName)
-	if !strings.HasPrefix(trimmedName, "tool.") || !strings.HasSuffix(trimmedName, suffix) {
-		return "", false
-	}
-	toolName := strings.TrimSuffix(strings.TrimPrefix(trimmedName, "tool."), suffix)
-	return strings.TrimSpace(toolName), strings.TrimSpace(toolName) != ""
 }
 
 func parseToolEventBody(body string) toolEventBody {

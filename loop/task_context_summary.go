@@ -10,10 +10,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
-const (
-	taskContextSummaryEventName            = "agent.context_summary"
-	contextCompactionFreedNothingEventName = "agent.context_compaction_freed_nothing"
-)
 const defaultCompactionTriggerTokens = 96000
 const taskContextCompactionRecentObservationCount = 10
 const taskContextCompactionMinimumNewObservations = 6
@@ -44,7 +40,7 @@ func (summary TaskContextSummary) accountsForTaskEvents() bool {
 
 func taskContextSummaryFromTaskEvents(events []taskstate.TaskEvent) TaskContextSummary {
 	for index := len(events) - 1; index >= 0; index-- {
-		if strings.TrimSpace(events[index].Name) != taskContextSummaryEventName {
+		if strings.TrimSpace(events[index].Name) != taskstate.TaskEventAgentContextSummary {
 			continue
 		}
 		var summary TaskContextSummary
@@ -82,7 +78,7 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	replacedCharacters := observationsCharacterCount(plan.CompactableObservations)
 	summaryCharacters := len(summaryObservation(summary).ContentText())
 	if summaryCharacters >= replacedCharacters {
-		agentTurnRunner.appendEvent(taskRunID, contextCompactionFreedNothingEventName, marshalEventBody(map[string]any{
+		agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentContextCompactionFreedNothing, marshalEventBody(map[string]any{
 			"compactedThroughObservationID": plan.CompactedThroughObservationID,
 			"replacedCharacters":            replacedCharacters,
 			"summaryCharacters":             summaryCharacters,
@@ -92,7 +88,7 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	compactedObservations := promptVisibleObservations(state.Observations, summary, pinnedObservationIDs)
 	summary = summaryAccountingForCompactedObservations(summary, currentSummary, compactedObservations, plan, taskEvents)
 	summary = normalizeTaskContextSummary(summary)
-	agentTurnRunner.appendEvent(taskRunID, taskContextSummaryEventName, marshalEventBody(summary))
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentContextSummary, marshalEventBody(summary))
 	return compactedObservations
 }
 
@@ -101,7 +97,7 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 func compactionAlreadyFreedNothing(events []taskstate.TaskEvent, compactedThroughObservationID string) bool {
 	trimmedObservationID := strings.TrimSpace(compactedThroughObservationID)
 	for _, taskEvent := range events {
-		if strings.TrimSpace(taskEvent.Name) != contextCompactionFreedNothingEventName {
+		if strings.TrimSpace(taskEvent.Name) != taskstate.TaskEventAgentContextCompactionFreedNothing {
 			continue
 		}
 		attempt := struct {
@@ -125,7 +121,7 @@ func (agentTurnRunner *AgentTurnRunner) promptObservationsWithLongToolResultsPru
 	if prunedTokenCount >= estimatedTokenCount {
 		return promptObservations, estimatedTokenCount
 	}
-	agentTurnRunner.appendEvent(taskRunID, "agent.tool_results_pruned", marshalEventBody(map[string]any{
+	agentTurnRunner.appendEvent(taskRunID, taskstate.TaskEventAgentToolResultsPruned, marshalEventBody(map[string]any{
 		"estimatedTokensBefore": estimatedTokenCount,
 		"estimatedTokensAfter":  prunedTokenCount,
 	}))
@@ -341,7 +337,7 @@ func pinActiveFailureDebtObservations(pinnedObservationIDs map[string]bool, obse
 func completionEvidenceObservationIDs(events []taskstate.TaskEvent) map[string]bool {
 	observationIDs := map[string]bool{}
 	for _, event := range events {
-		if strings.TrimSpace(event.Name) != "agent.action" {
+		if strings.TrimSpace(event.Name) != taskstate.TaskEventAgentAction {
 			continue
 		}
 		var actionDocument turnActionDocument

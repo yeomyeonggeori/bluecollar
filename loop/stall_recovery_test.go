@@ -23,10 +23,10 @@ func TestStalledOnRedundantInspectionDetectsCacheHit(t *testing.T) {
 }
 
 func TestStalledRecoveryDirectiveNamesFailedToolAndForbidsAsking(t *testing.T) {
-	failedBuild := newFailureObservation("obs-001", "continue", "site.build", "compile error", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
-	failedBuild.ToolInputKey = "site.build:lunch"
+	failedBuild := newFailureObservation("obs-001", "continue", "site_build", "compile error", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
+	failedBuild.ToolInputKey = "site_build:lunch"
 	directive := stalledRecoveryDirectiveObservation("obs-099", FailureDebt{LatestFailure: failedBuild})
-	if !strings.Contains(directive.Summary, "site.build") {
+	if !strings.Contains(directive.Summary, "site_build") {
 		t.Fatalf("expected directive to name the failed tool, got %q", directive.Summary)
 	}
 	if !strings.Contains(directive.Summary, "file_edit") || !strings.Contains(directive.Summary, "do not ask") {
@@ -37,8 +37,8 @@ func TestStalledRecoveryDirectiveNamesFailedToolAndForbidsAsking(t *testing.T) {
 func TestContinueStalledRecoveryNudgesReadLoopThenBounds(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{}, TurnOptions{})
 	taskRunID := "task-stall-recovery"
-	failedBuild := newFailureObservation("obs-001", "continue", "site.build", "compile error", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
-	failedBuild.ToolInputKey = "site.build:lunch"
+	failedBuild := newFailureObservation("obs-001", "continue", "site_build", "compile error", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
+	failedBuild.ToolInputKey = "site_build:lunch"
 	state := &agentTaskState{Observations: []turnObservation{failedBuild}}
 	tracker := newActionProgressTracker(state.Observations)
 	allowance := recoveryAllowance{CanRecover: true}
@@ -62,7 +62,7 @@ func TestContinueStalledRecoveryNudgesReadLoopThenBounds(t *testing.T) {
 	if services.runner.continueStalledRecoveryIfAllowed(taskRunID, state, &tracker, allowance) {
 		t.Fatal("expected stall recovery nudges to be bounded within an episode")
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRunID), "agent.stall_recovery_directive", "site.build") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRunID), "agent.stall_recovery_directive", "site_build") {
 		t.Fatal("expected stall recovery directive events naming the failed tool")
 	}
 }
@@ -131,7 +131,7 @@ func TestObservedSuggestedNextToolIgnoresUntrustedResultFields(t *testing.T) {
 func TestObservedSuggestedNextToolReadsRecoveryPacketAllowedTools(t *testing.T) {
 	observation := completionGateObservation(1, completionGateResult{Message: "finish is not backed by observed results", EvidenceKind: evidenceKindExpectedResult}, nil, nil)
 	observation.RecoveryPacket = &RecoveryPacket{
-		AllowedTools: []string{"file_write", "site.build"},
+		AllowedTools: []string{"file_write", "site_build"},
 	}
 
 	suggestion, isFound := latestObservedSuggestedNextTool([]turnObservation{observation})
@@ -142,8 +142,8 @@ func TestObservedSuggestedNextToolReadsRecoveryPacketAllowedTools(t *testing.T) 
 
 func TestTechnicalStallDoesNotPauseForUserInput(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{}, TurnOptions{})
-	failedBuild := newFailureObservation("obs-001", "continue", "site.build", "quality gate failed", toolcontract.FailureExternalService, toolcontract.FailureCodes.InvalidInput, "site_build_delivery")
-	failedBuild.ToolInputKey = "site.build:site-1"
+	failedBuild := newFailureObservation("obs-001", "continue", "site_build", "quality gate failed", toolcontract.FailureExternalService, toolcontract.FailureCodes.InvalidInput, "site_build_delivery")
+	failedBuild.ToolInputKey = "site_build:site-1"
 
 	if services.runner.shouldPauseForStalledRecovery("task-technical-stall", []turnObservation{failedBuild}) {
 		t.Fatal("expected technical artifact failures to block with a failure notice instead of waiting for user input")

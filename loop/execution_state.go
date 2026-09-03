@@ -116,7 +116,7 @@ func executionStateIsEmpty(state ExecutionState) bool {
 func executionStateFromTaskEvents(events []taskstate.TaskEvent) ExecutionState {
 	for index := len(events) - 1; index >= 0; index-- {
 		event := events[index]
-		if strings.TrimSpace(event.Name) != "agent.execution_state" {
+		if strings.TrimSpace(event.Name) != taskstate.TaskEventAgentExecutionState {
 			continue
 		}
 		var state ExecutionState

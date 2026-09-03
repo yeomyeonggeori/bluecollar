@@ -97,7 +97,7 @@ func (taskEventService *TaskEventService) recordObserverFailure(rawTurnEvent Raw
 	if errorValue != nil {
 		return
 	}
-	taskEventService.storeTaskEvent(rawTurnEvent.TaskRunID, "task.observer_crashed", string(body))
+	taskEventService.storeTaskEvent(rawTurnEvent.TaskRunID, TaskEventTaskObserverCrashed, string(body))
 }
 
 func (taskEventService *TaskEventService) UseRepository(repository TaskEventRepository) {
