@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"

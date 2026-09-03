@@ -537,8 +537,11 @@ func turnRouterSchema(request agentcontract.AgentRequest) string {
 		properties["approval"] = map[string]any{"type": "string", "enum": []string{string(agentcontract.ApprovalSignalApprove), string(agentcontract.ApprovalSignalApproveTask), string(agentcontract.ApprovalSignalReject), string(agentcontract.ApprovalSignalUnclear)}}
 		requiredProperties = append(requiredProperties, "approval")
 	}
-	if pendingChoice := pendingChoiceContext(request); strings.TrimSpace(pendingChoice.TaskRunID) != "" {
-		choiceKeys := pendingChoiceKeys(pendingChoice)
+	// An enum of nothing is not a schema a strict provider will take: it answers
+	// empty, the turn falls through to the local model, and the person is asked
+	// about something they never mentioned. A choice nobody is offering is a
+	// field with nothing to say, so it stays out.
+	if choiceKeys := pendingChoiceKeys(pendingChoiceContext(request)); len(choiceKeys) > 0 {
 		properties["choices"] = map[string]any{"type": "array", "maxItems": len(choiceKeys), "items": map[string]any{"type": "string", "enum": choiceKeys}}
 		requiredProperties = append(requiredProperties, "choices")
 	}
