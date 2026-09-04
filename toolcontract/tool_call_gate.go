@@ -5,6 +5,9 @@ import "context"
 type ToolCallReview struct {
 	MayProceed bool
 	Result     ToolResult
+	// Names the held call this approval spends, for a tool whose backend has to
+	// be told which approval it is running under.
+	ApprovedCallID string
 }
 
 type ToolCallGate interface {
@@ -18,16 +21,16 @@ func (toolSet *ToolSet) UseToolCallGate(toolCallGate ToolCallGate) {
 	toolSet.toolCallGate = toolCallGate
 }
 
-func (toolSet *ToolSet) reviewToolCall(ctx context.Context, toolInvocation ToolInvocation, toolDefinition ToolDefinition) (ToolResult, bool) {
+func (toolSet *ToolSet) reviewToolCall(ctx context.Context, toolInvocation ToolInvocation, toolDefinition ToolDefinition) (context.Context, ToolResult, bool) {
 	if toolSet.toolCallGate == nil {
-		return ToolResult{}, false
+		return ctx, ToolResult{}, false
 	}
 	review, errorValue := toolSet.toolCallGate.ReviewToolCall(ctx, toolInvocation, toolDefinition)
 	if errorValue != nil {
-		return ToolFailureResult(FailureUnknown, FailureCodes.OperationFailed, "tool_call_gate", errorValue.Error()), true
+		return ctx, ToolFailureResult(FailureUnknown, FailureCodes.OperationFailed, "tool_call_gate", errorValue.Error()), true
 	}
 	if review.MayProceed {
-		return ToolResult{}, false
+		return WithApprovedCallID(ctx, review.ApprovedCallID), ToolResult{}, false
 	}
-	return review.Result, true
+	return ctx, review.Result, true
 }

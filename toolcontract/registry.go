@@ -732,7 +732,8 @@ func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation Too
 		return ToolFailureResult(FailureInvalidInput, FailureCodes.InvalidInput, "tool_input_schema", errorValue.Error()), nil
 	}
 	toolInvocation.Input = toolInput
-	if reviewResult, isWithheld := toolSet.reviewToolCall(ctx, toolInvocation, boundTool.Definition); isWithheld {
+	ctx, reviewResult, isWithheld := toolSet.reviewToolCall(ctx, toolInvocation, boundTool.Definition)
+	if isWithheld {
 		return reviewResult, nil
 	}
 	result, errorValue := toolSet.invokeWithinDeclaredBudget(ctx, boundTool, toolInvocation)
