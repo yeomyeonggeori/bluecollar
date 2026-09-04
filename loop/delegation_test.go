@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -64,6 +65,65 @@ func TestADelegatedTurnReportsBackThroughTheParentsLedger(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(promptsOf(languageModel), "\n"), "the release renamed two flags") {
 		t.Fatal("the parent has to see what the child reported, or delegating it lost the work")
+	}
+}
+
+func TestADelegatedChildFromAResumedParentGetsItsOwnTaskRun(t *testing.T) {
+	languageModel := &sequenceLanguageModel{
+		modelTier: "xlow",
+		contents: []string{
+			delegateActionDocument("read the release notes and say what changed", "one sentence"),
+			finishMessageDocument("the release renamed two flags"),
+			finishMessageDocument("두 개의 플래그 이름이 바뀌었습니다"),
+		},
+	}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 4, MaxToolCallCount: 5, DelegationLimit: 2})
+	parentTaskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "무엇이 바뀌었는지 알려줘")
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID:      "person-1",
+		ExistingTaskRunID:      parentTaskRun.TaskRunID,
+		IsApprovalContinuation: true,
+		ConversationID:         "conversation-1",
+		Prompt:                 "무엇이 바뀌었는지 알려줘",
+		ToolSet:                newTestToolSet([]string{toolcontract.ShellToolName}),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+	if result.TaskRun.TaskRunID != parentTaskRun.TaskRunID {
+		t.Fatalf("the resumed parent turn must keep its own run, got %s want %s", result.TaskRun.TaskRunID, parentTaskRun.TaskRunID)
+	}
+
+	parentTaskEvents := services.taskEventService.ListTaskEvent(parentTaskRun.TaskRunID)
+	childTaskRunID := ""
+	for _, taskEvent := range parentTaskEvents {
+		if taskEvent.Name != "delegate.finished" {
+			continue
+		}
+		var document struct {
+			ChildTaskRunID string `json:"childTaskRunID"`
+		}
+		if json.Unmarshal([]byte(taskEvent.Body), &document) == nil {
+			childTaskRunID = document.ChildTaskRunID
+		}
+	}
+	if childTaskRunID == "" {
+		t.Fatal("delegate.finished has to name the run that actually did the work")
+	}
+	if childTaskRunID == parentTaskRun.TaskRunID {
+		t.Fatal("a child spawned from a resumed parent turn must not execute on the parent's own run")
+	}
+	if countTaskEvents(parentTaskEvents, agentcontract.TaskEventTaskCompleted) != 1 {
+		t.Fatalf("the parent's run must be completed once, by the parent, not once more by the child: %d", countTaskEvents(parentTaskEvents, agentcontract.TaskEventTaskCompleted))
+	}
+
+	childTaskRun, isFound := services.taskRunService.FindTaskRun(childTaskRunID)
+	if !isFound {
+		t.Fatal("the child's own run has to be findable on its own ID")
+	}
+	if childTaskRun.Status != agentcontract.TaskStatusCompleted {
+		t.Fatalf("expected the child's own run to complete, got %s", childTaskRun.Status)
 	}
 }
 

@@ -35,6 +35,7 @@ func childTurnRequest(request AgentTurnRequest, actionDocument turnActionDocumen
 	childRequest.PrecomputedTurnDecision = nil
 	childRequest.IsApprovalContinuation = false
 	childRequest.IsRuntimeRestartResume = false
+	childRequest.ExistingTaskRunID = ""
 	childRequest.ActiveGoal = ActiveGoal{OriginalInstruction: strings.TrimSpace(actionDocument.Instruction)}
 	childRequest.OutcomeContract = OutcomeContract{}
 	return childRequest
