@@ -1402,15 +1402,18 @@ func TestSlidesRequestWithCalendarContentDoesNotPinCalendarTools(t *testing.T) {
 
 type holdingToolCallGate struct {
 	taskRunService *taskstate.TaskRunService
-	taskRunID      string
 	confirmation   string
+	denialNotice   string
 }
 
-func (gate holdingToolCallGate) ReviewToolCall(_ context.Context, _ toolcontract.ToolInvocation, toolDefinition toolcontract.ToolDefinition) (toolcontract.ToolCallReview, error) {
+func (gate holdingToolCallGate) ReviewToolCall(ctx context.Context, _ toolcontract.ToolInvocation, toolDefinition toolcontract.ToolDefinition) (toolcontract.ToolCallReview, error) {
 	if !toolDefinition.RequiresApproval {
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
-	gate.taskRunService.PauseTaskRun(gate.taskRunID, agentcontract.TaskStatusWaitingApproval, gate.confirmation)
+	if toolcontract.IsDelegatedTurn(ctx) {
+		return toolcontract.ToolCallReview{Result: toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", gate.denialNotice)}, nil
+	}
+	gate.taskRunService.PauseTaskRun(toolcontract.TaskRunIDFromContext(ctx), agentcontract.TaskStatusWaitingApproval, gate.confirmation)
 	heldResult := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.InteractionRequired, "approval", gate.confirmation)
 	heldResult.Failure.RequiresApproval = true
 	return toolcontract.ToolCallReview{Result: heldResult}, nil
@@ -1431,7 +1434,6 @@ func TestATurnEndsWhereTheHostHeldTheCallItAskedFor(t *testing.T) {
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "일정 삭제해줘")
 	toolRegistry.UseToolCallGate(holdingToolCallGate{
 		taskRunService: services.taskRunService,
-		taskRunID:      taskRun.TaskRunID,
 		confirmation:   "이 일정을 삭제할까요?",
 	})
 

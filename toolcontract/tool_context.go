@@ -11,6 +11,7 @@ const taskRunIDContextKey toolContextKey = "taskRunID"
 const observationIDContextKey toolContextKey = "observationID"
 const responseLanguageContextKey toolContextKey = "responseLanguage"
 const userFacingMessageContextKey toolContextKey = "userFacingMessage"
+const delegatedTurnContextKey toolContextKey = "delegatedTurn"
 
 func WithUserFacingMessage(ctx context.Context, userFacingMessage string) context.Context {
 	if strings.TrimSpace(userFacingMessage) == "" {
@@ -34,6 +35,15 @@ func WithTaskRunID(ctx context.Context, taskRunID string) context.Context {
 func TaskRunIDFromContext(ctx context.Context) string {
 	taskRunID, _ := ctx.Value(taskRunIDContextKey).(string)
 	return taskRunID
+}
+
+func WithDelegatedTurn(ctx context.Context) context.Context {
+	return context.WithValue(ctx, delegatedTurnContextKey, true)
+}
+
+func IsDelegatedTurn(ctx context.Context) bool {
+	isDelegatedTurn, _ := ctx.Value(delegatedTurnContextKey).(bool)
+	return isDelegatedTurn
 }
 
 func WithObservationID(ctx context.Context, observationID string) context.Context {

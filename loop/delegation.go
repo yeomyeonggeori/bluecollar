@@ -88,7 +88,7 @@ func (agentTurnRunner *AgentTurnRunner) runDelegatedTurn(ctx context.Context, ta
 		"instruction":    instruction,
 		"expectedResult": strings.TrimSpace(actionDocument.ExpectedResult),
 	}))
-	childResult, errorValue := agentTurnRunner.childRunner(state).RunTurn(ctx, childTurnRequest(state.Request, actionDocument))
+	childResult, errorValue := agentTurnRunner.childRunner(state).RunTurn(toolcontract.WithDelegatedTurn(ctx), childTurnRequest(state.Request, actionDocument))
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventDelegateFinished, marshalEventBody(map[string]any{
 		"observationID":  observationID,
 		"childTaskRunID": childResult.TaskRun.TaskRunID,
@@ -98,12 +98,22 @@ func (agentTurnRunner *AgentTurnRunner) runDelegatedTurn(ctx context.Context, ta
 		return newFailureObservation(observationID, "delegate", "", "the delegated turn could not run: "+errorValue.Error(),
 			toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "delegate")
 	}
+	childAttachments := agentTurnRunner.artifactsTheChildProduced(childResult)
+	state.Attachments = appendUniqueAttachments(state.Attachments, childAttachments)
 	if childResult.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		return newFailureObservation(observationID, "delegate", "", delegatedFailureText(childResult),
-			toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "delegate")
+		return withAttachments(newFailureObservation(observationID, "delegate", "", delegatedFailureText(childResult),
+			toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "delegate"), childAttachments)
 	}
-	observation := newContentObservation(observationID, "delegate", "", delegatedReplyText(childResult))
-	observation.Attachments = append([]toolcontract.FileAttachment{}, childResult.Attachments...)
+	return withAttachments(newContentObservation(observationID, "delegate", "", delegatedReplyText(childResult)), childAttachments)
+}
+
+func (agentTurnRunner *AgentTurnRunner) artifactsTheChildProduced(childResult AgentTurnResult) []toolcontract.FileAttachment {
+	childEvents := agentTurnRunner.taskRunService.ListTaskEvent(childResult.TaskRun.TaskRunID)
+	return appendUniqueAttachments(childResult.Attachments, attachmentsFromObservations(observationsFromTaskEvents(childEvents)))
+}
+
+func withAttachments(observation turnObservation, attachments []toolcontract.FileAttachment) turnObservation {
+	observation.Attachments = append([]toolcontract.FileAttachment{}, attachments...)
 	return observation
 }
 
