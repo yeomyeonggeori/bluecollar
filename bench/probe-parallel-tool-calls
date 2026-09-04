@@ -14,8 +14,8 @@ model="${BENCH_MODEL:-openai/gpt-5.6-luna}"
 toolChoice="${PROBE_TOOL_CHOICE:-required}"
 
 for parallelToolCalls in true false; do
-  responseBody="$(curl -sS https://openrouter.ai/api/v1/chat/completions \
-    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  responseBody="$(curl -sS "$BENCH_ENDPOINT/chat/completions" \
+    -H "Authorization: Bearer $BENCH_API_KEY" \
     -H "Content-Type: application/json" \
     -d @- <<REQUEST
 {

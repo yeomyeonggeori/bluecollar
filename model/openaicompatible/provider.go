@@ -38,7 +38,7 @@ func (provider *Provider) UseHTTPClient(httpClient *http.Client) {
 }
 
 func (provider *Provider) GenerateResponse(ctx context.Context, prompt string) (string, error) {
-	response, errorValue := provider.complete(ctx, []model.Message{{Role: "user", Content: prompt}}, nil)
+	response, errorValue := provider.complete(ctx, []model.Message{{Role: "user", Content: prompt}}, nil, model.GenerationOptions{})
 	if errorValue != nil {
 		return "", errorValue
 	}
@@ -46,7 +46,7 @@ func (provider *Provider) GenerateResponse(ctx context.Context, prompt string) (
 }
 
 func (provider *Provider) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	return provider.complete(ctx, request.Messages, &request.StructuredOutputSchema)
+	return provider.complete(ctx, request.Messages, &request.StructuredOutputSchema, request.GenerationOptions)
 }
 
 func (provider *Provider) GenerateChatCompletion(ctx context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
@@ -89,10 +89,20 @@ func chatCompletionRequest(modelName string, request model.ChatCompletionRequest
 	}
 	chatRequest["parallel_tool_calls"] = request.ParallelToolCalls
 	chatRequest["usage"] = map[string]any{"include": true}
-	if request.GenerationOptions.MaxTokens != nil {
-		chatRequest["max_tokens"] = *request.GenerationOptions.MaxTokens
-	}
+	applyGenerationOptions(chatRequest, request.GenerationOptions)
 	return chatRequest
+}
+
+func applyGenerationOptions(chatRequest map[string]any, generationOptions model.GenerationOptions) {
+	if generationOptions.MaxTokens != nil {
+		chatRequest["max_tokens"] = *generationOptions.MaxTokens
+	}
+	if generationOptions.Seed != nil {
+		chatRequest["seed"] = *generationOptions.Seed
+	}
+	if generationOptions.Temperature != nil {
+		chatRequest["temperature"] = *generationOptions.Temperature
+	}
 }
 
 func chatCompletionMessages(messages []model.ChatCompletionMessage) []map[string]any {
@@ -189,8 +199,8 @@ func decodeChatCompletion(responseBody []byte, modelName string) (model.ChatComp
 	}, nil
 }
 
-func (provider *Provider) complete(ctx context.Context, messages []model.Message, schema *model.StructuredOutputSchema) (model.StructuredResponse, error) {
-	body, errorValue := json.Marshal(completionRequest(provider.modelName, messages, schema))
+func (provider *Provider) complete(ctx context.Context, messages []model.Message, schema *model.StructuredOutputSchema, generationOptions model.GenerationOptions) (model.StructuredResponse, error) {
+	body, errorValue := json.Marshal(completionRequest(provider.modelName, messages, schema, generationOptions))
 	if errorValue != nil {
 		return model.StructuredResponse{}, errorValue
 	}
@@ -298,11 +308,12 @@ func waitBeforeRetry(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-func completionRequest(modelName string, messages []model.Message, schema *model.StructuredOutputSchema) map[string]any {
+func completionRequest(modelName string, messages []model.Message, schema *model.StructuredOutputSchema, generationOptions model.GenerationOptions) map[string]any {
 	request := map[string]any{
 		"model":    modelName,
 		"messages": chatMessages(messages),
 	}
+	applyGenerationOptions(request, generationOptions)
 	if schema == nil || strings.TrimSpace(schema.Document) == "" {
 		return request
 	}

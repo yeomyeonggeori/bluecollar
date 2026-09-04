@@ -22,8 +22,13 @@ loadEnvironmentFile() {
   source "$environmentFile"
   set +a
 
-  if [ -z "${OPENROUTER_API_KEY:-}" ]; then
-    echo "$environmentFile defines no OPENROUTER_API_KEY" >&2
+  if [ -z "${BENCH_API_KEY:-}" ]; then
+    echo "$environmentFile defines no BENCH_API_KEY" >&2
+    return 2
+  fi
+
+  if [ -z "${BENCH_ENDPOINT:-}" ]; then
+    echo "$environmentFile defines no BENCH_ENDPOINT, the base URL serving /chat/completions" >&2
     return 2
   fi
 }

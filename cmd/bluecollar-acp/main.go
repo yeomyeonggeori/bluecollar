@@ -17,9 +17,13 @@ const requesterPersonID = "bluecollar"
 func main() {
 	endpointURL := flag.String("endpoint", envOrDefault("BLUECOLLAR_LLM_ENDPOINT", "http://127.0.0.1:8080/v1"), "OpenAI-compatible endpoint the loop reasons through")
 	apiKey := flag.String("api-key", os.Getenv("BLUECOLLAR_LLM_API_KEY"), "API key for that endpoint")
-	modelName := flag.String("model", envOrDefault("BLUECOLLAR_LLM_MODEL", "gpt-4o-mini"), "model name to request")
+	modelName := flag.String("model", os.Getenv("BLUECOLLAR_LLM_MODEL"), "model name to request")
 	agentName := flag.String("name", envOrDefault("BLUECOLLAR_AGENT_NAME", "bluecollar"), "the name this agent answers to")
 	flag.Parse()
+
+	if *modelName == "" {
+		log.Fatal("bluecollar-acp: no model named; pass -model or set BLUECOLLAR_LLM_MODEL")
+	}
 
 	languageModel := openaicompatible.NewProvider(*endpointURL, *apiKey, *modelName)
 	runningAgent := newAgent(languageModel, *agentName)

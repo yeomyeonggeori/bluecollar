@@ -156,8 +156,8 @@ Models reach bluecollar through a provider port. Anything satisfying it works, a
 the provider can change between steps of a running turn. The tier ladder relies on that: it escalates
 a task from a cheap model to a strong one without restarting it.
 
-`model/openaicompatible` is the one implementation shipped here, so the module runs against Ollama,
-vLLM, OpenRouter or anything else speaking `/chat/completions`. Hosts that need routing, tiering or
+`model/openaicompatible` is the one implementation shipped here, so the module runs against
+anything serving `/chat/completions`, local or hosted. Hosts that need routing, tiering or
 usage accounting bring their own; the reference is an [AI SDK](https://ai-sdk.dev) sidecar in
 [blueclaw](https://github.com/yeomyeonggeori/blueclaw).
 

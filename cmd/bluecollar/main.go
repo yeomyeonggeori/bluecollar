@@ -23,7 +23,7 @@ import (
 func main() {
 	endpointURL := flag.String("endpoint", envOrDefault("BLUECOLLAR_MODEL_ENDPOINT", "http://127.0.0.1:11434/v1"), "OpenAI-compatible base URL")
 	apiKey := flag.String("api-key", os.Getenv("BLUECOLLAR_MODEL_API_KEY"), "bearer token for the endpoint, when it needs one")
-	modelName := flag.String("model", envOrDefault("BLUECOLLAR_MODEL", "qwen3"), "model to ask")
+	modelName := flag.String("model", os.Getenv("BLUECOLLAR_MODEL"), "model to ask")
 	agentName := flag.String("agent-name", "the assistant", "what the agent calls itself")
 	timeout := flag.Duration("timeout", 5*time.Minute, "how long one turn may run")
 	workspacePath := flag.String("workspace", ".", "directory the agent's shell commands run in")
@@ -36,6 +36,11 @@ func main() {
 	replayTapePath := flag.String("replay-tape", "", "answer every model call from this tape instead of an endpoint; never evidence that the agent works, only that the loop still walks the same way")
 	tracePath := flag.String("trace", "", "write the whole run - request, reply, cost and every ledger entry - to this path, as JSON when it ends in .json and Markdown otherwise")
 	flag.Parse()
+
+	if strings.TrimSpace(*modelName) == "" {
+		fmt.Fprintln(os.Stderr, "bluecollar: no model named; pass -model or set BLUECOLLAR_MODEL")
+		os.Exit(2)
+	}
 
 	prompt := strings.TrimSpace(strings.Join(flag.Args(), " "))
 	options := runOptions{

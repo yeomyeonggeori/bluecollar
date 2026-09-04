@@ -30,16 +30,24 @@ import sys
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import defaultdict
 
-UPSTREAM_ORIGIN = os.environ.get("PROMPT_METER_UPSTREAM", "https://openrouter.ai")
 LEDGER_PATH = os.environ.get("PROMPT_METER_LEDGER", "/tmp/prompt-meter.jsonl")
 BODY_DIRECTORY = os.environ.get("PROMPT_METER_BODY_DIRECTORY", "")
 body_counter = collections.Counter()
 body_counter_lock = threading.Lock()
 
 ledger_lock = threading.Lock()
+
+
+def resolve_upstream_origin():
+    endpoint = os.environ.get("BENCH_ENDPOINT", "")
+    if not endpoint:
+        sys.exit("prompt-meter has no upstream; set BENCH_ENDPOINT to the base URL serving /chat/completions")
+    parts = urllib.parse.urlsplit(endpoint)
+    return f"{parts.scheme}://{parts.netloc}"
 
 
 # The Responses API names the same two counts input_tokens and output_tokens, and a harness that
@@ -91,7 +99,7 @@ def usage_from_event_stream(payload):
     return {}
 
 
-def forwarding_handler_for(harness_name):
+def forwarding_handler_for(harness_name, upstream_origin):
     class ForwardingHandler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -103,7 +111,7 @@ def forwarding_handler_for(harness_name):
         # budget the model does not have while a harness that never asks keeps the real one.
         def do_GET(self):
             upstream_request = urllib.request.Request(
-                UPSTREAM_ORIGIN + self.path,
+                upstream_origin + self.path,
                 method="GET",
                 headers={"Authorization": self.headers.get("Authorization", "")},
             )
@@ -123,7 +131,7 @@ def forwarding_handler_for(harness_name):
                 if self.headers.get(attribution_header):
                     forwarded_headers[attribution_header] = self.headers[attribution_header]
             upstream_request = urllib.request.Request(
-                UPSTREAM_ORIGIN + self.path,
+                upstream_origin + self.path,
                 data=body,
                 method="POST",
                 headers=forwarded_headers,
@@ -180,8 +188,9 @@ class ThreadedServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
 
 
 def serve(harness_name, port):
-    with ThreadedServer(("0.0.0.0", port), forwarding_handler_for(harness_name)) as server:
-        print(f"prompt-meter counting {harness_name} on {port}, forwarding to {UPSTREAM_ORIGIN}", flush=True)
+    upstream_origin = resolve_upstream_origin()
+    with ThreadedServer(("0.0.0.0", port), forwarding_handler_for(harness_name, upstream_origin)) as server:
+        print(f"prompt-meter counting {harness_name} on {port}, forwarding to {upstream_origin}", flush=True)
         server.serve_forever()
 
 

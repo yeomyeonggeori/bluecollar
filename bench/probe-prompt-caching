@@ -51,8 +51,8 @@ open(sys.argv[1], "w").write(json.dumps(request))
 PYTHON
 
 for attempt in first second; do
-  responseBody="$(curl -sS https://openrouter.ai/api/v1/chat/completions \
-    -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+  responseBody="$(curl -sS "$BENCH_ENDPOINT/chat/completions" \
+    -H "Authorization: Bearer $BENCH_API_KEY" \
     -H "Content-Type: application/json" \
     -d @"$requestFile")"
   printf '%s' "$responseBody" > "$responseFile"

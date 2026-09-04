@@ -7,7 +7,9 @@ loadEnvironmentFile
 
 dataset="${BENCH_DATASET:-terminal-bench-core==0.1.1}"
 model="${BENCH_MODEL:-openai/gpt-5.6-luna}"
-endpoint="${BENCH_ENDPOINT:-https://openrouter.ai/api/v1}"
+endpoint="$BENCH_ENDPOINT"
+endpointOrigin="$(python3 -c 'import os, urllib.parse; parts = urllib.parse.urlsplit(os.environ["BENCH_ENDPOINT"]); print(f"{parts.scheme}://{parts.netloc}")')"
+endpointPath="$(python3 -c 'import os, urllib.parse; print(urllib.parse.urlsplit(os.environ["BENCH_ENDPOINT"]).path.rstrip("/"))')"
 outputRoot="${BENCH_OUTPUT:-/tmp/bench-comparison}"
 concurrency="${BENCH_CONCURRENCY:-4}"
 attempts="${BENCH_ATTEMPTS:-1}"
@@ -27,7 +29,7 @@ refuseUnknownModel() {
   trap 'rm -f "$responseFile"' RETURN
   for attempt in $(seq 1 "$rateLimitAttempts"); do
     status="$(curl -s -o "$responseFile" -w '%{http_code}' --max-time 30 \
-      -H "Authorization: Bearer $OPENROUTER_API_KEY" \
+      -H "Authorization: Bearer $BENCH_API_KEY" \
       -H 'Content-Type: application/json' \
       -d "{\"model\":\"$model\",\"messages\":[{\"role\":\"user\",\"content\":\"ok\"}],\"max_tokens\":1}" \
       "$endpoint/chat/completions")"
@@ -83,9 +85,9 @@ startPromptMeters() {
   removeAbandonedPromptMeters
   mkdir -p "$outputRoot"
   rm -f "$promptMeterLedger"
-  PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" serve bluecollar "$bluecollarMeterPort" &
-  PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" serve pi "$piMeterPort" &
-  PROMPT_METER_LEDGER="$promptMeterLedger" "$(dirname "$0")/prompt-meter" serve codex "$codexMeterPort" &
+  PROMPT_METER_LEDGER="$promptMeterLedger" BENCH_ENDPOINT="$endpointOrigin" "$(dirname "$0")/prompt-meter" serve bluecollar "$bluecollarMeterPort" &
+  PROMPT_METER_LEDGER="$promptMeterLedger" BENCH_ENDPOINT="$endpointOrigin" "$(dirname "$0")/prompt-meter" serve pi "$piMeterPort" &
+  PROMPT_METER_LEDGER="$promptMeterLedger" BENCH_ENDPOINT="$endpointOrigin" "$(dirname "$0")/prompt-meter" serve codex "$codexMeterPort" &
   sleep 1
 }
 
@@ -119,15 +121,15 @@ runHarness() {
   echo "== $harnessName on $dataset with $model =="
   PYTHONPATH="$PWD" \
   BLUECOLLAR_BINARY=/tmp/bluecollar \
-  BLUECOLLAR_MODEL_ENDPOINT="http://127.0.0.1:$bluecollarMeterPort/api/v1" \
+  BLUECOLLAR_MODEL_ENDPOINT="http://127.0.0.1:$bluecollarMeterPort$endpointPath" \
   BLUECOLLAR_MODEL="$model" \
-  BLUECOLLAR_API_KEY="$OPENROUTER_API_KEY" \
-  PI_BASE_URL="http://host.docker.internal:$piMeterPort/api/v1" \
+  BLUECOLLAR_API_KEY="$BENCH_API_KEY" \
+  PI_BASE_URL="http://host.docker.internal:$piMeterPort$endpointPath" \
   PI_MODEL_ID="$model" \
-  PI_API_KEY="$OPENROUTER_API_KEY" \
-  CODEX_BASE_URL="http://host.docker.internal:$codexMeterPort/api/v1" \
+  PI_API_KEY="$BENCH_API_KEY" \
+  CODEX_BASE_URL="http://host.docker.internal:$codexMeterPort$endpointPath" \
   CODEX_MODEL_ID="$model" \
-  CODEX_API_KEY="$OPENROUTER_API_KEY" \
+  CODEX_API_KEY="$BENCH_API_KEY" \
     uvx --from terminal-bench --with 'litellm==1.77.0' tb run \
       ${datasetArguments[@]+"${datasetArguments[@]}"} \
       --agent-import-path "$importPath" \
