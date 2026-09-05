@@ -1520,3 +1520,53 @@ func TestATruncatedRouterAnswerGetsOneCorrectedAsk(t *testing.T) {
 		t.Fatalf("expected the corrected second ask to carry the decision, got %+v after %d asks", decision, languageModel.requestCount)
 	}
 }
+
+func TestTurnRouterDoublesBudgetForOneLengthCorrection(t *testing.T) {
+	languageModel := &turnRouterCorrectionLanguageModel{
+		errorsByCall: map[int]error{0: turnRouterStructuredCorrectionError{
+			message: "truncated",
+			correction: model.StructuredOutputCorrection{
+				Code: "provider_response_invalid",
+				Diagnostic: model.StructuredOutputDiagnostic{
+					Category:     model.StructuredOutputDiagnosticFinishReason,
+					FinishReason: model.StructuredOutputDiagnosticFinishLength,
+				},
+			},
+		}},
+		contents: []string{"", `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low"}`},
+	}
+	router := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+	if _, errorValue := router.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(languageModel.requests) != 2 || languageModel.requests[1].GenerationOptions.MaxTokens == nil || *languageModel.requests[1].GenerationOptions.MaxTokens != turnRouterMaxTokens*2 {
+		t.Fatalf("expected one length correction at double budget, got %+v", languageModel.requests)
+	}
+}
+
+func TestTurnRouterStopsAfterASecondLengthCorrection(t *testing.T) {
+	lengthCorrection := turnRouterStructuredCorrectionError{
+		message: "truncated",
+		correction: model.StructuredOutputCorrection{
+			Code: "provider_response_invalid",
+			Diagnostic: model.StructuredOutputDiagnostic{
+				Category:     model.StructuredOutputDiagnosticFinishReason,
+				FinishReason: model.StructuredOutputDiagnosticFinishLength,
+			},
+		},
+	}
+	languageModel := &turnRouterCorrectionLanguageModel{errorsByCall: map[int]error{0: lengthCorrection, 1: lengthCorrection}}
+	_, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"})
+	if errorValue == nil || len(languageModel.requests) != 2 {
+		t.Fatalf("expected one bounded correction and terminal failure, calls=%d error=%v", len(languageModel.requests), errorValue)
+	}
+}
+
+func TestTurnRouterLengthCorrectionCapsBudget(t *testing.T) {
+	maxTokens := 4000
+	request := model.StructuredResponseRequest{GenerationOptions: model.GenerationOptions{MaxTokens: &maxTokens}}
+	increaseTurnRouterTokenBudget(&request)
+	if request.GenerationOptions.MaxTokens == nil || *request.GenerationOptions.MaxTokens != 6400 {
+		t.Fatalf("expected the correction budget to cap at 6400, got %+v", request.GenerationOptions.MaxTokens)
+	}
+}

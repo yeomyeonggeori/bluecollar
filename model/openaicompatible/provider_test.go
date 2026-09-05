@@ -94,3 +94,20 @@ func TestReplayedReasoningGoesBackIntoTheFieldItCameFrom(t *testing.T) {
 		t.Fatal("only the assistant's own messages carry its reasoning")
 	}
 }
+
+func TestLengthFinishReasonIsARecoverableStructuredOutputError(t *testing.T) {
+	for _, toolCalls := range []string{"", `,"tool_calls":[{"id":"c1","type":"function","function":{"name":"answer","arguments":"{\"partial\":"}}]`} {
+		responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":""` + toolCalls + `},"finish_reason":"length"}],"usage":{"prompt_tokens":7,"completion_tokens":1600,"total_tokens":1607}}`)
+		response, errorValue := decodeCompletion(responseBody, "any/model")
+		if errorValue == nil {
+			t.Fatal("a length finish must never expose partial structured output as executable")
+		}
+		if response.FinishReason != "length" || response.Usage.CompletionTokens != 1600 {
+			t.Fatalf("truncation metadata was lost: %+v", response)
+		}
+		correction, isCorrectable := model.StructuredOutputCorrectionFromError(errorValue)
+		if !isCorrectable || correction.Code != "provider_response_invalid" || correction.Diagnostic.FinishReason != model.StructuredOutputDiagnosticFinishLength {
+			t.Fatalf("expected a typed length correction, got %+v", correction)
+		}
+	}
+}

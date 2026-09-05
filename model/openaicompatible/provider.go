@@ -404,18 +404,46 @@ func decodeCompletion(responseBody []byte, modelName string) (model.StructuredRe
 	if len(decoded.Choices) == 0 {
 		return model.StructuredResponse{}, errors.New("model endpoint returned no choices")
 	}
-	arguments, hasToolCall := firstToolCallArguments(decoded.Choices[0].Message.ToolCalls)
-	if !hasToolCall {
-		return model.StructuredResponse{}, errors.New("model answered " + decoded.Choices[0].FinishReason + " with prose instead of calling the schema it was given: " + truncated(decoded.Choices[0].Message.Content))
-	}
-	return model.StructuredResponse{
+	choice := decoded.Choices[0]
+	response := model.StructuredResponse{
 		Transport:    "http",
 		ProviderName: "openai-compatible",
 		ModelName:    modelName,
-		Content:      arguments,
-		FinishReason: decoded.Choices[0].FinishReason,
+		FinishReason: choice.FinishReason,
 		Usage:        decoded.Usage.measured(),
-	}, nil
+	}
+	if choice.FinishReason == string(model.StructuredOutputDiagnosticFinishLength) {
+		return response, completionTruncatedError{}
+	}
+	arguments, hasToolCall := firstToolCallArguments(choice.Message.ToolCalls)
+	if !hasToolCall {
+		return response, errors.New("model answered " + choice.FinishReason + " with prose instead of calling the schema it was given: " + truncated(choice.Message.Content))
+	}
+	response.Content = arguments
+	return response, nil
+}
+
+type completionTruncatedError struct{}
+
+func (completionTruncatedError) Error() string {
+	return "model response ended because the completion length limit was reached"
+}
+
+func (completionTruncatedError) StructuredOutputCorrection() (model.StructuredOutputCorrection, bool) {
+	return model.StructuredOutputCorrection{
+		Code: "provider_response_invalid",
+		Diagnostic: model.StructuredOutputDiagnostic{
+			Category:     model.StructuredOutputDiagnosticFinishReason,
+			FinishReason: model.StructuredOutputDiagnosticFinishLength,
+		},
+	}, true
+}
+
+func (completionTruncatedError) StructuredOutputDiagnostic() (model.StructuredOutputDiagnostic, bool) {
+	return model.StructuredOutputDiagnostic{
+		Category:     model.StructuredOutputDiagnosticFinishReason,
+		FinishReason: model.StructuredOutputDiagnosticFinishLength,
+	}, true
 }
 
 type toolCall struct {
