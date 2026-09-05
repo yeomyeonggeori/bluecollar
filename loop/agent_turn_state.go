@@ -815,18 +815,12 @@ func DecideAgentAction(ctx context.Context, languageModel model.LanguageModelPro
 
 func decideAgentActionWithChat(ctx context.Context, chatCompleter model.ChatCompleter, request model.ChatCompletionRequest, state agentTaskState) (agentAction, error) {
 	currentRequest := request
-	thoughtSoFar := ""
 	for correctionCount := 0; ; correctionCount++ {
 		response, errorValue := chatCompleter.GenerateChatCompletion(ctx, currentRequest)
 		if errorValue == nil {
-			if thoughtRequest, thought, isThought := requestAfterThinkingAloud(currentRequest, response, correctionCount); isThought {
-				currentRequest = thoughtRequest
-				thoughtSoFar = joinedAssistantText(thoughtSoFar, thought)
-				continue
-			}
 			action, parseError := parseNativeAgentActionResponse(response, currentRequest.Tools)
 			if parseError == nil {
-				return actionCarryingThought(action, thoughtSoFar), nil
+				return action, nil
 			}
 			retryRequest, canRetry := correctedAgentActionRequest(currentRequest, nativeActionParseCorrection(parseError), state, correctionCount)
 			if !canRetry {
@@ -1191,49 +1185,18 @@ func nativeTerminalActionParameters(document map[string]json.RawMessage) (json.R
 	return json.Marshal(document)
 }
 
-func requestAfterThinkingAloud(currentRequest model.ChatCompletionRequest, response model.ChatCompletionResponse, correctionCount int) (model.ChatCompletionRequest, string, bool) {
-	if correctionCount >= maximumAgentActionCorrectionCount {
-		return model.ChatCompletionRequest{}, "", false
-	}
-	thought := strings.TrimSpace(response.Message.Content)
-	if len(response.Message.ToolCalls) > 0 || thought == "" {
-		return model.ChatCompletionRequest{}, "", false
-	}
-	thoughtRequest := currentRequest
-	thoughtRequest.Messages = append(append([]model.ChatCompletionMessage{}, currentRequest.Messages...), model.ChatCompletionMessage{
-		Role:           "assistant",
-		Content:        thought,
-		Reasoning:      response.Message.Reasoning,
-		ReasoningField: response.Message.ReasoningField,
-	})
-	thoughtRequest.ToolChoice = json.RawMessage(`"required"`)
-	return thoughtRequest, thought, true
-}
-
-func actionCarryingThought(action agentAction, thought string) agentAction {
-	if thought == "" {
-		return action
-	}
-	action.AssistantText = joinedAssistantText(thought, action.AssistantText)
-	return action
-}
-
-func joinedAssistantText(first string, second string) string {
-	if strings.TrimSpace(first) == "" {
-		return strings.TrimSpace(second)
-	}
-	if strings.TrimSpace(second) == "" {
-		return strings.TrimSpace(first)
-	}
-	return strings.TrimSpace(first) + "\n\n" + strings.TrimSpace(second)
-}
-
 func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools []model.ChatCompletionTool) (agentAction, error) {
-	if response.FinishReason != "tool_calls" {
-		return turnActionDocument{}, fmt.Errorf("native agent action chat finish reason is %q", response.FinishReason)
-	}
 	if response.Message.Role != "assistant" {
 		return turnActionDocument{}, errors.New("native agent action chat message must be assistant")
+	}
+	if response.FinishReason == "stop" && len(response.Message.ToolCalls) == 0 && strings.TrimSpace(response.Message.Content) != "" {
+		action := completionStateFinishDocument(CompletionState{}, strings.TrimSpace(response.Message.Content))
+		action.ModelReasoning = response.Message.Reasoning
+		action.ModelReasoningField = response.Message.ReasoningField
+		return action, nil
+	}
+	if response.FinishReason != "tool_calls" {
+		return turnActionDocument{}, fmt.Errorf("native agent action chat finish reason is %q", response.FinishReason)
 	}
 	if len(response.Message.ToolCalls) == 0 {
 		return turnActionDocument{}, errors.New("native agent action chat expected at least one tool call")
