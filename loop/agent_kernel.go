@@ -156,6 +156,7 @@ func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request
 		SkipSkillSelection:         request.SkipSkillSelection,
 		TaskLevel:                  request.TaskLevel,
 		TurnStartedAt:              request.TurnStartedAt,
+		ExecutionStartedAt:         request.ExecutionStartedAt,
 		EnvironmentNow:             request.EnvironmentNow,
 		CarriedOutCalls:            request.CarriedOutCalls,
 		CheckpointSender:           request.CheckpointSender,
@@ -228,7 +229,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	intakeDecision := turnDecision.IntakeDecision()
 	intakeDecision = promoteArtifactTaskLevelForRequest(intakeRequest, intakeDecision)
 	turnOptions := agentKernel.turnOptionsForIntakeDecision(responseContext, intakeDecision)
-	taskBudget := newTurnBudgetContext(responseContext, request.TurnStartedAt, request.IsRuntimeRestartResume, requestReceivedAt, turnOptions)
+	taskBudget := newTurnBudgetContext(responseContext, executionBudgetStartedAt(request), request.IsRuntimeRestartResume, requestReceivedAt, turnOptions)
 	defer taskBudget.cancel()
 	taskContext := taskBudget.workContext
 	request.TurnStartedAt = taskBudget.turnStartedAt
@@ -794,9 +795,11 @@ func (agentKernel *AgentKernel) completeIntakeElapsed(turnBudget turnBudgetConte
 		taskRun.FailureReason = "max_elapsed"
 		blockedTaskRun = taskRun
 	}
-	failureNotice, noticeStatus := agentKernel.generateIntakeElapsedNotice(turnBudget.totalContext, request, taskRun.TaskRunID)
+	failureReport := buildIntakeFailureReport(turnBudget, request, intakeDecision, taskRun.TaskRunID)
+	failureNotice, noticeStatus := agentKernel.generateIntakeElapsedNotice(turnBudget.totalContext, failureReport)
 	replyStatus := limitReplyStatus{Source: noticeStatus.Source, Reason: noticeStatus.Reason, TextRecoveryError: noticeStatus.TextRecoveryError}
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(replyStatus))
+	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody("limit", failureReport, noticeStatus)))
 	blockedTaskRun = persistTaskRunResult(agentKernel.taskRunService, blockedTaskRun, failureNotice.SendableMessage())
 	agentKernel.appendGoalLifecycleEvent(blockedTaskRun, activeGoalFromIntakeOnly(taskRun.TaskRunID, request, intakeDecision, agentcontract.TaskStatusBlocked))
 	return AgentTurnResult{
@@ -807,16 +810,7 @@ func (agentKernel *AgentKernel) completeIntakeElapsed(turnBudget turnBudgetConte
 	}
 }
 
-func (agentKernel *AgentKernel) generateIntakeElapsedNotice(responseContext context.Context, request AgentRequest, taskRunID string) (FailureNotice, FailureNoticeGenerationStatus) {
-	report := FailureReport{
-		Phase:              "limit",
-		StopReason:         "max_elapsed",
-		SafeFailureSummary: elapsedLimitRawErrorSummary,
-		RawError:           elapsedLimitRawErrorSummary,
-		OriginalRequest:    request.Prompt,
-		ResponseLanguage:   request.ResponseLanguage,
-		DiagnosticEventID:  taskRunID + ":intake_limit",
-	}
+func (agentKernel *AgentKernel) generateIntakeElapsedNotice(responseContext context.Context, report FailureReport) (FailureNotice, FailureNoticeGenerationStatus) {
 	return (FailureNoticeGenerator{LanguageModel: agentKernel.languageModel}).Generate(responseContext, report)
 }
 

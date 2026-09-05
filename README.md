@@ -121,6 +121,11 @@ from whichever limit arrives first — step overflow, the elapsed wall, or a dea
 mid-call — and spends exactly once. A wall the host set explicitly is the host's number and is
 never escalated away.
 
+A host can mark `ExecutionStartedAt` after its bounded routing phase. The execution
+budget starts there, while the caller's deadline still caps the run. Restart recovery
+keeps its existing clock. Intake stops retain the expected outcome and report the
+planned interpretation separately from recorded execution and earlier results.
+
 **Progress is an output the model has not read before.** The stall watchdog does not count tool
 calls; it counts novel results. A call whose output is byte-identical to one already in the
 ledger adds nothing, whoever made it and however the arguments differed, and three consecutive

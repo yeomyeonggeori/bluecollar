@@ -27,11 +27,12 @@ type TurnRouter struct {
 
 const turnRouterMaxTokens = 1600
 
-const taskRecordRoutingInstruction = "Treat requests to add, update, list, or delete a task or reminder as management of the task record, not execution of the future work described in its title or notes. A task title, description, and any explicitly requested due date are sufficient to add the record. Do not ask for files, credentials, or other inputs that would only be needed when performing that future task. Editing a record's own fields — title, date, status, notes — with values the message already states is executable as written: route it as a bounded maintenance_task, never to clarify or needs_confirmation, and never treat the edit itself as approval-gated."
+const taskRecordRoutingInstruction = "Treat requests to add, update, list, or delete a task or reminder as management of the task record, not execution of the future work described in its title or notes. A task title, description, and any explicitly requested due date are sufficient to add the record. Do not ask for files, credentials, or other inputs that would only be needed when performing that future task. Editing a record's own fields — title, date, status, notes — with values the message already states is executable as written: route it as a bounded maintenance_task, never to clarify or needs_confirmation, and never treat the edit itself as approval-gated. A request to assess or choose field values delegates judgment: start by reading the records and registered choices or definitions. Do not require the requester to supply the values before that inspection, and do not invent choices absent from the records."
 const clarificationReviewInstruction = "Review the previous clarification decision. Use clarify with needs_confirmation only when essential user input is missing. Approval for risky, destructive, paid, or externally visible work is handled after routing, so never ask for approval here. If the request is executable as written, return start_task with bounded_task. If essential input is truly missing, keep clarify and ask exactly for that input."
 
 const turnRouterSystemPrompt = "You are a channel-agnostic turn router and task intake planner. Choose the route for the latest user message and classify the task shape. Keep terminal decisions consistent: needs_confirmation uses route=clarify and taskShape=approval_gated_task; unsupported uses route=give_up and taskShape=immediate_reply; consume uses classification=quick_reply and taskShape=immediate_reply." +
 	"\n\nLatest message authority: The latest user message is authoritative. Prior conversation may be used only when it helps interpret whether the latest message continues, revises, asks about, cancels, replaces an active task, or is a bare assistant mention requesting a response to recent context. Do not carry stale subjects, tools, or artifact formats into a self-contained new request." +
+	"\n\nResolve an omitted subject in a follow-up from the requester's preceding instruction. An additional attribute can belong to the same records or artifact already under discussion; compare it with the available tools' fields before choosing a different domain. Do not invent a subject change from an ambiguous word alone, or retain the old subject when the latest request explicitly names a new one. When missing facts or available choices can be read through a tool, route that lookup before asking the requester. Do not invent values; ask only if the retrieved evidence still leaves an essential choice unresolved." +
 	"\n\nWhat this agent said earlier is its own, not the requester's. A subject it named, a title it guessed at, or a thing it reported failing to find is never what the latest message is about unless the requester's own words say so. Take the subject from what the requester wrote." +
 	"\n\nRouting: Use quick_reply for direct answers that may answer directly or use a small useful read-only or computation tool once, including greetings, jokes, playful office banter, capability questions, arithmetic, short synthetic verification probes, opinions, casual recommendations, brainstorming, and answers available from common knowledge or visible conversation context. research_task requires actual information acquisition from an external or private source, or synthesis across source material. Use bounded_task for executable tool work. Use maintenance_task or approval_gated_task only for work that changes state; use research_task for private or external reads and lookups, and immediate_reply for tool-free answers. Use needs_confirmation only when essential user input is missing; approval for risky, destructive, paid, or externally visible work is handled after routing. If the assistant can choose a useful answer from its own judgment, common knowledge, or visible context, use immediate_reply even when the user calls it a recommendation. Do not require a preference merely to improve an answer when a reasonable answer can be given now. Do not ignore jokes or casual addressed remarks; answer like a concise coworker." +
 	"\n\nUnsupported: unsupported ONLY for requests that are pointless to even attempt — physically impossible or nonsensical (for example fetching a physical object), or plainly improper on their face such as revealing another person's password or private national ID number. unsupported is NOT a security or permission gate: the operating system enforces real permission at execution, so an action the requester lacks rights for simply fails there — never pre-refuse over permissions, just attempt it. Answer ordinary work needs such as a coworker's contact details, schedules, or documents rather than refusing. Use common sense; whenever the work could plausibly be done with terminal commands, skills, file tools, or capability operations, prefer bounded_task and attempt it." +
@@ -111,7 +112,7 @@ func (turnRouter TurnRouter) planWithLanguageModel(ctx context.Context, request 
 
 func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agentcontract.AgentRequest, messages []model.Message) (agentcontract.TurnDecision, error) {
 	initialRequest := turnRouterRequest(request, messages)
-	turnDecision, errorValue := turnRouter.generateTurnDecision(ctx, initialRequest)
+	turnDecision, errorValue := turnRouter.generateTurnDecision(ctx, initialRequest, turnRouterCallableToolNames(request))
 	if errorValue == nil {
 		return turnDecision, nil
 	}
@@ -130,7 +131,7 @@ func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agent
 	if shouldIncreaseCorrectionBudget(errorValue) {
 		increaseTurnRouterTokenBudget(&correctionRequest)
 	}
-	return turnRouter.generateTurnDecision(ctx, correctionRequest)
+	return turnRouter.generateTurnDecision(ctx, correctionRequest, turnRouterCallableToolNames(request))
 }
 
 func parseTurnDecision(content string) (agentcontract.TurnDecision, error) {
@@ -144,7 +145,28 @@ func parseTurnDecision(content string) (agentcontract.TurnDecision, error) {
 	return decision, nil
 }
 
-func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request model.StructuredResponseRequest) (agentcontract.TurnDecision, error) {
+func validateTurnDecisionToolNames(decision agentcontract.TurnDecision, availableToolNames []string) error {
+	availableToolNameSet := map[string]bool{}
+	for _, toolName := range availableToolNames {
+		availableToolNameSet[toolName] = true
+	}
+	unknownToolNames := []string{}
+	for _, toolName := range decision.InitialToolNames {
+		if !availableToolNameSet[toolName] {
+			unknownToolNames = appendUniqueStrings(unknownToolNames, toolName)
+		}
+	}
+	if len(unknownToolNames) == 0 {
+		return nil
+	}
+	availableTools := strings.Join(availableToolNames, ", ")
+	if availableTools == "" {
+		availableTools = "none"
+	}
+	return fmt.Errorf("initialToolNames contains unavailable tool names: %s; available tools: %s", strings.Join(unknownToolNames, ", "), availableTools)
+}
+
+func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request model.StructuredResponseRequest, availableToolNames []string) (agentcontract.TurnDecision, error) {
 	structuredResponse, errorValue := turnRouter.languageModel.GenerateStructuredResponse(ctx, request)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
@@ -152,6 +174,12 @@ func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request m
 	turnDecision, parseError := parseTurnDecision(structuredResponse.Content)
 	if parseError != nil {
 		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: parseError}
+	}
+	if validationError := validateTurnDecisionToolNames(turnDecision, availableToolNames); validationError != nil {
+		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: validationError}
+	}
+	if agentcontract.NormalizeIntakeClassification(turnDecision.Classification) == "" {
+		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: fmt.Errorf("classification %q is invalid; use a value from the schema's classification enum, which is distinct from taskShape", turnDecision.Classification)}
 	}
 	return turnDecision, nil
 }
@@ -506,7 +534,7 @@ func normalizeTurnDecisionFileRequirement(decision agentcontract.TurnDecision) a
 	return decision
 }
 
-func turnRouterSchema(request agentcontract.AgentRequest) string {
+func turnRouterCallableToolNames(request agentcontract.AgentRequest) []string {
 	callableToolNames := []string{}
 	if request.ToolSet != nil {
 		for _, toolName := range request.ToolSet.ListToolNames() {
@@ -521,6 +549,11 @@ func turnRouterSchema(request agentcontract.AgentRequest) string {
 			}
 		}
 	}
+	return callableToolNames
+}
+
+func turnRouterSchema(request agentcontract.AgentRequest) string {
+	callableToolNames := turnRouterCallableToolNames(request)
 	routeValues := []string{
 		string(agentcontract.TurnRouteContinueTask),
 		string(agentcontract.TurnRouteReviseTask),
