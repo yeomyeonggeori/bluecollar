@@ -162,7 +162,27 @@ func (turnRouter TurnRouter) generateStructuredResponse(ctx context.Context, req
 		Role:    "system",
 		Content: turnRouterCorrectionInstruction(correction),
 	})
+	if isLengthCorrection(correction) {
+		increaseTurnRouterTokenBudget(&correctionRequest)
+	}
 	return turnRouter.languageModel.GenerateStructuredResponse(ctx, correctionRequest)
+}
+
+func isLengthCorrection(correction model.StructuredOutputCorrection) bool {
+	return correction.Diagnostic.Category == model.StructuredOutputDiagnosticFinishReason &&
+		correction.Diagnostic.FinishReason == model.StructuredOutputDiagnosticFinishLength
+}
+
+func increaseTurnRouterTokenBudget(request *model.StructuredResponseRequest) {
+	if request.GenerationOptions.MaxTokens == nil {
+		return
+	}
+	const maximumTurnRouterCorrectionTokens = 6400
+	correctedMaxTokens := *request.GenerationOptions.MaxTokens * 2
+	if correctedMaxTokens > maximumTurnRouterCorrectionTokens {
+		correctedMaxTokens = maximumTurnRouterCorrectionTokens
+	}
+	request.GenerationOptions.MaxTokens = &correctedMaxTokens
 }
 
 func turnRouterRequest(request agentcontract.AgentRequest, messages []model.Message) model.StructuredResponseRequest {
