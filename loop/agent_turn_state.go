@@ -491,7 +491,7 @@ func shouldExposeFailAction(state agentTaskState) bool {
 		return true
 	}
 	if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt {
-		return !evaluateRecoveryAllowance(state.Observations, state.Options.RecoveryBudget).CanRecover
+		return true
 	}
 	if _, shouldContinue := recoverableWorkflowFailResult(state.Request, state.Observations); shouldContinue {
 		return false
@@ -1017,6 +1017,12 @@ func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMe
 	for _, observation := range observations {
 		toolName := strings.TrimSpace(observation.Tool)
 		result := toolResultForTranscript(observation)
+		if observation.Action != "continue" {
+			if result != "" {
+				transcript = append(transcript, model.ChatCompletionMessage{Role: "system", Content: "Runtime observation (" + observation.Action + "): " + result})
+			}
+			continue
+		}
 		if toolName == "" || result == "" {
 			continue
 		}

@@ -4,6 +4,15 @@ Repository-specific conventions for anyone — human or agent — changing this
 code. The code style itself lives in the parent host's AGENTS.md and applies
 here unchanged: no comments, no abbreviations, small functions, guard clauses.
 
+Recovery allowances are ceilings. A model may stop with recorded failure facts while budget
+remains. A retry must address the observed cause or use an independent route. Prior assistant
+reports and inferred outcome contracts are hypotheses; recorded calls and effects carry the
+evidence, and the current intake may replace the old interpretation.
+Keep `fail` in the native action schema while failure debt exists, even when
+recovery allowances remain. Runtime guidance is a system observation, never an
+executed tool call. A live recovery test must verify the chosen action; a failed
+task caused by a provider error is not evidence that the model chose to stop.
+
 ## Working on this repository
 
 Nothing lands on `main` by direct push. Branch, open a pull request, let the

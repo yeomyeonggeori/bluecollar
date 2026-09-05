@@ -1899,6 +1899,7 @@ func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T)
 
 func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 	observation := turnObservation{
+		Action:        "continue",
 		ObservationID: "obs-004",
 		Tool:          toolcontract.ShellToolName,
 		AssistantText: "The contacts list has no venmo field, so I have to cross-reference the venmo account list instead.",
@@ -1913,7 +1914,7 @@ func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 }
 
 func TestATranscriptEntryWithNoReasoningCarriesNone(t *testing.T) {
-	observation := turnObservation{ObservationID: "obs-005", Tool: toolcontract.ShellToolName}
+	observation := turnObservation{ObservationID: "obs-005", Action: "continue", Tool: toolcontract.ShellToolName}
 	observation.Output.Content = "ok"
 
 	transcript := toolCallTranscript([]turnObservation{observation})

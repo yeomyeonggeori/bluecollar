@@ -314,6 +314,9 @@ func buildLimitObservationSummary(observations []turnObservation) string {
 func buildFailureObservationSummary(observations []turnObservation) string {
 	lines := []string{}
 	for _, observation := range observations {
+		if observation.Action == "recovery_guidance" {
+			continue
+		}
 		content := strings.TrimSpace(observation.ContentText())
 		if observation.Failed() {
 			content = firstNonEmptyString(summarizeStructuredFailure(observation), content)

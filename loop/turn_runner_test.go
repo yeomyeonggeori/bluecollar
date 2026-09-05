@@ -699,18 +699,17 @@ func TestActionSchemaRequiresFailureResolutionWhenRecoveryIsExhausted(t *testing
 	}
 	failVariant := actionSchemaVariant(t, schemaDocument, "fail")
 	failRequired := stringSliceFromAny(failVariant["required"])
-	for _, fieldName := range []string{"reason", "goalStatus", "goalSatisfied", "failureResolution", "usedFailureFacts"} {
+	for _, fieldName := range []string{"reason", "goalStatus", "message", "failureResolution", "usedFailureFacts"} {
 		if !containsString(failRequired, fieldName) {
 			t.Fatalf("expected fail schema to require %s, got %+v", fieldName, failRequired)
 		}
 	}
 	failProperties := mapFromAny(failVariant["properties"])
-	failGoalSatisfied := mapFromAny(failProperties["goalSatisfied"])
-	if failGoalSatisfied["type"] != "boolean" {
-		t.Fatalf("fail schema goalSatisfied must be a boolean, got %+v", failGoalSatisfied)
+	if _, hasGoalSatisfied := failProperties["goalSatisfied"]; hasGoalSatisfied {
+		t.Fatal("fail already declares a blocked goal; a second completion flag is redundant")
 	}
-	if _, hasEnum := failGoalSatisfied["enum"]; hasEnum {
-		t.Fatalf("fail schema goalSatisfied must not use a single-value boolean enum; gemini structured output rejects it, got %+v", failGoalSatisfied)
+	if message := mapFromAny(failProperties["message"]); message["type"] != "string" {
+		t.Fatalf("fail must carry the final user reply: %+v", message)
 	}
 	usedFailureFacts := mapFromAny(failProperties["usedFailureFacts"])
 	attempts := mapFromAny(mapFromAny(usedFailureFacts["properties"])["attempts"])
@@ -731,7 +730,7 @@ func TestContinueActionSchemaRequiresCompletionIntent(t *testing.T) {
 	}
 }
 
-func TestActionSchemaHidesFailWhileRecoveryBudgetRemains(t *testing.T) {
+func TestActionSchemaOffersFailureReportAndRecoveryWhileBudgetRemains(t *testing.T) {
 	toolRegistry := newTestToolSet([]string{"site_serve", "file_write"})
 	request := BuildAgentActionRequest(agentTaskState{
 		Request: AgentTurnRequest{ToolSet: toolRegistry, RequiredEvidenceTools: []string{"site_serve"}},
@@ -747,8 +746,8 @@ func TestActionSchemaHidesFailWhileRecoveryBudgetRemains(t *testing.T) {
 		}},
 	})
 	schemaDocument := request.StructuredOutputSchema.Document
-	if actionSchemaHasVariant(t, schemaDocument, "fail") {
-		t.Fatalf("expected fail action to remain hidden while typed recovery is available, got %s", schemaDocument)
+	if !actionSchemaHasVariant(t, schemaDocument, "fail") {
+		t.Fatalf("expected an evidence-backed failure report to be available with budget remaining, got %s", schemaDocument)
 	}
 	if actionSchemaHasVariant(t, schemaDocument, "finish") {
 		t.Fatalf("expected finish action to remain hidden while required recovery evidence is missing, got %s", schemaDocument)

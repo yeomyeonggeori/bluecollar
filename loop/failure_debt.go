@@ -382,7 +382,7 @@ func maxToolCallCountWithRecovery(options TurnOptions, observations []turnObserv
 }
 
 func repeatedFailedAttemptObservation(toolSet *toolcontract.ToolSet, index int, failedObservation turnObservation, originalInstruction string) turnObservation {
-	content := "This exact tool/input/error fingerprint already failed. Do not repeat it. Change the input, use another route or adjacent tool, answer without tools using failureResolution=no_tool_fallback if enough context exists, or fail after recovery budget is exhausted."
+	content := "This exact tool/input/error fingerprint already failed. Do not repeat it. Recover only when evidence explains how a correction or another route addresses this failure. Answer without tools using failureResolution=no_tool_fallback if enough context exists, or fail with failureResolution=failure_report when no evidence-backed recovery is available. Budget is a ceiling, not a requirement to keep trying."
 	observation := recoveryGuidanceObservation(toolSet, index, failedObservation, originalInstruction)
 	observation.Action = "policy"
 	observation = withObservationContent(observation, content+" "+observation.ContentText())
@@ -393,7 +393,7 @@ func repeatedFailedAttemptObservation(toolSet *toolcontract.ToolSet, index int, 
 }
 
 func recoveryBudgetExhaustedObservation(toolSet *toolcontract.ToolSet, index int, failedObservation turnObservation, recoveryStep string, refusedToolName string, originalInstruction string) turnObservation {
-	content := "The recovery budget for " + strings.TrimSpace(recoveryStep) + " is exhausted. Choose another recovery step, answer without tools using failureResolution=no_tool_fallback if enough context exists, or return fail if no recovery tool budget remains."
+	content := "The recovery budget for " + strings.TrimSpace(recoveryStep) + " is exhausted. Use another route only when evidence supports it, answer without tools using failureResolution=no_tool_fallback if enough context exists, or return fail when no evidence-backed recovery is available."
 	observation := recoveryGuidanceObservation(toolSet, index, failedObservation, originalInstruction)
 	observation.Action = "policy"
 	observation = withObservationContent(observation, content+" "+observation.ContentText())
@@ -499,10 +499,12 @@ func failureReportMessage(observation turnObservation) string {
 func failureDebtActionContractMessage(facts failureReportFacts) string {
 	return strings.Join([]string{
 		"FailureDebt is active. The action schema now requires failureResolution.",
-		"If a RecoveryPacket is present, choose one of its allowedTools and satisfy evidenceNeeded before retrying the failed tool.",
+		"A fail action includes the final requester-language reply in message. State the blocker and any uncertain outcome concisely; validated failure facts let the runtime deliver it directly without further model calls.",
+		"Budget is a ceiling, not an instruction to spend it. Judge whether the failure can be repaired with the tools, permissions, and information available to you.",
+		"If a RecoveryPacket is present, use its facts and suggested tools to identify a repair or an independent route. Before another attempt, explain in the action reason which evidence makes it useful. Do not change titles, people, or other unrelated fields merely to produce a different input.",
 		"Do not repeat a failed tool while RecoveryPacket.forbiddenRepeats applies; use an inspect/edit/repair/change-route action first.",
 		"If you can answer directly without tools, return finish with failureResolution=no_tool_fallback and do not apologize or mention the failed tool unless the user asked about internals.",
-		"If you cannot answer directly and recovery budget is exhausted, return fail with failureResolution=failure_report and copy the relevant facts into usedFailureFacts.",
+		"If no evidence-backed recovery is available, return fail with failureResolution=failure_report immediately, even with budget remaining. Explain the blocker in reason and copy the recorded facts into usedFailureFacts. Do not invent a missing prerequisite or call an error temporary without evidence. A failed result check does not prove that a mutation was not saved; verify current state when possible and report uncertainty when it is not.",
 		"FailureReportFacts:\n" + marshalEventBody(facts),
 	}, "\n")
 }

@@ -141,12 +141,13 @@ func recoveryForbiddenRepeats(observation turnObservation) []string {
 }
 
 func recoveryEvidenceNeeded(observation turnObservation) []string {
-	evidence := []string{}
-	evidence = append(evidence, "different tool/input/route evidence")
-	return appendUniqueRecoveryStrings(evidence)
+	return []string{"Evidence that the proposed repair addresses the recorded failure or that an independent route can achieve the user's outcome. A different input alone is not evidence of recovery."}
 }
 
 func recoveryMustDoNext(observation turnObservation, failureClass string) []string {
+	if retryPolicyForObservation(observation) == retryPolicyDoNotRetry {
+		return []string{"Do not retry this failed route with changed inputs. Assess whether an independent route can complete the request; if none is supported by evidence, report the blocker now with the recorded facts."}
+	}
 	if observation.Failure != nil && len(observation.Failure.RecoveryHints) > 0 {
 		steps := []string{}
 		for _, recoveryHint := range observation.Failure.RecoveryHints {
@@ -171,7 +172,7 @@ func recoveryMustDoNext(observation turnObservation, failureClass string) []stri
 	case failureClassSchema, failureClassUserInput:
 		return []string{"Provide the missing or corrected input fields named above, then call the same tool again."}
 	default:
-		return []string{"Change tool input, route, or use an adjacent tool before retrying."}
+		return []string{"Diagnose the recorded failure before choosing a repair or independent route. Keep the user's intended entities and outcome intact. If no available action can address the cause, report the blocker now; do not spend the remaining budget on input variations."}
 	}
 }
 

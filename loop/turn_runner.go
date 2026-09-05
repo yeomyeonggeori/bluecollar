@@ -679,6 +679,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 					}
 					continue
 				}
+				if strings.TrimSpace(actionDocument.Message) != "" {
+					if result, handled, _ := agentTurnRunner.failTerminalNoToolsFailure(taskRun.TaskRunID, stepID, request, &state, actionDocument); handled {
+						return result, nil
+					}
+				}
 				agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReportFactsUsed, marshalEventBody(actionDocument.UsedFailureFacts))
 			}
 			reason := firstNonEmptyString(actionDocument.Reason, "agent reported failure")
@@ -2172,7 +2177,7 @@ func (agentTurnRunner *AgentTurnRunner) failTerminalNoToolsFailure(taskRunID str
 	if !failureReportResult.IsSatisfied {
 		return AgentTurnResult{}, false, failureReportResult.Message
 	}
-	reason := strings.TrimSpace(firstNonEmptyString(actionDocument.Reason, "agent reported failure"))
+	reason := strings.TrimSpace(firstNonEmptyString(actionDocument.Message, actionDocument.Reason, "agent reported failure"))
 	notice, failureReport, validationMessage := failureNoticeFromTerminalAction(request, taskRunID, reason, state.Observations, state.Attachments, state.ExecutionState)
 	if validationMessage != "" {
 		return AgentTurnResult{}, false, validationMessage
