@@ -76,6 +76,67 @@ func TestTurnRouterPreservesConsumeWithoutPlannedWork(t *testing.T) {
 	}
 }
 
+func TestTurnRouterRejectsUnknownInitialToolName(t *testing.T) {
+	content := `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","initialToolNames":["invented_tool"]}`
+	decision, parseError := parseTurnDecision(content)
+	errorValue := parseError
+	if errorValue == nil {
+		errorValue = validateTurnDecisionToolNames(decision, []string{"task_list"})
+	}
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "invented_tool") || !strings.Contains(errorValue.Error(), "task_list") {
+		t.Fatalf("expected unknown tool diagnostic with candidates, got %v", errorValue)
+	}
+}
+
+func TestTurnRouterCorrectsUnknownInitialToolName(t *testing.T) {
+	invalid := `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","initialToolNames":["invented_tool"]}`
+	valid := strings.Replace(invalid, "invented_tool", "task_list", 1)
+	languageModel := &turnRouterCorrectionLanguageModel{contents: []string{invalid, valid}}
+	decision, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{ToolSet: newTestCapabilityToolSet([]string{"task_list"})})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(languageModel.requests) != 2 || !slices.Contains(decision.InitialToolNames, "task_list") {
+		t.Fatalf("expected one informed correction to preserve valid tool, calls=%d decision=%+v", len(languageModel.requests), decision)
+	}
+	if !strings.Contains(joinMessageContent(languageModel.requests[1].Messages), "available tools: task_list") {
+		t.Fatal("expected correction to include the available tool candidate")
+	}
+}
+
+func TestTurnRouterCorrectsTaskShapeUsedAsClassification(t *testing.T) {
+	invalid := `{"route":"start_task","classification":"research_task","taskShape":"research_task","level":"low","initialToolNames":[]}`
+	valid := `{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","initialToolNames":[]}`
+	languageModel := &turnRouterCorrectionLanguageModel{contents: []string{invalid, valid}}
+	decision, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{})
+	if errorValue != nil || len(languageModel.requests) != 2 || decision.Classification != agentcontract.IntakeClassificationBoundedTask {
+		t.Fatalf("expected one correction of the invalid classification: %+v %v", decision, errorValue)
+	}
+}
+
+func TestTurnRouterAcceptsValidInitialToolName(t *testing.T) {
+	content := `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","initialToolNames":["task_list"]}`
+	decision, errorValue := parseTurnDecision(content)
+	if errorValue == nil {
+		errorValue = validateTurnDecisionToolNames(decision, []string{"task_list"})
+	}
+	if errorValue != nil || !slices.Contains(decision.InitialToolNames, "task_list") {
+		t.Fatalf("expected valid tool name, got decision=%+v error=%v", decision, errorValue)
+	}
+}
+
+func TestTurnRouterRejectsToolNameWithEmptyCatalog(t *testing.T) {
+	content := `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low","initialToolNames":["task_list"]}`
+	decision, parseError := parseTurnDecision(content)
+	errorValue := parseError
+	if errorValue == nil {
+		errorValue = validateTurnDecisionToolNames(decision, nil)
+	}
+	if errorValue == nil || !strings.Contains(errorValue.Error(), "available tools: none") {
+		t.Fatalf("expected empty catalog diagnostic, got %v", errorValue)
+	}
+}
+
 func TestTurnRouterPropagatesLanguageModelError(t *testing.T) {
 	_, errorValue := NewTurnRouter(failingLanguageModel{}, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "hello"})
 	if errorValue == nil || !strings.Contains(errorValue.Error(), "model failed") {

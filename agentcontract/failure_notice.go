@@ -18,20 +18,85 @@ const (
 )
 
 type FailureReport struct {
-	Phase               string   `json:"phase,omitempty"`
-	StepName            string   `json:"stepName,omitempty"`
-	StopReason          string   `json:"stopReason,omitempty"`
-	FailedOperation     string   `json:"failedOperation,omitempty"`
-	SafeFailureSummary  string   `json:"safeFailureSummary,omitempty"`
-	RawError            string   `json:"rawError,omitempty"`
-	CompletedSummary    string   `json:"completedSummary,omitempty"`
-	NextAction          string   `json:"nextAction,omitempty"`
-	OriginalRequest     string   `json:"originalRequest,omitempty"`
-	ResponseLanguage    string   `json:"responseLanguage,omitempty"`
-	ArtifactRequired    bool     `json:"artifactRequired,omitempty"`
-	HasAttachments      bool     `json:"hasAttachments,omitempty"`
-	AttachmentFilenames []string `json:"attachmentFilenames,omitempty"`
-	DiagnosticEventID   string   `json:"diagnosticEventID,omitempty"`
+	Phase               string              `json:"phase,omitempty"`
+	StepName            string              `json:"stepName,omitempty"`
+	StopReason          string              `json:"stopReason,omitempty"`
+	FailedOperation     string              `json:"failedOperation,omitempty"`
+	SafeFailureSummary  string              `json:"safeFailureSummary,omitempty"`
+	RawError            string              `json:"rawError,omitempty"`
+	CompletedSummary    string              `json:"completedSummary,omitempty"`
+	NextAction          string              `json:"nextAction,omitempty"`
+	OriginalRequest     string              `json:"originalRequest,omitempty"`
+	ResponseLanguage    string              `json:"responseLanguage,omitempty"`
+	ArtifactRequired    bool                `json:"artifactRequired,omitempty"`
+	HasAttachments      bool                `json:"hasAttachments,omitempty"`
+	AttachmentFilenames []string            `json:"attachmentFilenames,omitempty"`
+	DiagnosticEventID   string              `json:"diagnosticEventID,omitempty"`
+	IntakeFacts         *IntakeFailureFacts `json:"intakeFacts,omitempty"`
+}
+
+type IntakeFailureFacts struct {
+	PlannedInterpretation     string               `json:"plannedInterpretation,omitempty"`
+	UnverifiedUserFacingReply string               `json:"unverifiedUserFacingReply,omitempty"`
+	Classification            IntakeClassification `json:"classification,omitempty"`
+	TaskShape                 TaskShape            `json:"taskShape,omitempty"`
+	MaxIterationCount         int                  `json:"maxIterationCount,omitempty"`
+	MaxToolCallCount          int                  `json:"maxToolCallCount,omitempty"`
+	MaxElapsedSecond          int                  `json:"maxElapsedSecond,omitempty"`
+	UsedExecutionIterations   int                  `json:"usedExecutionIterations"`
+	UsedExecutionToolCalls    int                  `json:"usedExecutionToolCalls"`
+	ElapsedSecond             float64              `json:"elapsedSecond,omitempty"`
+	CarriedOutToolNames       []string             `json:"carriedOutToolNames,omitempty"`
+	PriorTaskID               string               `json:"priorTaskID,omitempty"`
+	PriorTaskStatus           string               `json:"priorTaskStatus,omitempty"`
+	PriorTaskResult           string               `json:"priorTaskResult,omitempty"`
+	PriorTaskFailureReason    string               `json:"priorTaskFailureReason,omitempty"`
+}
+
+type IntakeFailureReportInput struct {
+	OriginalRequest           string
+	ResponseLanguage          string
+	DiagnosticEventID         string
+	PlannedInterpretation     string
+	UnverifiedUserFacingReply string
+	Classification            IntakeClassification
+	TaskShape                 TaskShape
+	MaxIterationCount         int
+	MaxToolCallCount          int
+	MaxElapsedSecond          int
+	ElapsedSecond             float64
+	CarriedOutToolNames       []string
+	PriorTaskID               string
+	PriorTaskStatus           string
+	PriorTaskResult           string
+	PriorTaskFailureReason    string
+}
+
+func BuildIntakeFailureReport(input IntakeFailureReportInput) FailureReport {
+	return FailureReport{
+		Phase:              "limit",
+		StopReason:         "max_elapsed",
+		SafeFailureSummary: "Execution time limit reached during request intake; the execution loop did not begin.",
+		RawError:           ElapsedLimitRawErrorSummary,
+		OriginalRequest:    strings.TrimSpace(input.OriginalRequest),
+		ResponseLanguage:   input.ResponseLanguage,
+		DiagnosticEventID:  strings.TrimSpace(input.DiagnosticEventID),
+		IntakeFacts: &IntakeFailureFacts{
+			PlannedInterpretation:     strings.TrimSpace(input.PlannedInterpretation),
+			UnverifiedUserFacingReply: strings.TrimSpace(input.UnverifiedUserFacingReply),
+			Classification:            input.Classification,
+			TaskShape:                 input.TaskShape,
+			MaxIterationCount:         input.MaxIterationCount,
+			MaxToolCallCount:          input.MaxToolCallCount,
+			MaxElapsedSecond:          input.MaxElapsedSecond,
+			ElapsedSecond:             input.ElapsedSecond,
+			CarriedOutToolNames:       append([]string{}, input.CarriedOutToolNames...),
+			PriorTaskID:               strings.TrimSpace(input.PriorTaskID),
+			PriorTaskStatus:           strings.TrimSpace(input.PriorTaskStatus),
+			PriorTaskResult:           strings.TrimSpace(input.PriorTaskResult),
+			PriorTaskFailureReason:    strings.TrimSpace(input.PriorTaskFailureReason),
+		},
+	}
 }
 
 type FailureNoticeGenerationStatus struct {
@@ -44,7 +109,7 @@ type FailureNoticeGenerationStatus struct {
 	OriginalWasInvalid bool   `json:"originalWasInvalid,omitempty"`
 }
 
-const ElapsedLimitRawErrorSummary = "Execution limit reached; completed progress was saved for continuation."
+const ElapsedLimitRawErrorSummary = "Execution time limit reached."
 
 type FailureNoticeGenerator struct {
 	LanguageModel model.LanguageModelProvider
@@ -435,6 +500,9 @@ func BuildFailureNoticePrompt(report FailureReport) string {
 	}
 	if completedSummaryInstruction := failureNoticeCompletedSummaryInstruction(report); completedSummaryInstruction != "" {
 		sections = append(sections, completedSummaryInstruction)
+	}
+	if report.IntakeFacts != nil {
+		sections = append(sections, "For an intake stop, name the concrete work the router was preparing and state that this turn's execution loop did not start. plannedInterpretation and unverifiedUserFacingReply describe an unverified interpretation, never completed work; if they conflict with originalRequest, expose that misunderstanding plainly. Distinguish earlier results and carried-out approval calls from this turn's loop. Do not invent findings, saved progress, resumability, or missing user input. Do not end with a generic request to repeat the request.")
 	}
 	sections = append(sections,
 		"Never claim a retry or recovery is currently underway, and never promise the system will follow up on its own: nothing runs after this notice. Work continues only if the user replies or asks again.",

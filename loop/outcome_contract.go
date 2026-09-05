@@ -859,13 +859,33 @@ func activeGoalFromExecutionPlan(taskRunID string, executionPlan ExecutionPlan, 
 }
 
 func activeGoalFromIntakeOnly(taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
-	return ActiveGoal{
-		GoalID:              strings.TrimSpace(taskRunID),
-		TaskRunID:           strings.TrimSpace(taskRunID),
-		OriginalInstruction: strings.TrimSpace(request.Prompt),
-		CurrentObjective:    strings.TrimSpace(intakeDecision.Reason),
-		Status:              activeGoalStatusForTaskStatus(status),
+	goal := ActiveGoal{}
+	if canPreserveIntakeGoal(taskRunID, request) {
+		goal = request.ActiveGoal
 	}
+	goal.GoalID = strings.TrimSpace(taskRunID)
+	goal.TaskRunID = strings.TrimSpace(taskRunID)
+	goal.OriginalInstruction = firstNonEmptyString(goal.OriginalInstruction, request.Prompt)
+	goal.CurrentObjective = firstNonEmptyString(intakeDecision.Reason, goal.CurrentObjective)
+	goal.Status = activeGoalStatusForTaskStatus(status)
+	if !OutcomeContractHasRequirements(goal.OutcomeContract) {
+		goal.OutcomeContract.ExpectedResults = agentcontract.NormalizeExpectedResults(intakeDecision.ExpectedResults)
+		goal.OutcomeContract.RequiredAttachmentSuffixes = attachmentSuffixesForRequestedOutputFormats(intakeDecision.RequestedOutputFormats)
+	}
+	goal.SelectedToolNames = appendUniqueStrings(goal.SelectedToolNames, registeredToolNamesOnly(request.ToolSet, request.PinnedToolNames)...)
+	goal.SelectedSkillNames = appendUniqueStrings(goal.SelectedSkillNames, request.PinnedSkillNames...)
+	return goal
+}
+
+func canPreserveIntakeGoal(taskRunID string, request AgentRequest) bool {
+	if strings.TrimSpace(request.ActiveGoal.TaskRunID) != strings.TrimSpace(taskRunID) {
+		return false
+	}
+	if request.PrecomputedTurnDecision == nil {
+		return true
+	}
+	route := request.PrecomputedTurnDecision.Route
+	return route != TurnRouteStartTask && route != TurnRouteReviseTask
 }
 
 func activeGoalStatusForTaskStatus(status agentcontract.TaskStatus) ActiveGoalStatus {

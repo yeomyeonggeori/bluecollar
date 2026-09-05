@@ -287,6 +287,39 @@ func TestFailureNoticePromptDoesNotForceCompletedSummaryWithoutData(t *testing.T
 	}
 }
 
+func TestFailureNoticePromptIncludesTypedIntakeFactsWithoutClaimingProgress(t *testing.T) {
+	report := FailureReport{
+		Phase:              "limit",
+		StopReason:         "max_elapsed",
+		SafeFailureSummary: "Execution time limit reached during request intake; task execution did not begin.",
+		OriginalRequest:    "사업 분류를 설정해줘",
+		ResponseLanguage:   toolcontract.ResponseLanguageKorean,
+		IntakeFacts: &IntakeFailureFacts{
+			PlannedInterpretation:   "Assess the task classification",
+			Classification:          IntakeClassificationBoundedTask,
+			TaskShape:               TaskShapeMaintenanceTask,
+			MaxIterationCount:       20,
+			MaxToolCallCount:        13,
+			UsedExecutionIterations: 0,
+			UsedExecutionToolCalls:  0,
+		},
+	}
+
+	prompt := BuildFailureNoticePrompt(report)
+	if !strings.Contains(prompt, "intakeFacts") || !strings.Contains(prompt, "plannedInterpretation") {
+		t.Fatalf("expected typed intake facts in prompt, got %q", prompt)
+	}
+	if strings.Contains(prompt, "completed progress was saved") || strings.Contains(prompt, "completedSummary") {
+		t.Fatalf("expected prompt to avoid unsupported progress claim, got %q", prompt)
+	}
+}
+
+func TestElapsedLimitRawErrorSummaryDoesNotClaimSavedProgress(t *testing.T) {
+	if strings.Contains(ElapsedLimitRawErrorSummary, "saved") || strings.Contains(ElapsedLimitRawErrorSummary, "continuation") {
+		t.Fatalf("expected neutral elapsed limit summary, got %q", ElapsedLimitRawErrorSummary)
+	}
+}
+
 func TestFailureNoticeGeneratorFallsBackToRedactedRawError(t *testing.T) {
 	notice, status := (FailureNoticeGenerator{LanguageModel: failingLanguageModel{}}).Generate(context.Background(), FailureReport{
 		Phase:             "launch",
