@@ -115,8 +115,7 @@ func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agent
 		return agentcontract.TurnDecision{}, errorValue
 	}
 
-	var turnDecision agentcontract.TurnDecision
-	parseError := json.Unmarshal([]byte(structuredResponse.Content), &turnDecision)
+	turnDecision, parseError := parseTurnDecision(structuredResponse.Content)
 	if parseError == nil {
 		return turnDecision, nil
 	}
@@ -125,16 +124,24 @@ func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agent
 	}
 	correctionMessages := append(append([]model.Message{}, messages...), model.Message{
 		Role:    "system",
-		Content: "The previous answer could not be read as one complete JSON document for the schema: " + parseError.Error() + ". Answer again with exactly one complete JSON object and nothing else.",
+		Content: "The previous decision violates the turn contract: " + parseError.Error() + ". Reconsider that conflict and answer with exactly one complete JSON object for the schema.",
 	})
 	correctedResponse, correctionError := turnRouter.generateStructuredResponse(ctx, turnRouterRequest(request, correctionMessages))
 	if correctionError != nil {
 		return agentcontract.TurnDecision{}, parseError
 	}
-	if json.Unmarshal([]byte(correctedResponse.Content), &turnDecision) != nil {
-		return agentcontract.TurnDecision{}, parseError
+	return parseTurnDecision(correctedResponse.Content)
+}
+
+func parseTurnDecision(content string) (agentcontract.TurnDecision, error) {
+	var decision agentcontract.TurnDecision
+	if errorValue := json.Unmarshal([]byte(content), &decision); errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
 	}
-	return turnDecision, nil
+	if decision.Route == agentcontract.TurnRouteConsume && len(decision.InitialToolNames) > 0 {
+		return agentcontract.TurnDecision{}, errors.New("consume ends the turn without executing tools, but initialToolNames declares work still to do; select an executable route for that work, or remove the plan only if no work remains")
+	}
+	return decision, nil
 }
 
 func (turnRouter TurnRouter) generateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
@@ -583,7 +590,7 @@ func boundedNamedStringArraySchema(values []string) map[string]any {
 	if maximumItems > 16 {
 		maximumItems = 16
 	}
-	return map[string]any{"type": "array", "maxItems": maximumItems, "items": itemSchema}
+	return map[string]any{"type": "array", "description": "Tools the request still needs. consume performs no work and requires an empty list.", "maxItems": maximumItems, "items": itemSchema}
 }
 
 func expectedResultsSchema() map[string]any {
