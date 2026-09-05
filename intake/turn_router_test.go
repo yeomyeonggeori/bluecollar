@@ -47,6 +47,35 @@ func TestTurnRouterReturnsDisabledError(t *testing.T) {
 	}
 }
 
+func TestTurnRouterReconsidersConsumeWithPlannedRead(t *testing.T) {
+	invalid := `{"route":"consume","classification":"quick_reply","taskShape":"immediate_reply","level":"low","initialToolNames":["task_list"],"reason":"inspect the current records","userFacingReply":"","responseLanguage":"en"}`
+	corrected := strings.Replace(invalid, `"route":"consume"`, `"route":"answer_question"`, 1)
+	languageModel := &turnRouterCorrectionLanguageModel{contents: []string{invalid, corrected}}
+	decision := mustPlanTurn(t, NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}), agentcontract.AgentRequest{ToolSet: newTestCapabilityToolSet([]string{"task_list"})})
+	if decision.Route != agentcontract.TurnRouteAnswerQuestion || len(languageModel.requests) != 2 {
+		t.Fatalf("planned reads must receive one informed routing correction: %+v", decision)
+	}
+	if !slices.Contains(decision.InitialToolNames, "task_list") {
+		t.Fatal("the runtime must preserve the corrected work plan")
+	}
+}
+
+func TestTurnRouterRejectsRepeatedConsumeWorkConflict(t *testing.T) {
+	invalid := `{"route":"consume","classification":"quick_reply","taskShape":"immediate_reply","level":"low","initialToolNames":["read"]}`
+	languageModel := &turnRouterCorrectionLanguageModel{contents: []string{invalid, invalid}}
+	_, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{})
+	if errorValue == nil || len(languageModel.requests) != 2 {
+		t.Fatalf("an unresolved work conflict must fail after one correction: calls=%d error=%v", len(languageModel.requests), errorValue)
+	}
+}
+
+func TestTurnRouterPreservesConsumeWithoutPlannedWork(t *testing.T) {
+	decision, errorValue := parseTurnDecision(`{"route":"consume","initialToolNames":[]}`)
+	if errorValue != nil || decision.Route != agentcontract.TurnRouteConsume {
+		t.Fatalf("a pure acknowledgment remains valid: %+v %v", decision, errorValue)
+	}
+}
+
 func TestTurnRouterPropagatesLanguageModelError(t *testing.T) {
 	_, errorValue := NewTurnRouter(failingLanguageModel{}, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "hello"})
 	if errorValue == nil || !strings.Contains(errorValue.Error(), "model failed") {
