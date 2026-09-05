@@ -1,8 +1,11 @@
 package agentcontract
 
 import (
+	"encoding/json"
 	"strconv"
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type ActiveGoalStatus string
@@ -69,13 +72,24 @@ type ExpectedResult struct {
 }
 
 type PriorTaskContext struct {
-	TaskRunID              string          `json:"taskRunID,omitempty"`
-	Status                 string          `json:"status,omitempty"`
-	Prompt                 string          `json:"prompt,omitempty"`
-	Result                 string          `json:"result,omitempty"`
-	FailureReason          string          `json:"failureReason,omitempty"`
-	OutcomeContract        OutcomeContract `json:"outcomeContract,omitempty"`
-	RequestedOutputFormats []string        `json:"requestedOutputFormats,omitempty"`
+	TaskRunID              string             `json:"taskRunID,omitempty"`
+	Status                 string             `json:"status,omitempty"`
+	Prompt                 string             `json:"prompt,omitempty"`
+	Result                 string             `json:"result,omitempty"`
+	FailureReason          string             `json:"failureReason,omitempty"`
+	OutcomeContract        OutcomeContract    `json:"outcomeContract,omitempty"`
+	RequestedOutputFormats []string           `json:"requestedOutputFormats,omitempty"`
+	RecordedAttempts       []PriorTaskAttempt `json:"recordedAttempts,omitempty"`
+	OmittedAttemptCount    int                `json:"omittedAttemptCount,omitempty"`
+}
+
+type PriorTaskAttempt struct {
+	ObservationID    string                        `json:"observationID"`
+	Tool             string                        `json:"tool"`
+	ToolInput        json.RawMessage               `json:"toolInput,omitempty"`
+	ToolInputOmitted bool                          `json:"toolInputOmitted,omitempty"`
+	Failure          *toolcontract.ToolFailure     `json:"failure,omitempty"`
+	Effects          []toolcontract.ResourceEffect `json:"effects,omitempty"`
 }
 
 func OutcomeContractHasRequirements(contract OutcomeContract) bool {

@@ -38,6 +38,15 @@ func applyPriorTaskOutcomeRecovery(request AgentRequest, decision IntakeDecision
 		decision.PriorTaskReference = PriorTaskReferenceNone
 		return request, decision
 	}
+	if len(normalizeExpectedResults(decision.ExpectedResults)) > 0 {
+		request.ActiveGoal = ActiveGoal{
+			OriginalInstruction: firstNonEmptyString(priorTask.Prompt, request.Prompt),
+			CurrentObjective:    request.Prompt,
+			KnownContext:        priorTaskKnownContext(priorTask),
+			Status:              ActiveGoalStatusActive,
+		}
+		return request, decision
+	}
 	priorTask.RequestedOutputFormats = normalizeRequestedOutputFormats(appendUniqueStrings(priorTask.RequestedOutputFormats, decision.RequestedOutputFormats...))
 	contract := outcomeContractFromPriorTask(priorTask)
 	if !OutcomeContractHasRequirements(contract) {
@@ -89,11 +98,6 @@ func priorTaskKnownContext(priorTask PriorTaskContext) []string {
 	if priorTask.Status != "" {
 		values = append(values, "Prior task status: "+priorTask.Status)
 	}
-	if priorTask.FailureReason != "" {
-		values = append(values, "Prior task failure: "+priorTask.FailureReason)
-	}
-	if priorTask.Result != "" {
-		values = append(values, "Prior task result: "+priorTask.Result)
-	}
+	values = append(values, "Reassess the previous assistant's interpretation against the user's messages and recorded attempts in Prior task context. Its report is not an established fact.")
 	return values
 }
