@@ -110,27 +110,27 @@ func (turnRouter TurnRouter) planWithLanguageModel(ctx context.Context, request 
 }
 
 func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agentcontract.AgentRequest, messages []model.Message) (agentcontract.TurnDecision, error) {
-	structuredResponse, errorValue := turnRouter.generateStructuredResponse(ctx, turnRouterRequest(request, messages))
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
-
-	turnDecision, parseError := parseTurnDecision(structuredResponse.Content)
-	if parseError == nil {
+	initialRequest := turnRouterRequest(request, messages)
+	turnDecision, errorValue := turnRouter.generateTurnDecision(ctx, initialRequest)
+	if errorValue == nil {
 		return turnDecision, nil
 	}
-	if ctx.Err() != nil {
-		return agentcontract.TurnDecision{}, parseError
+	if errors.Is(errorValue, context.Canceled) || errors.Is(errorValue, context.DeadlineExceeded) || ctx.Err() != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
+	correctionInstruction, isCorrectable := turnRouterCorrectionInstructionForError(errorValue)
+	if !isCorrectable {
+		return agentcontract.TurnDecision{}, errorValue
 	}
 	correctionMessages := append(append([]model.Message{}, messages...), model.Message{
 		Role:    "system",
-		Content: "The previous decision violates the turn contract: " + parseError.Error() + ". Reconsider that conflict and answer with exactly one complete JSON object for the schema.",
+		Content: correctionInstruction,
 	})
-	correctedResponse, correctionError := turnRouter.generateStructuredResponse(ctx, turnRouterRequest(request, correctionMessages))
-	if correctionError != nil {
-		return agentcontract.TurnDecision{}, parseError
+	correctionRequest := turnRouterRequest(request, correctionMessages)
+	if shouldIncreaseCorrectionBudget(errorValue) {
+		increaseTurnRouterTokenBudget(&correctionRequest)
 	}
-	return parseTurnDecision(correctedResponse.Content)
+	return turnRouter.generateTurnDecision(ctx, correctionRequest)
 }
 
 func parseTurnDecision(content string) (agentcontract.TurnDecision, error) {
@@ -144,28 +144,49 @@ func parseTurnDecision(content string) (agentcontract.TurnDecision, error) {
 	return decision, nil
 }
 
-func (turnRouter TurnRouter) generateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request model.StructuredResponseRequest) (agentcontract.TurnDecision, error) {
 	structuredResponse, errorValue := turnRouter.languageModel.GenerateStructuredResponse(ctx, request)
-	if errorValue == nil {
-		return structuredResponse, nil
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
 	}
-	if errors.Is(errorValue, context.Canceled) || errors.Is(errorValue, context.DeadlineExceeded) || ctx.Err() != nil {
-		return model.StructuredResponse{}, errorValue
+	turnDecision, parseError := parseTurnDecision(structuredResponse.Content)
+	if parseError != nil {
+		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: parseError}
+	}
+	return turnDecision, nil
+}
+
+type turnRouterDecisionError struct {
+	cause error
+}
+
+func (errorValue turnRouterDecisionError) Error() string {
+	return errorValue.cause.Error()
+}
+
+func (errorValue turnRouterDecisionError) Unwrap() error {
+	return errorValue.cause
+}
+
+func turnRouterCorrectionInstructionForError(errorValue error) (string, bool) {
+	var decisionError turnRouterDecisionError
+	if errors.As(errorValue, &decisionError) {
+		return "The previous decision violates the turn contract: " + decisionError.cause.Error() + ". Reconsider that conflict and answer with exactly one complete JSON object for the schema.", true
 	}
 	correction, isCorrectable := model.StructuredOutputCorrectionFromError(errorValue)
 	if !isCorrectable {
-		return model.StructuredResponse{}, errorValue
+		return "", false
 	}
-	correctionRequest := request
-	correctionRequest.Messages = append([]model.Message{}, request.Messages...)
-	correctionRequest.Messages = append(correctionRequest.Messages, model.Message{
-		Role:    "system",
-		Content: turnRouterCorrectionInstruction(correction),
-	})
-	if isLengthCorrection(correction) {
-		increaseTurnRouterTokenBudget(&correctionRequest)
+	return turnRouterCorrectionInstruction(correction), true
+}
+
+func shouldIncreaseCorrectionBudget(errorValue error) bool {
+	var syntaxError *json.SyntaxError
+	if errors.As(errorValue, &syntaxError) {
+		return true
 	}
-	return turnRouter.languageModel.GenerateStructuredResponse(ctx, correctionRequest)
+	correction, isCorrectable := model.StructuredOutputCorrectionFromError(errorValue)
+	return isCorrectable && isLengthCorrection(correction)
 }
 
 func isLengthCorrection(correction model.StructuredOutputCorrection) bool {

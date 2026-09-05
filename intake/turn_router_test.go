@@ -1544,6 +1544,70 @@ func TestTurnRouterDoublesBudgetForOneLengthCorrection(t *testing.T) {
 	}
 }
 
+func TestTurnRouterDoublesBudgetForLocalJSONCorrection(t *testing.T) {
+	languageModel := &turnRouterCorrectionLanguageModel{contents: []string{
+		`{"route":"start_task"`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low"}`,
+	}}
+	router := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+	if _, errorValue := router.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(languageModel.requests) != 2 || languageModel.requests[1].GenerationOptions.MaxTokens == nil || *languageModel.requests[1].GenerationOptions.MaxTokens != turnRouterMaxTokens*2 {
+		t.Fatalf("expected local JSON correction at double budget, got %+v", languageModel.requests)
+	}
+}
+
+func TestTurnRouterDoesNotCorrectAfterProviderThenLocalJSONFailure(t *testing.T) {
+	lengthCorrection := turnRouterStructuredCorrectionError{
+		message: "truncated",
+		correction: model.StructuredOutputCorrection{
+			Code: "provider_response_invalid",
+			Diagnostic: model.StructuredOutputDiagnostic{
+				Category:     model.StructuredOutputDiagnosticFinishReason,
+				FinishReason: model.StructuredOutputDiagnosticFinishLength,
+			},
+		},
+	}
+	languageModel := &turnRouterCorrectionLanguageModel{
+		errorsByCall: map[int]error{0: lengthCorrection},
+		contents:     []string{"", `{"route":"start_task"`},
+	}
+	_, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"})
+	if errorValue == nil || len(languageModel.requests) != 2 {
+		t.Fatalf("expected one correction total, calls=%d error=%v", len(languageModel.requests), errorValue)
+	}
+}
+
+func TestTurnRouterDoesNotCorrectAfterLocalThenProviderLengthFailure(t *testing.T) {
+	lengthCorrection := turnRouterStructuredCorrectionError{
+		message: "truncated",
+		correction: model.StructuredOutputCorrection{
+			Code: "provider_response_invalid",
+			Diagnostic: model.StructuredOutputDiagnostic{
+				Category:     model.StructuredOutputDiagnosticFinishReason,
+				FinishReason: model.StructuredOutputDiagnosticFinishLength,
+			},
+		},
+	}
+	languageModel := &turnRouterCorrectionLanguageModel{
+		errorsByCall: map[int]error{1: lengthCorrection},
+		contents:     []string{`{"route":"start_task"`},
+	}
+	_, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"})
+	if errorValue == nil || len(languageModel.requests) != 2 {
+		t.Fatalf("expected one correction total, calls=%d error=%v", len(languageModel.requests), errorValue)
+	}
+}
+
+func TestTurnRouterStopsAfterASecondLocalJSONFailure(t *testing.T) {
+	languageModel := &turnRouterCorrectionLanguageModel{contents: []string{`{"route":"start_task"`, `{"route":"start_task"`}}
+	_, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"})
+	if errorValue == nil || len(languageModel.requests) != 2 {
+		t.Fatalf("expected one correction total and terminal parse failure, calls=%d error=%v", len(languageModel.requests), errorValue)
+	}
+}
+
 func TestTurnRouterStopsAfterASecondLengthCorrection(t *testing.T) {
 	lengthCorrection := turnRouterStructuredCorrectionError{
 		message: "truncated",
