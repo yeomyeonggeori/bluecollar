@@ -1962,23 +1962,18 @@ func TestReasoningIsCarriedAndStrippedFromTheToolInput(t *testing.T) {
 	}
 }
 
-type thinkThenActLanguageModel struct {
+type textFinalLanguageModel struct {
 	chatRequests []model.ChatCompletionRequest
+	content      string
 }
 
-func (languageModel *thinkThenActLanguageModel) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+func (languageModel *textFinalLanguageModel) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
 	languageModel.chatRequests = append(languageModel.chatRequests, request)
-	if len(languageModel.chatRequests) == 1 {
-		return model.ChatCompletionResponse{FinishReason: "stop", Message: model.ChatCompletionMessage{Role: "assistant", Content: "The contacts list has no venmo field, so I will cross-reference the venmo accounts."}}, nil
-	}
-	return model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{
-		Role:      "assistant",
-		ToolCalls: []model.ChatCompletionToolCall{{ID: "call-1", Type: "function", Function: model.ChatCompletionToolCallFunction{Name: toolcontract.ShellToolName, Arguments: `{"command":"ls"}`}}},
-	}}, nil
+	return model.ChatCompletionResponse{FinishReason: "stop", Message: model.ChatCompletionMessage{Role: "assistant", Content: languageModel.content}}, nil
 }
 
-func TestAModelThatThinksFirstThenActsCompletesOneStep(t *testing.T) {
-	languageModel := &thinkThenActLanguageModel{}
+func TestNativeTextFinalDoesNotForceAnotherModelCall(t *testing.T) {
+	languageModel := &textFinalLanguageModel{content: "462"}
 	request := model.ChatCompletionRequest{
 		Tools:      []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.ShellToolName}}},
 		ToolChoice: json.RawMessage(`"auto"`),
@@ -1986,21 +1981,26 @@ func TestAModelThatThinksFirstThenActsCompletesOneStep(t *testing.T) {
 
 	action, errorValue := decideAgentActionWithChat(context.Background(), languageModel, request, agentTaskState{})
 
-	if errorValue != nil || action.ToolName != toolcontract.ShellToolName {
-		t.Fatalf("a text-only response is the model thinking, and treating it as a malformed action threw the thought away: %v %+v", errorValue, action)
+	if errorValue != nil || action.Action != "finish" || action.Message != "462" || action.ToolName != "" {
+		t.Fatalf("native final text must enter completion validation: %v %+v", errorValue, action)
 	}
-	if len(languageModel.chatRequests) != 2 {
-		t.Fatalf("expected think then act in two calls, got %d", len(languageModel.chatRequests))
+	if len(languageModel.chatRequests) != 1 {
+		t.Fatalf("final text triggered %d model calls", len(languageModel.chatRequests))
 	}
-	secondRequest := languageModel.chatRequests[1]
-	lastMessage := secondRequest.Messages[len(secondRequest.Messages)-1]
-	if lastMessage.Role != "assistant" || !strings.Contains(lastMessage.Content, "cross-reference the venmo accounts") {
-		t.Fatalf("the thought has to be in front of the model when it acts: %+v", lastMessage)
+}
+
+func TestNativeTextFinalCannotBypassRequiredToolEvidence(t *testing.T) {
+	state := nativeAgentActionCompletionReadyState()
+	state.Observations = nil
+	action, errorValue := parseNativeAgentActionResponse(model.ChatCompletionResponse{
+		FinishReason: "stop",
+		Message:      model.ChatCompletionMessage{Role: "assistant", Content: "The task was added."},
+	}, nil)
+	if errorValue != nil {
+		t.Fatal(errorValue)
 	}
-	if string(secondRequest.ToolChoice) != `"required"` {
-		t.Fatalf("after thinking, the second sample acts: %s", secondRequest.ToolChoice)
-	}
-	if !strings.Contains(action.AssistantText, "cross-reference the venmo accounts") {
-		t.Fatalf("a thought that lives only in one request's messages is gone from every later transcript: %+v", action)
+	result := validateAgentActionCompletionGate(state, deriveToolUseRequirements(state.Request), action)
+	if result.Message == "" {
+		t.Fatal("plain text falsely completed a mutation without tool evidence")
 	}
 }

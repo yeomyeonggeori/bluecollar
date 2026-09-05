@@ -141,9 +141,10 @@ intake's expected results when present, so a correction can replace the previous
 An uncertain mutation outcome calls for inspecting current state before another write.
 
 **The transport carries everything the model produces.** Native tool calling with parallel calls,
-and the first sample of every step runs with `tool_choice: auto`: a text-only response is the
-model thinking, and the loop replays it as the model's own turn before asking again with
-`required`: typed actions without forbidding thought. The provider decodes `reasoning_content`
+and the first sample of every step runs with `tool_choice: auto`. An assistant response with
+`finish_reason: stop` and nonempty text enters the normal completion gate as a proposed final
+answer. Required effects and the completion judge still apply. The loop does not force another
+tool call after a final answer. The provider decodes `reasoning_content`
 and replays it in the field it arrived in, so a reasoning model keeps its working memory across
 steps. Tool schemas stay provider-portable: string enums, no `$ref`, no numeric-enum tricks that
 one endpoint accepts and the next rejects.
