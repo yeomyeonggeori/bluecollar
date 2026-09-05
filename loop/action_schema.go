@@ -156,9 +156,9 @@ func setQualityCriteriaActionSchema() map[string]any {
 func failActionSchema(hasFailureDebt bool) map[string]any {
 	properties := map[string]any{
 		"action":               enumStringSchema("fail"),
+		"message":              stringSchema(),
 		"reason":               stringSchema(),
 		"goalStatus":           enumValuesStringSchema([]string{"blocked"}),
-		"goalSatisfied":        booleanSchema(),
 		"executionStateUpdate": executionStateSchema(),
 	}
 	if hasFailureDebt {

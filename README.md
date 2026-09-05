@@ -128,10 +128,17 @@ nothings stop the run. There is no hand-kept list of which tools count: the rule
 
 **Failure is a budget, and each class has its own.** A failed call opens failure debt that the
 loop must either pay or report. Recovery spends from typed allowances (corrected retry,
-alternate route, adjacent tool, no-tool fallback), and a failure signature that repeats three
-times is structural: that route closes, whatever the remaining budget says. What survives to the
+alternate route, adjacent tool, no-tool fallback). These are ceilings: the model can report a
+blocker immediately when the available tools cannot repair it. Another attempt needs evidence
+that it addresses the recorded cause; changing an unrelated argument adds none. A failure
+signature that repeats three times closes that route, whatever the remaining budget says. What survives to the
 requester is written by the model for the person who asked, carrying what was tried; the raw
 error goes to the ledger, where raw things belong.
+
+When a user retries a previous task, its assistant-written report remains a hypothesis. The
+host supplies recorded calls, failures and effects separately. The loop uses the current
+intake's expected results when present, so a correction can replace the previous interpretation.
+An uncertain mutation outcome calls for inspecting current state before another write.
 
 **The transport carries everything the model produces.** Native tool calling with parallel calls,
 and the first sample of every step runs with `tool_choice: auto`: a text-only response is the

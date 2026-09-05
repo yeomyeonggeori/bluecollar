@@ -164,7 +164,7 @@ func completionRemainingWork(completionState CompletionState, fallback string) s
 func compactProgressObservations(observations []turnObservation) []ProgressObservation {
 	compactedObservations := []ProgressObservation{}
 	for _, observation := range observations {
-		if observation.Action == "checkpoint" {
+		if observation.Action == "checkpoint" || observation.Action == "recovery_guidance" {
 			continue
 		}
 		progressObservation := summarizeObservation(observation)
