@@ -202,15 +202,11 @@ func TestAgentKernelConsumeRouteSuppressesReply(t *testing.T) {
 
 func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
-	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
-		Route:            TurnRouteConsume,
-		Classification:   IntakeClassificationBoundedTask,
-		TaskShape:        TaskShapeResearchTask,
-		TaskLevel:        TaskLevelLow,
-		ResponseLanguage: "ko",
-		Reason:           "사용자가 명시적으로 업무 등록을 요청함",
-		InitialToolNames: []string{"task_add"},
-	}})
+	intakeModel := &sequenceLanguageModel{contents: []string{
+		`{"route":"consume","classification":"bounded_task","taskShape":"research_task","level":"low","responseLanguage":"ko","initialToolNames":["task_add"]}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","responseLanguage":"ko","initialToolNames":["task_add"]}`,
+	}}
+	agentKernel.UseIntakeLanguageModelProvider(intakeModel)
 
 	toolCallCount := 0
 	toolSet := newTestCapabilityToolSet([]string{"task_add", "task_list", "task_update"})
@@ -238,6 +234,15 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 	}
 	if result.ReplySuppressed {
 		t.Fatalf("expected a worked reply instead of a suppressed consume")
+	}
+	routerCallCount := 0
+	for _, request := range intakeModel.requests {
+		if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
+			routerCallCount++
+		}
+	}
+	if routerCallCount != 2 {
+		t.Fatalf("expected one informed intake correction, got %d router calls", routerCallCount)
 	}
 }
 
