@@ -1486,6 +1486,7 @@ type turnRouterCorrectionLanguageModel struct {
 	contexts     []context.Context
 	requests     []model.StructuredResponseRequest
 	contents     []string
+	responses    []model.StructuredResponse
 	errorsByCall map[int]error
 }
 
@@ -1499,6 +1500,9 @@ func (languageModel *turnRouterCorrectionLanguageModel) GenerateStructuredRespon
 	callIndex := len(languageModel.requests) - 1
 	if errorValue := languageModel.errorsByCall[callIndex]; errorValue != nil {
 		return model.StructuredResponse{}, errorValue
+	}
+	if callIndex < len(languageModel.responses) {
+		return languageModel.responses[callIndex], nil
 	}
 	if callIndex >= len(languageModel.contents) {
 		return model.StructuredResponse{}, nil
@@ -1619,6 +1623,47 @@ func TestTurnRouterDoublesBudgetForLocalJSONCorrection(t *testing.T) {
 	}
 	if len(languageModel.requests) != 2 || languageModel.requests[1].GenerationOptions.MaxTokens == nil || *languageModel.requests[1].GenerationOptions.MaxTokens != turnRouterMaxTokens*2 {
 		t.Fatalf("expected local JSON correction at double budget, got %+v", languageModel.requests)
+	}
+}
+
+func TestTurnRouterDoublesBudgetWhenInvalidDecisionUsesConfiguredBudget(t *testing.T) {
+	languageModel := &turnRouterCorrectionLanguageModel{responses: []model.StructuredResponse{
+		{Content: `{}`, FinishReason: "tool_calls", Usage: model.Usage{CompletionTokens: turnRouterMaxTokens}},
+		{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low"}`},
+	}}
+	router := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+	if _, errorValue := router.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(languageModel.requests) != 2 || languageModel.requests[1].GenerationOptions.MaxTokens == nil || *languageModel.requests[1].GenerationOptions.MaxTokens != turnRouterMaxTokens*2 {
+		t.Fatalf("expected exhausted invalid decision to receive a doubled correction budget, got %+v", languageModel.requests)
+	}
+}
+
+func TestTurnRouterKeepsBudgetForInvalidDecisionBelowConfiguredBudget(t *testing.T) {
+	languageModel := &turnRouterCorrectionLanguageModel{responses: []model.StructuredResponse{
+		{Content: `{}`, Usage: model.Usage{CompletionTokens: turnRouterMaxTokens - 1}},
+		{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low"}`},
+	}}
+	router := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+	if _, errorValue := router.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(languageModel.requests) != 2 || languageModel.requests[1].GenerationOptions.MaxTokens == nil || *languageModel.requests[1].GenerationOptions.MaxTokens != turnRouterMaxTokens {
+		t.Fatalf("expected semantic correction to preserve its budget, got %+v", languageModel.requests)
+	}
+}
+
+func TestTurnRouterDoesNotRetryValidDecisionAtConfiguredBudget(t *testing.T) {
+	languageModel := &turnRouterCorrectionLanguageModel{responses: []model.StructuredResponse{
+		{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low"}`, Usage: model.Usage{CompletionTokens: turnRouterMaxTokens}},
+	}}
+	decision, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if decision.Classification != agentcontract.IntakeClassificationBoundedTask || len(languageModel.requests) != 1 {
+		t.Fatalf("expected valid decision at the budget to be accepted once, got %+v after %d calls", decision, len(languageModel.requests))
 	}
 }
 

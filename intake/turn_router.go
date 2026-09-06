@@ -174,20 +174,38 @@ func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request m
 	}
 	turnDecision, parseError := parseTurnDecision(structuredResponse.Content)
 	if parseError != nil {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: parseError, content: structuredResponse.Content}
+		return agentcontract.TurnDecision{}, newTurnRouterDecisionError(parseError, structuredResponse, request)
 	}
 	if validationError := validateTurnDecisionToolNames(turnDecision, availableToolNames); validationError != nil {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
+		return agentcontract.TurnDecision{}, newTurnRouterDecisionError(validationError, structuredResponse, request)
 	}
 	if agentcontract.NormalizeIntakeClassification(turnDecision.Classification) == "" {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: fmt.Errorf("classification %q is invalid; use a value from the schema's classification enum, which is distinct from taskShape", turnDecision.Classification), content: structuredResponse.Content}
+		return agentcontract.TurnDecision{}, newTurnRouterDecisionError(
+			fmt.Errorf("classification %q is invalid; use a value from the schema's classification enum, which is distinct from taskShape", turnDecision.Classification),
+			structuredResponse,
+			request,
+		)
 	}
 	return turnDecision, nil
 }
 
+func newTurnRouterDecisionError(cause error, response model.StructuredResponse, request model.StructuredResponseRequest) turnRouterDecisionError {
+	return turnRouterDecisionError{
+		cause:                  cause,
+		content:                response.Content,
+		isTokenBudgetExhausted: hasStructuredResponseExhaustedBudget(response, request),
+	}
+}
+
+func hasStructuredResponseExhaustedBudget(response model.StructuredResponse, request model.StructuredResponseRequest) bool {
+	maximumTokens := request.GenerationOptions.MaxTokens
+	return maximumTokens != nil && *maximumTokens > 0 && response.Usage.CompletionTokens >= int64(*maximumTokens)
+}
+
 type turnRouterDecisionError struct {
-	cause   error
-	content string
+	cause                  error
+	content                string
+	isTokenBudgetExhausted bool
 }
 
 func (errorValue turnRouterDecisionError) Error() string {
@@ -219,6 +237,10 @@ func turnRouterCorrectionInstructionForError(errorValue error) (string, bool) {
 }
 
 func shouldIncreaseCorrectionBudget(errorValue error) bool {
+	var decisionError turnRouterDecisionError
+	if errors.As(errorValue, &decisionError) && decisionError.isTokenBudgetExhausted {
+		return true
+	}
 	var syntaxError *json.SyntaxError
 	if errors.As(errorValue, &syntaxError) {
 		return true
