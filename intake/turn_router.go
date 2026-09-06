@@ -38,7 +38,7 @@ const turnRouterSystemPrompt = "You are a channel-agnostic turn router and task 
 	"\n\nUnsupported: unsupported ONLY for requests that are pointless to even attempt — physically impossible or nonsensical (for example fetching a physical object), or plainly improper on their face such as revealing another person's password or private national ID number. unsupported is NOT a security or permission gate: the operating system enforces real permission at execution, so an action the requester lacks rights for simply fails there — never pre-refuse over permissions, just attempt it. Answer ordinary work needs such as a coworker's contact details, schedules, or documents rather than refusing. Use common sense; whenever the work could plausibly be done with terminal commands, skills, file tools, or capability operations, prefer bounded_task and attempt it." +
 	"\n\nSizing: Set level to the single difficulty tier that sizes both the model and the work budget: low for ordinary bounded work with a clear short outcome that normally produces one final user reply even if it needs a few tools; medium for multi-step work, research, or artifact generation where progress updates are useful; high for long, wide, deployment, or verification-heavy work. Do not choose above high; the runtime raises the tier on its own for website and presentation deliverables." +
 	"\n\nClarification: Use clarify when the latest request cannot be routed safely without a user choice. When route is clarify, provide clarificationQuestion and 2-5 clarificationOptions whenever finite choices are natural. Do not use clarify for a message that only mentions the assistant when recent visible context gives a clear topic. Do not invent clarificationOptions the message does not imply; offer finite options only when the message itself implies a finite choice." +
-	"\n\nConsume: Use consume for addressed messages that need no text reply; consume is delivered as an emoji reaction, not a text reply. Prefer consume with reactionEmojiName for lightweight acknowledgement. Never consume a message that asks the assistant to do, check, read, verify, or report anything: a question or work request always needs a worked text reply even when the outcome seems obvious, so route it as a task or quick_reply instead. For consume, put a concise natural fallback acknowledgement in userFacingReply; the runtime sends it only when a direct-message reaction cannot be delivered. For non-consume routes, set reactionEmojiName to null or omit it." +
+	"\n\nConsume: Use consume for addressed messages that need no text reply; consume is delivered as an emoji reaction, not a text reply. Prefer consume with reactionEmojiName for lightweight acknowledgement. Never consume a message that asks the assistant to do, check, read, verify, or report anything: a question or work request always needs a worked text reply even when the outcome seems obvious, so route direct text answers as answer_question or work as start_task with the appropriate taskShape. For consume, put a concise natural fallback acknowledgement in userFacingReply; the runtime sends it only when a direct-message reaction cannot be delivered. For non-consume routes, set reactionEmojiName to null or omit it." +
 	"\n\nPrior task reference: PriorTaskContext, when present, is a candidate previous task in the same conversation or reply target, not an active task. Set priorTaskReference=outcome_recovery only when the latest message asks to deliver, retry, continue, or revise that prior task's outcome. Set priorTaskReference=none for unrelated or self-contained requests, including a follow-up that asks to read, open, check, or summarize an artifact the prior task already delivered — that is a new read request, not a recovery." +
 	"\n\nOutput formats: Set requestedOutputFormats to the explicit deliverable file formats when the latest request asks to create, edit, convert, generate, or deliver a file artifact; leave it null for reading, summarizing, searching, or analyzing an input attachment, unless priorTaskReference=outcome_recovery and the prior task prompt, result, known contract, or latest message identifies the deliverable format. A request to read or confirm the content of an existing file is answered in the reply text and has no deliverable format, even when that file itself has one. Content the assistant posts as a message in the conversation is never a file deliverable: when the request is to write, rewrite, correct, or restore something that lives as a message, leave requestedOutputFormats null even under priorTaskReference=outcome_recovery, because recovering a message means posting the message again, not attaching a file of it. Under outcome_recovery, name a format only when the prior deliverable actually was a file; never pick one because a format is expected. requestedOutputFormats should contain only explicit deliverable formats such as html, pptx, pdf, txt, docx, xlsx, csv, or json. Use values like html, pptx, pdf, txt, docx, xlsx, csv, or json when explicit. Treat words like presentation, slides, deck, ppt, 피피티, and 발표자료 as the kind of artifact, not as a .pptx file format unless the user explicitly requests a PowerPoint/PPTX file or asks for all common slide formats. If the user asks for a presentation as HTML, requestedOutputFormats should be [\"html\"], not [\"html\",\"pptx\"]. A request to create or update a website or web page is a live site deliverable, not a file: leave requestedOutputFormats null unless the user explicitly asks for an HTML file to download or send." +
 	"\n\nInitial tools: Set initialToolNames to exact callable tool names copied from Available tools that this request will most likely call first; include only confident picks and leave it empty when unsure or when no tool is needed. When the visible conversation shows a site, document, or artifact the assistant already created for this requester, a request to change, extend, preview, or publish it is a follow-up edit on that same artifact: suggest its status or read tool and the edit tool, never the create tool. Pick tools whose effect matches the visible outcome the user asked for: a note, memo, or announcement the user wants visible in a conversation or channel is a message send, while memory tools store private assistant recall that nobody sees." +
@@ -123,10 +123,11 @@ func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agent
 	if !isCorrectable {
 		return agentcontract.TurnDecision{}, errorValue
 	}
-	correctionMessages := append(append([]model.Message{}, messages...), model.Message{
-		Role:    "system",
-		Content: correctionInstruction,
-	})
+	correctionMessages := append([]model.Message{}, messages...)
+	if previousDecision := previousTurnRouterDecision(errorValue); previousDecision != "" {
+		correctionMessages = append(correctionMessages, model.Message{Role: "assistant", Content: previousDecision})
+	}
+	correctionMessages = append(correctionMessages, model.Message{Role: "system", Content: correctionInstruction})
 	correctionRequest := turnRouterRequest(request, correctionMessages)
 	if shouldIncreaseCorrectionBudget(errorValue) {
 		increaseTurnRouterTokenBudget(&correctionRequest)
@@ -173,19 +174,20 @@ func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request m
 	}
 	turnDecision, parseError := parseTurnDecision(structuredResponse.Content)
 	if parseError != nil {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: parseError}
+		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: parseError, content: structuredResponse.Content}
 	}
 	if validationError := validateTurnDecisionToolNames(turnDecision, availableToolNames); validationError != nil {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: validationError}
+		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
 	}
 	if agentcontract.NormalizeIntakeClassification(turnDecision.Classification) == "" {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: fmt.Errorf("classification %q is invalid; use a value from the schema's classification enum, which is distinct from taskShape", turnDecision.Classification)}
+		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: fmt.Errorf("classification %q is invalid; use a value from the schema's classification enum, which is distinct from taskShape", turnDecision.Classification), content: structuredResponse.Content}
 	}
 	return turnDecision, nil
 }
 
 type turnRouterDecisionError struct {
-	cause error
+	cause   error
+	content string
 }
 
 func (errorValue turnRouterDecisionError) Error() string {
@@ -194,6 +196,14 @@ func (errorValue turnRouterDecisionError) Error() string {
 
 func (errorValue turnRouterDecisionError) Unwrap() error {
 	return errorValue.cause
+}
+
+func previousTurnRouterDecision(errorValue error) string {
+	var decisionError turnRouterDecisionError
+	if !errors.As(errorValue, &decisionError) {
+		return ""
+	}
+	return strings.TrimSpace(decisionError.content)
 }
 
 func turnRouterCorrectionInstructionForError(errorValue error) (string, bool) {
