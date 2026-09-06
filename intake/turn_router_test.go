@@ -102,6 +102,9 @@ func TestTurnRouterCorrectsUnknownInitialToolName(t *testing.T) {
 	if !strings.Contains(joinMessageContent(languageModel.requests[1].Messages), "available tools: task_list") {
 		t.Fatal("expected correction to include the available tool candidate")
 	}
+	if !strings.Contains(joinMessageContent(languageModel.requests[1].Messages), `"invented_tool"`) {
+		t.Fatal("expected correction to include the invalid structured decision")
+	}
 }
 
 func TestTurnRouterCorrectsTaskShapeUsedAsClassification(t *testing.T) {
