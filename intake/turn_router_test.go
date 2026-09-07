@@ -188,9 +188,8 @@ func TestTurnRouterCorrectsAuthoritativeStructuredOutputOnce(t *testing.T) {
 	if firstRequest.StructuredOutputSchema != correctionRequest.StructuredOutputSchema {
 		t.Fatal("expected correction to preserve the router schema")
 	}
-	if firstRequest.GenerationOptions.MaxTokens == nil || correctionRequest.GenerationOptions.MaxTokens == nil ||
-		*firstRequest.GenerationOptions.MaxTokens != *correctionRequest.GenerationOptions.MaxTokens {
-		t.Fatal("expected correction to preserve generation options")
+	if firstRequest.GenerationOptions.MaxTokens != nil || correctionRequest.GenerationOptions.MaxTokens != nil {
+		t.Fatal("turn router must leave token budgets unset")
 	}
 	if languageModel.contexts[0] != languageModel.contexts[1] {
 		t.Fatal("expected correction to use the same response context")
@@ -467,8 +466,8 @@ func TestTaskIntakePlannerUsesStructuredModelDecision(t *testing.T) {
 	if languageModel.requests[0].StructuredOutputSchema.Name != "bluecollar_turn_router" {
 		t.Fatalf("expected turn router schema, got %q", languageModel.requests[0].StructuredOutputSchema.Name)
 	}
-	if languageModel.requests[0].GenerationOptions.MaxTokens == nil || *languageModel.requests[0].GenerationOptions.MaxTokens != turnRouterMaxTokens {
-		t.Fatalf("expected bounded turn router output, got %+v", languageModel.requests[0].GenerationOptions)
+	if languageModel.requests[0].GenerationOptions.MaxTokens != nil {
+		t.Fatalf("expected turn router token budget to be unset, got %+v", languageModel.requests[0].GenerationOptions)
 	}
 	if !strings.Contains(languageModel.requests[0].StructuredOutputSchema.Document, `"taskShape"`) {
 		t.Fatalf("expected task shape in intake schema, got %s", languageModel.requests[0].StructuredOutputSchema.Document)
@@ -1585,7 +1584,7 @@ func TestATruncatedRouterAnswerGetsOneCorrectedAsk(t *testing.T) {
 	}
 }
 
-func TestTurnRouterDoublesBudgetForOneLengthCorrection(t *testing.T) {
+func TestTurnRouterLeavesOutputLimitUnsetForLengthCorrection(t *testing.T) {
 	languageModel := &turnRouterCorrectionLanguageModel{
 		errorsByCall: map[int]error{0: turnRouterStructuredCorrectionError{
 			message: "truncated",
@@ -1603,12 +1602,12 @@ func TestTurnRouterDoublesBudgetForOneLengthCorrection(t *testing.T) {
 	if _, errorValue := router.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(languageModel.requests) != 2 || languageModel.requests[1].GenerationOptions.MaxTokens == nil || *languageModel.requests[1].GenerationOptions.MaxTokens != turnRouterMaxTokens*2 {
-		t.Fatalf("expected one length correction at double budget, got %+v", languageModel.requests)
+	if len(languageModel.requests) != 2 || languageModel.requests[0].GenerationOptions.MaxTokens != nil || languageModel.requests[1].GenerationOptions.MaxTokens != nil {
+		t.Fatalf("expected no token budgets on length correction, got %+v", languageModel.requests)
 	}
 }
 
-func TestTurnRouterDoublesBudgetForLocalJSONCorrection(t *testing.T) {
+func TestTurnRouterLeavesOutputLimitUnsetForJSONCorrection(t *testing.T) {
 	languageModel := &turnRouterCorrectionLanguageModel{contents: []string{
 		`{"route":"start_task"`,
 		`{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"low"}`,
@@ -1617,8 +1616,8 @@ func TestTurnRouterDoublesBudgetForLocalJSONCorrection(t *testing.T) {
 	if _, errorValue := router.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"}); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(languageModel.requests) != 2 || languageModel.requests[1].GenerationOptions.MaxTokens == nil || *languageModel.requests[1].GenerationOptions.MaxTokens != turnRouterMaxTokens*2 {
-		t.Fatalf("expected local JSON correction at double budget, got %+v", languageModel.requests)
+	if len(languageModel.requests) != 2 || languageModel.requests[0].GenerationOptions.MaxTokens != nil || languageModel.requests[1].GenerationOptions.MaxTokens != nil {
+		t.Fatalf("expected no token budgets on JSON correction, got %+v", languageModel.requests)
 	}
 }
 
@@ -1687,14 +1686,5 @@ func TestTurnRouterStopsAfterASecondLengthCorrection(t *testing.T) {
 	_, errorValue := NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true}).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "make the file"})
 	if errorValue == nil || len(languageModel.requests) != 2 {
 		t.Fatalf("expected one bounded correction and terminal failure, calls=%d error=%v", len(languageModel.requests), errorValue)
-	}
-}
-
-func TestTurnRouterLengthCorrectionCapsBudget(t *testing.T) {
-	maxTokens := 4000
-	request := model.StructuredResponseRequest{GenerationOptions: model.GenerationOptions{MaxTokens: &maxTokens}}
-	increaseTurnRouterTokenBudget(&request)
-	if request.GenerationOptions.MaxTokens == nil || *request.GenerationOptions.MaxTokens != 6400 {
-		t.Fatalf("expected the correction budget to cap at 6400, got %+v", request.GenerationOptions.MaxTokens)
 	}
 }

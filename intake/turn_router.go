@@ -25,8 +25,6 @@ type TurnRouter struct {
 	options       agentcontract.IntakeOptions
 }
 
-const turnRouterMaxTokens = 1600
-
 const taskRecordRoutingInstruction = "Treat requests to add, update, list, or delete a task or reminder as management of the task record, not execution of the future work described in its title or notes. A task title, description, and any explicitly requested due date are sufficient to add the record. Do not ask for files, credentials, or other inputs that would only be needed when performing that future task. Editing a record's own fields — title, date, status, notes — with values the message already states is executable as written: route it as a bounded maintenance_task, never to clarify or needs_confirmation, and never treat the edit itself as approval-gated. A request to assess or choose field values delegates judgment: start by reading the records and registered choices or definitions. Do not require the requester to supply the values before that inspection, and do not invent choices absent from the records."
 const clarificationReviewInstruction = "Review the previous clarification decision. Use clarify with needs_confirmation only when essential user input is missing. Approval for risky, destructive, paid, or externally visible work is handled after routing, so never ask for approval here. If the request is executable as written, return start_task with bounded_task. If essential input is truly missing, keep clarify and ask exactly for that input."
 
@@ -129,9 +127,6 @@ func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agent
 	}
 	correctionMessages = append(correctionMessages, model.Message{Role: "system", Content: correctionInstruction})
 	correctionRequest := turnRouterRequest(request, correctionMessages)
-	if shouldIncreaseCorrectionBudget(errorValue) {
-		increaseTurnRouterTokenBudget(&correctionRequest)
-	}
 	return turnRouter.generateTurnDecision(ctx, correctionRequest, turnRouterCallableToolNames(request))
 }
 
@@ -218,37 +213,9 @@ func turnRouterCorrectionInstructionForError(errorValue error) (string, bool) {
 	return turnRouterCorrectionInstruction(correction), true
 }
 
-func shouldIncreaseCorrectionBudget(errorValue error) bool {
-	var syntaxError *json.SyntaxError
-	if errors.As(errorValue, &syntaxError) {
-		return true
-	}
-	correction, isCorrectable := model.StructuredOutputCorrectionFromError(errorValue)
-	return isCorrectable && isLengthCorrection(correction)
-}
-
-func isLengthCorrection(correction model.StructuredOutputCorrection) bool {
-	return correction.Diagnostic.Category == model.StructuredOutputDiagnosticFinishReason &&
-		correction.Diagnostic.FinishReason == model.StructuredOutputDiagnosticFinishLength
-}
-
-func increaseTurnRouterTokenBudget(request *model.StructuredResponseRequest) {
-	if request.GenerationOptions.MaxTokens == nil {
-		return
-	}
-	const maximumTurnRouterCorrectionTokens = 6400
-	correctedMaxTokens := *request.GenerationOptions.MaxTokens * 2
-	if correctedMaxTokens > maximumTurnRouterCorrectionTokens {
-		correctedMaxTokens = maximumTurnRouterCorrectionTokens
-	}
-	request.GenerationOptions.MaxTokens = &correctedMaxTokens
-}
-
 func turnRouterRequest(request agentcontract.AgentRequest, messages []model.Message) model.StructuredResponseRequest {
-	maxTokens := turnRouterMaxTokens
 	return model.StructuredResponseRequest{
-		Messages:          messages,
-		GenerationOptions: model.GenerationOptions{MaxTokens: &maxTokens},
+		Messages: messages,
 		StructuredOutputSchema: model.StructuredOutputSchema{
 			Name:               "bluecollar_turn_router",
 			Document:           turnRouterSchema(request),
