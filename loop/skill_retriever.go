@@ -166,13 +166,24 @@ func (skillRetriever *EmbeddingSkillRetriever) lockBeforeDeadline(ctx context.Co
 }
 
 func (skillRetriever *EmbeddingSkillRetriever) queryEmbeddings(ctx context.Context, querySet SkillSearchQuerySet) [][]float32 {
+	embeddingByQuery := make([][]float32, len(querySet.Queries))
+	var waitGroup sync.WaitGroup
+	for queryIndex, query := range querySet.Queries {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			embedding, errorValue := skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, query.Description)
+			if errorValue == nil {
+				embeddingByQuery[queryIndex] = embedding
+			}
+		}()
+	}
+	waitGroup.Wait()
 	embeddings := [][]float32{}
-	for _, query := range querySet.Queries {
-		embedding, errorValue := skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, query.Description)
-		if errorValue != nil || len(embedding) == 0 {
-			continue
+	for _, embedding := range embeddingByQuery {
+		if len(embedding) > 0 {
+			embeddings = append(embeddings, embedding)
 		}
-		embeddings = append(embeddings, embedding)
 	}
 	return embeddings
 }

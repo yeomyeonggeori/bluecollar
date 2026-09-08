@@ -16,11 +16,14 @@ import (
 )
 
 type Provider struct {
-	endpointURL    string
-	apiKey         string
-	modelName      string
-	httpClient     *http.Client
-	retryBaseDelay time.Duration
+	endpointURL     string
+	apiKey          string
+	modelName       string
+	providerOrder   []string
+	providerSort    string
+	reasoningEffort string
+	httpClient      *http.Client
+	retryBaseDelay  time.Duration
 }
 
 func NewProvider(endpointURL string, apiKey string, modelName string) *Provider {
@@ -50,7 +53,7 @@ func (provider *Provider) GenerateStructuredResponse(ctx context.Context, reques
 }
 
 func (provider *Provider) GenerateChatCompletion(ctx context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
-	body, errorValue := json.Marshal(chatCompletionRequest(provider.modelName, request))
+	body, errorValue := json.Marshal(provider.chatCompletionRequest(request))
 	if errorValue != nil {
 		return model.ChatCompletionResponse{}, errorValue
 	}
@@ -76,11 +79,12 @@ func (provider *Provider) GenerateRecoveryChatCompletion(ctx context.Context, re
 	return provider.GenerateChatCompletion(ctx, request)
 }
 
-func chatCompletionRequest(modelName string, request model.ChatCompletionRequest) map[string]any {
+func (provider *Provider) chatCompletionRequest(request model.ChatCompletionRequest) map[string]any {
 	chatRequest := map[string]any{
-		"model":    modelName,
+		"model":    provider.modelName,
 		"messages": chatCompletionMessages(request.Messages),
 	}
+	provider.applyServingPreferences(chatRequest)
 	if len(request.Tools) > 0 {
 		chatRequest["tools"] = request.Tools
 	}
@@ -91,6 +95,34 @@ func chatCompletionRequest(modelName string, request model.ChatCompletionRequest
 	chatRequest["usage"] = map[string]any{"include": true}
 	applyGenerationOptions(chatRequest, request.GenerationOptions)
 	return chatRequest
+}
+
+// OpenRouter balances a request across providers by price unless the request
+// names an order or a sort, and lets a model reason at its default length
+// unless the request names an effort.
+// https://openrouter.ai/docs/features/provider-routing
+// https://openrouter.ai/docs/use-cases/reasoning-tokens
+func (provider *Provider) applyServingPreferences(request map[string]any) {
+	if routing := provider.providerRouting(); routing != nil {
+		request["provider"] = routing
+	}
+	if provider.reasoningEffort != "" {
+		request["reasoning"] = map[string]any{"effort": provider.reasoningEffort}
+	}
+}
+
+func (provider *Provider) providerRouting() map[string]any {
+	if provider.providerSort == "" && len(provider.providerOrder) == 0 {
+		return nil
+	}
+	routing := map[string]any{"allow_fallbacks": true}
+	if len(provider.providerOrder) > 0 {
+		routing["order"] = append([]string{}, provider.providerOrder...)
+	}
+	if provider.providerSort != "" {
+		routing["sort"] = provider.providerSort
+	}
+	return routing
 }
 
 func applyGenerationOptions(chatRequest map[string]any, generationOptions model.GenerationOptions) {
@@ -140,6 +172,9 @@ type reportedUsage struct {
 	PromptTokensDetails struct {
 		CachedTokens int64 `json:"cached_tokens"`
 	} `json:"prompt_tokens_details"`
+	CompletionTokensDetails struct {
+		ReasoningTokens int64 `json:"reasoning_tokens"`
+	} `json:"completion_tokens_details"`
 }
 
 func (usage reportedUsage) measured() model.Usage {
@@ -149,12 +184,14 @@ func (usage reportedUsage) measured() model.Usage {
 		TotalTokens:        usage.TotalTokens,
 		CostUSD:            usage.Cost,
 		CachedPromptTokens: usage.PromptTokensDetails.CachedTokens,
+		ReasoningTokens:    usage.CompletionTokensDetails.ReasoningTokens,
 	}
 }
 
 func decodeChatCompletion(responseBody []byte, modelName string) (model.ChatCompletionResponse, error) {
 	var decoded struct {
-		Choices []struct {
+		Provider string `json:"provider"`
+		Choices  []struct {
 			Message struct {
 				Role             string     `json:"role"`
 				Content          string     `json:"content"`
@@ -184,10 +221,11 @@ func decodeChatCompletion(responseBody []byte, modelName string) (model.ChatComp
 		finishReason = "tool_calls"
 	}
 	return model.ChatCompletionResponse{
-		Transport:    "http",
-		ProviderName: "openai-compatible",
-		ModelName:    modelName,
-		FinishReason: finishReason,
+		Transport:        "http",
+		ProviderName:     "openai-compatible",
+		UpstreamProvider: decoded.Provider,
+		ModelName:        modelName,
+		FinishReason:     finishReason,
 		Message: model.ChatCompletionMessage{
 			Role:           decoded.Choices[0].Message.Role,
 			Content:        decoded.Choices[0].Message.Content,
@@ -200,7 +238,7 @@ func decodeChatCompletion(responseBody []byte, modelName string) (model.ChatComp
 }
 
 func (provider *Provider) complete(ctx context.Context, messages []model.Message, schema *model.StructuredOutputSchema, generationOptions model.GenerationOptions) (model.StructuredResponse, error) {
-	body, errorValue := json.Marshal(completionRequest(provider.modelName, messages, schema, generationOptions))
+	body, errorValue := json.Marshal(provider.completionRequest(messages, schema, generationOptions))
 	if errorValue != nil {
 		return model.StructuredResponse{}, errorValue
 	}
@@ -308,11 +346,12 @@ func waitBeforeRetry(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-func completionRequest(modelName string, messages []model.Message, schema *model.StructuredOutputSchema, generationOptions model.GenerationOptions) map[string]any {
+func (provider *Provider) completionRequest(messages []model.Message, schema *model.StructuredOutputSchema, generationOptions model.GenerationOptions) map[string]any {
 	request := map[string]any{
-		"model":    modelName,
+		"model":    provider.modelName,
 		"messages": chatMessages(messages),
 	}
+	provider.applyServingPreferences(request)
 	applyGenerationOptions(request, generationOptions)
 	if schema == nil || strings.TrimSpace(schema.Document) == "" {
 		return request
@@ -389,7 +428,8 @@ func messageText(content string, parts []model.MessagePart) string {
 
 func decodeCompletion(responseBody []byte, modelName string) (model.StructuredResponse, error) {
 	var decoded struct {
-		Choices []struct {
+		Provider string `json:"provider"`
+		Choices  []struct {
 			Message struct {
 				Content   string     `json:"content"`
 				ToolCalls []toolCall `json:"tool_calls"`
@@ -406,11 +446,12 @@ func decodeCompletion(responseBody []byte, modelName string) (model.StructuredRe
 	}
 	choice := decoded.Choices[0]
 	response := model.StructuredResponse{
-		Transport:    "http",
-		ProviderName: "openai-compatible",
-		ModelName:    modelName,
-		FinishReason: choice.FinishReason,
-		Usage:        decoded.Usage.measured(),
+		Transport:        "http",
+		ProviderName:     "openai-compatible",
+		UpstreamProvider: decoded.Provider,
+		ModelName:        modelName,
+		FinishReason:     choice.FinishReason,
+		Usage:            decoded.Usage.measured(),
 	}
 	if choice.FinishReason == string(model.StructuredOutputDiagnosticFinishLength) {
 		return response, completionTruncatedError{}

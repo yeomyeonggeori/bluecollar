@@ -71,3 +71,66 @@ func TestATurnGivenNoGenerationOptionsAsksForNone(t *testing.T) {
 		}
 	}
 }
+
+func recordedEndpointRequestDocument(t *testing.T, endpoint Endpoint, ask func(*Provider)) map[string]any {
+	t.Helper()
+	recorded := map[string]any{}
+	server := httptest.NewServer(http.HandlerFunc(func(responseWriter http.ResponseWriter, request *http.Request) {
+		if errorValue := json.NewDecoder(request.Body).Decode(&recorded); errorValue != nil {
+			t.Errorf("expected a decodable request: %v", errorValue)
+		}
+		responseWriter.Write([]byte(oneToolCallAnswer))
+	}))
+	defer server.Close()
+	endpoint.URL = server.URL
+	provider, errorValue := endpoint.Provider()
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	ask(provider)
+	return recorded
+}
+
+var everyWayOfAsking = []func(*Provider){
+	func(provider *Provider) {
+		provider.GenerateStructuredResponse(context.Background(), model.StructuredResponseRequest{
+			Messages:               []model.Message{{Role: "user", Content: "hello"}},
+			StructuredOutputSchema: model.StructuredOutputSchema{Name: "answer", Document: `{"type":"object"}`},
+		})
+	},
+	func(provider *Provider) {
+		provider.GenerateChatCompletion(context.Background(), model.ChatCompletionRequest{
+			Messages: []model.ChatCompletionMessage{{Role: "user", Content: "hello"}},
+		})
+	},
+}
+
+func TestAnEndpointsServingPreferencesRideEveryRequestItGets(t *testing.T) {
+	endpoint := Endpoint{ModelName: "example/model", ProviderOrder: []string{"modal", "baseten"}, ProviderSort: "throughput", ReasoningEffort: "none"}
+	for _, ask := range everyWayOfAsking {
+		recorded := recordedEndpointRequestDocument(t, endpoint, ask)
+		routing, _ := recorded["provider"].(map[string]any)
+		if routing["sort"] != "throughput" || routing["allow_fallbacks"] != true {
+			t.Fatalf("the endpoint sorts providers by throughput, so every request must say so, got %v", recorded["provider"])
+		}
+		if order, _ := routing["order"].([]any); len(order) != 2 || order[0] != "modal" || order[1] != "baseten" {
+			t.Fatalf("the endpoint asks its preferred providers first, got %v", recorded["provider"])
+		}
+		reasoning, _ := recorded["reasoning"].(map[string]any)
+		if reasoning["effort"] != "none" {
+			t.Fatalf("the endpoint asks for no reasoning, so every request must say so, got %v", recorded["reasoning"])
+		}
+	}
+}
+
+func TestAnEndpointWithNoServingPreferencesAsksForNone(t *testing.T) {
+	for _, ask := range everyWayOfAsking {
+		recorded := recordedEndpointRequestDocument(t, Endpoint{ModelName: "example/model"}, ask)
+		if _, isNamed := recorded["provider"]; isNamed {
+			t.Fatalf("an endpoint given no sort must leave routing to the endpoint, got %v", recorded["provider"])
+		}
+		if _, isNamed := recorded["reasoning"]; isNamed {
+			t.Fatalf("an endpoint given no effort must leave reasoning to the model, got %v", recorded["reasoning"])
+		}
+	}
+}

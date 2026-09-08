@@ -65,17 +65,18 @@ type Usage struct {
 }
 
 type StructuredResponse struct {
-	Transport       string
-	ProviderName    string
-	ModelName       string
-	ModelTier       string `json:"-"`
-	Content         string
-	SelectedBackend string
-	FinishReason    string
-	ConstraintMode  string
-	UsedFallback    bool
-	FallbackReason  string
-	Usage           Usage
+	Transport        string
+	ProviderName     string
+	UpstreamProvider string
+	ModelName        string
+	ModelTier        string `json:"-"`
+	Content          string
+	SelectedBackend  string
+	FinishReason     string
+	ConstraintMode   string
+	UsedFallback     bool
+	FallbackReason   string
+	Usage            Usage
 }
 
 type LanguageModelProvider interface {

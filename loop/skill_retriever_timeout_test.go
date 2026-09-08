@@ -43,3 +43,32 @@ func TestSkillSearchDegradesToBM25WhenIndexLockIsHeld(t *testing.T) {
 		t.Fatalf("expected fast fallback, took %s", time.Since(startedAt))
 	}
 }
+
+type slowEmbeddingProvider struct{ delay time.Duration }
+
+func (provider slowEmbeddingProvider) GenerateEmbedding(ctx context.Context, _ string) ([]float32, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(provider.delay):
+		return []float32{1, 0}, nil
+	}
+}
+
+func TestQueryEmbeddingsAreAskedForTogether(t *testing.T) {
+	retriever := NewEmbeddingSkillRetriever(slowEmbeddingProvider{delay: 200 * time.Millisecond}, t.TempDir())
+	querySet := SkillSearchQuerySet{}
+	for range 5 {
+		querySet.Queries = append(querySet.Queries, SkillSearchQuery{Description: "calendar"})
+	}
+
+	startedAt := time.Now()
+	embeddings := retriever.queryEmbeddings(context.Background(), querySet)
+
+	if len(embeddings) != 5 {
+		t.Fatalf("expected one embedding per query, got %d", len(embeddings))
+	}
+	if elapsed := time.Since(startedAt); elapsed > 600*time.Millisecond {
+		t.Fatalf("five queries asked one after another would take a second; together they took %s", elapsed)
+	}
+}
