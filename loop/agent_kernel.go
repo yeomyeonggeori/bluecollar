@@ -618,12 +618,7 @@ func (agentKernel *AgentKernel) pauseForClarification(responseContext context.Co
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentGoalCreated, marshalEventBody(waitingGoal))
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentGoalWaitingUserInput, marshalEventBody(waitingGoal))
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventConfirmationClarificationRequested, reply)
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(map[string]string{
-		"kind":             "ask_input",
-		"question":         reply,
-		"message":          reply,
-		"responseLanguage": request.ResponseLanguage,
-	}))
+	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(agentcontract.NewAskInputRequest(reply, nil, request.ResponseLanguage)))
 	return AgentTurnResult{TaskRun: waitingTaskRun, UserNotice: reply, ToolNames: toolNamesForEvent(request.ToolSet)}, nil
 }
 
@@ -635,7 +630,7 @@ func (agentKernel *AgentKernel) completeIntakeOnlyRequest(responseContext contex
 	taskRun := agentKernel.taskRunForRequest(request)
 	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(intakeDecision))
-	finishMessage := strings.TrimSpace(intakeDecision.UserFacingReply)
+	finishMessage := intakeOnlyFinishMessage(intakeDecision)
 	if finishMessage == "" {
 		finishMessage = (FailureNoticeGenerator{LanguageModel: agentKernel.languageModel}).GenerateIntakeNotice(responseContext, IntakeReport{
 			Classification:    intakeDecision.Classification,
@@ -645,27 +640,24 @@ func (agentKernel *AgentKernel) completeIntakeOnlyRequest(responseContext contex
 			DiagnosticEventID: taskRun.TaskRunID + ":task_intake",
 		}).SendableMessage()
 	}
-	if intakeDecision.Classification == IntakeClassificationNeedsConfirmation && len(intakeDecision.ClarificationOptions) >= 2 {
-		finishMessage = firstNonEmptyString(strings.TrimSpace(intakeDecision.ClarificationQuestion), finishMessage)
-	}
 	blockedTaskRun, errorValue := agentKernel.taskRunService.PauseTaskRun(taskRun.TaskRunID, status, intakeDecision.Reason)
 	if errorValue != nil {
 		return AgentTurnResult{}, errorValue
 	}
-	if status == agentcontract.TaskStatusWaitingUserInput && intakeDecision.Classification == IntakeClassificationNeedsConfirmation && len(intakeDecision.ClarificationOptions) >= 2 {
-		agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(map[string]any{
-			"kind":                 "ask_input",
-			"question":             finishMessage,
-			"message":              finishMessage,
-			"options":              intakeDecision.ClarificationOptions,
-			"recommendedOptionKey": intakeDecision.ClarificationOptions[0].Key,
-			"selectionMode":        "single",
-			"responseLanguage":     request.ResponseLanguage,
-		}))
+	if status == agentcontract.TaskStatusWaitingUserInput && intakeDecision.Classification == IntakeClassificationNeedsConfirmation {
+		agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(agentcontract.NewAskInputRequest(finishMessage, intakeDecision.ClarificationOptions, request.ResponseLanguage)))
 	}
 	agentKernel.appendGoalLifecycleEvent(blockedTaskRun, activeGoalFromIntakeOnly(taskRun.TaskRunID, request, intakeDecision, status))
 	blockedTaskRun = persistTaskRunResult(agentKernel.taskRunService, blockedTaskRun, finishMessage)
 	return AgentTurnResult{TaskRun: blockedTaskRun, UserNotice: finishMessage, ToolNames: toolNamesForEvent(request.ToolSet)}, nil
+}
+
+func intakeOnlyFinishMessage(intakeDecision IntakeDecision) string {
+	userFacingReply := strings.TrimSpace(intakeDecision.UserFacingReply)
+	if intakeDecision.Classification != IntakeClassificationNeedsConfirmation {
+		return userFacingReply
+	}
+	return firstNonEmptyString(strings.TrimSpace(intakeDecision.ClarificationQuestion), userFacingReply)
 }
 
 func (agentKernel *AgentKernel) taskRunForRequest(request AgentRequest) agentcontract.TaskRun {
