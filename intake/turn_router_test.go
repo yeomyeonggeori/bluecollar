@@ -712,6 +712,29 @@ func TestTaskIntakePlannerReviewsExecutableTaskClarification(t *testing.T) {
 	}
 }
 
+func TestTaskIntakePlannerRejectsClarificationWithoutQuestion(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"medium","requestedOutputFormats":[],"expectedResults":[],"responseLanguage":"ko","reason":"사전 확인 없이 바로 시작하는 것이 맞습니다.","userFacingReply":"네, 바로 조사를 시작하겠습니다.","initialToolNames":["web_search"],"priorTaskReference":"none","clarificationQuestion":null}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"medium","requestedOutputFormats":[],"expectedResults":[],"responseLanguage":"ko","reason":"바로 조사할 수 있습니다.","userFacingReply":"","initialToolNames":["web_search"],"priorTaskReference":"none"}`,
+	}}
+	planner := NewTaskIntakePlanner(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+
+	decision := mustPlanIntake(t, planner, agentcontract.AgentRequest{
+		Prompt:  "우리 회사 조사해봐 우리의 강점은 뭐지?",
+		ToolSet: newTestCapabilityToolSet([]string{"web_search"}),
+	})
+
+	if decision.Classification != agentcontract.IntakeClassificationBoundedTask {
+		t.Fatalf("expected the corrected decision to be executable, got %+v", decision)
+	}
+	if len(languageModel.requests) != 2 {
+		t.Fatalf("expected one correction call, got %d calls", len(languageModel.requests))
+	}
+	if !strings.Contains(joinMessageContent(languageModel.requests[1].Messages), "needs_confirmation requires a clarificationQuestion") {
+		t.Fatalf("expected the correction to name the missing clarification question, got %s", joinMessageContent(languageModel.requests[1].Messages))
+	}
+}
+
 func TestTaskIntakePlannerPreservesClarificationWhenReviewFails(t *testing.T) {
 	languageModel := &clarificationReviewFailureLanguageModel{content: `{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":[],"expectedResults":[],"responseLanguage":"ko","reason":"수정할 업무가 여러 개일 수 있습니다.","userFacingReply":"어떤 업무를 수정할까요?","initialToolNames":["task_update"],"priorTaskReference":"none","clarificationQuestion":"어떤 업무를 수정할까요?"}`}
 	planner := NewTaskIntakePlanner(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
@@ -1286,8 +1309,8 @@ func TestTaskIntakePlannerTreatsLocalArtifactConfirmationAsBoundedTask(t *testin
 	if decision.TaskShape != agentcontract.TaskShapeMaintenanceTask {
 		t.Fatalf("expected executable task shape, got %+v", decision)
 	}
-	if len(languageModel.requests) != 2 || !strings.Contains(joinMessageContent(languageModel.requests[1].Messages), clarificationReviewInstruction) {
-		t.Fatalf("expected one clarification review, got %d calls", len(languageModel.requests))
+	if len(languageModel.requests) != 2 || !strings.Contains(joinMessageContent(languageModel.requests[1].Messages), "needs_confirmation requires a clarificationQuestion") {
+		t.Fatalf("expected one contract correction for the question-less confirmation, got %d calls", len(languageModel.requests))
 	}
 }
 

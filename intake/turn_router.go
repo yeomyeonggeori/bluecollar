@@ -28,7 +28,7 @@ type TurnRouter struct {
 const taskRecordRoutingInstruction = "Treat requests to add, update, list, or delete a task or reminder as management of the task record, not execution of the future work described in its title or notes. A task title, description, and any explicitly requested due date are sufficient to add the record. Do not ask for files, credentials, or other inputs that would only be needed when performing that future task. Editing a record's own fields — title, date, status, notes — with values the message already states is executable as written: route it as a bounded maintenance_task, never to clarify or needs_confirmation, and never treat the edit itself as approval-gated. A request to assess or choose field values delegates judgment: start by reading the records and registered choices or definitions. Do not require the requester to supply the values before that inspection, and do not invent choices absent from the records."
 const clarificationReviewInstruction = "Review the previous clarification decision. Use clarify with needs_confirmation only when essential user input is missing. Approval for risky, destructive, paid, or externally visible work is handled after routing, so never ask for approval here. If the request is executable as written, return start_task with bounded_task. If essential input is truly missing, keep clarify and ask exactly for that input."
 
-const turnRouterSystemPrompt = "You are a channel-agnostic turn router and task intake planner. Choose the route for the latest user message and classify the task shape. Keep terminal decisions consistent: needs_confirmation uses route=clarify and taskShape=approval_gated_task; unsupported uses route=give_up and taskShape=immediate_reply; consume uses classification=quick_reply and taskShape=immediate_reply." +
+const turnRouterSystemPrompt = "You are a channel-agnostic turn router and task intake planner. Choose the route for the latest user message and classify the task shape. Keep terminal decisions consistent: needs_confirmation uses route=clarify, taskShape=approval_gated_task, and a clarificationQuestion naming the missing input; unsupported uses route=give_up and taskShape=immediate_reply; consume uses classification=quick_reply and taskShape=immediate_reply." +
 	"\n\nLatest message authority: The latest user message is authoritative. Prior conversation may be used only when it helps interpret whether the latest message continues, revises, asks about, cancels, replaces an active task, or is a bare assistant mention requesting a response to recent context. Do not carry stale subjects, tools, or artifact formats into a self-contained new request." +
 	"\n\nResolve an omitted subject in a follow-up from the requester's preceding instruction. An additional attribute can belong to the same records or artifact already under discussion; compare it with the available tools' fields before choosing a different domain. Do not invent a subject change from an ambiguous word alone, or retain the old subject when the latest request explicitly names a new one. When missing facts or available choices can be read through a tool, route that lookup before asking the requester. Do not invent values; ask only if the retrieved evidence still leaves an essential choice unresolved." +
 	"\n\nWhat this agent said earlier is its own, not the requester's. A subject it named, a title it guessed at, or a thing it reported failing to find is never what the latest message is about unless the requester's own words say so. Take the subject from what the requester wrote." +
@@ -177,7 +177,20 @@ func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request m
 	if agentcontract.NormalizeIntakeClassification(turnDecision.Classification) == "" {
 		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: fmt.Errorf("classification %q is invalid; use a value from the schema's classification enum, which is distinct from taskShape", turnDecision.Classification), content: structuredResponse.Content}
 	}
+	if validationError := validateClarificationQuestion(turnDecision); validationError != nil {
+		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
+	}
 	return turnDecision, nil
+}
+
+func validateClarificationQuestion(decision agentcontract.TurnDecision) error {
+	if agentcontract.NormalizeIntakeClassification(decision.Classification) != agentcontract.IntakeClassificationNeedsConfirmation {
+		return nil
+	}
+	if strings.TrimSpace(decision.ClarificationQuestion) != "" {
+		return nil
+	}
+	return errors.New("needs_confirmation requires a clarificationQuestion that names the missing user input; when nothing essential is missing, use bounded_task with an executable route")
 }
 
 type turnRouterDecisionError struct {
@@ -256,8 +269,7 @@ func clarificationDecisionNeedsReview(decision agentcontract.TurnDecision) bool 
 	if decision.Route != agentcontract.TurnRouteClarify && decision.Classification != agentcontract.IntakeClassificationNeedsConfirmation {
 		return false
 	}
-	return strings.TrimSpace(decision.ClarificationQuestion) == "" ||
-		len(decision.RequestedOutputFormats) > 0 ||
+	return len(decision.RequestedOutputFormats) > 0 ||
 		len(decision.ExpectedResults) > 0 ||
 		len(decision.InitialToolNames) > 0
 }
@@ -581,9 +593,10 @@ func turnRouterSchema(request agentcontract.AgentRequest) string {
 			string(agentcontract.PriorTaskReferenceNone),
 			string(agentcontract.PriorTaskReferenceOutcomeRecovery),
 		}},
-		"clarificationQuestion": map[string]any{
-			"type": "string", "maxLength": 256,
-		},
+		"clarificationQuestion": map[string]any{"anyOf": []any{
+			map[string]any{"type": "string", "maxLength": 256},
+			map[string]any{"type": "null"},
+		}},
 		"clarificationOptions": clarificationOptionsSchema(),
 		"reactionEmojiName": map[string]any{"anyOf": []any{
 			map[string]any{"type": "string", "enum": allowedReactionEmojiNames},

@@ -397,6 +397,40 @@ func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 	}
 }
 
+func TestAgentKernelAsksTheClarificationQuestionWithoutOptions(t *testing.T) {
+	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs the target company","userFacingReply":"네, 바로 조사를 시작하겠습니다.","clarificationQuestion":"어느 회사를 조사할까요?","clarificationOptions":[]}`,
+	}}
+	replyLanguageModel := &sequenceLanguageModel{contents: []string{
+		finishMessageDocument("should not run"),
+	}}
+	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
+
+	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "회사 조사해줘",
+		ToolSet:           newTestToolSet([]string{toolcontract.AskInputToolName}),
+	}))
+	if errorValue != nil {
+		t.Fatalf("expected clarify result: %v", errorValue)
+	}
+
+	if result.UserNotice != "어느 회사를 조사할까요?" {
+		t.Fatalf("expected the clarification question to reach the user, got %q", result.UserNotice)
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusWaitingUserInput {
+		t.Fatalf("expected waiting user input, got %s", result.TaskRun.Status)
+	}
+	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
+	if !taskEventsContain(events, "ask.requested", `"kind":"ask_input"`) {
+		t.Fatalf("expected an open ask_input event so the reply resumes the task, got %+v", events)
+	}
+	if taskEventsContain(events, "ask.requested", `"selectionMode"`) {
+		t.Fatalf("expected no selection mode without options, got %+v", events)
+	}
+}
+
 func TestAgentKernelQuickReplyAllowsToolFreeReplyWithoutAskInput(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"reason":"direct answer","userFacingReply":""}`,
