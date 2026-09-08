@@ -15,8 +15,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-const defaultAgentActionMaxTokens = 4096
-const terminalStructuredMaxTokens = 1600
 const maximumAgentActionCorrectionCount = 2
 
 const refusalsThatWithdrawFinish = 2
@@ -454,26 +452,8 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, 
 			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFail, allowFinish, delegationIsAllowed(state.Options)),
 			IsStrictlyEnforced: true,
 		},
-		GenerationOptions: agentActionGenerationOptions(state.Options.GenerationOptions),
+		GenerationOptions: state.Options.GenerationOptions,
 	}
-}
-
-func agentActionGenerationOptions(options model.GenerationOptions) model.GenerationOptions {
-	if options.MaxTokens != nil {
-		return options
-	}
-	maxTokens := defaultAgentActionMaxTokens
-	options.MaxTokens = &maxTokens
-	return options
-}
-
-func terminalStructuredGenerationOptions(options model.GenerationOptions) model.GenerationOptions {
-	if options.MaxTokens != nil {
-		return options
-	}
-	maxTokens := terminalStructuredMaxTokens
-	options.MaxTokens = &maxTokens
-	return options
 }
 
 func modelCallableToolSet(toolSet *toolcontract.ToolSet, restrictToTerminalActionsOnly bool) *toolcontract.ToolSet {

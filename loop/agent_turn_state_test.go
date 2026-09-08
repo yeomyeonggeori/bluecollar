@@ -140,8 +140,8 @@ func TestBuildAgentActionRequestKeepsTextToolCatalogForStructuredFallback(t *tes
 	if !strings.Contains(joinMessageContent(request.Messages), "Available tool catalog") {
 		t.Fatalf("expected structured request to retain textual tool catalog, got %s", joinMessageContent(request.Messages))
 	}
-	if request.GenerationOptions.MaxTokens == nil || *request.GenerationOptions.MaxTokens != defaultAgentActionMaxTokens {
-		t.Fatalf("expected bounded action output, got %+v", request.GenerationOptions)
+	if request.GenerationOptions.MaxTokens != nil {
+		t.Fatalf("an action step must leave the output budget unset, got %+v", request.GenerationOptions)
 	}
 	chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(request, nil)
 	if !isRepresentable {

@@ -14,7 +14,6 @@ const defaultCompactionTriggerTokens = 96000
 const taskContextCompactionRecentObservationCount = 10
 const taskContextCompactionMinimumNewObservations = 6
 const taskContextCompactionMinimumNewCharacters = 20000
-const taskContextSummaryMaxTokens = 1800
 
 type TaskContextSummary struct {
 	ObservationID                 string   `json:"observationID,omitempty"`
@@ -362,7 +361,6 @@ func completionEvidenceObservationIDs(events []agentcontract.TaskEvent) map[stri
 }
 
 func (agentTurnRunner *AgentTurnRunner) generateTaskContextSummary(ctx context.Context, request AgentTurnRequest, currentSummary TaskContextSummary, observations []turnObservation) (TaskContextSummary, bool) {
-	maxTokens := taskContextSummaryMaxTokens
 	structuredResponse, errorValue := agentTurnRunner.languageModel.GenerateStructuredResponse(ctx, model.StructuredResponseRequest{
 		Messages: []model.Message{{
 			Role:    "system",
@@ -376,7 +374,6 @@ func (agentTurnRunner *AgentTurnRunner) generateTaskContextSummary(ctx context.C
 			Document:           taskContextSummarySchema(),
 			IsStrictlyEnforced: true,
 		},
-		GenerationOptions: model.GenerationOptions{MaxTokens: &maxTokens},
 	})
 	if errorValue != nil {
 		return TaskContextSummary{}, false
