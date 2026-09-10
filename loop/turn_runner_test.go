@@ -2420,7 +2420,7 @@ func TestApprovalObservationUserFacingMessageReadsConfirmQuestion(t *testing.T) 
 	}
 }
 
-func TestTerminalStructuredRequestsCarryMaxTokensCap(t *testing.T) {
+func TestTerminalStructuredRequestsLeaveTheOutputBudgetUnset(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		noToolFallbackFinishMessageDocument("done"),
 		noToolFallbackFinishMessageDocument("done"),
@@ -2435,8 +2435,8 @@ func TestTerminalStructuredRequestsCarryMaxTokensCap(t *testing.T) {
 		t.Fatalf("expected finalizer, terminal, and judge requests, got %+v", structuredRequestNames(capturedRequests))
 	}
 	for _, structuredRequest := range capturedRequests {
-		if structuredRequest.GenerationOptions.MaxTokens == nil || *structuredRequest.GenerationOptions.MaxTokens != terminalStructuredMaxTokens {
-			t.Fatalf("expected %s request to cap maxTokens at %d", structuredRequest.StructuredOutputSchema.Name, terminalStructuredMaxTokens)
+		if structuredRequest.GenerationOptions.MaxTokens != nil {
+			t.Fatalf("%s request must leave the output budget unset, got %+v", structuredRequest.StructuredOutputSchema.Name, structuredRequest.GenerationOptions)
 		}
 	}
 }

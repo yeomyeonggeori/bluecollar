@@ -9,9 +9,12 @@ import (
 // ask, what to call the model there, and the key that endpoint wants. A ladder
 // of tiers is a ladder of these, so nothing below this line knows a model name.
 type Endpoint struct {
-	URL       string `json:"url"`
-	ModelName string `json:"model"`
-	APIKey    string `json:"-"`
+	URL             string   `json:"url"`
+	ModelName       string   `json:"model"`
+	APIKey          string   `json:"-"`
+	ProviderOrder   []string `json:"providerOrder,omitempty"`
+	ProviderSort    string   `json:"providerSort,omitempty"`
+	ReasoningEffort string   `json:"reasoningEffort,omitempty"`
 }
 
 func (endpoint Endpoint) IsConfigured() bool {
@@ -25,7 +28,11 @@ func (endpoint Endpoint) Provider() (*Provider, error) {
 	if strings.TrimSpace(endpoint.ModelName) == "" {
 		return nil, errors.New("a model endpoint needs the name the model answers to there")
 	}
-	return NewProvider(endpoint.URL, endpoint.APIKey, endpoint.ModelName), nil
+	provider := NewProvider(endpoint.URL, endpoint.APIKey, endpoint.ModelName)
+	provider.providerOrder = append([]string{}, endpoint.ProviderOrder...)
+	provider.providerSort = strings.TrimSpace(endpoint.ProviderSort)
+	provider.reasoningEffort = strings.TrimSpace(endpoint.ReasoningEffort)
+	return provider, nil
 }
 
 func (endpoint Endpoint) EmbeddingProvider() (*EmbeddingProvider, error) {

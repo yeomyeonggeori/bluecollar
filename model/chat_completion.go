@@ -21,6 +21,7 @@ type ChatCompletionResponse struct {
 	Transport        string                `json:"-"`
 	FinishReason     string                `json:"finishReason"`
 	ProviderName     string                `json:"provider"`
+	UpstreamProvider string                `json:"upstreamProvider,omitempty"`
 	ModelName        string                `json:"model"`
 	ModelTier        string                `json:"-"`
 	SelectedBackend  string                `json:"selectedBackend"`

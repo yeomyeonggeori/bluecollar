@@ -88,8 +88,8 @@ func assertRecoveryDecisionTokenBudget(t *testing.T, requests []model.Structured
 		if request.StructuredOutputSchema.Name != "bluecollar_recovery_decision" {
 			continue
 		}
-		if request.GenerationOptions.MaxTokens == nil || *request.GenerationOptions.MaxTokens != recoveryDecisionMaxTokens {
-			t.Fatalf("expected recovery decision max tokens %d, got %+v", recoveryDecisionMaxTokens, request.GenerationOptions)
+		if request.GenerationOptions.MaxTokens != nil {
+			t.Fatalf("a recovery decision must leave the output budget unset, got %+v", request.GenerationOptions)
 		}
 		return
 	}

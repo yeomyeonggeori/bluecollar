@@ -12,8 +12,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-const recoveryDecisionMaxTokens = 1600
-
 type limitReplyStatus struct {
 	Source                  string             `json:"source"`
 	FirstInvalid            bool               `json:"firstInvalid"`
@@ -54,7 +52,6 @@ func (agentTurnRunner *AgentTurnRunner) appendUnavailableReplyEvents(taskRunID s
 }
 
 func (agentTurnRunner *AgentTurnRunner) generateRecoveryDecision(recoveryContext context.Context, request AgentTurnRequest, failureReason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState, phase string) (recoveryDecision, error) {
-	maxTokens := recoveryDecisionMaxTokens
 	messages := []model.Message{{
 		Role: "system",
 		Content: strings.Join([]string{
@@ -76,7 +73,6 @@ func (agentTurnRunner *AgentTurnRunner) generateRecoveryDecision(recoveryContext
 			Document:           recoveryDecisionSchema(),
 			IsStrictlyEnforced: true,
 		},
-		GenerationOptions: model.GenerationOptions{MaxTokens: &maxTokens},
 	})
 	if errorValue != nil {
 		return recoveryDecision{}, errorValue

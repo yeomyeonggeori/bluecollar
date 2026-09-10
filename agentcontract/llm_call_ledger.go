@@ -18,6 +18,7 @@ type LLMCallRecord struct {
 	Transport              string                                   `json:"transport,omitempty"`
 	SchemaName             string                                   `json:"schemaName,omitempty"`
 	Provider               string                                   `json:"provider,omitempty"`
+	UpstreamProvider       string                                   `json:"upstreamProvider,omitempty"`
 	Model                  string                                   `json:"model,omitempty"`
 	ModelTier              string                                   `json:"modelTier,omitempty"`
 	SelectedBackend        string                                   `json:"selectedBackend,omitempty"`
@@ -156,6 +157,7 @@ func (observedModel observedLanguageModel) GenerateStructuredResponse(ctx contex
 		Transport:             response.Transport,
 		SchemaName:            strings.TrimSpace(request.StructuredOutputSchema.Name),
 		Provider:              response.ProviderName,
+		UpstreamProvider:      response.UpstreamProvider,
 		Model:                 response.ModelName,
 		ModelTier:             response.ModelTier,
 		SelectedBackend:       response.SelectedBackend,
@@ -276,6 +278,7 @@ func chatCallRecord(kind string, request model.ChatCompletionRequest, response m
 		Transport:             response.Transport,
 		SchemaName:            chatRequestSchemaName(request),
 		Provider:              response.ProviderName,
+		UpstreamProvider:      response.UpstreamProvider,
 		Model:                 response.ModelName,
 		ModelTier:             response.ModelTier,
 		SelectedBackend:       response.SelectedBackend,

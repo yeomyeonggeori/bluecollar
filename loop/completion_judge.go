@@ -203,7 +203,6 @@ func completionJudgeRequest(request AgentTurnRequest, observations []turnObserva
 			Document:           completionJudgeSchema(),
 			IsStrictlyEnforced: true,
 		},
-		GenerationOptions: terminalStructuredGenerationOptions(model.GenerationOptions{}),
 	}
 }
 

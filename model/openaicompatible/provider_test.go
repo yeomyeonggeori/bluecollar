@@ -111,3 +111,24 @@ func TestLengthFinishReasonIsARecoverableStructuredOutputError(t *testing.T) {
 		}
 	}
 }
+
+func TestTheProviderThatActuallyServedTheRequestIsRecorded(t *testing.T) {
+	responseBody := []byte(`{"provider":"Modal","choices":[{"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":30,"total_tokens":40,"completion_tokens_details":{"reasoning_tokens":25}}}`)
+	response, errorValue := decodeChatCompletion(responseBody, "any/model")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if response.UpstreamProvider != "Modal" {
+		t.Fatalf("the ledger has to say who served the request, got %q", response.UpstreamProvider)
+	}
+	if response.Usage.ReasoningTokens != 25 {
+		t.Fatalf("the tokens the model spent thinking must be counted, got %d", response.Usage.ReasoningTokens)
+	}
+	structured, errorValue := decodeCompletion([]byte(`{"provider":"Modal","choices":[{"message":{"role":"assistant","tool_calls":[{"id":"c1","type":"function","function":{"name":"answer","arguments":"{}"}}]},"finish_reason":"tool_calls"}],"usage":{"completion_tokens_details":{"reasoning_tokens":3}}}`), "any/model")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if structured.UpstreamProvider != "Modal" || structured.Usage.ReasoningTokens != 3 {
+		t.Fatalf("a structured answer records the same, got %q and %d", structured.UpstreamProvider, structured.Usage.ReasoningTokens)
+	}
+}
