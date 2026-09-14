@@ -59,6 +59,7 @@ const (
 	TaskEventAgentLimitReply                       = "agent.limit_reply"
 	TaskEventAgentLimitStop                        = "agent.limit_stop"
 	TaskEventAgentLLMUnavailable                   = "agent.llm_unavailable"
+	TaskEventAgentModelCallCut                     = "agent.model_call_cut"
 	TaskEventAgentNoProgressLoopPaused             = "agent.no_progress_loop_paused"
 	TaskEventAgentNoProgressLoopStopped            = "agent.no_progress_loop_stopped"
 	TaskEventAgentNonRetryableToolRefused          = "agent.non_retryable_tool_refused"

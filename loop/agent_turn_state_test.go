@@ -112,8 +112,8 @@ func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *tes
 	if strings.Contains(string(finishTool.Function.Parameters), `"action"`) {
 		t.Fatalf("expected terminal control schema without redundant action discriminator, got %s", finishTool.Function.Parameters)
 	}
-	if string(chatRequest.ToolChoice) != `"auto"` {
-		t.Fatalf("the first sample may think in text before acting; forcing a call suppresses the thought entirely, got %s", chatRequest.ToolChoice)
+	if len(chatRequest.ToolChoice) != 0 {
+		t.Fatalf("naming tool_choice, even as the default, excludes providers that serve tools but reject the parameter, got %s", chatRequest.ToolChoice)
 	}
 	if !chatRequest.ParallelToolCalls {
 		t.Fatal("expected parallel native tool calls to be enabled")
@@ -312,8 +312,8 @@ func TestDecideAgentActionNativeChatRetryRequiresSinglePendingContractTool(t *te
 			if errorValue != nil {
 				t.Fatalf("expected corrected native action: %v", errorValue)
 			}
-			if string(provider.chatRequests[0].ToolChoice) != `"auto"` {
-				t.Fatalf("expected the thinking-allowed first choice, got %s", provider.chatRequests[0].ToolChoice)
+			if len(provider.chatRequests[0].ToolChoice) != 0 {
+				t.Fatalf("expected the first ask to leave tool_choice to the provider default, got %s", provider.chatRequests[0].ToolChoice)
 			}
 			retryRequest := provider.chatRequests[1]
 			if len(retryRequest.Tools) != 1 || retryRequest.Tools[0].Function.Name != testCase.expectedToolName {
@@ -1975,8 +1975,7 @@ func (languageModel *textFinalLanguageModel) GenerateChatCompletion(_ context.Co
 func TestNativeTextFinalDoesNotForceAnotherModelCall(t *testing.T) {
 	languageModel := &textFinalLanguageModel{content: "462"}
 	request := model.ChatCompletionRequest{
-		Tools:      []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.ShellToolName}}},
-		ToolChoice: json.RawMessage(`"auto"`),
+		Tools: []model.ChatCompletionTool{{Type: "function", Function: model.ChatCompletionFunction{Name: toolcontract.ShellToolName}}},
 	}
 
 	action, errorValue := decideAgentActionWithChat(context.Background(), languageModel, request, agentTaskState{})
