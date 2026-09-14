@@ -979,7 +979,6 @@ func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredRes
 		SchemaName:        agentActionSchemaName,
 		Messages:          messages,
 		Tools:             tools,
-		ToolChoice:        json.RawMessage(`"auto"`),
 		ParallelToolCalls: true,
 		GenerationOptions: structuredRequest.GenerationOptions,
 	}, true

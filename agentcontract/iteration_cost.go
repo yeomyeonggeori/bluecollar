@@ -29,6 +29,15 @@ func DurationForIterationCount(iterationCount int, iterationCost IterationCost, 
 	return min(max(measured, shortest), ceiling)
 }
 
+const measuredSuccessfulCallLatencyPercentile95PerMedian = 6
+
+func ModelCallPatience(iterationCost IterationCost) (time.Duration, bool) {
+	if iterationCost.CostPerIteration <= 0 {
+		return 0, false
+	}
+	return iterationCost.CostPerIteration * measuredSuccessfulCallLatencyPercentile95PerMedian * durationMargin, true
+}
+
 type IterationCostObserver struct {
 	mutex           sync.Mutex
 	costsByModel    map[string][]time.Duration

@@ -634,7 +634,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			}
 			return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: completionGateResult.Attachments, RecoveryActions: recoveryActionsFromObservations(state.Observations)}, nil
 		case "continue":
-			outcome := agentTurnRunner.handleToolCallAction(workContext, taskRun.TaskRunID, stepID, iteration, iterationRequest, toolUseRequirements, &state, actionDocument, successfulToolCalls, stopForNoProgress)
+			outcome := agentTurnRunner.handleToolCallAction(workContext, taskContext, taskRun.TaskRunID, stepID, iteration, iterationRequest, toolUseRequirements, &state, actionDocument, successfulToolCalls, stopForNoProgress)
 			if outcome.ShouldReturn {
 				if outcome.CanYieldToElapsed {
 					if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
@@ -731,9 +731,11 @@ func (agentTurnRunner *AgentTurnRunner) failLaunchStep(ctx context.Context, task
 	return AgentTurnResult{TaskRun: failedTaskRun, UserNotice: failedTaskRun.Result, FailureNotice: failureNotice, ToolNames: toolNamesForEvent(request.ToolSet)}
 }
 
-func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context, taskRunID string, stepID string, iteration int, request AgentTurnRequest, requirements []toolUseRequirement, state *agentTaskState, actionDocument turnActionDocument, successfulToolCalls map[string]turnObservation, stopForNoProgress func(string) (AgentTurnResult, bool)) toolCallActionOutcome {
+func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context, taskContext context.Context, taskRunID string, stepID string, iteration int, request AgentTurnRequest, requirements []toolUseRequirement, state *agentTaskState, actionDocument turnActionDocument, successfulToolCalls map[string]turnObservation, stopForNoProgress func(string) (AgentTurnResult, bool)) toolCallActionOutcome {
 	effortContext, cancelEffort := agentTurnRunner.currentEffortContext(ctx, request.EffortStartedAt)
 	defer cancelEffort()
+	invocationContext, cancelInvocation := agentTurnRunner.toolInvocationContext(taskContext, effortContext, request, actionDocument.ToolName)
+	defer cancelInvocation()
 	if outcome := agentTurnRunner.rejectMalformedToolCall(taskRunID, stepID, request, state, actionDocument, stopForNoProgress); outcome.WasHandled {
 		return outcome
 	}
@@ -769,7 +771,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		state.LastModelMessage = ""
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
-	observation := agentTurnRunner.invokeTool(effortContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
+	observation := agentTurnRunner.invokeTool(invocationContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, state.Attachments); isCancelled {
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}
 	}
@@ -1077,11 +1079,26 @@ func (agentTurnRunner *AgentTurnRunner) nextAction(ctx context.Context, taskRunI
 		Requirements:    append([]toolUseRequirement{}, requirements...),
 	}
 	state.Observations = agentTurnRunner.promptVisibleObservationsForAction(ctx, taskRunID, state)
-	actionDocument, errorValue := DecideAgentAction(ctx, agentTurnRunner.languageModel, state)
-	if errorValue != nil {
-		return turnActionDocument{}, errorValue
+	return agentTurnRunner.decideActionPatiently(ctx, taskRunID, state)
+}
+
+func (agentTurnRunner *AgentTurnRunner) decideActionPatiently(ctx context.Context, taskRunID string, state agentTaskState) (turnActionDocument, error) {
+	patience, isMeasured := agentcontract.ModelCallPatience(agentTurnRunner.iterationCostObserver.CostOfModelInUse())
+	if !isMeasured {
+		return DecideAgentAction(ctx, agentTurnRunner.languageModel, state)
 	}
-	return actionDocument, nil
+	callContext, cancelCall := context.WithTimeout(ctx, patience)
+	actionDocument, errorValue := DecideAgentAction(callContext, agentTurnRunner.languageModel, state)
+	wasCut := errors.Is(callContext.Err(), context.DeadlineExceeded) && ctx.Err() == nil
+	cancelCall()
+	if errorValue == nil || !wasCut {
+		return actionDocument, errorValue
+	}
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentModelCallCut, marshalEventBody(map[string]any{
+		"model":           agentTurnRunner.modelInUse,
+		"patienceSeconds": int(patience.Seconds()),
+	}))
+	return DecideAgentAction(ctx, agentTurnRunner.languageModel, state)
 }
 
 func outcomeContractNeedsQualityCriteria(toolSet *toolcontract.ToolSet, contract OutcomeContract) bool {
@@ -1905,6 +1922,21 @@ func (agentTurnRunner *AgentTurnRunner) stopForElapsedLimitIfReached(ctx context
 	completionRequirements := elapsedCompletionRequirements(state.Requirements, state.Observations, state.CompletionIntentToolName, request.ToolSet)
 	result, errorValue := agentTurnRunner.stopForElapsedLimit(ctx, taskRunID, request, completionRequirements, state.Observations, state.Attachments, state.ExecutionState, usedIterationCount, state.ToolCallCount)
 	return result, true, errorValue
+}
+
+func (agentTurnRunner *AgentTurnRunner) toolInvocationContext(taskContext context.Context, effortContext context.Context, request AgentTurnRequest, toolName string) (context.Context, context.CancelFunc) {
+	if !toolChangesSomething(request.ToolSet, toolName) {
+		return context.WithCancel(effortContext)
+	}
+	return agentTurnRunner.elapsedClosingContext(taskContext, request.EffortStartedAt)
+}
+
+func toolChangesSomething(toolSet *toolcontract.ToolSet, toolName string) bool {
+	if toolSet == nil {
+		return false
+	}
+	toolDefinition, isKnown := toolSet.ToolDefinition(strings.TrimSpace(toolName))
+	return isKnown && toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition)
 }
 
 func (agentTurnRunner *AgentTurnRunner) currentEffortContext(parentContext context.Context, effortStartedAt time.Time) (context.Context, context.CancelFunc) {
