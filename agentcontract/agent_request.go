@@ -65,23 +65,29 @@ type ActiveTaskContext struct {
 }
 
 type PendingConfirmationContext struct {
-	TaskRunID string
-	Prompt    string
-	Question  string
+	TaskRunID      string
+	Prompt         string
+	Question       string
+	AskedAt        time.Time
+	ExchangesSince int
 }
 
 type PendingChoiceContext struct {
-	TaskRunID     string
-	Question      string
-	SelectionMode string
-	Options       []ChoiceReplyOption
+	TaskRunID      string
+	Question       string
+	SelectionMode  string
+	Options        []ChoiceReplyOption
+	AskedAt        time.Time
+	ExchangesSince int
 }
 
 type PendingInputContext struct {
-	TaskRunID     string
-	Question      string
-	SelectionMode string
-	Options       []ChoiceReplyOption
+	TaskRunID      string
+	Question       string
+	SelectionMode  string
+	Options        []ChoiceReplyOption
+	AskedAt        time.Time
+	ExchangesSince int
 }
 
 type ChoiceReplyOption struct {
