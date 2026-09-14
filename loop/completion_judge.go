@@ -268,6 +268,7 @@ func deliveredCompletionAttachments(observations []turnObservation, actionDocume
 func completionJudgeInstruction() string {
 	return strings.Join([]string{
 		"Judge whether the recorded operations actually accomplish the user's original instruction. An operation marked failed=true attempted something and did not do it, so it is not evidence the thing was done.",
+		"The instruction's wording may be a bare confirmation such as 'ㅇ', '응', or 'yes'; the reading beneath it says what was confirmed and what the runtime already knows. Judge against that reading. Never mark unsatisfied because the wording alone names no work.",
 		"Judge only from the recorded ledger facts below. The executor's own completion claims are not evidence.",
 		"Accepting this completion delivers the finish reply to the user as the task's answer. Content the finish reply itself carries, such as links, results, and answers, is thereby delivered; never require a separate send or delivery operation for it. The reply's claims about operations it performed remain non-evidence and must match the ledger.",
 		"When the instruction asks only for words — a greeting, an answer, an explanation, advice — no recorded operation can exist for it: the finish reply is the work itself. Judge whether the reply's content accomplishes the instruction, and require no operation evidence for it.",
@@ -317,7 +318,16 @@ func completionJudgePlanContext(observations []turnObservation) string {
 }
 
 func completionJudgeOriginalInstruction(request AgentTurnRequest) string {
-	return firstNonEmptyString(request.ActiveGoal.OriginalInstruction, request.Prompt)
+	lines := []string{firstNonEmptyString(request.ActiveGoal.OriginalInstruction, request.Prompt)}
+	if objective := strings.TrimSpace(request.ActiveGoal.CurrentObjective); objective != "" {
+		lines = append(lines, "Read at intake as: "+objective)
+	}
+	for _, knownContext := range request.ActiveGoal.KnownContext {
+		if trimmedContext := strings.TrimSpace(knownContext); trimmedContext != "" {
+			lines = append(lines, "Known: "+trimmedContext)
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Delivering a reply is required of every task and accomplishes none of them; listed beside the
