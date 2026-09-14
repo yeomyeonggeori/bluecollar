@@ -8,6 +8,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -738,6 +739,7 @@ func turnRoutingContextDescription(request agentcontract.AgentRequest) string {
 			"Pending confirmation:",
 			"- Task: "+strings.TrimSpace(request.PendingConfirmation.Prompt),
 			"- Question: "+strings.TrimSpace(request.PendingConfirmation.Question),
+			"- "+openInteractionAgeLine(request.PendingConfirmation.AskedAt, request.PendingConfirmation.ExchangesSince, request.EnvironmentNow),
 			"- Return approval=approve or approval=approve_task only when the latest user message clearly authorizes this exact pending action. approve_task differs from approve only by covering the rest of this task's work of the same kind as well; it never authorizes an action the message did not authorize.",
 			"- Use answer_question only when the latest user message asks about this pending confirmation.",
 			"- If the latest user message changes the target, scope, conditions, or asks for a different action, use revise_task or start_task with approval=unclear. Redirecting the work is not approving it: when the message names a different action, the pending one stays unauthorized however agreeable the wording, and no approving signal may be returned for it.",
@@ -751,6 +753,7 @@ func turnRoutingContextDescription(request agentcontract.AgentRequest) string {
 		lines = append(lines,
 			"Pending input options:",
 			"- Question: "+strings.TrimSpace(pendingChoice.Question),
+			"- "+openInteractionAgeLine(pendingChoice.AskedAt, pendingChoice.ExchangesSince, request.EnvironmentNow),
 			"- Selection mode: "+strings.TrimSpace(pendingChoice.SelectionMode),
 			"- Options: "+strings.Join(optionLines, "; "),
 			"- Return choices as option keys when the latest natural-language answer matches options. Return an empty array for a valid custom answer.",
@@ -762,6 +765,7 @@ func turnRoutingContextDescription(request agentcontract.AgentRequest) string {
 		lines = append(lines,
 			"Pending input:",
 			"- Question: "+strings.TrimSpace(request.PendingInput.Question),
+			"- "+openInteractionAgeLine(request.PendingInput.AskedAt, request.PendingInput.ExchangesSince, request.EnvironmentNow),
 			"- Use continue_task or revise_task when the latest message answers or modifies this pending input.",
 			"- Use start_task when the latest message is a self-contained question or independent request instead of an answer.",
 			"- Treat messages that delegate the missing choice back to the assistant as an answer to continue the task; do not ask the same question again.",
@@ -790,6 +794,17 @@ func turnRoutingContextDescription(request agentcontract.AgentRequest) string {
 		return ""
 	}
 	return strings.Join(lines, "\n")
+}
+
+func openInteractionAgeLine(askedAt time.Time, exchangesSince int, now time.Time) string {
+	age := "just now"
+	if !askedAt.IsZero() && !now.IsZero() && now.After(askedAt) {
+		age = now.Sub(askedAt).Round(time.Minute).String() + " ago"
+	}
+	if exchangesSince == 0 {
+		return "Asked " + age + ", and nothing has been exchanged since: a bare yes, no, or option number answers it."
+	}
+	return "Asked " + age + ", and " + strconv.Itoa(exchangesSince) + " exchange(s) have happened since: a bare yes, no, or option number no longer names it. Only a message that names this action or this question answers it; otherwise treat the message as unrelated."
 }
 
 func resolveDecisionResponseLanguage(decisionLanguage string, requestLanguage string) string {
