@@ -831,7 +831,7 @@ func TestAgentTurnRunnerTerminalNoToolsAcceptsFailureReportFail(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "", "schedule_list", `{"range":"today"}`),
 		directToolAction("continue", "", "schedule_list", `{"range":"tomorrow"}`),
-		failureReportDocument("Schedule lookup is blocked because schedule_lookup returned operation_failed.", "schedule_list", "today", toolcontract.FailureCodes.OperationFailed.String(), "schedule_lookup", "schedule storage unavailable"),
+		failureReportDocumentWithBudget("Schedule lookup is blocked because schedule_lookup returned operation_failed.", "schedule_list", `{"range":"today"}`, toolcontract.FailureCodes.OperationFailed.String(), "schedule_lookup", "schedule storage unavailable", "no_tool_fallback_available"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, RecoveryBudget: terminalNoToolRecoveryBudgetForTest()})
 	toolRegistry := newTestCapabilityToolSet([]string{"schedule_list"})
@@ -941,7 +941,7 @@ func TestAgentTurnRunnerTerminalNoToolsRejectsFailWithoutReason(t *testing.T) {
 		directToolAction("continue", "", "schedule_list", `{"range":"today"}`),
 		directToolAction("continue", "", "schedule_list", `{"range":"tomorrow"}`),
 		`{"action":"fail","goalStatus":"blocked","goalSatisfied":false}`,
-		failureReportDocument("Schedule lookup is blocked because schedule_lookup returned operation_failed.", "schedule_list", "today", toolcontract.FailureCodes.OperationFailed.String(), "schedule_lookup", "schedule storage unavailable"),
+		failureReportDocumentWithBudget("Schedule lookup is blocked because schedule_lookup returned operation_failed.", "schedule_list", `{"range":"today"}`, toolcontract.FailureCodes.OperationFailed.String(), "schedule_lookup", "schedule storage unavailable", "no_tool_fallback_available"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, RecoveryBudget: terminalNoToolRecoveryBudgetForTest()})
 	toolRegistry := newTestCapabilityToolSet([]string{"schedule_list"})
@@ -2364,6 +2364,10 @@ func noToolFallbackFinishMessageDocument(reply string) string {
 }
 
 func failureReportDocument(reason string, toolName string, inputSummary string, errorCode string, failureStage string, message string) string {
+	return failureReportDocumentWithBudget(reason, toolName, inputSummary, errorCode, failureStage, message, "failure_report_required")
+}
+
+func failureReportDocumentWithBudget(reason string, toolName string, inputSummary string, errorCode string, failureStage string, message string, budgetState string) string {
 	document, errorValue := json.Marshal(map[string]any{
 		"action":            "fail",
 		"reason":            reason,
@@ -2378,7 +2382,7 @@ func failureReportDocument(reason string, toolName string, inputSummary string, 
 				FailureStage: failureStage,
 				Message:      message,
 			}},
-			BudgetState: "failure_report_required",
+			BudgetState: budgetState,
 		},
 	})
 	if errorValue != nil {
