@@ -314,7 +314,7 @@ func TestAgentTurnRunnerRejectsUnsafeRepeatedExternalSend(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana","message":"please take a look"}}`,
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana","message":"please take a look"}}`,
-		failureReportDocument("send failed", "message_send", "Dana", toolcontract.FailureCodes.OperationFailed.String(), "message_send", "Mattermost returned 503 after post create"),
+		failureReportDocument("send failed", "message_send", "please take a look", toolcontract.FailureCodes.OperationFailed.String(), "message_send", "Mattermost returned 503 after post create"),
 		recoveryDecisionDocument("inspect delivery state before retrying", "report the failed stage and avoid duplicate send claims"),
 	}, textResponses: []string{
 		"message_send/operation_failed stage failed to send. The same message was not sent again because of the duplicate delivery risk.",

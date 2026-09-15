@@ -525,14 +525,30 @@ func validateFailureReportAction(actionDocument turnActionDocument, facts failur
 	if len(actionDocument.UsedFailureFacts.Attempts) == 0 {
 		return completionGateResult{Message: "FailureDebt failure reports require usedFailureFacts.attempts"}
 	}
-	if strings.TrimSpace(actionDocument.UsedFailureFacts.BudgetState) == "" {
-		return completionGateResult{Message: "FailureDebt failure reports require usedFailureFacts.budgetState"}
+	if actionDocument.UsedFailureFacts.BudgetState != facts.BudgetState {
+		return completionGateResult{Message: "FailureDebt failure reports must copy usedFailureFacts.budgetState from FailureReportFacts"}
 	}
-	expectedAttempt, hasExpectedAttempt := latestFailureReportAttempt(facts)
-	if hasExpectedAttempt && !usedFailureFactsContainAttempt(actionDocument.UsedFailureFacts.Attempts, expectedAttempt) {
-		return completionGateResult{Message: "FailureDebt failure reports must preserve toolName, errorCode, failureStage, and message from FailureReportFacts"}
+	if !failureReportAttemptsAreRecorded(actionDocument.UsedFailureFacts.Attempts, facts.Attempts) {
+		return completionGateResult{Message: "FailureDebt failure reports must copy each cited attempt exactly from FailureReportFacts. Do not add unrecorded attempts or count one recorded call more than once."}
+	}
+	if expectedAttempt, hasExpectedAttempt := latestFailureReportAttempt(facts); hasExpectedAttempt && !usedFailureFactsContainAttempt(actionDocument.UsedFailureFacts.Attempts, expectedAttempt) {
+		return completionGateResult{Message: "FailureDebt failure reports must include the latest recorded failed attempt"}
 	}
 	return completionGateResult{IsSatisfied: true}
+}
+
+func failureReportAttemptsAreRecorded(attempts []failureReportAttempt, recordedAttempts []failureReportAttempt) bool {
+	remaining := make(map[failureReportAttempt]int, len(recordedAttempts))
+	for _, attempt := range recordedAttempts {
+		remaining[attempt]++
+	}
+	for _, attempt := range attempts {
+		if remaining[attempt] == 0 {
+			return false
+		}
+		remaining[attempt]--
+	}
+	return true
 }
 
 func latestFailureReportAttempt(facts failureReportFacts) (failureReportAttempt, bool) {
@@ -546,19 +562,9 @@ func latestFailureReportAttempt(facts failureReportFacts) (failureReportAttempt,
 
 func usedFailureFactsContainAttempt(attempts []failureReportAttempt, expectedAttempt failureReportAttempt) bool {
 	for _, attempt := range attempts {
-		if strings.TrimSpace(attempt.ToolName) != strings.TrimSpace(expectedAttempt.ToolName) {
-			continue
+		if attempt == expectedAttempt {
+			return true
 		}
-		if strings.TrimSpace(attempt.ErrorCode) == "" || strings.TrimSpace(attempt.FailureStage) == "" || strings.TrimSpace(attempt.Message) == "" {
-			continue
-		}
-		if strings.TrimSpace(expectedAttempt.ErrorCode) != "" && strings.TrimSpace(attempt.ErrorCode) != strings.TrimSpace(expectedAttempt.ErrorCode) {
-			continue
-		}
-		if strings.TrimSpace(expectedAttempt.FailureStage) != "" && strings.TrimSpace(attempt.FailureStage) != strings.TrimSpace(expectedAttempt.FailureStage) {
-			continue
-		}
-		return true
 	}
 	return false
 }

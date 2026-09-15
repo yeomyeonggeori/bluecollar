@@ -856,7 +856,7 @@ func observedRealityStatement(toolSet *toolcontract.ToolSet, observations []turn
 		}
 	}
 	if successfulToolCount == 0 {
-		return " Recorded reality: this task has ZERO successful tool observations, so nothing has been created or modified. Any completion claim is false. Your next action must be the required tool call, not finish."
+		return " Recorded reality: this task has ZERO successful tool observations. The requested outcome is not verified. Failed calls may have changed state before reporting an error. Inspect current state before repeating a write, or report the blocker and uncertainty if verification is unavailable."
 	}
 	if len(recordedEffects) == 0 {
 		return ""

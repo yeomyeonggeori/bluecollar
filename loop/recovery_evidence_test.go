@@ -54,7 +54,7 @@ func TestRecoveryGuidanceDoesNotInventAnExecutedToolCall(t *testing.T) {
 }
 
 func TestEarlyFailureReportDoesNotSpendRemainingRecoveryCalls(t *testing.T) {
-	failureDocument := failureReportDocument("The server must be repaired by its operator.", "record_create", "{}", "operation_failed", "result_validation", "server result contract failed")
+	failureDocument := failureReportDocumentWithBudget("The server must be repaired by its operator.", "record_create", "{}", "operation_failed", "result_validation", "server result contract failed", "no_tool_fallback_available")
 	var failureAction map[string]json.RawMessage
 	if errorValue := json.Unmarshal([]byte(failureDocument), &failureAction); errorValue != nil {
 		t.Fatal(errorValue)

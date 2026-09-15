@@ -2158,6 +2158,7 @@ func terminalNoToolsInstruction(observations []turnObservation, budget RecoveryB
 		"Return exactly one terminal action.",
 		"Use finish only when you can answer from current context with failureResolution=no_tool_fallback.",
 		"Use fail only when completion is blocked, with failureResolution=failure_report and usedFailureFacts copied from FailureReportFacts.",
+		"Only the recorded tool calls in FailureReportFacts were attempted. Guidance and model calls are not tool executions. Do not invent retries or infer that a failed response means a write was not saved; report an unverified outcome as uncertain.",
 		"FailureReportFacts:\n" + marshalEventBody(facts),
 	}
 	if strings.TrimSpace(rejectionReason) != "" {
