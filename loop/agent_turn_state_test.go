@@ -1302,23 +1302,13 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 	}
 }
 
-func TestParseAgentActionResponseUsesReplyPartsForFinishMessage(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"summary","replyParts":[{"type":"text","text":"done"}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
+func TestParseAgentActionResponseDeliversTheFinishMessageOverAStatusLine(t *testing.T) {
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Open https://intern.kim/handoff/handoff-1 and sign in.","replyParts":[{"type":"text","text":"Browser handed over, waiting for the user."}],"completionSummary":"Browser handed over.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}
-	if action.Action != "finish" || finishActionMessage(action) != "done" {
-		t.Fatalf("expected replyParts to provide finish message, got %+v", action)
-	}
-}
-
-func TestParseAgentActionResponseNormalizesUntypedFinishReplyParts(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Delivering it directly.","replyParts":[{"type":"","text":"Still pending. It will be delivered as an attachment later."}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
-	if errorValue != nil {
-		t.Fatalf("expected parsed action: %v", errorValue)
-	}
-	if finishActionMessage(action) != "Still pending. It will be delivered as an attachment later." {
-		t.Fatalf("expected untyped replyParts text to stay visible, got %+v", action)
+	if finishActionMessage(action) != "Open https://intern.kim/handoff/handoff-1 and sign in." {
+		t.Fatalf("expected the finish message to be the reply, got %q", finishActionMessage(action))
 	}
 }
 
@@ -1333,7 +1323,7 @@ func TestParseAgentActionResponseCoercesStringCompletionEvidenceIDs(t *testing.T
 }
 
 func TestParseAgentActionResponseNormalizesNestedFinishBlock(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"executionStateUpdate":{"goal":"answer user"},"finish":{"message":"done","replyParts":[{"type":"text","text":"done"}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[{"id":"complete","passed":true,"evidenceIDs":["obs-001"]}]}}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"executionStateUpdate":{"goal":"answer user"},"finish":{"message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[{"id":"complete","passed":true,"evidenceIDs":["obs-001"]}]}}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}

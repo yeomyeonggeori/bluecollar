@@ -40,7 +40,6 @@ type turnActionDocument struct {
 	AssistantText         string                        `json:"assistantText,omitempty"`
 	ModelReasoning        string                        `json:"modelReasoning,omitempty"`
 	ModelReasoningField   string                        `json:"modelReasoningField,omitempty"`
-	ReplyParts            []AgentPart                   `json:"replyParts,omitempty"`
 	CompletionSummary     string                        `json:"completionSummary,omitempty"`
 	ToolName              string                        `json:"toolName"`
 	ToolInput             json.RawMessage               `json:"toolInput"`
@@ -1042,18 +1041,7 @@ func toolObservationMessage(observation turnObservation) string {
 }
 
 func finishActionMessage(actionDocument turnActionDocument) string {
-	return firstNonEmptyString(replyPartsText(actionDocument.ReplyParts), actionDocument.Message, actionDocument.Reply)
-}
-
-func replyPartsText(parts []AgentPart) string {
-	textParts := []string{}
-	for _, part := range parts {
-		if strings.TrimSpace(part.Type) != AgentPartTypeText || strings.TrimSpace(part.Text) == "" {
-			continue
-		}
-		textParts = append(textParts, strings.TrimSpace(part.Text))
-	}
-	return strings.TrimSpace(strings.Join(textParts, "\n\n"))
+	return firstNonEmptyString(actionDocument.Message, actionDocument.Reply)
 }
 
 func approvalObservationUserFacingMessage(observation turnObservation) string {

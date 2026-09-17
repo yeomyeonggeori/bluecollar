@@ -726,29 +726,10 @@ func normalizeParsedAction(actionDocument turnActionDocument) turnActionDocument
 		actionDocument.ToolName = strings.TrimSpace(actionDocument.ToolName)
 	case "finish":
 		actionDocument.Action = "finish"
-		actionDocument.ReplyParts = normalizeFinishReplyParts(actionDocument.ReplyParts)
 	default:
 		actionDocument.Action = action
 	}
 	return actionDocument
-}
-
-func normalizeFinishReplyParts(parts []AgentPart) []AgentPart {
-	normalizedParts := []AgentPart{}
-	for _, part := range parts {
-		part.Type = strings.TrimSpace(part.Type)
-		part.Text = strings.TrimSpace(part.Text)
-		if part.Type == "" && part.Text != "" {
-			part.Type = AgentPartTypeText
-		}
-		if part.Type != AgentPartTypeText || part.Text == "" {
-			continue
-		}
-		part.Image = nil
-		part.File = nil
-		normalizedParts = append(normalizedParts, part)
-	}
-	return normalizedParts
 }
 
 func normalizeParsedEvidence(actionDocument turnActionDocument) turnActionDocument {
