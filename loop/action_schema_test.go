@@ -109,10 +109,10 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 }
 
 func TestTerminalActionSchemasAcceptFinishAndFailDocuments(t *testing.T) {
-	finishDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
-	failDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
-	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","replyParts":[],"reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"shell","errorCode":"operation_failed","failureStage":"shell","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
-	finishWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"no_tool_fallback","replyParts":[],"reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
+	finishDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
+	failDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
+	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"shell","errorCode":"operation_failed","failureStage":"shell","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
+	finishWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
 
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), finishDocument)
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), failDocument)
@@ -353,4 +353,23 @@ func TestAContinueVariantAsksOnlyForWhatTheLoopReads(t *testing.T) {
 		return
 	}
 	t.Fatal("no continue variant in the schema")
+}
+
+func TestAFinishHasOnePlaceForTheReply(t *testing.T) {
+	schemas := map[string]map[string]any{
+		"finish":   finishActionSchema(false, nil),
+		"terminal": terminalActionUnifiedSchema(false),
+	}
+	for name, schema := range schemas {
+		properties, isObject := schema["properties"].(map[string]any)
+		if !isObject {
+			t.Fatalf("expected the %s schema to declare properties, got %+v", name, schema)
+		}
+		if _, hasMessage := properties["message"]; !hasMessage {
+			t.Fatalf("expected the %s schema to carry the reply in message", name)
+		}
+		if _, hasReplyParts := properties["replyParts"]; hasReplyParts {
+			t.Fatalf("expected the %s schema to offer no second reply field", name)
+		}
+	}
 }

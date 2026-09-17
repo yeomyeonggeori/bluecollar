@@ -298,7 +298,6 @@ func completionStateFinishDocument(state CompletionState, message string) turnAc
 	return turnActionDocument{
 		Action:             "finish",
 		Message:            message,
-		ReplyParts:         []AgentPart{{Type: AgentPartTypeText, Text: message}},
 		CompletionSummary:  message,
 		GoalStatus:         "satisfied",
 		GoalSatisfied:      &goalSatisfied,

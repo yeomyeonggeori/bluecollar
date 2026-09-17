@@ -92,7 +92,6 @@ func finishActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[st
 	return closedObjectSchema(map[string]any{
 		"action":                enumStringSchema("finish"),
 		"message":               stringSchema(),
-		"replyParts":            finishReplyPartArraySchema(),
 		"completionSummary":     stringSchema(),
 		"failureResolution":     enumValuesStringSchema(failureResolutionValues),
 		"goalStatus":            enumValuesStringSchema([]string{"satisfied"}),
@@ -102,16 +101,6 @@ func finishActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[st
 		"qualityReview":         qualityReviewSchema(),
 		"executionStateUpdate":  executionStateSchema(),
 	})
-}
-
-func finishReplyPartArraySchema() map[string]any {
-	return map[string]any{
-		"type": "array",
-		"items": closedObjectSchema(map[string]any{
-			"type": enumValuesStringSchema([]string{"text"}),
-			"text": stringSchema(),
-		}),
-	}
 }
 
 func agentPartArraySchema() map[string]any {
@@ -314,7 +303,6 @@ func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
 	properties := map[string]any{
 		"action":                enumValuesStringSchema([]string{"finish", "fail"}),
 		"message":               stringSchema(),
-		"replyParts":            finishReplyPartArraySchema(),
 		"completionSummary":     stringSchema(),
 		"reason":                stringSchema(),
 		"goalStatus":            enumValuesStringSchema([]string{"satisfied", "blocked"}),
