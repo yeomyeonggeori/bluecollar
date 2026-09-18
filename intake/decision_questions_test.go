@@ -25,9 +25,6 @@ func criteriaText(t *testing.T, question model.DecisionQuestion) string {
 	return question.Instructions + " " + string(document)
 }
 
-// The router used to refuse doable work by calling it unsupported, and used to
-// pre-refuse anything that smelled like a permission problem. POSIX decides
-// permissions at execution, so the criteria must keep saying so.
 func TestTheRouteQuestionReservesGiveUpForImpossibleWork(t *testing.T) {
 	questions := questionsFor(addressedDecisionRequest("이 파일로 덱 만들어줘"))
 

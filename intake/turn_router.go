@@ -508,12 +508,7 @@ func answerableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute 
 }
 
 func isValidBusyRoute(busyRoute agentcontract.BusyRoute) bool {
-	switch busyRoute {
-	case agentcontract.BusyRouteStatus, agentcontract.BusyRouteSteer, agentcontract.BusyRouteReplace, agentcontract.BusyRouteCancel, agentcontract.BusyRouteNewTask, agentcontract.BusyRouteUnrelated:
-		return true
-	default:
-		return false
-	}
+	return agentcontract.IsBusyRouteName(string(busyRoute))
 }
 
 func removeFileDeliveryToolWithoutArtifactFormat(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
@@ -655,21 +650,17 @@ func hasArtifactOutputFormat(formats []string) bool {
 }
 
 func normalizeTaskShape(taskShape agentcontract.TaskShape) agentcontract.TaskShape {
-	switch taskShape {
-	case agentcontract.TaskShapeImmediateReply, agentcontract.TaskShapeResearchTask, agentcontract.TaskShapeMaintenanceTask, agentcontract.TaskShapeScheduledTask, agentcontract.TaskShapeBrowserHandoffTask, agentcontract.TaskShapeApprovalGatedTask:
+	if agentcontract.IsTaskShapeName(string(taskShape)) {
 		return taskShape
-	default:
-		return ""
 	}
+	return ""
 }
 
 func normalizeTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
-	switch route {
-	case agentcontract.TurnRouteContinueTask, agentcontract.TurnRouteReviseTask, agentcontract.TurnRouteAnswerQuestion, agentcontract.TurnRouteStartTask, agentcontract.TurnRouteAnswerMeta, agentcontract.TurnRouteClarify, agentcontract.TurnRouteConsume, agentcontract.TurnRouteGiveUp:
+	if agentcontract.IsTurnRouteName(string(route)) {
 		return route
-	default:
-		return ""
 	}
+	return ""
 }
 
 func normalizeApprovalSignal(signal *agentcontract.ApprovalSignal, hasPendingConfirmation bool) *agentcontract.ApprovalSignal {
@@ -681,13 +672,11 @@ func normalizeApprovalSignal(signal *agentcontract.ApprovalSignal, hasPendingCon
 		return &unclear
 	}
 	normalizedSignal := agentcontract.ApprovalSignal(strings.TrimSpace(string(*signal)))
-	switch normalizedSignal {
-	case agentcontract.ApprovalSignalApprove, agentcontract.ApprovalSignalApproveTask, agentcontract.ApprovalSignalReject, agentcontract.ApprovalSignalUnclear:
+	if agentcontract.IsApprovalSignalName(string(normalizedSignal)) {
 		return &normalizedSignal
-	default:
-		unclear := agentcontract.ApprovalSignalUnclear
-		return &unclear
 	}
+	unclear := agentcontract.ApprovalSignalUnclear
+	return &unclear
 }
 
 func normalizeChoiceSelections(selections []string, pendingChoice agentcontract.PendingChoiceContext) []string {
@@ -762,13 +751,6 @@ func clarificationOptionKey(index int) string {
 
 func toolIsModelCallable(toolID string) bool {
 	return strings.TrimSpace(toolID) != ""
-}
-
-func requestToolSetCanReachTool(toolSet *toolcontract.ToolSet, toolName string) bool {
-	if toolSet == nil {
-		return false
-	}
-	return toolSet.IsAllowed(toolName) || toolSet.CanExpose(toolName)
 }
 
 func appendUniqueStrings(values []string, candidates ...string) []string {

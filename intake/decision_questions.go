@@ -123,13 +123,17 @@ func (builder questionBuilder) addressingQuestions(messageKey string) map[string
 }
 
 func reactionEmojiOptionDescriptions() map[string]string {
+	return optionDescriptions(agentcontract.ReactionEmojiNames, reactionEmojiDescriptions)
+}
+
+func optionDescriptions(optionNames []string, descriptionsByName map[string]string) map[string]string {
 	descriptions := map[string]string{}
-	for _, name := range agentcontract.ReactionEmojiNames {
-		description := reactionEmojiDescriptions[name]
+	for _, optionName := range optionNames {
+		description := descriptionsByName[optionName]
 		if description == "" {
-			description = name
+			description = optionName
 		}
-		descriptions[name] = description
+		descriptions[optionName] = description
 	}
 	return descriptions
 }
@@ -200,7 +204,7 @@ func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQu
 	agentName := builder.agentName()
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "What should " + agentName + " do about it? The latest message is authoritative; earlier context only helps read it. When scheduledRun is in the state the message is a run of that schedule firing, and when activeGoal is in the state the message is input to that goal unless it plainly starts something unrelated.",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.TurnRouteNames, map[string]string{
 			string(agentcontract.TurnRouteConsume):        "nothing to say: an addressed message that needs no text reply, acknowledged with an emoji. Never consume a message that asks " + agentName + " to do, check, read, verify, or report anything",
 			string(agentcontract.TurnRouteAnswerQuestion): "answer in words right now, from common knowledge, judgment, or what is visible, possibly after one small read-only tool call",
 			string(agentcontract.TurnRouteAnswerMeta):     "answer a question about " + agentName + " itself: what it can do, how it works, what it is",
@@ -209,56 +213,56 @@ func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQu
 			string(agentcontract.TurnRouteContinueTask):   "add to, or approve, work already running",
 			string(agentcontract.TurnRouteReviseTask):     "redirect work already running toward a changed target or scope",
 			string(agentcontract.TurnRouteGiveUp):         "say it cannot be done: physically impossible, nonsensical, or plainly improper on its face. Never for a permission concern, which the operating system decides at execution",
-		},
+		}),
 	}.Question()
 }
 
 func (builder questionBuilder) classificationQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "What kind of turn is it?",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.IntakeClassificationNames, map[string]string{
 			string(agentcontract.IntakeClassificationQuickReply):        "answerable in words now, with at most one small read-only or computation tool: greetings, jokes, office banter, capability questions, arithmetic, opinions, casual recommendations, brainstorming, and anything available from common knowledge or the visible conversation",
 			string(agentcontract.IntakeClassificationBoundedTask):       "executable tool work with a clear outcome",
 			string(agentcontract.IntakeClassificationNeedsConfirmation): "essential input only the sender can supply is missing. Approval for risky, destructive, paid, or externally visible work is handled after routing and is never this",
 			string(agentcontract.IntakeClassificationUnsupported):       "pointless to even attempt",
-		},
+		}),
 	}.Question()
 }
 
 func (builder questionBuilder) taskShapeQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "What shape does the work take?",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.TaskShapeNames, map[string]string{
 			string(agentcontract.TaskShapeImmediateReply):     "a tool-free answer; only for a quick reply or an unsupported request",
 			string(agentcontract.TaskShapeResearchTask):       "information acquisition from an external or private source, or synthesis across source material",
 			string(agentcontract.TaskShapeMaintenanceTask):    "work that changes state: adding, updating, or deleting records, files, or settings",
 			string(agentcontract.TaskShapeScheduledTask):      "work the message asks to run later, repeatedly, or on a schedule",
 			string(agentcontract.TaskShapeBrowserHandoffTask): "work that needs a person at a browser, such as a sign-in or a captcha",
 			string(agentcontract.TaskShapeApprovalGatedTask):  "work held for a missing essential input",
-		},
+		}),
 	}.Question()
 }
 
 func (builder questionBuilder) levelQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "How difficult is the work it asks for? This one tier sizes both the model and the work budget.",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.IntakeTaskLevelNames, map[string]string{
 			string(agentcontract.TaskLevelLow):    "ordinary bounded work with a clear short outcome that normally produces one final reply, even when it needs a few tools",
 			string(agentcontract.TaskLevelMedium): "multi-step work, research, or artifact generation, where progress updates are useful",
 			string(agentcontract.TaskLevelHigh):   "long, wide, deployment-shaped, or verification-heavy work",
-		},
+		}),
 	}.Question()
 }
 
 func (builder questionBuilder) deliverableKindQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "What is the primary deliverable the work ultimately is? This is about the final form, not which tool runs first.",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.DeliverableKindNames, map[string]string{
 			string(agentcontract.DeliverableKindWebsite):      "a live site, web page, landing page, dashboard, or demo served at a URL, at every stage including an unpublished draft",
 			string(agentcontract.DeliverableKindPresentation): "a slide deck",
 			string(agentcontract.DeliverableKindDocument):     "a text document that exists as a file",
 			string(agentcontract.DeliverableKindNone):         "anything else, including everything whose final form is a message in the conversation",
-		},
+		}),
 	}.Question()
 }
 
@@ -276,36 +280,36 @@ func (builder questionBuilder) responseLanguageQuestion(messageKey string) model
 func (builder questionBuilder) priorTaskReferenceQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "How does it relate to priorTask in the state, which is a candidate previous task rather than a running one?",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.PriorTaskReferenceNames, map[string]string{
 			string(agentcontract.PriorTaskReferenceOutcomeRecovery): "it asks to deliver, retry, continue, or revise that prior task's outcome",
 			string(agentcontract.PriorTaskReferenceNone):            "unrelated or self-contained, including a follow-up that asks to read, open, check, or summarize an artifact the prior task already delivered",
-		},
+		}),
 	}.Question()
 }
 
 func (builder questionBuilder) approvalQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "A confirmation is pending (pendingConfirmation in the state). How does the message answer it? Redirecting the work is not approving it. When pendingConfirmation.exchangesSince is above zero, a bare yes, no, or option number no longer names the pending action, and only a message naming this action or this question answers it.",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.ApprovalSignalNames, map[string]string{
 			string(agentcontract.ApprovalSignalApprove):     "it clearly authorizes this exact pending action, this once",
 			string(agentcontract.ApprovalSignalApproveTask): "it authorizes this action and the rest of this task's work of the same kind, without asking again",
 			string(agentcontract.ApprovalSignalReject):      "it declines the pending action or says to stop",
 			string(agentcontract.ApprovalSignalUnclear):     "it does not answer the pending confirmation, or it changes the target, scope, conditions, or asks for a different action",
-		},
+		}),
 	}.Question()
 }
 
 func (builder questionBuilder) busyRouteQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: about(messageKey) + "A task is already running (activeTask in the state). What should happen to it? Natural-language stop requests are ordinary messages, so read them by intent.",
-		OptionDescriptions: map[string]string{
+		OptionDescriptions: optionDescriptions(agentcontract.BusyRouteNames, map[string]string{
 			string(agentcontract.BusyRouteStatus):    "it asks whether work is happening, or asks for progress",
 			string(agentcontract.BusyRouteSteer):     "it corrects or redirects the running task without cancelling it",
 			string(agentcontract.BusyRouteReplace):   "it clearly cancels or replaces the running task with a new instruction",
 			string(agentcontract.BusyRouteCancel):    "it asks to stop, cancel, abort, or not continue the running task",
 			string(agentcontract.BusyRouteNewTask):   "it is independent and should not affect the running task",
 			string(agentcontract.BusyRouteUnrelated): "it should neither start nor alter work",
-		},
+		}),
 	}.Question()
 }
 
