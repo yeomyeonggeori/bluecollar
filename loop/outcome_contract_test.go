@@ -590,6 +590,35 @@ func TestOutcomeContractDemotesIntakeInitialToolsToEvidenceHints(t *testing.T) {
 	}
 }
 
+func TestALikelyToolTheWorkNeverCalledDoesNotHoldAFinishedTaskOpen(t *testing.T) {
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		{Name: "message_search", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectRead},
+		{Name: "task_update", Namespace: "task", SideEffectClass: toolcontract.ToolSideEffectStateChange},
+	})
+	contract := outcomeContractForRequest(
+		AgentRequest{
+			Prompt:  "어제 올린 공지 상태 정리해줘",
+			ToolSet: toolSet,
+		},
+		IntakeDecision{
+			Classification:   IntakeClassificationBoundedTask,
+			TaskShape:        TaskShapeMaintenanceTask,
+			InitialToolNames: []string{"message_search", "task_update"},
+		},
+		InstructionBundle{},
+		ExecutionPlan{},
+		false,
+		nil,
+	)
+
+	if len(contract.RequiredEvidenceTools) != 0 {
+		t.Fatalf("expected a merely likely tool to prove nothing about the outcome, got %+v", contract.RequiredEvidenceTools)
+	}
+	if !stringSliceContains(contract.SelectedEvidenceHints, "message_search") {
+		t.Fatalf("expected the likely tool to stay a hint, got %+v", contract.SelectedEvidenceHints)
+	}
+}
+
 func TestOutcomeContractDerivesSideEffectEvidenceAnyOfGroupForMaintenanceTask(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 		{Name: "task_add", Namespace: "task", SideEffectClass: toolcontract.ToolSideEffectStateChange},
