@@ -60,21 +60,21 @@ func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) a
 	return record
 }
 
-func toolSelectionRecord(messageKeys []string, candidateToolNames []string, answers map[string]model.DecisionAnswer, selectionError error) *agentcontract.ToolSelectionRecord {
+func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers map[string]model.DecisionAnswer, selectionError error) *agentcontract.ToolSelectionRecord {
 	if selectionError != nil {
 		return nil
 	}
 	record := agentcontract.ToolSelectionRecord{ProbabilityThreshold: likelyToolProbabilityThreshold, CountLimit: likelyToolCountLimit, Probabilities: map[string]float64{}}
 	for _, messageKey := range messageKeys {
 		reader := answerReader{answers: answers, messageKey: messageKey}
-		probabilityByToolName, errorValue := reader.toolProbabilities(candidateToolNames)
+		probabilityByToolName, errorValue := reader.toolProbabilities(plan.candidateToolNames)
 		if errorValue != nil {
 			continue
 		}
 		for toolName, probability := range recordedToolProbabilities(probabilityByToolName) {
 			record.Probabilities[messageKey+"."+toolName] = probability
 		}
-		for _, toolName := range selectLikelyToolNames(probabilityByToolName, candidateToolNames) {
+		for _, toolName := range selectLikelyToolNames(probabilityByToolName, plan.candidateToolNames) {
 			record.SelectedToolNames = append(record.SelectedToolNames, messageKey+"."+toolName)
 		}
 	}

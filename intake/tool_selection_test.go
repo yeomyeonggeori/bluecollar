@@ -158,7 +158,8 @@ func toolQuestionsFor(request agentcontract.IntakeDecisionRequest, toolNames []s
 }
 
 func toolSelectionRequestFor(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
-	return toolSelectionRequestPart(request, []string{decisionMessageKey(0)}, resolveCallableToolNames(request))
+	candidateToolNames := resolveCallableToolNames(request)
+	return toolSelectionRequestPart(request, []string{decisionMessageKey(0)}, decisionToolDescriptions(request.ToolSet, candidateToolNames).tools)
 }
 
 func TestThePerToolQuestionStaysSmallEnoughToRepeatPerMessage(t *testing.T) {
@@ -257,7 +258,7 @@ func TestToolQuestionsSplitAcrossRequestsWhenOneWouldOverflowTheBudget(t *testin
 	messageKeys := burstMessageKeys(request)
 	candidateToolNames := resolveCallableToolNames(request)
 
-	requests := planToolSelectionRequests(request, messageKeys, candidateToolNames)
+	requests := planToolSelection(request, messageKeys, candidateToolNames).requests
 
 	if len(requests) < 2 {
 		t.Fatalf("expected a burst this size to be split, got %d request(s)", len(requests))
@@ -290,31 +291,10 @@ func burstMessageKeys(request agentcontract.IntakeDecisionRequest) []string {
 	return messageKeys
 }
 
-func TestASplitGivesEveryPartAlmostTheSameNumberOfTools(t *testing.T) {
-	for _, partCount := range []int{2, 3, 7, 11} {
-		parts := balancedToolNameParts(measurementToolNames(), partCount)
-		if len(parts) != partCount {
-			t.Fatalf("expected %d parts, got %d", partCount, len(parts))
-		}
-		smallestPartSize, largestPartSize, totalSize := len(parts[0]), len(parts[0]), 0
-		for _, part := range parts {
-			smallestPartSize = min(smallestPartSize, len(part))
-			largestPartSize = max(largestPartSize, len(part))
-			totalSize += len(part)
-		}
-		if largestPartSize-smallestPartSize > 1 {
-			t.Fatalf("expected balanced parts, got sizes between %d and %d", smallestPartSize, largestPartSize)
-		}
-		if totalSize != len(measurementToolNames()) {
-			t.Fatalf("expected every tool to land in a part, got %d of %d", totalSize, len(measurementToolNames()))
-		}
-	}
-}
-
 func TestASplitRequestAsksOnlyAboutTheToolsItsOwnStateDescribes(t *testing.T) {
 	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 
-	for _, decisionRequest := range planToolSelectionRequests(request, burstMessageKeys(request), resolveCallableToolNames(request)) {
+	for _, decisionRequest := range planToolSelection(request, burstMessageKeys(request), resolveCallableToolNames(request)).requests {
 		state, isDecisionState := decisionRequest.State.(decisionState)
 		if !isDecisionState {
 			t.Fatalf("expected a decision state, got %T", decisionRequest.State)

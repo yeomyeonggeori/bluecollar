@@ -62,10 +62,14 @@ func (builder questionBuilder) toolQuestions(messageKeys []string, toolNames []s
 	questions := map[string]model.DecisionQuestion{}
 	for _, messageKey := range messageKeys {
 		for _, toolName := range toolNames {
-			questions[messageKey+"."+agentcontract.IntakeQuestionPrefixTool+toolName] = builder.likelyToolQuestion(messageKey, toolName)
+			questions[toolQuestionName(messageKey, toolName)] = builder.likelyToolQuestion(messageKey, toolName)
 		}
 	}
 	return questions
+}
+
+func toolQuestionName(messageKey string, toolName string) string {
+	return messageKey + "." + agentcontract.IntakeQuestionPrefixTool + toolName
 }
 
 func (builder questionBuilder) questionsForMessage(messageKey string) map[string]model.DecisionQuestion {

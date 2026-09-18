@@ -7,18 +7,25 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
+type toolSelectionPlan struct {
+	requests                []model.DecisionRequest
+	candidateToolNames      []string
+	clippedDescriptionCount int
+}
+
 func (planner DecisionPlanner) withLikelyTools(ctx context.Context, request agentcontract.IntakeDecisionRequest, decisions agentcontract.IntakeDecisions, callLedger *agentcontract.IntakeCallLedger) agentcontract.IntakeDecisions {
 	messageKeys := messageKeysThatStartWork(decisions)
 	candidateToolNames := resolveCallableToolNames(request)
 	if len(messageKeys) == 0 || len(candidateToolNames) == 0 {
 		return decisions
 	}
-	calls := planner.decideEveryRequest(ctx, planToolSelectionRequests(request, messageKeys, candidateToolNames))
+	plan := planToolSelection(request, messageKeys, candidateToolNames)
+	calls := planner.decideEveryRequest(ctx, plan.requests)
 	answers := mergedDecisionAnswers(calls)
 	selectedToolNames, selectionError := likelyToolNamesByMessageKey(messageKeys, candidateToolNames, answers, firstCallError(calls))
 	recordDecisionCalls(callLedger, calls, decisionCallContext{
 		errorValue:    selectionError,
-		toolSelection: toolSelectionRecord(messageKeys, candidateToolNames, answers, selectionError),
+		toolSelection: toolSelectionRecord(messageKeys, plan, answers, selectionError),
 	})
 	return withLikelyToolNames(decisions, selectedToolNames)
 }
@@ -56,42 +63,38 @@ func withLikelyToolNames(decisions agentcontract.IntakeDecisions, selectedToolNa
 	return decisions
 }
 
-func planToolSelectionRequests(request agentcontract.IntakeDecisionRequest, messageKeys []string, toolNames []string) []model.DecisionRequest {
-	wholeRequest := toolSelectionRequestPart(request, messageKeys, toolNames)
+func planToolSelection(request agentcontract.IntakeDecisionRequest, messageKeys []string, candidateToolNames []string) toolSelectionPlan {
+	described := decisionToolDescriptions(request.ToolSet, candidateToolNames)
+	plan := toolSelectionPlan{candidateToolNames: candidateToolNames, clippedDescriptionCount: described.clippedDescriptionCount}
+	wholeRequest := toolSelectionRequestPart(request, messageKeys, described.tools)
 	if decisionRequestByteCount(wholeRequest) <= decisionRequestByteBudget {
-		return []model.DecisionRequest{wholeRequest}
+		plan.requests = []model.DecisionRequest{wholeRequest}
+		return plan
 	}
-	for partCount := 2; partCount < len(toolNames); partCount++ {
-		requests := balancedToolSelectionRequests(request, messageKeys, toolNames, partCount)
+	byteCountByToolName := toolSelectionByteCounts(newQuestionBuilder(request), messageKeys, described.tools)
+	fixedByteCount := decisionRequestByteCount(toolSelectionRequestPart(request, messageKeys, nil)) + len(toolLikelihoodGuidance)
+	for batchCount := max(smallestBatchCountThatFits(fixedByteCount, byteCountByToolName), 2); batchCount <= len(described.tools); batchCount++ {
+		requests := toolSelectionRequests(request, messageKeys, toolSelectionBatches(described.tools, byteCountByToolName, batchCount))
 		if largestDecisionRequestByteCount(requests) <= decisionRequestByteBudget {
-			return requests
+			plan.requests = requests
+			return plan
 		}
 	}
-	return balancedToolSelectionRequests(request, messageKeys, toolNames, len(toolNames))
+	plan.requests = toolSelectionRequests(request, messageKeys, toolSelectionBatches(described.tools, byteCountByToolName, len(described.tools)))
+	return plan
 }
 
-func balancedToolSelectionRequests(request agentcontract.IntakeDecisionRequest, messageKeys []string, toolNames []string, partCount int) []model.DecisionRequest {
-	requests := []model.DecisionRequest{}
-	for _, partToolNames := range balancedToolNameParts(toolNames, partCount) {
-		requests = append(requests, toolSelectionRequestPart(request, messageKeys, partToolNames))
+func toolSelectionRequests(request agentcontract.IntakeDecisionRequest, messageKeys []string, batches [][]decisionTool) []model.DecisionRequest {
+	requests := make([]model.DecisionRequest, 0, len(batches))
+	for _, batch := range batches {
+		requests = append(requests, toolSelectionRequestPart(request, messageKeys, batch))
 	}
 	return requests
 }
 
-func balancedToolNameParts(toolNames []string, partCount int) [][]string {
-	parts := [][]string{}
-	startIndex := 0
-	for remainingPartCount := partCount; remainingPartCount > 0; remainingPartCount-- {
-		endIndex := startIndex + len(toolNames[startIndex:])/remainingPartCount
-		parts = append(parts, toolNames[startIndex:endIndex])
-		startIndex = endIndex
-	}
-	return parts
-}
-
-func toolSelectionRequestPart(request agentcontract.IntakeDecisionRequest, messageKeys []string, toolNames []string) model.DecisionRequest {
+func toolSelectionRequestPart(request agentcontract.IntakeDecisionRequest, messageKeys []string, tools []decisionTool) model.DecisionRequest {
 	return model.DecisionRequest{
-		State:     buildDecisionState(request, decisionToolDescriptions(request.ToolSet, toolNames).tools),
-		Questions: newQuestionBuilder(request).toolQuestions(messageKeys, toolNames),
+		State:     buildDecisionState(request, tools),
+		Questions: newQuestionBuilder(request).toolQuestions(messageKeys, toolNamesOf(tools)),
 	}
 }
