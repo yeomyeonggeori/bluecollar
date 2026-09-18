@@ -590,6 +590,52 @@ func TestOutcomeContractDemotesIntakeInitialToolsToEvidenceHints(t *testing.T) {
 	}
 }
 
+func TestAPlannedExternalSendKeepsTheToolItWasPlannedWith(t *testing.T) {
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		{Name: "message_send", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
+	})
+	testCases := []struct {
+		name                    string
+		executionPlan           ExecutionPlan
+		expectsRequiredEvidence bool
+	}{
+		{
+			name:                    "a plan that declares an external send",
+			executionPlan:           ExecutionPlan{ExternalSend: true},
+			expectsRequiredEvidence: true,
+		},
+		{
+			name:                    "a plan that declares no external send",
+			executionPlan:           ExecutionPlan{},
+			expectsRequiredEvidence: false,
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			contract := outcomeContractForRequest(
+				AgentRequest{
+					Prompt:  "send 이샘플 a message about tomorrow",
+					ToolSet: toolSet,
+				},
+				IntakeDecision{
+					Classification:   IntakeClassificationBoundedTask,
+					TaskShape:        TaskShapeMaintenanceTask,
+					InitialToolNames: []string{"message_send"},
+				},
+				InstructionBundle{},
+				testCase.executionPlan,
+				true,
+				nil,
+			)
+
+			isRequiredEvidence := stringSliceContains(contract.RequiredEvidenceTools, "message_send")
+			if isRequiredEvidence != testCase.expectsRequiredEvidence {
+				t.Fatalf("expected message_send required evidence %t, got %+v", testCase.expectsRequiredEvidence, contract.RequiredEvidenceTools)
+			}
+		})
+	}
+}
+
 func TestALikelyToolTheWorkNeverCalledDoesNotHoldAFinishedTaskOpen(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 		{Name: "message_search", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectRead},

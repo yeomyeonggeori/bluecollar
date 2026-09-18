@@ -257,6 +257,7 @@ func outcomeContractForRequest(request AgentRequest, intakeDecision IntakeDecisi
 	}
 	contract.RequiredEvidenceTools = outcomeEvidenceTools(request, intakeDecision, executionPlan, hasExecutionPlan, contract.SelectedEvidenceHints, requiredAttachmentSuffixes)
 	contract.SelectedEvidenceHints = appendUniqueStrings(contract.SelectedEvidenceHints, workingSetEvidenceGroup(request.ToolSet, intakeDecision.InitialToolNames)...)
+	contract.RequiredEvidenceTools = appendUniqueStrings(contract.RequiredEvidenceTools, plannedSendEvidenceTools(request, intakeDecision, executionPlan, hasExecutionPlan)...)
 	contract.RequiredEvidenceTools = appendUniqueStrings(contract.RequiredEvidenceTools, requiredSendEvidenceToolsForContract(request.ToolSet, contract)...)
 	if requestNeedsDerivedSideEffectEvidenceGroup(request.ToolSet, intakeDecision, contract) {
 		evidenceGroup := workingSetEvidenceGroup(request.ToolSet, selectedEvidenceHintTools(instructionBundle))
@@ -637,6 +638,16 @@ func outcomeEvidenceTools(request AgentRequest, intakeDecision IntakeDecision, e
 		}
 	}
 	return toolNames
+}
+
+func plannedSendEvidenceTools(request AgentRequest, intakeDecision IntakeDecision, executionPlan ExecutionPlan, hasExecutionPlan bool) []string {
+	if !hasExecutionPlan {
+		return nil
+	}
+	if !executionPlan.ExternalSend && !executionPlan.ThirdPartyExternalSend {
+		return nil
+	}
+	return sendEvidenceToolsFromValues(request.ToolSet, workingSetEvidenceGroup(request.ToolSet, intakeDecision.InitialToolNames))
 }
 
 func requiredSendEvidenceToolsForContract(toolSet *toolcontract.ToolSet, contract OutcomeContract) []string {
