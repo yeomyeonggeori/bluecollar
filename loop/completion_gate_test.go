@@ -847,7 +847,7 @@ func TestAgentTurnRunnerAutoAttachesRequiredWorkspaceArtifacts(t *testing.T) {
 	writeValidPDFTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pdf"))
 
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"finish","message":"자료를 첨부했습니다.","completionSummary":"자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"file_deliver","attachmentIndex":0},{"observationID":"obs-002","toolName":"file_deliver","attachmentIndex":0}],"qualityReview":[]}`,
+		`{"action":"finish","message":"자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"file_deliver","attachmentIndex":0},{"observationID":"obs-002","toolName":"file_deliver","attachmentIndex":0}],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -905,7 +905,7 @@ func TestAgentTurnRunnerCompletesAfterRequiredArtifactsExist(t *testing.T) {
 	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","message":"자료를 완성했습니다.","toolName":"shell","toolInput":{"command":"build deck"}}`,
-		`{"action":"finish","message":"완성한 발표 자료를 첨부했습니다.","completionSummary":"발표 자료 완성 및 첨부","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-003","toolName":"file_deliver","attachmentIndex":0},{"observationID":"obs-004","toolName":"file_deliver","attachmentIndex":0}],"qualityReview":[]}`,
+		`{"action":"finish","message":"완성한 발표 자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-003","toolName":"file_deliver","attachmentIndex":0},{"observationID":"obs-004","toolName":"file_deliver","attachmentIndex":0}],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"shell", "file_deliver"})

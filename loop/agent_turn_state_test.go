@@ -1303,7 +1303,7 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 }
 
 func TestParseAgentActionResponseDeliversTheFinishMessageOverAStatusLine(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Open https://intern.kim/handoff/handoff-1 and sign in.","replyParts":[{"type":"text","text":"Browser handed over, waiting for the user."}],"completionSummary":"Browser handed over.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Open https://intern.kim/handoff/handoff-1 and sign in.","replyParts":[{"type":"text","text":"Browser handed over, waiting for the user."}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}

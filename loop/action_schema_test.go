@@ -109,10 +109,10 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 }
 
 func TestTerminalActionSchemasAcceptFinishAndFailDocuments(t *testing.T) {
-	finishDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
-	failDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"none","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
-	failWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"shell","errorCode":"operation_failed","failureStage":"shell","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
-	finishWithDebtDocument := `{"completionSummary":"","executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
+	finishDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
+	failDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
+	failWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"shell","errorCode":"operation_failed","failureStage":"shell","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
+	finishWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
 
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), finishDocument)
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), failDocument)
@@ -368,8 +368,10 @@ func TestAFinishHasOnePlaceForTheReply(t *testing.T) {
 		if _, hasMessage := properties["message"]; !hasMessage {
 			t.Fatalf("expected the %s schema to carry the reply in message", name)
 		}
-		if _, hasReplyParts := properties["replyParts"]; hasReplyParts {
-			t.Fatalf("expected the %s schema to offer no second reply field", name)
+		for _, secondField := range []string{"replyParts", "completionSummary", "reply"} {
+			if _, hasSecondField := properties[secondField]; hasSecondField {
+				t.Fatalf("expected the %s schema to offer no %s beside message", name, secondField)
+			}
 		}
 	}
 }
