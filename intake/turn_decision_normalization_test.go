@@ -174,6 +174,83 @@ func TestAnApprovalOnAPendingConfirmationContinuesTheTask(t *testing.T) {
 	}
 }
 
+func TestAnApprovedConfirmationIsNeverReopenedByItsOwnTurn(t *testing.T) {
+	answeredTurns := []struct {
+		name           string
+		route          agentcontract.TurnRoute
+		classification agentcontract.IntakeClassification
+		taskShape      agentcontract.TaskShape
+	}{
+		{"a clarify route on an approved confirmation", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TaskShapeApprovalGatedTask},
+		{"a continuing route the classification would reopen", agentcontract.TurnRouteContinueTask, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TaskShapeApprovalGatedTask},
+	}
+
+	for _, answeredTurn := range answeredTurns {
+		request := agentcontract.AgentRequest{PendingConfirmation: agentcontract.PendingConfirmationContext{TaskRunID: "task-run-1", Question: "정정할까요?"}}
+		approve := agentcontract.ApprovalSignalApprove
+		decidedFields := decidedTurnFields(answeredTurn.route, answeredTurn.classification)
+		decidedFields.TaskShape = answeredTurn.taskShape
+		decidedFields.Approval = &approve
+
+		decision := normalizedTurnDecision(t, decidedFields, request)
+
+		if decision.Route != agentcontract.TurnRouteContinueTask {
+			t.Fatalf("%s: expected the answered confirmation to continue the task, got %q", answeredTurn.name, decision.Route)
+		}
+		if decision.Classification != agentcontract.IntakeClassificationBoundedTask {
+			t.Fatalf("%s: expected the answered confirmation to be bounded work, got %q", answeredTurn.name, decision.Classification)
+		}
+		if decision.TaskShape != agentcontract.TaskShapeMaintenanceTask {
+			t.Fatalf("%s: expected the supplied input to leave the approval gate, got %q", answeredTurn.name, decision.TaskShape)
+		}
+		if decision.Approval == nil || *decision.Approval != agentcontract.ApprovalSignalApprove {
+			t.Fatalf("%s: expected the approval to survive, got %+v", answeredTurn.name, decision.Approval)
+		}
+		wordsShape, needsChatCall := turnWordsShapeFor(decision)
+		if !needsChatCall || wordsShape.systemPrompt != expectedResultsSystemPrompt {
+			t.Fatalf("%s: expected the words call to write the acceptance contract, got %v %q", answeredTurn.name, needsChatCall, wordsShape.systemPrompt)
+		}
+	}
+}
+
+func TestASelectedChoiceIsNeverReopenedByItsOwnTurn(t *testing.T) {
+	request := agentcontract.AgentRequest{PendingChoice: agentcontract.PendingChoiceContext{
+		TaskRunID: "task-run-1",
+		Question:  "어떤 형식으로 드릴까요?",
+		Options:   []agentcontract.ChoiceReplyOption{{Key: "table", Label: "표"}, {Key: "graph", Label: "그래프"}},
+	}}
+	decidedFields := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation)
+	decidedFields.Choices = []string{"1"}
+
+	decision := normalizedTurnDecision(t, decidedFields, request)
+
+	if len(decision.Choices) != 1 || decision.Choices[0] != "table" {
+		t.Fatalf("expected the selected option to survive, got %v", decision.Choices)
+	}
+	if decision.Route != agentcontract.TurnRouteContinueTask {
+		t.Fatalf("expected the answered choice to continue the task, got %q", decision.Route)
+	}
+	if decision.Classification != agentcontract.IntakeClassificationBoundedTask {
+		t.Fatalf("expected the answered choice to be bounded work, got %q", decision.Classification)
+	}
+}
+
+func TestAnUnclearApprovalLeavesTheRouteToTheDecision(t *testing.T) {
+	request := agentcontract.AgentRequest{PendingConfirmation: agentcontract.PendingConfirmationContext{TaskRunID: "task-run-1", Question: "정정할까요?"}}
+	unclear := agentcontract.ApprovalSignalUnclear
+	decidedFields := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation)
+	decidedFields.Approval = &unclear
+
+	decision := normalizedTurnDecision(t, decidedFields, request)
+
+	if decision.Route != agentcontract.TurnRouteClarify {
+		t.Fatalf("expected an unclear approval to leave the route alone, got %q", decision.Route)
+	}
+	if decision.Classification != agentcontract.IntakeClassificationNeedsConfirmation {
+		t.Fatalf("expected an unclear approval to leave the classification alone, got %q", decision.Classification)
+	}
+}
+
 func TestAnApprovalSignalWithoutAPendingConfirmationIsDropped(t *testing.T) {
 	approve := agentcontract.ApprovalSignalApprove
 	decidedFields := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)

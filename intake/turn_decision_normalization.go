@@ -36,19 +36,31 @@ func normalizeDecidedRoute(decision agentcontract.TurnDecision, request agentcon
 	if decision.Route == "" {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid route")
 	}
-	decision = answerPendingConfirmation(decision, request.PendingConfirmation)
-	decision.Choices = normalizeChoiceSelections(decision.Choices, pendingChoiceContext(request))
+	decision = answerPendingInteraction(decision, request)
 	decision.ReactionEmojiName = agentcontract.NormalizeReactionEmojiName(decision.ReactionEmojiName)
 	return normalizeBusyRoute(decision, request.ActiveTask)
 }
 
-func answerPendingConfirmation(decision agentcontract.TurnDecision, pendingConfirmation agentcontract.PendingConfirmationContext) agentcontract.TurnDecision {
-	hasPendingConfirmation := strings.TrimSpace(pendingConfirmation.TaskRunID) != ""
+func answerPendingInteraction(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) agentcontract.TurnDecision {
+	hasPendingConfirmation := strings.TrimSpace(request.PendingConfirmation.TaskRunID) != ""
 	decision.Approval = normalizeApprovalSignal(decision.Approval, hasPendingConfirmation)
-	if decision.Approval != nil && agentcontract.IsApprovingSignal(*decision.Approval) {
-		decision.Route = agentcontract.TurnRouteContinueTask
+	decision.Choices = normalizeChoiceSelections(decision.Choices, pendingChoiceContext(request))
+	if !pendingInteractionIsAnswered(decision) {
+		return decision
+	}
+	decision.Route = agentcontract.TurnRouteContinueTask
+	decision.Classification = agentcontract.IntakeClassificationBoundedTask
+	if decision.TaskShape == agentcontract.TaskShapeApprovalGatedTask {
+		decision.TaskShape = agentcontract.TaskShapeMaintenanceTask
 	}
 	return decision
+}
+
+func pendingInteractionIsAnswered(decision agentcontract.TurnDecision) bool {
+	if decision.Approval != nil && agentcontract.IsApprovingSignal(*decision.Approval) {
+		return true
+	}
+	return len(decision.Choices) > 0
 }
 
 func normalizeBusyRoute(decision agentcontract.TurnDecision, activeTask agentcontract.ActiveTaskContext) (agentcontract.TurnDecision, error) {
