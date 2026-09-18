@@ -47,10 +47,6 @@ func newQuestionBuilder(request agentcontract.IntakeDecisionRequest) questionBui
 	}
 }
 
-func (builder questionBuilder) questions() map[string]model.DecisionQuestion {
-	return mergedQuestions(builder.questionsWithoutTools(), builder.toolQuestions(builder.toolNames))
-}
-
 func (builder questionBuilder) questionsWithoutTools() map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	for index := range builder.request.Messages {
@@ -62,22 +58,11 @@ func (builder questionBuilder) questionsWithoutTools() map[string]model.Decision
 	return questions
 }
 
-func (builder questionBuilder) toolQuestions(toolNames []string) map[string]model.DecisionQuestion {
+func (builder questionBuilder) toolQuestions(messageKeys []string, toolNames []string) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
-	for index := range builder.request.Messages {
-		messageKey := decisionMessageKey(index)
+	for _, messageKey := range messageKeys {
 		for _, toolName := range toolNames {
 			questions[messageKey+"."+agentcontract.IntakeQuestionPrefixTool+toolName] = builder.likelyToolQuestion(messageKey, toolName)
-		}
-	}
-	return questions
-}
-
-func mergedQuestions(questionSets ...map[string]model.DecisionQuestion) map[string]model.DecisionQuestion {
-	questions := map[string]model.DecisionQuestion{}
-	for _, questionSet := range questionSets {
-		for name, question := range questionSet {
-			questions[name] = question
 		}
 	}
 	return questions

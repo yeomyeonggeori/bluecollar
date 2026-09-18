@@ -97,14 +97,14 @@ func TestATurnThatNeedsNoToolSelectsNone(t *testing.T) {
 func TestTheAlwaysExposedKernelToolsAreNeverAskedAbout(t *testing.T) {
 	request := addressedDecisionRequest("워크스페이스 파일 정리해서 결과 알려줘")
 	request.ToolSet = newTestToolSet(append(toolcontract.KernelToolNames(), "task_add", "message_send"))
-	builderRequest, builder := decisionQuestionBuilder(request)
+	candidateToolNames := resolveCallableToolNames(request)
 
-	state := buildDecisionState(builderRequest, decisionToolDescriptions(request.ToolSet, builder.toolNames))
-	questions := builder.toolQuestions(builder.toolNames)
+	state := buildDecisionState(request, decisionToolDescriptions(request.ToolSet, candidateToolNames))
+	questions := toolQuestionsFor(request, candidateToolNames)
 
 	for _, kernelToolName := range toolcontract.KernelToolNames() {
-		if containsString(builder.toolNames, kernelToolName) {
-			t.Fatalf("expected %s to be exposed without being asked about, got %v", kernelToolName, builder.toolNames)
+		if containsString(candidateToolNames, kernelToolName) {
+			t.Fatalf("expected %s to be exposed without being asked about, got %v", kernelToolName, candidateToolNames)
 		}
 		for questionName := range questions {
 			if askedToolName, isToolQuestion := toolNameOfQuestion(questionName); isToolQuestion && askedToolName == kernelToolName {
@@ -117,8 +117,8 @@ func TestTheAlwaysExposedKernelToolsAreNeverAskedAbout(t *testing.T) {
 			}
 		}
 	}
-	if !containsString(builder.toolNames, "task_add") || !containsString(builder.toolNames, "message_send") {
-		t.Fatalf("expected the extension tools to stay candidates, got %v", builder.toolNames)
+	if !containsString(candidateToolNames, "task_add") || !containsString(candidateToolNames, "message_send") {
+		t.Fatalf("expected the extension tools to stay candidates, got %v", candidateToolNames)
 	}
 }
 
@@ -128,8 +128,8 @@ func TestTheRequestIsIdenticalWhateverOrderTheToolsWereRegisteredIn(t *testing.T
 	reversedRequest := addressedDecisionRequest("이번 주 회의 일정 정리해서 공유해줘")
 	reversedRequest.ToolSet = newTestToolSet(reversedToolNames(measurementToolNames()))
 
-	forwardDocument := decisionRequestDocument(t, buildDecisionRequest(forwardRequest))
-	reversedDocument := decisionRequestDocument(t, buildDecisionRequest(reversedRequest))
+	forwardDocument := decisionRequestDocument(t, toolSelectionRequestFor(forwardRequest))
+	reversedDocument := decisionRequestDocument(t, toolSelectionRequestFor(reversedRequest))
 
 	if forwardDocument != reversedDocument {
 		t.Fatal("expected registration order to leave the request unchanged; the order of the descriptions moves a mid-range probability by about 0.15")
@@ -153,14 +153,22 @@ func decisionRequestDocument(t *testing.T, request model.DecisionRequest) string
 	return string(document)
 }
 
+func toolQuestionsFor(request agentcontract.IntakeDecisionRequest, toolNames []string) map[string]model.DecisionQuestion {
+	return newQuestionBuilder(request).toolQuestions([]string{decisionMessageKey(0)}, toolNames)
+}
+
+func toolSelectionRequestFor(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
+	return toolSelectionRequestPart(request, []string{decisionMessageKey(0)}, resolveCallableToolNames(request))
+}
+
 func TestThePerToolQuestionStaysSmallEnoughToRepeatPerMessage(t *testing.T) {
 	request := addressedDecisionRequest("지난 분기 매출 정리해서 덱 만들어줘")
 	request.ToolSet = newTestToolSet(measurementToolNames())
-	_, builder := decisionQuestionBuilder(request)
+	candidateToolNames := resolveCallableToolNames(request)
 
-	questionBytes := decisionQuestionsByteCount(builder.toolQuestions(builder.toolNames))
+	questionBytes := decisionQuestionsByteCount(toolQuestionsFor(request, candidateToolNames))
 
-	if averageBytes := questionBytes / len(builder.toolNames); averageBytes > perToolQuestionByteBudget {
+	if averageBytes := questionBytes / len(candidateToolNames); averageBytes > perToolQuestionByteBudget {
 		t.Fatalf("expected a tool question to stay within %d bytes, got %d; shared guidance belongs in the state", perToolQuestionByteBudget, averageBytes)
 	}
 }
@@ -170,16 +178,16 @@ const perToolQuestionByteBudget = 220
 func TestTheToolGuidanceIsCarriedOnceByTheStateRatherThanByEachQuestion(t *testing.T) {
 	request := addressedDecisionRequest("지난 분기 매출 정리해서 덱 만들어줘")
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
-	builderRequest, builder := decisionQuestionBuilder(request)
+	candidateToolNames := resolveCallableToolNames(request)
 
-	state := buildDecisionState(builderRequest, decisionToolDescriptions(request.ToolSet, builder.toolNames))
+	state := buildDecisionState(request, decisionToolDescriptions(request.ToolSet, candidateToolNames))
 	if !strings.Contains(state.ToolGuidance, "at any point before the work is done") {
 		t.Fatalf("expected the state to ask about the whole job, got %q", state.ToolGuidance)
 	}
 	if !strings.Contains(state.ToolGuidance, "Do not raise a tool because it exists") {
 		t.Fatalf("expected the guidance to pair the must-check with a must-not-invent, got %q", state.ToolGuidance)
 	}
-	for questionName, question := range builder.toolQuestions(builder.toolNames) {
+	for questionName, question := range toolQuestionsFor(request, candidateToolNames) {
 		if strings.Contains(question.Instructions, "at any point before the work is done") {
 			t.Fatalf("expected %s to carry no copy of the shared guidance, got %q", questionName, question.Instructions)
 		}
@@ -223,9 +231,12 @@ func TestTheLedgerCarriesTheProbabilitiesTheSelectionWasMadeFrom(t *testing.T) {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
 	}
 
-	toolSelection := callLedger.Records[0].ToolSelection
+	if callLedger.Records[0].ToolSelection != nil {
+		t.Fatalf("expected the routing call to carry no tool selection, got %+v", callLedger.Records[0].ToolSelection)
+	}
+	toolSelection := recordedToolSelection(callLedger)
 	if toolSelection == nil {
-		t.Fatal("expected the decision record to carry the tool selection")
+		t.Fatal("expected the selection call to carry its own record")
 	}
 	if toolSelection.ProbabilityThreshold != likelyToolProbabilityThreshold || toolSelection.CountLimit != likelyToolCountLimit {
 		t.Fatalf("expected the rule to be recorded with the selection, got %+v", toolSelection)
@@ -243,40 +254,40 @@ func TestTheLedgerCarriesTheProbabilitiesTheSelectionWasMadeFrom(t *testing.T) {
 
 func TestToolQuestionsSplitAcrossRequestsWhenOneWouldOverflowTheBudget(t *testing.T) {
 	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
+	messageKeys := burstMessageKeys(request)
+	candidateToolNames := resolveCallableToolNames(request)
 
-	requests := planDecisionRequests(request)
+	requests := planToolSelectionRequests(request, messageKeys, candidateToolNames)
 
 	if len(requests) < 2 {
 		t.Fatalf("expected a burst this size to be split, got %d request(s)", len(requests))
 	}
 	askedToolQuestions := map[string]bool{}
-	nonToolRequestCount := 0
 	for _, decisionRequest := range requests {
 		if byteCount := decisionRequestByteCount(decisionRequest); byteCount > decisionRequestByteBudget {
 			t.Fatalf("expected every part to fit the budget, got %d bytes", byteCount)
 		}
-		hasNonToolQuestion := false
 		for questionName := range decisionRequest.Questions {
-			if strings.Contains(questionName, "."+agentcontract.IntakeQuestionPrefixTool) {
-				if askedToolQuestions[questionName] {
-					t.Fatalf("expected %s to be asked once, got it twice", questionName)
-				}
-				askedToolQuestions[questionName] = true
-				continue
+			if _, isToolQuestion := toolNameOfQuestion(questionName); !isToolQuestion {
+				t.Fatalf("expected the selection call to ask about tools and nothing else, got %s", questionName)
 			}
-			hasNonToolQuestion = true
-		}
-		if hasNonToolQuestion {
-			nonToolRequestCount++
+			if askedToolQuestions[questionName] {
+				t.Fatalf("expected %s to be asked once, got it twice", questionName)
+			}
+			askedToolQuestions[questionName] = true
 		}
 	}
-	if nonToolRequestCount != 1 {
-		t.Fatalf("expected the addressing and routing questions to ride in exactly one request, got %d", nonToolRequestCount)
-	}
-	_, builder := decisionQuestionBuilder(request)
-	if len(askedToolQuestions) != len(builder.toolQuestions(builder.toolNames)) {
+	if len(askedToolQuestions) != len(messageKeys)*len(candidateToolNames) {
 		t.Fatalf("expected every tool question to survive the split, got %d", len(askedToolQuestions))
 	}
+}
+
+func burstMessageKeys(request agentcontract.IntakeDecisionRequest) []string {
+	messageKeys := []string{}
+	for index := range request.Messages {
+		messageKeys = append(messageKeys, decisionMessageKey(index))
+	}
+	return messageKeys
 }
 
 func TestASplitGivesEveryPartAlmostTheSameNumberOfTools(t *testing.T) {
@@ -303,7 +314,7 @@ func TestASplitGivesEveryPartAlmostTheSameNumberOfTools(t *testing.T) {
 func TestASplitRequestAsksOnlyAboutTheToolsItsOwnStateDescribes(t *testing.T) {
 	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 
-	for _, decisionRequest := range planDecisionRequests(request) {
+	for _, decisionRequest := range planToolSelectionRequests(request, burstMessageKeys(request), resolveCallableToolNames(request)) {
 		state, isDecisionState := decisionRequest.State.(decisionState)
 		if !isDecisionState {
 			t.Fatalf("expected a decision state, got %T", decisionRequest.State)
@@ -343,19 +354,37 @@ func TestASplitDecisionMergesTheProbabilitiesOfEveryPart(t *testing.T) {
 	}
 }
 
-func TestOnePartFailingTakesTheFailurePathRatherThanSelectingFromTheRest(t *testing.T) {
+func TestAFailedSelectionStartsTheTaskWithNoLikelyToolsAndSaysSoOnTheLedger(t *testing.T) {
 	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88}
+	callLedger := &agentcontract.IntakeCallLedger{}
 
-	decisions, errorValue := NewDecisionPlanner(&partFailingDecisionModel{outcome: outcome}, nil, func() float64 { return 1 }).Decide(context.Background(), request, nil)
+	decisions, errorValue := NewDecisionPlanner(&partFailingDecisionModel{outcome: outcome}, nil, func() float64 { return 1 }).Decide(context.Background(), request, callLedger)
 
-	if errorValue == nil {
-		t.Fatalf("expected a partial answer to fail the decision, got %+v", decisions)
+	if errorValue != nil {
+		t.Fatalf("expected a failed selection to leave the task startable: %v", errorValue)
 	}
-	if len(decisions.Messages) != 0 {
-		t.Fatalf("expected no decision to be read from a partial answer, got %+v", decisions)
+	if len(decisions.Messages) != len(request.Messages) {
+		t.Fatalf("expected every message to keep its routing decision, got %d", len(decisions.Messages))
 	}
+	for _, decision := range decisions.Messages {
+		if len(decision.TurnFields.InitialToolNames) != 0 {
+			t.Fatalf("expected no tool to be pre-exposed after a failed selection, got %v", decision.TurnFields.InitialToolNames)
+		}
+	}
+	if !hasFailedSelectionRecord(callLedger) {
+		t.Fatalf("expected the failed selection call to be recorded, got %+v", callLedger.Records)
+	}
+}
+
+func hasFailedSelectionRecord(callLedger *agentcontract.IntakeCallLedger) bool {
+	for _, record := range callLedger.Records {
+		if record.IsError && record.DecidedMessageCount == 0 {
+			return true
+		}
+	}
+	return false
 }
 
 type partFailingDecisionModel struct {
@@ -375,7 +404,7 @@ func (decisionModel *partFailingDecisionModel) Decide(_ context.Context, request
 	return model.DecisionResponse{Answers: intaketest.Answers(request.Questions, func(string) intaketest.Outcome { return decisionModel.outcome })}, nil
 }
 
-const burstMessageCountThatOverflowsTheBudget = 8
+const burstMessageCountThatOverflowsTheBudget = 14
 
 func burstDecisionRequest(messageCount int, toolNames []string) agentcontract.IntakeDecisionRequest {
 	request := addressedDecisionRequest("지난 분기 매출 정리해서 덱 만들어줘")
@@ -392,4 +421,48 @@ func toolNameOfQuestion(questionName string) (string, bool) {
 		return "", false
 	}
 	return questionName[separatorIndex+len("."+agentcontract.IntakeQuestionPrefixTool):], true
+}
+
+func recordedToolSelection(callLedger *agentcontract.IntakeCallLedger) *agentcontract.ToolSelectionRecord {
+	for _, record := range callLedger.Records {
+		if record.ToolSelection != nil {
+			return record.ToolSelection
+		}
+	}
+	return nil
+}
+
+func TestOnlyAMessageRoutedToWorkCostsAToolSelectionCall(t *testing.T) {
+	for _, testCase := range []struct {
+		name              string
+		route             agentcontract.TurnRoute
+		classification    agentcontract.IntakeClassification
+		expectedCallCount int
+	}{
+		{name: "start_task", route: agentcontract.TurnRouteStartTask, classification: agentcontract.IntakeClassificationBoundedTask, expectedCallCount: 2},
+		{name: "continue_task", route: agentcontract.TurnRouteContinueTask, classification: agentcontract.IntakeClassificationBoundedTask, expectedCallCount: 2},
+		{name: "bounded task routed to clarify", route: agentcontract.TurnRouteClarify, classification: agentcontract.IntakeClassificationBoundedTask, expectedCallCount: 2},
+		{name: "answer_question", route: agentcontract.TurnRouteAnswerQuestion, classification: agentcontract.IntakeClassificationQuickReply, expectedCallCount: 1},
+		{name: "clarify", route: agentcontract.TurnRouteClarify, classification: agentcontract.IntakeClassificationNeedsConfirmation, expectedCallCount: 1},
+		{name: "consume", route: agentcontract.TurnRouteConsume, classification: agentcontract.IntakeClassificationQuickReply, expectedCallCount: 1},
+		{name: "give_up", route: agentcontract.TurnRouteGiveUp, classification: agentcontract.IntakeClassificationUnsupported, expectedCallCount: 1},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			request := addressedDecisionRequest("이번 주 회의 일정 정리해서 공유해줘")
+			request.ToolSet = newTestToolSet([]string{"event_list", "message_send"})
+			outcome := startTaskOutcome()
+			outcome.TurnDecision.Route = testCase.route
+			outcome.TurnDecision.Classification = testCase.classification
+			outcome.TurnDecision.InitialToolNames = nil
+			decisionModel := intaketest.NewDecisionModel(outcome)
+
+			if _, errorValue := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }).Decide(context.Background(), request, nil); errorValue != nil {
+				t.Fatalf("expected the decision to answer: %v", errorValue)
+			}
+
+			if len(decisionModel.Requests()) != testCase.expectedCallCount {
+				t.Fatalf("expected %d decision call(s), got %d", testCase.expectedCallCount, len(decisionModel.Requests()))
+			}
+		})
+	}
 }

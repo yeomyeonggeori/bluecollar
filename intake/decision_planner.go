@@ -42,7 +42,7 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 		return agentcontract.IntakeDecisions{}, errors.New("intake decision request carries no message")
 	}
 	describedRequest, hasDescribedAttachments := planner.describeAttachmentsOnlyMessages(ctx, request)
-	calls := planner.decideEveryRequest(ctx, planDecisionRequests(describedRequest))
+	calls := planner.decideEveryRequest(ctx, []model.DecisionRequest{buildIntakeDecisionRequest(describedRequest)})
 	callError := firstCallError(calls)
 	answers := mergedDecisionAnswers(calls)
 	decisions, readError := planner.readDecisions(describedRequest, answers, callError)
@@ -51,7 +51,6 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 		decisions:            decisions,
 		messageCount:         len(describedRequest.Messages),
 		attachmentsDescribed: hasDescribedAttachments,
-		toolSelection:        toolSelectionRecord(describedRequest, answers, callError),
 	})
 	if callError != nil {
 		return agentcontract.IntakeDecisions{}, callError
@@ -59,7 +58,7 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 	if readError != nil {
 		return agentcontract.IntakeDecisions{}, readError
 	}
-	return decisions, nil
+	return planner.withLikelyTools(ctx, describedRequest, decisions, callLedger), nil
 }
 
 type decisionCall struct {
@@ -118,7 +117,7 @@ const decisionRequestByteBudgetTenthsOfThatCount = 9
 const decisionRequestByteBudget = largestDecisionRequestByteCountTheModelAccepted * decisionRequestByteBudgetTenthsOfThatCount / 10
 
 func DecisionRequestByteCount(request agentcontract.IntakeDecisionRequest) int {
-	return decisionRequestByteCount(buildDecisionRequest(request))
+	return decisionRequestByteCount(buildIntakeDecisionRequest(request))
 }
 
 func decisionRequestByteCount(request model.DecisionRequest) int {
@@ -129,61 +128,11 @@ func decisionRequestByteCount(request model.DecisionRequest) int {
 	return len(document)
 }
 
-func buildDecisionRequest(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
-	builderRequest, builder := decisionQuestionBuilder(request)
-	return decisionRequestPart(builderRequest, builder.toolNames, builder.questionsWithoutTools(), builder.toolNames)
-}
-
-func decisionQuestionBuilder(request agentcontract.IntakeDecisionRequest) (agentcontract.IntakeDecisionRequest, questionBuilder) {
-	builderRequest := request
-	builderRequest.CallableToolNames = resolveCallableToolNames(request)
-	return builderRequest, newQuestionBuilder(builderRequest)
-}
-
-func decisionRequestPart(request agentcontract.IntakeDecisionRequest, stateToolNames []string, questionsWithoutTools map[string]model.DecisionQuestion, toolNames []string) model.DecisionRequest {
-	builder := newQuestionBuilder(request)
+func buildIntakeDecisionRequest(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
 	return model.DecisionRequest{
-		State:     buildDecisionState(request, decisionToolDescriptions(request.ToolSet, stateToolNames)),
-		Questions: mergedQuestions(questionsWithoutTools, builder.toolQuestions(toolNames)),
+		State:     buildDecisionState(request, nil),
+		Questions: newQuestionBuilder(request).questionsWithoutTools(),
 	}
-}
-
-func planDecisionRequests(request agentcontract.IntakeDecisionRequest) []model.DecisionRequest {
-	builderRequest, builder := decisionQuestionBuilder(request)
-	questionsWithoutTools := builder.questionsWithoutTools()
-	wholeRequest := decisionRequestPart(builderRequest, builder.toolNames, questionsWithoutTools, builder.toolNames)
-	if decisionRequestByteCount(wholeRequest) <= decisionRequestByteBudget {
-		return []model.DecisionRequest{wholeRequest}
-	}
-	for partCount := 2; partCount < len(builder.toolNames); partCount++ {
-		requests := balancedDecisionRequests(builderRequest, questionsWithoutTools, builder.toolNames, partCount)
-		if largestDecisionRequestByteCount(requests) <= decisionRequestByteBudget {
-			return requests
-		}
-	}
-	return balancedDecisionRequests(builderRequest, questionsWithoutTools, builder.toolNames, len(builder.toolNames))
-}
-
-func balancedDecisionRequests(request agentcontract.IntakeDecisionRequest, questionsWithoutTools map[string]model.DecisionQuestion, toolNames []string, partCount int) []model.DecisionRequest {
-	requests := []model.DecisionRequest{}
-	for partIndex, partToolNames := range balancedToolNameParts(toolNames, partCount) {
-		if partIndex > 0 {
-			questionsWithoutTools = nil
-		}
-		requests = append(requests, decisionRequestPart(request, partToolNames, questionsWithoutTools, partToolNames))
-	}
-	return requests
-}
-
-func balancedToolNameParts(toolNames []string, partCount int) [][]string {
-	parts := [][]string{}
-	startIndex := 0
-	for remainingPartCount := partCount; remainingPartCount > 0; remainingPartCount-- {
-		endIndex := startIndex + len(toolNames[startIndex:])/remainingPartCount
-		parts = append(parts, toolNames[startIndex:endIndex])
-		startIndex = endIndex
-	}
-	return parts
 }
 
 func largestDecisionRequestByteCount(requests []model.DecisionRequest) int {
@@ -365,12 +314,6 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
-	candidateToolNames := resolveCallableToolNames(request)
-	toolProbabilities, errorValue := reader.toolProbabilities(candidateToolNames)
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
-	turnFields.InitialToolNames = selectLikelyToolNames(toolProbabilities, candidateToolNames)
 	if approvalChoice, isAsked := choices[agentcontract.IntakeQuestionApproval]; isAsked {
 		approval := agentcontract.ApprovalSignal(approvalChoice)
 		turnFields.Approval = &approval

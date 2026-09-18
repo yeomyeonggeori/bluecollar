@@ -11,9 +11,12 @@ import (
 )
 
 func questionsFor(request agentcontract.IntakeDecisionRequest) map[string]model.DecisionQuestion {
-	builderRequest := request
-	builderRequest.CallableToolNames = resolveCallableToolNames(request)
-	return newQuestionBuilder(builderRequest).questions()
+	builder := newQuestionBuilder(request)
+	questions := builder.questionsWithoutTools()
+	for questionName, question := range toolQuestionsFor(request, resolveCallableToolNames(request)) {
+		questions[questionName] = question
+	}
+	return questions
 }
 
 func criteriaText(t *testing.T, question model.DecisionQuestion) string {

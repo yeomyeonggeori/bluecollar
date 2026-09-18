@@ -297,12 +297,12 @@ func TestAnExactPrecomputedDecisionIsUsedAsItStands(t *testing.T) {
 	}
 }
 
-func TestTheWordsCallIsShapedByTheRepairedRoute(t *testing.T) {
+func TestTheWordsCallForWorkAsksOnlyForItsAcceptance(t *testing.T) {
 	toolSet := newTestToolSet([]string{"task_add"})
 	outcome := startTaskOutcome()
-	outcome.TurnDecision.Route = agentcontract.TurnRouteAnswerQuestion
-	outcome.TurnDecision.Classification = agentcontract.IntakeClassificationQuickReply
-	outcome.TurnDecision.TaskShape = agentcontract.TaskShapeImmediateReply
+	outcome.TurnDecision.Route = agentcontract.TurnRouteStartTask
+	outcome.TurnDecision.Classification = agentcontract.IntakeClassificationBoundedTask
+	outcome.TurnDecision.TaskShape = agentcontract.TaskShapeMaintenanceTask
 	outcome.TurnDecision.InitialToolNames = []string{"task_add"}
 	outcome.TurnDecision.RequestedOutputFormats = nil
 	languageModel := &sequenceLanguageModel{contents: []string{
@@ -316,7 +316,10 @@ func TestTheWordsCallIsShapedByTheRepairedRoute(t *testing.T) {
 	}
 
 	if decision.Route != agentcontract.TurnRouteStartTask {
-		t.Fatalf("expected a side-effect tool to start work, got %q", decision.Route)
+		t.Fatalf("expected the work route to survive, got %q", decision.Route)
+	}
+	if !containsString(decision.InitialToolNames, "task_add") {
+		t.Fatalf("expected the likely tool to reach the turn, got %v", decision.InitialToolNames)
 	}
 	if len(languageModel.requests) != 1 {
 		t.Fatalf("expected exactly one chat call, got %d", len(languageModel.requests))
