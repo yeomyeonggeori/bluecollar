@@ -223,7 +223,10 @@ func readAddressingDecision(reader answerReader, isReacting bool) (agentcontract
 }
 
 func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) (agentcontract.TurnDecision, error) {
-	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionClassification, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage, agentcontract.IntakeQuestionPriorTaskReference}
+	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionClassification, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage}
+	if hasPriorTask(request) {
+		choiceNames = append(choiceNames, agentcontract.IntakeQuestionPriorTaskReference)
+	}
 	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionApproval)
 	}
@@ -241,7 +244,10 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 		TaskLevel:          agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
 		DeliverableKind:    agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
 		ResponseLanguage:   choices[agentcontract.IntakeQuestionResponseLanguage],
-		PriorTaskReference: agentcontract.PriorTaskReference(choices[agentcontract.IntakeQuestionPriorTaskReference]),
+		PriorTaskReference: agentcontract.PriorTaskReferenceNone,
+	}
+	if priorTaskChoice, isAsked := choices[agentcontract.IntakeQuestionPriorTaskReference]; isAsked {
+		turnFields.PriorTaskReference = agentcontract.PriorTaskReference(priorTaskChoice)
 	}
 	turnFields.RequestedOutputFormats, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, agentcontract.RequestedOutputFormatNames)
 	if errorValue != nil {

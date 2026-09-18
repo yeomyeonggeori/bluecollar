@@ -147,6 +147,18 @@ func TestTheApprovalQuestionIsAskedOnlyForAPendingConfirmation(t *testing.T) {
 	}
 }
 
+func TestThePriorTaskQuestionIsAskedOnlyForAPriorTask(t *testing.T) {
+	if _, isAsked := questionsFor(addressedDecisionRequest("보고서 다시 보내줘"))["m1."+agentcontract.IntakeQuestionPriorTaskReference]; isAsked {
+		t.Fatal("expected no prior task question when the state carries no prior task")
+	}
+
+	request := addressedDecisionRequest("보고서 다시 보내줘")
+	request.PriorTask = agentcontract.PriorTaskContext{TaskRunID: "task-run-0", Prompt: "보고서 정리해줘"}
+	if _, isAsked := questionsFor(request)["m1."+agentcontract.IntakeQuestionPriorTaskReference]; !isAsked {
+		t.Fatal("expected the prior task question when the state carries a prior task")
+	}
+}
+
 func TestTheStateShowsHowStaleAPendingQuestionIs(t *testing.T) {
 	now := time.Date(2026, 9, 14, 15, 8, 0, 0, time.UTC)
 	request := addressedDecisionRequest("응")

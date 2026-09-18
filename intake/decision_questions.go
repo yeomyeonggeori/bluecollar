@@ -156,13 +156,15 @@ func (builder questionBuilder) relatesToActiveTaskQuestion(messageKey string) mo
 
 func (builder questionBuilder) routerQuestions(messageKey string) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{
-		agentcontract.IntakeQuestionRoute:              builder.routeQuestion(messageKey),
-		agentcontract.IntakeQuestionClassification:     builder.classificationQuestion(messageKey),
-		agentcontract.IntakeQuestionTaskShape:          builder.taskShapeQuestion(messageKey),
-		agentcontract.IntakeQuestionLevel:              builder.levelQuestion(messageKey),
-		agentcontract.IntakeQuestionDeliverableKind:    builder.deliverableKindQuestion(messageKey),
-		agentcontract.IntakeQuestionResponseLanguage:   builder.responseLanguageQuestion(messageKey),
-		agentcontract.IntakeQuestionPriorTaskReference: builder.priorTaskReferenceQuestion(messageKey),
+		agentcontract.IntakeQuestionRoute:            builder.routeQuestion(messageKey),
+		agentcontract.IntakeQuestionClassification:   builder.classificationQuestion(messageKey),
+		agentcontract.IntakeQuestionTaskShape:        builder.taskShapeQuestion(messageKey),
+		agentcontract.IntakeQuestionLevel:            builder.levelQuestion(messageKey),
+		agentcontract.IntakeQuestionDeliverableKind:  builder.deliverableKindQuestion(messageKey),
+		agentcontract.IntakeQuestionResponseLanguage: builder.responseLanguageQuestion(messageKey),
+	}
+	if hasPriorTask(builder.request) {
+		questions[agentcontract.IntakeQuestionPriorTaskReference] = builder.priorTaskReferenceQuestion(messageKey)
 	}
 	if strings.TrimSpace(builder.request.PendingConfirmation.TaskRunID) != "" {
 		questions[agentcontract.IntakeQuestionApproval] = builder.approvalQuestion(messageKey)
