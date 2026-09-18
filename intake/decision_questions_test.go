@@ -187,6 +187,68 @@ func TestTheStateShowsHowStaleAPendingQuestionIs(t *testing.T) {
 	}
 }
 
+func firingDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest {
+	request := addressedDecisionRequest(prompt)
+	request.ScheduledRun = agentcontract.ScheduledRunContext{
+		ScheduleID:   "schedule-1",
+		Name:         "주간 보고 알림",
+		Kind:         "cron",
+		Cadence:      "매일 22:08",
+		OccurrenceAt: "2026-09-18T22:08:00Z",
+	}
+	return request
+}
+
+func TestEveryQuestionAboutAFiringSaysItIsTheWorkNow(t *testing.T) {
+	scheduleInstruction := "매일 이 시간에 주간 보고 알림을 보내줘."
+
+	firingRequest := firingDecisionRequest(scheduleInstruction)
+	firingRequest.ToolSet = newTestToolSet([]string{"schedule_create", "message_send"})
+	firingQuestions := questionsFor(firingRequest)
+	if len(firingQuestions) == 0 {
+		t.Fatal("expected the firing request to be asked about")
+	}
+	firingPreamble := newQuestionBuilder(firingRequest).about("m1")
+	for questionName, question := range firingQuestions {
+		if !strings.HasPrefix(question.Instructions, firingPreamble) {
+			t.Fatalf("expected %s to open with the firing preamble, got %q", questionName, question.Instructions)
+		}
+	}
+
+	plainRequest := addressedDecisionRequest(scheduleInstruction)
+	plainRequest.ToolSet = newTestToolSet([]string{"schedule_create", "message_send"})
+	plainQuestions := questionsFor(plainRequest)
+	if len(plainQuestions) != len(firingQuestions) {
+		t.Fatalf("expected the same questions either way, got %d without a firing and %d with one", len(plainQuestions), len(firingQuestions))
+	}
+	plainPreamble := newQuestionBuilder(plainRequest).about("m1")
+	for questionName, question := range plainQuestions {
+		if !strings.HasPrefix(question.Instructions, plainPreamble) {
+			t.Fatalf("expected %s to open with the plain preamble, got %q", questionName, question.Instructions)
+		}
+		if strings.Contains(question.Instructions, firingMessagePreambleEnding) {
+			t.Fatalf("expected %s to say nothing about a firing, got %q", questionName, question.Instructions)
+		}
+	}
+}
+
+func TestTheRouteQuestionDoesNotRepeatTheFiringFact(t *testing.T) {
+	scheduleInstruction := "매일 이 시간에 주간 보고 알림을 보내줘."
+
+	firingRoute := criteriaText(t, questionsFor(firingDecisionRequest(scheduleInstruction))["m1."+agentcontract.IntakeQuestionRoute])
+	if occurrences := strings.Count(firingRoute, firingMessagePreambleEnding); occurrences != 1 {
+		t.Fatalf("expected the firing fact exactly once, got %d in %q", occurrences, firingRoute)
+	}
+	if !strings.Contains(firingRoute, "activeGoal") {
+		t.Fatalf("expected the route question to keep the activeGoal clause, got %q", firingRoute)
+	}
+
+	plainRoute := criteriaText(t, questionsFor(addressedDecisionRequest(scheduleInstruction))["m1."+agentcontract.IntakeQuestionRoute])
+	if strings.Contains(plainRoute, "scheduledRun") {
+		t.Fatalf("expected no mention of scheduledRun without a scheduled run, got %q", plainRoute)
+	}
+}
+
 func TestTheStateNamesEachMessageTheQuestionsAskAbout(t *testing.T) {
 	request := addressedDecisionRequest("보고서 정리해줘")
 	request.Messages = append(request.Messages, agentcontract.IntakeDecisionMessage{MessageID: "message-2", Prompt: "표도 넣어줘"})
