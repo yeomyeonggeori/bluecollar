@@ -50,10 +50,21 @@ type LLMCallRecord struct {
 	DiagnosticRepairStatus model.StructuredOutputRepairStatus       `json:"diagnosticRepairStatus,omitempty"`
 	DecisionAnswers        map[string]model.DecisionAnswer          `json:"decisionAnswers,omitempty"`
 	DecisionDraws          map[string]float64                       `json:"decisionDraws,omitempty"`
+	ToolSelection          *ToolSelectionRecord                     `json:"toolSelection,omitempty"`
 	DecidedMessageCount    int                                      `json:"decidedMessageCount,omitempty"`
 	QuestionCount          int                                      `json:"questionCount,omitempty"`
 	AttachmentsDescribed   bool                                     `json:"attachmentsDescribed"`
 	AttachmentDescriptions []string                                 `json:"attachmentDescriptions,omitempty"`
+}
+
+type ToolSelectionRecord struct {
+	ProbabilityThreshold    float64            `json:"probabilityThreshold"`
+	CountLimit              int                `json:"countLimit"`
+	CandidateCount          int                `json:"candidateCount"`
+	BatchByteCounts         []int              `json:"batchByteCounts,omitempty"`
+	ClippedDescriptionCount int                `json:"clippedDescriptionCount,omitempty"`
+	Probabilities           map[string]float64 `json:"probabilities,omitempty"`
+	SelectedToolNames       []string           `json:"selectedToolNames,omitempty"`
 }
 
 type LLMCallObserver func(record LLMCallRecord)

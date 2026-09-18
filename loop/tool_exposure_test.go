@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -282,7 +283,7 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 	if !filteredToolSet.IsAllowed("shell") {
 		t.Fatalf("expected pinned direct tool inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
-	expectedToolCount := len(kernelToolNamesForInstructionBundle(instructionBundle)) + maxExtensionCallableToolCount
+	expectedToolCount := len(kernelToolNamesForInstructionBundle(instructionBundle)) + toolcontract.MaxExtensionCallableToolCount
 	if len(filteredToolSet.ListToolNames()) != expectedToolCount {
 		t.Fatalf("expected %d tools, got %+v", expectedToolCount, filteredToolSet.ListToolNames())
 	}
@@ -561,4 +562,32 @@ func TestRegisteredToolNameCeilingBlocksToolAcquisition(t *testing.T) {
 	if widenedToolSet.IsAllowed("message_send") {
 		t.Fatalf("expected pinning to be unable to widen past the ceiling")
 	}
+}
+
+func TestThePinnedGroupLeavesOneSlotForEveryGroupRankedAfterIt(t *testing.T) {
+	groupsRankedAfterPinned := []toolExposureGroup{
+		{Name: "required next tools", ToolIDs: []string{"required_next_tool"}},
+		{Name: "selected skills", ToolIDs: []string{"selected_skill_tool"}},
+		{Name: "evidence alternatives", ToolIDs: []string{"evidence_alternative_tool"}},
+	}
+	pinnedGroup := toolExposureGroup{Name: "pinned tools", ToolIDs: numberedToolNames(toolcontract.MaxExtensionCallableToolCount - len(groupsRankedAfterPinned))}
+
+	exposedToolIDs, droppedGroups := selectToolGroups(append([]toolExposureGroup{pinnedGroup}, groupsRankedAfterPinned...), toolcontract.MaxExtensionCallableToolCount)
+
+	if len(droppedGroups) != 0 {
+		t.Fatalf("expected a pinned group of this size to starve nothing, got %+v", droppedGroups)
+	}
+	for _, group := range groupsRankedAfterPinned {
+		if !stringSliceContains(exposedToolIDs, group.ToolIDs[0]) {
+			t.Fatalf("expected %s to survive a full pinned group, got %v", group.ToolIDs[0], exposedToolIDs)
+		}
+	}
+}
+
+func numberedToolNames(count int) []string {
+	toolNames := make([]string, 0, count)
+	for index := range count {
+		toolNames = append(toolNames, "pinned_tool_"+strconv.Itoa(index))
+	}
+	return toolNames
 }

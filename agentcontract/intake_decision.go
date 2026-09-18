@@ -153,7 +153,7 @@ const (
 	IntakeQuestionDuty                = "duty"
 	IntakeQuestionRelatesToActiveTask = "relatesToActiveTask"
 	IntakeQuestionRoute               = "route"
-	IntakeQuestionClassification      = "classification"
+	IntakeQuestionNeedsTool           = "needsTool"
 	IntakeQuestionTaskShape           = "taskShape"
 	IntakeQuestionLevel               = "level"
 	IntakeQuestionDeliverableKind     = "deliverableKind"

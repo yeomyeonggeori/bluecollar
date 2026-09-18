@@ -24,7 +24,7 @@ func normalizeDecidedTurnFields(decision agentcontract.TurnDecision, request age
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
-	decision, errorValue = normalizeDecidedWork(decision, request)
+	decision, errorValue = normalizeDecidedWork(decision)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
@@ -62,7 +62,7 @@ func normalizeBusyRoute(decision agentcontract.TurnDecision, activeTask agentcon
 	return decision, nil
 }
 
-func normalizeDecidedWork(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+func normalizeDecidedWork(decision agentcontract.TurnDecision) (agentcontract.TurnDecision, error) {
 	decision.Classification = agentcontract.NormalizeIntakeClassification(decision.Classification)
 	if decision.Classification == "" {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid classification")
@@ -73,7 +73,6 @@ func normalizeDecidedWork(decision agentcontract.TurnDecision, request agentcont
 	}
 	decision.RequestedOutputFormats = agentcontract.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)
 	decision = normalizeDeliverableTools(decision)
-	decision = normalizeSideEffectTurnDecision(decision, request.ToolSet)
 	return liftBoundedImmediateReplyToMaintenance(decision), nil
 }
 
@@ -125,10 +124,23 @@ func canonicalizeTurnDecision(decision agentcontract.TurnDecision) agentcontract
 
 func executableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
 	switch route {
-	case agentcontract.TurnRouteConsume, agentcontract.TurnRouteClarify, agentcontract.TurnRouteGiveUp:
-		return agentcontract.TurnRouteStartTask
-	default:
+	case agentcontract.TurnRouteContinueTask, agentcontract.TurnRouteReviseTask:
 		return route
+	default:
+		return agentcontract.TurnRouteStartTask
+	}
+}
+
+func classificationOf(route agentcontract.TurnRoute, needsTool bool) agentcontract.IntakeClassification {
+	switch {
+	case route == agentcontract.TurnRouteClarify:
+		return agentcontract.IntakeClassificationNeedsConfirmation
+	case route == agentcontract.TurnRouteGiveUp:
+		return agentcontract.IntakeClassificationUnsupported
+	case needsTool:
+		return agentcontract.IntakeClassificationBoundedTask
+	default:
+		return agentcontract.IntakeClassificationQuickReply
 	}
 }
 
@@ -176,36 +188,6 @@ func normalizeSiteDeliverableFormats(decision agentcontract.TurnDecision) agentc
 func decisionSuggestsSiteTool(decision agentcontract.TurnDecision) bool {
 	for _, toolName := range decision.InitialToolNames {
 		if strings.HasPrefix(strings.TrimSpace(toolName), "site_") {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizeSideEffectTurnDecision(decision agentcontract.TurnDecision, toolSet *toolcontract.ToolSet) agentcontract.TurnDecision {
-	if decision.Classification != agentcontract.IntakeClassificationQuickReply || !includesRegisteredSideEffectEvidence(toolSet, decision.InitialToolNames) {
-		return decision
-	}
-	decision.Classification = agentcontract.IntakeClassificationBoundedTask
-	if decision.TaskShape == agentcontract.TaskShapeImmediateReply {
-		decision.TaskShape = agentcontract.TaskShapeMaintenanceTask
-	}
-	switch decision.Route {
-	case agentcontract.TurnRouteStartTask, agentcontract.TurnRouteContinueTask, agentcontract.TurnRouteReviseTask:
-	default:
-		decision.Route = agentcontract.TurnRouteStartTask
-	}
-	return decision
-}
-
-func includesRegisteredSideEffectEvidence(toolSet *toolcontract.ToolSet, toolNames []string) bool {
-	for _, toolName := range toolNames {
-		registeredToolName := strings.TrimSpace(toolName)
-		if !agentcontract.RequiredEvidenceToolCanBeSatisfied(toolSet, registeredToolName) {
-			continue
-		}
-		toolDefinition, isDefined := toolSet.ToolDefinition(registeredToolName)
-		if isDefined && toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition) {
 			return true
 		}
 	}

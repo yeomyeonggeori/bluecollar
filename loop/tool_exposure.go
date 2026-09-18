@@ -6,8 +6,6 @@ import (
 	"strings"
 )
 
-const maxExtensionCallableToolCount = 15
-
 type toolExposureGroup struct {
 	Name    string
 	ToolIDs []string
@@ -37,7 +35,7 @@ func toolSetForAgentTurnWithExposure(toolSet *toolcontract.ToolSet, instructionB
 	if hasAuthoritativeWorkingSet {
 		groups = []toolExposureGroup{interactionGroup, recoveryGroup, pendingGroup, requiredEvidenceGroup, pinnedGroup, requiredNextGroup, selectedSkillGroup, evidenceAlternativesGroup}
 	}
-	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(groups), maxExtensionCallableToolCount)
+	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(groups), toolcontract.MaxExtensionCallableToolCount)
 	kernelToolIDs := []string{}
 	if requestNeedsToolAccess(request, groups) {
 		kernelToolIDs = filterGroupTools(toolSet, toolExposureGroup{ToolIDs: kernelToolNamesForInstructionBundle(instructionBundle)}).ToolIDs

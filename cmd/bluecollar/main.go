@@ -130,7 +130,7 @@ func collapsedWhitespace(text string) string {
 }
 
 func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(configuredDecisionModel(), nil, nil), agentcontract.IntakeOptions{IsEnabled: true})
+	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(decisions.ConfiguredDecisionModel(os.Stderr), nil, nil), agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: request.RequesterPersonID,
 		RequesterName:     request.RequesterName,
@@ -139,15 +139,6 @@ func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, r
 		WorkspaceRootPath: request.WorkspaceRootPath,
 		ToolSet:           request.ToolSet,
 	})
-}
-
-func configuredDecisionModel() model.DecisionModel {
-	endpoint, errorValue := decisions.EndpointFromEnvironment()
-	if errorValue != nil {
-		fmt.Fprintln(os.Stderr, "no decision model:", errorValue)
-		return nil
-	}
-	return endpoint.DecisionModel()
 }
 
 func printResult(result agentcontract.AgentTurnResult) {

@@ -9,6 +9,7 @@ import (
 	"os"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
@@ -26,7 +27,7 @@ func main() {
 	}
 
 	languageModel := openaicompatible.NewProvider(*endpointURL, *apiKey, *modelName)
-	runningAgent := newAgent(languageModel, *agentName)
+	runningAgent := newAgent(languageModel, decisions.ConfiguredDecisionModel(os.Stderr), *agentName)
 	connection := acp.NewAgentSideConnection(runningAgent, os.Stdout, os.Stdin)
 	runningAgent.sessionUpdates = connection
 	<-connection.Done()

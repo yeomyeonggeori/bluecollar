@@ -15,6 +15,7 @@ type Outcome struct {
 	Addressing          agentcontract.AddressingDecision
 	ReactionProbability float64
 	TurnDecision        agentcontract.TurnDecision
+	ToolProbabilities   map[string]float64
 	RelatesToActiveTask bool
 	PendingChoiceKeys   []string
 }
@@ -78,7 +79,7 @@ func splitQuestionName(questionName string) (string, string) {
 
 func answerFor(shortName string, question model.DecisionQuestion, outcome Outcome) model.DecisionAnswer {
 	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixTool) {
-		return noulAnswer(containsValue(outcome.TurnDecision.InitialToolNames, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixTool)))
+		return toolAnswer(strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixTool), outcome)
 	}
 	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat) {
 		return noulAnswer(containsValue(outcome.TurnDecision.RequestedOutputFormats, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat)))
@@ -105,8 +106,8 @@ func namedAnswer(shortName string, question model.DecisionQuestion, outcome Outc
 		return noulAnswer(outcome.RelatesToActiveTask)
 	case agentcontract.IntakeQuestionRoute:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
-	case agentcontract.IntakeQuestionClassification:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.Classification), string(agentcontract.IntakeClassificationQuickReply)))
+	case agentcontract.IntakeQuestionNeedsTool:
+		return noulAnswer(outcome.TurnDecision.Classification == agentcontract.IntakeClassificationBoundedTask)
 	case agentcontract.IntakeQuestionTaskShape:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskShape), string(agentcontract.TaskShapeImmediateReply)))
 	case agentcontract.IntakeQuestionLevel:
@@ -197,6 +198,13 @@ func choiceAnswer(choice string) model.DecisionAnswer {
 		Probabilities: map[string]float64{trimmedChoice: 1},
 		Confidence:    1,
 	}
+}
+
+func toolAnswer(toolName string, outcome Outcome) model.DecisionAnswer {
+	if probability, isGiven := outcome.ToolProbabilities[toolName]; isGiven {
+		return model.DecisionAnswer{Type: model.DecisionQuestionTypeNoul, Noul: probability}
+	}
+	return noulAnswer(containsValue(outcome.TurnDecision.InitialToolNames, toolName))
 }
 
 func noulAnswer(isYes bool) model.DecisionAnswer {
