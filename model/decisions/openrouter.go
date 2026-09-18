@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -49,6 +50,15 @@ func EndpointFromEnvironment() (Endpoint, error) {
 
 func (endpoint Endpoint) DecisionModel() model.DecisionModel {
 	return decisionModel{endpoint: endpoint}
+}
+
+func ConfiguredDecisionModel(warnings io.Writer) model.DecisionModel {
+	endpoint, errorValue := EndpointFromEnvironment()
+	if errorValue != nil {
+		fmt.Fprintln(warnings, "no decision model:", errorValue)
+		return nil
+	}
+	return endpoint.DecisionModel()
 }
 
 type decisionModel struct {

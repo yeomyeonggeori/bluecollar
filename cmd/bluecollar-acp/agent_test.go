@@ -11,9 +11,17 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
+
+func scriptedDecisionModel(languageModel model.LanguageModelProvider) *intaketest.LanguageModelDecisionModel {
+	return &intaketest.LanguageModelDecisionModel{
+		LanguageModel: languageModel,
+		Addressing:    agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
+	}
+}
 
 type scriptedLanguageModel struct {
 	contents      []string
@@ -167,7 +175,7 @@ func driveOneTurnWithMeta(t *testing.T, catalogTransport mcp.Transport, language
 	t.Helper()
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
-	runningAgent := newAgent(languageModel, "bluecollar")
+	runningAgent := newAgent(languageModel, scriptedDecisionModel(languageModel), "bluecollar")
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)
@@ -286,7 +294,7 @@ func TestACancelledTurnStopsCallingTools(t *testing.T) {
 
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
-	runningAgent := newAgent(languageModel, "bluecollar")
+	runningAgent := newAgent(languageModel, scriptedDecisionModel(languageModel), "bluecollar")
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogClientTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)

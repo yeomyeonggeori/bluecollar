@@ -26,6 +26,7 @@ type session struct {
 
 type agent struct {
 	languageModel    model.LanguageModelProvider
+	decisionPlanner  intake.DecisionPlanner
 	agentName        string
 	resolveTransport transportResolver
 	sessionUpdates   sessionUpdateSender
@@ -35,9 +36,10 @@ type agent struct {
 	nextSessionNumber int
 }
 
-func newAgent(languageModel model.LanguageModelProvider, agentName string) *agent {
+func newAgent(languageModel model.LanguageModelProvider, decisionModel model.DecisionModel, agentName string) *agent {
 	return &agent{
 		languageModel:    languageModel,
+		decisionPlanner:  intake.NewDecisionPlanner(decisionModel, nil, nil),
 		agentName:        agentName,
 		resolveTransport: transportForServer,
 		sessionsByID:     map[acp.SessionId]*session{},
@@ -113,7 +115,7 @@ func (runningAgent *agent) Prompt(ctx context.Context, request acp.PromptRequest
 }
 
 func (runningAgent *agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(runningAgent.languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: turnRequest.RequesterPersonID,
 		ConversationID:    turnRequest.ConversationID,
