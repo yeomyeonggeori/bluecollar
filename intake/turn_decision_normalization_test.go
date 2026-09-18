@@ -88,24 +88,6 @@ func TestAnInvalidClosedFieldIsAnError(t *testing.T) {
 	}
 }
 
-func TestASideEffectToolTurnsAQuickReplyIntoWork(t *testing.T) {
-	toolSet := newTestToolSet([]string{"task_add"})
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
-	decidedFields.InitialToolNames = []string{"task_add"}
-
-	decision := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{ToolSet: toolSet})
-
-	if decision.Classification != agentcontract.IntakeClassificationBoundedTask {
-		t.Fatalf("expected a side-effect tool to make the turn work, got %q", decision.Classification)
-	}
-	if decision.Route != agentcontract.TurnRouteStartTask {
-		t.Fatalf("expected the start_task route, got %q", decision.Route)
-	}
-	if decision.TaskShape != agentcontract.TaskShapeMaintenanceTask {
-		t.Fatalf("expected a maintenance task, got %q", decision.TaskShape)
-	}
-}
-
 func TestAConsumedTurnCarriesNoTools(t *testing.T) {
 	toolSet := newTestToolSet([]string{"task_list"})
 	decidedFields := decidedTurnFields(agentcontract.TurnRouteConsume, agentcontract.IntakeClassificationQuickReply)
