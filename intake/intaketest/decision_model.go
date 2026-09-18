@@ -5,6 +5,7 @@ package intaketest
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"strings"
 	"sync"
@@ -213,4 +214,29 @@ func containsValue(values []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// PendingChoiceKeys reads the option keys out of the state the planner sent, so
+// a harness that scripts a turn's selected keys does not also have to repeat the
+// options it is selecting from.
+func PendingChoiceKeys(state any) []string {
+	document, errorValue := json.Marshal(state)
+	if errorValue != nil {
+		return nil
+	}
+	var decisionState struct {
+		PendingChoice struct {
+			Options []struct {
+				Key string `json:"key"`
+			} `json:"options"`
+		} `json:"pendingChoice"`
+	}
+	if errorValue := json.Unmarshal(document, &decisionState); errorValue != nil {
+		return nil
+	}
+	choiceKeys := []string{}
+	for _, option := range decisionState.PendingChoice.Options {
+		choiceKeys = append(choiceKeys, option.Key)
+	}
+	return choiceKeys
 }

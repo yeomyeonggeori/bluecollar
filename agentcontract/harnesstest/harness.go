@@ -24,7 +24,7 @@ type Harness struct {
 
 	lastTurnRequest             agentcontract.AgentTurnRequest
 	runTurnCallCount            int
-	classifyAddressingCallCount int
+	decideCallCount int
 }
 
 func New(taskRunService *taskstate.TaskRunService) *Harness {
@@ -83,7 +83,7 @@ func (harness *Harness) GenerateReplyWithContext(context.Context, string, agentc
 }
 
 func (harness *Harness) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
-	harness.classifyAddressingCallCount++
+	harness.decideCallCount++
 	decisions := agentcontract.IntakeDecisions{}
 	for _, message := range request.Messages {
 		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
@@ -106,8 +106,8 @@ func (harness *Harness) RunTurnCallCount() int {
 	return harness.runTurnCallCount
 }
 
-func (harness *Harness) ClassifyAddressingCallCount() int {
-	return harness.classifyAddressingCallCount
+func (harness *Harness) DecideCallCount() int {
+	return harness.decideCallCount
 }
 
 func (harness *Harness) settleTaskRun(request agentcontract.AgentTurnRequest, status agentcontract.TaskStatus, message string) (agentcontract.TaskRun, error) {
