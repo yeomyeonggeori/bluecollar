@@ -15,7 +15,6 @@ import (
 )
 
 const DefaultEndpointURL = "https://openrouter.ai/api/alpha/decisions"
-const DefaultModelName = "~typesafe/jev-latest"
 
 const (
 	endpointEnvironmentName = "BLUECOLLAR_DECISION_ENDPOINT"
@@ -30,28 +29,22 @@ type Endpoint struct {
 	HTTPClient *http.Client
 }
 
-// EndpointFromEnvironment reads the one endpoint a live decision run needs.
-// Nothing is decided remotely when the key is unset, which is how the default
-// test run stays offline.
-func EndpointFromEnvironment() (Endpoint, bool) {
+var ErrDecisionAPIKeyMissing = errors.New(apiKeyEnvironmentName + " is not set")
+
+func EndpointFromEnvironment() (Endpoint, error) {
 	apiKey := strings.TrimSpace(os.Getenv(apiKeyEnvironmentName))
 	if apiKey == "" {
-		return Endpoint{}, false
+		return Endpoint{}, ErrDecisionAPIKeyMissing
 	}
-	return Endpoint{
-		URL:       firstNonEmpty(strings.TrimSpace(os.Getenv(endpointEnvironmentName)), DefaultEndpointURL),
-		ModelName: firstNonEmpty(strings.TrimSpace(os.Getenv(modelEnvironmentName)), DefaultModelName),
-		APIKey:    apiKey,
-	}, true
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
+	modelName := strings.TrimSpace(os.Getenv(modelEnvironmentName))
+	if modelName == "" {
+		return Endpoint{}, errors.New(modelEnvironmentName + " is not set and there is no default decision model")
 	}
-	return ""
+	endpointURL := strings.TrimSpace(os.Getenv(endpointEnvironmentName))
+	if endpointURL == "" {
+		endpointURL = DefaultEndpointURL
+	}
+	return Endpoint{URL: endpointURL, ModelName: modelName, APIKey: apiKey}, nil
 }
 
 func (endpoint Endpoint) DecisionModel() model.DecisionModel {
@@ -78,7 +71,6 @@ type decisionResponseDocument struct {
 type decisionAnswerDocument struct {
 	Choice        string             `json:"choice"`
 	Noul          float64            `json:"noul"`
-	Score         float64            `json:"score"`
 	Probabilities map[string]float64 `json:"probabilities"`
 	Confidence    float64            `json:"confidence"`
 }
@@ -90,8 +82,12 @@ type decisionUsageDocument struct {
 }
 
 func (decisionModel decisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
+	modelName := strings.TrimSpace(request.Model)
+	if modelName == "" {
+		modelName = decisionModel.endpoint.ModelName
+	}
 	requestDocument, errorValue := json.Marshal(decisionRequestDocument{
-		Model:     firstNonEmpty(strings.TrimSpace(request.Model), decisionModel.endpoint.ModelName, DefaultModelName),
+		Model:     modelName,
 		State:     request.State,
 		Questions: request.Questions,
 	})
@@ -152,7 +148,6 @@ func answersFromDocument(documents map[string]decisionAnswerDocument, questions 
 			Type:          questions[questionName].Type,
 			Choice:        strings.TrimSpace(document.Choice),
 			Noul:          document.Noul,
-			Score:         document.Score,
 			Probabilities: document.Probabilities,
 			Confidence:    document.Confidence,
 		}

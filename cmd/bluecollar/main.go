@@ -142,8 +142,9 @@ func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, r
 }
 
 func configuredDecisionModel() model.DecisionModel {
-	endpoint, isConfigured := decisions.EndpointFromEnvironment()
-	if !isConfigured {
+	endpoint, errorValue := decisions.EndpointFromEnvironment()
+	if errorValue != nil {
+		fmt.Fprintln(os.Stderr, "no decision model:", errorValue)
 		return nil
 	}
 	return endpoint.DecisionModel()

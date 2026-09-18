@@ -2,9 +2,10 @@ package intake
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"math"
 	"math/rand"
-	"strconv"
 	"strings"
 	"time"
 
@@ -12,9 +13,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-// AttachmentDescriber turns image parts into short factual sentences. The
-// decision model reads text, so a message whose whole content is a picture has
-// nothing to decide on without one.
 type AttachmentDescriber interface {
 	DescribeAttachments(context.Context, []agentcontract.AgentPart) ([]string, error)
 }
@@ -42,7 +40,7 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 		return agentcontract.IntakeDecisions{}, errors.New("intake decision request carries no message")
 	}
 	describedRequest, hasDescribedAttachments := planner.describeAttachmentsOnlyMessages(ctx, request)
-	decisionRequest := planner.buildDecisionRequest(describedRequest)
+	decisionRequest := buildDecisionRequest(describedRequest)
 	startedAt := time.Now()
 	response, errorValue := planner.decisionModel.Decide(ctx, decisionRequest)
 	latency := time.Since(startedAt)
@@ -74,7 +72,15 @@ func firstError(errorValues ...error) error {
 	return nil
 }
 
-func (planner DecisionPlanner) buildDecisionRequest(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
+func DecisionRequestByteCount(request agentcontract.IntakeDecisionRequest) int {
+	document, errorValue := json.Marshal(buildDecisionRequest(request))
+	if errorValue != nil {
+		return math.MaxInt
+	}
+	return len(document)
+}
+
+func buildDecisionRequest(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
 	toolNames := resolveCallableToolNames(request)
 	builderRequest := request
 	builderRequest.CallableToolNames = toolNames
@@ -152,36 +158,59 @@ func (planner DecisionPlanner) readDecisions(request agentcontract.IntakeDecisio
 }
 
 func (planner DecisionPlanner) readMessageDecision(request agentcontract.IntakeDecisionRequest, message agentcontract.IntakeDecisionMessage, reader answerReader) (agentcontract.IntakeMessageDecision, error) {
-	target, errorValue := reader.choice(questionNameTarget)
+	reactionAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionReaction)
 	if errorValue != nil {
 		return agentcontract.IntakeMessageDecision{}, errorValue
 	}
-	reactionProbability := reader.answer(questionNameReaction).ChoiceProbability(reactionOptionReact)
+	reactionProbability := reactionAnswer.ChoiceProbability(agentcontract.IntakeReactionOptionReact)
 	reactionDraw := planner.randomSource()
+	addressing, errorValue := readAddressingDecision(reader, reactionDraw < reactionProbability)
+	if errorValue != nil {
+		return agentcontract.IntakeMessageDecision{}, errorValue
+	}
+	turnFields, errorValue := readTurnFields(request, reader)
+	if errorValue != nil {
+		return agentcontract.IntakeMessageDecision{}, errorValue
+	}
 	decision := agentcontract.IntakeMessageDecision{
 		MessageID:           strings.TrimSpace(message.MessageID),
-		Addressing:          readAddressingDecision(reader, target, reactionDraw < reactionProbability),
+		Addressing:          addressing,
 		ReactionProbability: reactionProbability,
 		ReactionDraw:        reactionDraw,
-		TurnFields:          readTurnFields(request, reader),
+		TurnFields:          turnFields,
 		Attachments:         message.Attachments,
 	}
-	if _, hasAnswer := reader.answers[reader.messageKey+"."+questionNameRelatesToActiveTask]; hasAnswer {
+	if _, hasAnswer := reader.answers[reader.questionKey(agentcontract.IntakeQuestionRelatesToActiveTask)]; hasAnswer {
 		decision.HasRelatesToActiveTask = true
-		decision.RelatesToActiveTask = reader.answer(questionNameRelatesToActiveTask).IsYes()
+		decision.RelatesToActiveTask = reader.answer(agentcontract.IntakeQuestionRelatesToActiveTask).IsYes()
 	}
 	return decision, nil
 }
 
-func readAddressingDecision(reader answerReader, target string, isReacting bool) agentcontract.AddressingDecision {
+func readAddressingDecision(reader answerReader, isReacting bool) (agentcontract.AddressingDecision, error) {
+	target, errorValue := reader.choice(agentcontract.IntakeQuestionTarget)
+	if errorValue != nil {
+		return agentcontract.AddressingDecision{}, errorValue
+	}
+	shouldRespond, errorValue := reader.noul(agentcontract.IntakeQuestionShouldRespond)
+	if errorValue != nil {
+		return agentcontract.AddressingDecision{}, errorValue
+	}
 	decision := agentcontract.AddressingDecision{
 		Target:        agentcontract.AddressingTarget(target),
-		ShouldRespond: reader.answer(questionNameShouldRespond).IsYes(),
+		ShouldRespond: shouldRespond,
 	}
 	if isReacting {
-		decision.ReactionEmoji = normalizeAddressingReactionEmoji(reader.answer(questionNameReactionEmoji).Choice)
+		reactionEmoji, errorValue := reader.choice(agentcontract.IntakeQuestionReactionEmoji)
+		if errorValue != nil {
+			return agentcontract.AddressingDecision{}, errorValue
+		}
+		decision.ReactionEmoji = normalizeAddressingReactionEmoji(reactionEmoji)
 	}
-	dutyAnswer := reader.answer(questionNameDuty)
+	dutyAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionDuty)
+	if errorValue != nil {
+		return agentcontract.AddressingDecision{}, errorValue
+	}
 	if duty, isDuty := agentcontract.StandingDutyByName(dutyAnswer.Choice); isDuty {
 		decision.DutyMatch = true
 		decision.DutyName = duty.Name
@@ -190,44 +219,65 @@ func readAddressingDecision(reader answerReader, target string, isReacting bool)
 	if decision.Target == agentcontract.AddressingTargetHuman {
 		decision.ShouldRespond = false
 	}
-	return decision
+	return decision, nil
 }
 
-func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) agentcontract.TurnDecision {
-	turnFields := agentcontract.TurnDecision{
-		Route:                  agentcontract.TurnRoute(reader.answer(questionNameRoute).Choice),
-		Classification:         agentcontract.IntakeClassification(reader.answer(questionNameClassification).Choice),
-		TaskShape:              agentcontract.TaskShape(reader.answer(questionNameTaskShape).Choice),
-		TaskLevel:              agentcontract.TaskLevel(reader.answer(questionNameLevel).Choice),
-		DeliverableKind:        agentcontract.DeliverableKind(reader.answer(questionNameDeliverableKind).Choice),
-		ResponseLanguage:       reader.answer(questionNameResponseLanguage).Choice,
-		PriorTaskReference:     agentcontract.PriorTaskReference(reader.answer(questionNamePriorTaskReference).Choice),
-		RequestedOutputFormats: reader.yesMembers(questionPrefixFormat, requestedOutputFormatNames),
-		InitialToolNames:       reader.yesMembers(questionPrefixTool, resolveCallableToolNames(request)),
-	}
+func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) (agentcontract.TurnDecision, error) {
+	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionClassification, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage, agentcontract.IntakeQuestionPriorTaskReference}
 	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
-		approval := agentcontract.ApprovalSignal(reader.answer(questionNameApproval).Choice)
-		turnFields.Approval = &approval
+		choiceNames = append(choiceNames, agentcontract.IntakeQuestionApproval)
 	}
 	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {
-		turnFields.BusyRoute = agentcontract.BusyRoute(reader.answer(questionNameBusyRoute).Choice)
+		choiceNames = append(choiceNames, agentcontract.IntakeQuestionBusyRoute)
 	}
-	turnFields.Choices = readChoiceSelections(request, reader)
-	return turnFields
+	choices, errorValue := reader.choices(choiceNames)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
+	turnFields := agentcontract.TurnDecision{
+		Route:                  agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute]),
+		Classification:         agentcontract.IntakeClassification(choices[agentcontract.IntakeQuestionClassification]),
+		TaskShape:              agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
+		TaskLevel:              agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
+		DeliverableKind:        agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
+		ResponseLanguage:       choices[agentcontract.IntakeQuestionResponseLanguage],
+		PriorTaskReference:     agentcontract.PriorTaskReference(choices[agentcontract.IntakeQuestionPriorTaskReference]),
+		RequestedOutputFormats: reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, agentcontract.RequestedOutputFormatNames),
+		InitialToolNames:       reader.yesMembers(agentcontract.IntakeQuestionPrefixTool, resolveCallableToolNames(request)),
+	}
+	if approvalChoice, isAsked := choices[agentcontract.IntakeQuestionApproval]; isAsked {
+		approval := agentcontract.ApprovalSignal(approvalChoice)
+		turnFields.Approval = &approval
+	}
+	if busyRouteChoice, isAsked := choices[agentcontract.IntakeQuestionBusyRoute]; isAsked {
+		turnFields.BusyRoute = agentcontract.BusyRoute(busyRouteChoice)
+	}
+	selections, errorValue := readChoiceSelections(request, reader)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
+	turnFields.Choices = selections
+	return turnFields, nil
 }
 
-func readChoiceSelections(request agentcontract.IntakeDecisionRequest, reader answerReader) []string {
+func readChoiceSelections(request agentcontract.IntakeDecisionRequest, reader answerReader) ([]string, error) {
 	choiceKeys := decisionChoiceKeys(request.PendingChoice)
-	selections := []string{}
-	for index, choiceKey := range choiceKeys {
-		if reader.answer(questionPrefixChoice + strconv.Itoa(index+1)).IsYes() {
-			selections = append(selections, choiceKey)
+	if len(choiceKeys) == 0 {
+		return nil, nil
+	}
+	if isMultipleChoiceSelection(request.PendingChoice) {
+		return reader.yesMembers(agentcontract.IntakeQuestionPrefixChoice, choiceKeys), nil
+	}
+	selectedKey, errorValue := reader.choice(agentcontract.IntakeQuestionChoice)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	for _, choiceKey := range choiceKeys {
+		if choiceKey == selectedKey {
+			return []string{choiceKey}, nil
 		}
 	}
-	if len(selections) == 0 {
-		return nil
-	}
-	return selections
+	return nil, nil
 }
 
 type answerReader struct {
@@ -235,20 +285,51 @@ type answerReader struct {
 	messageKey string
 }
 
+func (reader answerReader) questionKey(questionName string) string {
+	return reader.messageKey + "." + questionName
+}
+
 func (reader answerReader) answer(questionName string) model.DecisionAnswer {
-	return reader.answers[reader.messageKey+"."+questionName]
+	return reader.answers[reader.questionKey(questionName)]
+}
+
+func (reader answerReader) choiceAnswer(questionName string) (model.DecisionAnswer, error) {
+	answer, isAnswered := reader.answers[reader.questionKey(questionName)]
+	if !isAnswered {
+		return model.DecisionAnswer{}, errors.New("intake decision is missing an answer for " + reader.questionKey(questionName))
+	}
+	if strings.TrimSpace(answer.Choice) == "" {
+		return model.DecisionAnswer{}, errors.New("intake decision answered " + reader.questionKey(questionName) + " with no choice")
+	}
+	return answer, nil
 }
 
 func (reader answerReader) choice(questionName string) (string, error) {
-	answer, isAnswered := reader.answers[reader.messageKey+"."+questionName]
+	answer, errorValue := reader.choiceAnswer(questionName)
+	if errorValue != nil {
+		return "", errorValue
+	}
+	return strings.TrimSpace(answer.Choice), nil
+}
+
+func (reader answerReader) choices(questionNames []string) (map[string]string, error) {
+	choices := map[string]string{}
+	for _, questionName := range questionNames {
+		choice, errorValue := reader.choice(questionName)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		choices[questionName] = choice
+	}
+	return choices, nil
+}
+
+func (reader answerReader) noul(questionName string) (bool, error) {
+	answer, isAnswered := reader.answers[reader.questionKey(questionName)]
 	if !isAnswered {
-		return "", errors.New("intake decision is missing an answer for " + reader.messageKey + "." + questionName)
+		return false, errors.New("intake decision is missing an answer for " + reader.questionKey(questionName))
 	}
-	choice := strings.TrimSpace(answer.Choice)
-	if choice == "" {
-		return "", errors.New("intake decision answered " + reader.messageKey + "." + questionName + " with no choice")
-	}
-	return choice, nil
+	return answer.IsYes(), nil
 }
 
 func (reader answerReader) yesMembers(questionPrefix string, memberNames []string) []string {

@@ -56,7 +56,7 @@ func decisionLLMCallRecord(call decisionCallRecord) agentcontract.LLMCallRecord 
 func reactionDrawsOf(decisions agentcontract.IntakeDecisions) map[string]float64 {
 	draws := map[string]float64{}
 	for index, decision := range decisions.Messages {
-		draws[decisionMessageKey(index)+"."+questionNameReaction] = decision.ReactionDraw
+		draws[decisionMessageKey(index)+"."+agentcontract.IntakeQuestionReaction] = decision.ReactionDraw
 	}
 	if len(draws) == 0 {
 		return nil

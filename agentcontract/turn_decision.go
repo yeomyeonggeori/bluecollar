@@ -109,8 +109,6 @@ type TurnDecision struct {
 	BusyInstruction        string                `json:"busyInstruction,omitempty"`
 }
 
-// TurnWords is everything about a turn a chat model still writes once the
-// decision model has settled the closed fields.
 type TurnWords struct {
 	Reason                string                `json:"reason"`
 	UserFacingReply       string                `json:"userFacingReply"`

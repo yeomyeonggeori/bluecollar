@@ -13,8 +13,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-var allowedReactionEmojiNames = agentcontract.ReactionEmojiNames
-
 type TurnRouter struct {
 	languageModel   model.LanguageModelProvider
 	decisionPlanner DecisionPlanner
@@ -48,16 +46,12 @@ func (turnRouter TurnRouter) Plan(ctx context.Context, request agentcontract.Age
 	return turnRouter.PlanObserved(ctx, request, nil)
 }
 
-// PlanObserved decides the turn and then, only for a route whose output is
-// words, asks the chat model to write them. The closed fields arrive already
-// decided on the request when the inbound pipeline made one decision call for
-// the whole burst; otherwise this asks for them itself.
 func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
 	if request.PrecomputedTurnDecision != nil {
 		if request.IsPrecomputedDecisionExact {
 			return *request.PrecomputedTurnDecision, nil
 		}
-		return turnRouter.normalizeDecision(*request.PrecomputedTurnDecision, request)
+		return normalizeTurnDecision(*request.PrecomputedTurnDecision, request)
 	}
 	if !turnRouter.options.IsEnabled {
 		return agentcontract.TurnDecision{}, ErrTurnRouterDisabled
@@ -66,10 +60,13 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
-	decidedFields = canonicalizeTurnDecision(decidedFields)
+	decidedFields, errorValue = normalizeDecidedTurnFields(decidedFields, request)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
 	wordsShape, needsChatCall := turnWordsShapeFor(decidedFields)
 	if !needsChatCall {
-		return turnRouter.normalizeDecision(decidedFields, request)
+		return normalizeTurnWords(decidedFields), nil
 	}
 	observedRouter := turnRouter
 	if callLedger != nil {
@@ -79,7 +76,7 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, fmt.Errorf("turn router words: %w", errorValue)
 	}
-	return turnRouter.normalizeDecision(decidedFields.WithTurnWords(turnWords), request)
+	return normalizeTurnWords(decidedFields.WithTurnWords(turnWords)), nil
 }
 
 func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
@@ -96,9 +93,6 @@ func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agent
 	return decisions.Messages[0].TurnFields, nil
 }
 
-// TurnRequestDecisionRequest assembles the one state a decision call reads from
-// a single agent request. The inbound pipeline builds the same state for a
-// whole burst before the engagement gate; this is the one-message form of it.
 func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontract.IntakeDecisionRequest {
 	return agentcontract.IntakeDecisionRequest{
 		Messages: []agentcontract.IntakeDecisionMessage{{
@@ -128,10 +122,6 @@ func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontrac
 	}
 }
 
-// turnWordsShape is what the one remaining chat call is for. A route whose
-// output is words gets the reply schema; a route that starts work gets only the
-// acceptance contract, because the completion gate reads its acceptanceHints
-// and nothing else in intake can write them.
 type turnWordsShape struct {
 	systemPrompt   string
 	schemaDocument string
@@ -301,9 +291,6 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	return append(messages, turnWordsUserMessage(request))
 }
 
-// A picture that came with the message is the only place the answer lives when
-// the message asks about it, so the words call carries the image itself rather
-// than a filename.
 func turnWordsUserMessage(request agentcontract.AgentRequest) model.Message {
 	message := model.Message{Role: "user", Content: request.Prompt}
 	imageParts := agentcontract.ImageMessageParts(request.InputParts)
@@ -355,7 +342,15 @@ func turnWordsPendingDescription(request agentcontract.AgentRequest) string {
 	return strings.Join(lines, "\n")
 }
 
-func (turnRouter TurnRouter) normalizeDecision(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+func normalizeTurnDecision(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+	decidedFields, errorValue := normalizeDecidedTurnFields(decision, request)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
+	return normalizeTurnWords(decidedFields), nil
+}
+
+func normalizeDecidedTurnFields(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
 	decision.Route = normalizeTurnRoute(decision.Route)
 	if decision.Route == "" {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid route")
@@ -372,9 +367,6 @@ func (turnRouter TurnRouter) normalizeDecision(decision agentcontract.TurnDecisi
 	if strings.TrimSpace(request.ActiveTask.TaskRunID) == "" {
 		decision.BusyRoute = ""
 	}
-	decision.BusyInstruction = strings.TrimSpace(decision.BusyInstruction)
-	decision.ClarificationQuestion = strings.TrimSpace(decision.ClarificationQuestion)
-	decision.ClarificationOptions = normalizeClarificationOptions(decision.ClarificationOptions)
 	decision.ReactionEmojiName = agentcontract.NormalizeReactionEmojiName(decision.ReactionEmojiName)
 	normalizedClassification := agentcontract.NormalizeIntakeClassification(decision.Classification)
 	if normalizedClassification == "" {
@@ -389,13 +381,15 @@ func (turnRouter TurnRouter) normalizeDecision(decision agentcontract.TurnDecisi
 	decision.RequestedOutputFormats = agentcontract.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)
 	decision = normalizeWebsiteDeliverableKind(decision)
 	decision = normalizeSiteDeliverableFormats(decision)
-	decision.ExpectedResults = agentcontract.NormalizeExpectedResults(decision.ExpectedResults)
-	decision = normalizeTurnDecisionFileRequirement(decision)
+	decision = removeFileDeliveryToolWithoutArtifactFormat(decision)
 	decision = normalizeSideEffectTurnDecision(decision, request.ToolSet)
 	if decision.Classification == agentcontract.IntakeClassificationBoundedTask && decision.TaskShape == agentcontract.TaskShapeImmediateReply {
 		decision.TaskShape = agentcontract.TaskShapeMaintenanceTask
 	}
 	decision = canonicalizeTurnDecision(decision)
+	if decision.Route == agentcontract.TurnRouteConsume {
+		decision.InitialToolNames = nil
+	}
 	normalizedTaskLevel := agentcontract.NormalizeTaskLevel(string(decision.TaskLevel))
 	if normalizedTaskLevel == "" {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid task level")
@@ -403,9 +397,17 @@ func (turnRouter TurnRouter) normalizeDecision(decision agentcontract.TurnDecisi
 	decision.TaskLevel = normalizedTaskLevel
 	decision.InitialToolNames = agentcontract.RegisteredToolNamesOnly(request.ToolSet, appendUniqueStrings(decision.InitialToolNames))
 	decision.ResponseLanguage = resolveDecisionResponseLanguage(decision.ResponseLanguage, request.ResponseLanguage)
-	decision.Reason = strings.TrimSpace(decision.Reason)
 	decision.PriorTaskReference = agentcontract.NormalizePriorTaskReference(decision.PriorTaskReference)
 	return decision, nil
+}
+
+func normalizeTurnWords(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+	decision.Reason = strings.TrimSpace(decision.Reason)
+	decision.BusyInstruction = strings.TrimSpace(decision.BusyInstruction)
+	decision.ClarificationQuestion = strings.TrimSpace(decision.ClarificationQuestion)
+	decision.ClarificationOptions = normalizeClarificationOptions(decision.ClarificationOptions)
+	decision.ExpectedResults = agentcontract.NormalizeExpectedResults(decision.ExpectedResults)
+	return removeFileExpectedResultsWithoutArtifactFormat(decision)
 }
 
 func normalizeWebsiteDeliverableKind(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
@@ -514,12 +516,19 @@ func isValidBusyRoute(busyRoute agentcontract.BusyRoute) bool {
 	}
 }
 
-func normalizeTurnDecisionFileRequirement(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func removeFileDeliveryToolWithoutArtifactFormat(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+	if hasArtifactOutputFormat(decision.RequestedOutputFormats) {
+		return decision
+	}
+	decision.InitialToolNames = removeToolName(decision.InitialToolNames, toolcontract.FileDeliverToolName)
+	return decision
+}
+
+func removeFileExpectedResultsWithoutArtifactFormat(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
 	if hasArtifactOutputFormat(decision.RequestedOutputFormats) {
 		return decision
 	}
 	decision.ExpectedResults = removeExpectedResultsByType(decision.ExpectedResults, agentcontract.ExpectedResultTypeFile)
-	decision.InitialToolNames = removeToolName(decision.InitialToolNames, toolcontract.FileDeliverToolName)
 	return decision
 }
 
@@ -642,13 +651,7 @@ func resolveDecisionResponseLanguage(decisionLanguage string, requestLanguage st
 }
 
 func hasArtifactOutputFormat(formats []string) bool {
-	for _, format := range agentcontract.NormalizeRequestedOutputFormats(formats) {
-		switch format {
-		case "html", "pptx", "pdf", "txt", "docx", "xlsx", "csv", "json":
-			return true
-		}
-	}
-	return false
+	return len(agentcontract.NormalizeRequestedOutputFormats(formats)) > 0
 }
 
 func normalizeTaskShape(taskShape agentcontract.TaskShape) agentcontract.TaskShape {

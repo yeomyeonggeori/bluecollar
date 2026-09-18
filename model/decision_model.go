@@ -10,7 +10,6 @@ type DecisionQuestionType string
 const (
 	DecisionQuestionTypeChoice DecisionQuestionType = "choice"
 	DecisionQuestionTypeNoul   DecisionQuestionType = "noul"
-	DecisionQuestionTypeScore  DecisionQuestionType = "score"
 )
 
 type DecisionQuestion struct {
@@ -28,11 +27,6 @@ type NoulQuestion struct {
 	Instructions     string
 	TrueDescription  string
 	FalseDescription string
-}
-
-type ScoreQuestion struct {
-	Instructions string
-	Levels       []string
 }
 
 func (question ChoiceQuestion) Question() DecisionQuestion {
@@ -57,14 +51,6 @@ func (question NoulQuestion) Question() DecisionQuestion {
 	return DecisionQuestion{Type: DecisionQuestionTypeNoul, Instructions: question.Instructions, Criteria: criteria}
 }
 
-func (question ScoreQuestion) Question() DecisionQuestion {
-	return DecisionQuestion{
-		Type:         DecisionQuestionTypeScore,
-		Instructions: question.Instructions,
-		Criteria:     question.Levels,
-	}
-}
-
 func (question ChoiceQuestion) OptionNames() []string {
 	names := make([]string, 0, len(question.OptionDescriptions))
 	for name := range question.OptionDescriptions {
@@ -85,7 +71,6 @@ type DecisionAnswer struct {
 	Type          DecisionQuestionType `json:"type"`
 	Choice        string               `json:"choice,omitempty"`
 	Noul          float64              `json:"noul,omitempty"`
-	Score         float64              `json:"score,omitempty"`
 	Probabilities map[string]float64   `json:"probabilities,omitempty"`
 	Confidence    float64              `json:"confidence,omitempty"`
 }
@@ -99,10 +84,6 @@ type DecisionResponse struct {
 	LatencyMS        int64                     `json:"latencyMs,omitempty"`
 }
 
-// DecisionModel answers typed questions about a state and never writes words.
-// It is not a LanguageModelProvider: there are no messages, no schema document
-// and no text to parse, and every answer carries the distribution it was drawn
-// from.
 type DecisionModel interface {
 	Decide(context.Context, DecisionRequest) (DecisionResponse, error)
 }

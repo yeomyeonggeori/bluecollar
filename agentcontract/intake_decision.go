@@ -144,3 +144,31 @@ func ImageMessageParts(parts []AgentPart) []model.MessagePart {
 	}
 	return messageParts
 }
+
+const (
+	IntakeQuestionTarget              = "target"
+	IntakeQuestionShouldRespond       = "shouldRespond"
+	IntakeQuestionReaction            = "reaction"
+	IntakeQuestionReactionEmoji       = "reactionEmoji"
+	IntakeQuestionDuty                = "duty"
+	IntakeQuestionRelatesToActiveTask = "relatesToActiveTask"
+	IntakeQuestionRoute               = "route"
+	IntakeQuestionClassification      = "classification"
+	IntakeQuestionTaskShape           = "taskShape"
+	IntakeQuestionLevel               = "level"
+	IntakeQuestionDeliverableKind     = "deliverableKind"
+	IntakeQuestionResponseLanguage    = "responseLanguage"
+	IntakeQuestionPriorTaskReference  = "priorTaskReference"
+	IntakeQuestionApproval            = "approval"
+	IntakeQuestionBusyRoute           = "busyRoute"
+	IntakeQuestionChoice              = "choice"
+
+	IntakeQuestionPrefixFormat = "format."
+	IntakeQuestionPrefixTool   = "tool."
+	IntakeQuestionPrefixChoice = "choice."
+
+	IntakeReactionOptionNone  = "none"
+	IntakeReactionOptionReact = "react"
+	IntakeDutyOptionNone      = "none"
+	IntakeChoiceOptionNone    = "none_of_these"
+)

@@ -22,9 +22,9 @@ type Harness struct {
 	AddressingDecision   agentcontract.AddressingDecision
 	IsActiveTaskFollowUp bool
 
-	lastTurnRequest             agentcontract.AgentTurnRequest
-	runTurnCallCount            int
-	decideCallCount int
+	lastTurnRequest  agentcontract.AgentTurnRequest
+	runTurnCallCount int
+	decideCallCount  int
 }
 
 func New(taskRunService *taskstate.TaskRunService) *Harness {

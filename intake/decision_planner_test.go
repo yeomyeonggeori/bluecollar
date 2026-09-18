@@ -99,7 +99,7 @@ func TestDecisionPlannerLeavesAFollowUpUnaskedWithoutATask(t *testing.T) {
 	if decision.HasRelatesToActiveTask {
 		t.Fatal("expected no follow-up answer when no task is running")
 	}
-	if _, isAsked := decisionModel.Requests()[0].Questions["m1."+questionNameRelatesToActiveTask]; isAsked {
+	if _, isAsked := decisionModel.Requests()[0].Questions["m1."+agentcontract.IntakeQuestionRelatesToActiveTask]; isAsked {
 		t.Fatal("expected the follow-up question to be left out when no task is running")
 	}
 }
@@ -155,13 +155,13 @@ func reactionScript(reactProbability float64) *model.ScriptedDecisionModel {
 	return &model.ScriptedDecisionModel{
 		AnswerFor: func(questionName string, question model.DecisionQuestion) (model.DecisionAnswer, bool) {
 			switch {
-			case strings.HasSuffix(questionName, "."+questionNameReaction):
+			case strings.HasSuffix(questionName, "."+agentcontract.IntakeQuestionReaction):
 				return model.DecisionAnswer{
 					Type:          model.DecisionQuestionTypeChoice,
-					Choice:        reactionOptionNone,
-					Probabilities: map[string]float64{reactionOptionNone: 1 - reactProbability, reactionOptionReact: reactProbability},
+					Choice:        agentcontract.IntakeReactionOptionNone,
+					Probabilities: map[string]float64{agentcontract.IntakeReactionOptionNone: 1 - reactProbability, agentcontract.IntakeReactionOptionReact: reactProbability},
 				}, true
-			case strings.HasSuffix(questionName, "."+questionNameReactionEmoji):
+			case strings.HasSuffix(questionName, "."+agentcontract.IntakeQuestionReactionEmoji):
 				return model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: "white_check_mark"}, true
 			}
 			return intaketest.Answers(map[string]model.DecisionQuestion{questionName: question}, func(string) intaketest.Outcome {
@@ -216,7 +216,7 @@ func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
 	if record.AttachmentsDescribed {
 		t.Fatal("expected no described attachments without a describer")
 	}
-	if _, isRecorded := record.DecisionAnswers["m1."+questionNameRoute]; !isRecorded {
+	if _, isRecorded := record.DecisionAnswers["m1."+agentcontract.IntakeQuestionRoute]; !isRecorded {
 		t.Fatalf("expected the route distribution in the record, got %+v", record.DecisionAnswers)
 	}
 }
@@ -242,7 +242,7 @@ func TestDecisionPlannerDecidesEveryMessageOfABurstInOneCall(t *testing.T) {
 		t.Fatal("expected the second message to be addressable by its identifier")
 	}
 	questions := decisionModel.Requests()[0].Questions
-	if _, isAsked := questions["m2."+questionNameRoute]; !isAsked {
+	if _, isAsked := questions["m2."+agentcontract.IntakeQuestionRoute]; !isAsked {
 		t.Fatal("expected the question set to repeat per message")
 	}
 }

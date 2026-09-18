@@ -10,10 +10,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-// LanguageModelDecisionModel answers the decision questions from the turn a
-// chat model is scripted to return for the router schema. A harness written
-// before one call decided everything scripts a turn rather than an answer set,
-// and this keeps that script meaning what it meant.
 type LanguageModelDecisionModel struct {
 	LanguageModel model.LanguageModelProvider
 	Addressing    agentcontract.AddressingDecision

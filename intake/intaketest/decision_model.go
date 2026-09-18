@@ -1,17 +1,14 @@
-// Package intaketest answers intake decision questions from an outcome a test
-// states directly, so a test that is about what the runtime does with a
-// decision does not have to spell out forty answers to get one.
 package intaketest
 
 import (
 	"context"
 	"encoding/json"
-	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type Outcome struct {
@@ -80,59 +77,65 @@ func splitQuestionName(questionName string) (string, string) {
 }
 
 func answerFor(shortName string, question model.DecisionQuestion, outcome Outcome) model.DecisionAnswer {
-	if strings.HasPrefix(shortName, "tool.") {
-		return noulAnswer(containsValue(outcome.TurnDecision.InitialToolNames, strings.TrimPrefix(shortName, "tool.")))
+	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixTool) {
+		return noulAnswer(containsValue(outcome.TurnDecision.InitialToolNames, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixTool)))
 	}
-	if strings.HasPrefix(shortName, "format.") {
-		return noulAnswer(containsValue(outcome.TurnDecision.RequestedOutputFormats, strings.TrimPrefix(shortName, "format.")))
+	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat) {
+		return noulAnswer(containsValue(outcome.TurnDecision.RequestedOutputFormats, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat)))
 	}
-	if strings.HasPrefix(shortName, "choice.") {
-		return noulAnswer(containsValue(outcome.TurnDecision.Choices, selectedChoiceKey(shortName, outcome)))
+	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixChoice) {
+		return noulAnswer(containsValue(outcome.TurnDecision.Choices, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixChoice)))
 	}
 	return namedAnswer(shortName, question, outcome)
 }
 
 func namedAnswer(shortName string, question model.DecisionQuestion, outcome Outcome) model.DecisionAnswer {
 	switch shortName {
-	case "target":
+	case agentcontract.IntakeQuestionTarget:
 		return choiceAnswer(addressingTargetName(outcome))
-	case "shouldRespond":
+	case agentcontract.IntakeQuestionShouldRespond:
 		return noulAnswer(outcome.Addressing.ShouldRespond)
-	case "reaction":
+	case agentcontract.IntakeQuestionReaction:
 		return reactionAnswer(outcome)
-	case "reactionEmoji":
-		return choiceAnswer(outcome.Addressing.ReactionEmoji)
-	case "duty":
+	case agentcontract.IntakeQuestionReactionEmoji:
+		return choiceAnswer(orDefault(outcome.Addressing.ReactionEmoji, agentcontract.DefaultReactionEmojiName))
+	case agentcontract.IntakeQuestionDuty:
 		return dutyAnswer(outcome)
-	case "relatesToActiveTask":
+	case agentcontract.IntakeQuestionRelatesToActiveTask:
 		return noulAnswer(outcome.RelatesToActiveTask)
-	case "route":
-		return choiceAnswer(string(outcome.TurnDecision.Route))
-	case "classification":
-		return choiceAnswer(string(outcome.TurnDecision.Classification))
-	case "taskShape":
-		return choiceAnswer(string(outcome.TurnDecision.TaskShape))
-	case "level":
-		return choiceAnswer(string(outcome.TurnDecision.TaskLevel))
-	case "deliverableKind":
-		return choiceAnswer(string(outcome.TurnDecision.DeliverableKind))
-	case "responseLanguage":
-		return choiceAnswer(outcome.TurnDecision.ResponseLanguage)
-	case "priorTaskReference":
-		return choiceAnswer(string(outcome.TurnDecision.PriorTaskReference))
-	case "approval":
+	case agentcontract.IntakeQuestionRoute:
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
+	case agentcontract.IntakeQuestionClassification:
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.Classification), string(agentcontract.IntakeClassificationQuickReply)))
+	case agentcontract.IntakeQuestionTaskShape:
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskShape), string(agentcontract.TaskShapeImmediateReply)))
+	case agentcontract.IntakeQuestionLevel:
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskLevel), string(agentcontract.TaskLevelLow)))
+	case agentcontract.IntakeQuestionDeliverableKind:
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.DeliverableKind), string(agentcontract.DeliverableKindNone)))
+	case agentcontract.IntakeQuestionResponseLanguage:
+		return choiceAnswer(orDefault(outcome.TurnDecision.ResponseLanguage, toolcontract.ResponseLanguageSameAsConversation))
+	case agentcontract.IntakeQuestionPriorTaskReference:
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone)))
+	case agentcontract.IntakeQuestionApproval:
 		return choiceAnswer(approvalName(outcome))
-	case "busyRoute":
+	case agentcontract.IntakeQuestionBusyRoute:
 		return choiceAnswer(string(outcome.TurnDecision.BusyRoute))
+	case agentcontract.IntakeQuestionChoice:
+		return choiceAnswer(selectedChoiceKey(outcome))
 	}
 	return model.DecisionAnswer{Type: question.Type}
 }
 
 func addressingTargetName(outcome Outcome) string {
-	if target := strings.TrimSpace(string(outcome.Addressing.Target)); target != "" {
-		return target
+	return orDefault(string(outcome.Addressing.Target), string(agentcontract.AddressingTargetBot))
+}
+
+func orDefault(value string, defaultValue string) string {
+	if trimmedValue := strings.TrimSpace(value); trimmedValue != "" {
+		return trimmedValue
 	}
-	return string(agentcontract.AddressingTargetBot)
+	return defaultValue
 }
 
 func approvalName(outcome Outcome) string {
@@ -150,20 +153,20 @@ func reactionAnswer(outcome Outcome) model.DecisionAnswer {
 	return model.DecisionAnswer{
 		Type:          model.DecisionQuestionTypeChoice,
 		Choice:        reactionChoice(probability),
-		Probabilities: map[string]float64{"none": 1 - probability, "react": probability},
+		Probabilities: map[string]float64{agentcontract.IntakeReactionOptionNone: 1 - probability, agentcontract.IntakeReactionOptionReact: probability},
 		Confidence:    1,
 	}
 }
 
 func reactionChoice(probability float64) string {
 	if probability >= 0.5 {
-		return "react"
+		return agentcontract.IntakeReactionOptionReact
 	}
-	return "none"
+	return agentcontract.IntakeReactionOptionNone
 }
 
 func dutyAnswer(outcome Outcome) model.DecisionAnswer {
-	dutyName := "none"
+	dutyName := agentcontract.IntakeDutyOptionNone
 	confidence := float64(0)
 	if outcome.Addressing.DutyMatch {
 		dutyName = outcome.Addressing.DutyName
@@ -177,14 +180,13 @@ func dutyAnswer(outcome Outcome) model.DecisionAnswer {
 	}
 }
 
-func selectedChoiceKey(shortName string, outcome Outcome) string {
-	optionNumber := strings.TrimPrefix(shortName, "choice.")
-	for index, choiceKey := range outcome.PendingChoiceKeys {
-		if optionNumber == strconv.Itoa(index+1) {
+func selectedChoiceKey(outcome Outcome) string {
+	for _, choiceKey := range outcome.TurnDecision.Choices {
+		if containsValue(outcome.PendingChoiceKeys, choiceKey) {
 			return choiceKey
 		}
 	}
-	return ""
+	return agentcontract.IntakeChoiceOptionNone
 }
 
 func choiceAnswer(choice string) model.DecisionAnswer {
@@ -216,9 +218,6 @@ func containsValue(values []string, value string) bool {
 	return false
 }
 
-// PendingChoiceKeys reads the option keys out of the state the planner sent, so
-// a harness that scripts a turn's selected keys does not also have to repeat the
-// options it is selecting from.
 func PendingChoiceKeys(state any) []string {
 	document, errorValue := json.Marshal(state)
 	if errorValue != nil {

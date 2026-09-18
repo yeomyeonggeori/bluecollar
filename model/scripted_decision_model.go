@@ -6,10 +6,6 @@ import (
 	"sync"
 )
 
-// ScriptedDecisionModel answers from a table instead of a network. A scenario
-// names the answer it wants per question name; anything it does not name is
-// answered from DefaultAnswers, and a question neither names fails loudly so a
-// scenario cannot pass on a silently invented decision.
 type ScriptedDecisionModel struct {
 	AnswerFor      func(questionName string, question DecisionQuestion) (DecisionAnswer, bool)
 	DefaultAnswers map[string]DecisionAnswer

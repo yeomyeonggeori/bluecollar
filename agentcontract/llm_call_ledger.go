@@ -58,10 +58,6 @@ type LLMCallRecord struct {
 
 type LLMCallObserver func(record LLMCallRecord)
 
-// IntakeCallLedger keeps every model call intake makes about one inbound
-// message: the decision call, the words-only router call, and the vision call
-// that describes an attachment nothing else can read. Keeping only the router
-// left the classifiers unmeasured, so nothing said what judging a message cost.
 type IntakeCallLedger struct {
 	Records []LLMCallRecord
 }
@@ -333,9 +329,6 @@ func chatRequestSchemaName(request model.ChatCompletionRequest) string {
 	return strings.TrimSpace(request.SchemaName)
 }
 
-// An image travels as a part beside the text, so counting only the text says a
-// prompt carrying a megabyte of picture is the same size as one carrying none.
-// The ledger is what an outage is read from; it has to see what was sent.
 func chatRequestByteCount(request model.ChatCompletionRequest) int {
 	byteCount := 0
 	for _, message := range request.Messages {

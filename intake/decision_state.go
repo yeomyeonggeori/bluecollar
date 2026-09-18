@@ -25,6 +25,8 @@ type decisionState struct {
 	PendingConfirmation *decisionPending         `json:"pendingConfirmation,omitempty"`
 	PendingChoice       *decisionPendingChoice   `json:"pendingChoice,omitempty"`
 	PriorTask           *decisionPriorTask       `json:"priorTask,omitempty"`
+	ScheduledRun        *decisionScheduledRun    `json:"scheduledRun,omitempty"`
+	ActiveGoal          *decisionActiveGoal      `json:"activeGoal,omitempty"`
 	GiveUpAllowance     string                   `json:"giveUpAllowedBecause,omitempty"`
 	ResponseLanguage    string                   `json:"runtimeResponseLanguage,omitempty"`
 }
@@ -98,6 +100,20 @@ type decisionPriorTask struct {
 	Result string `json:"result,omitempty"`
 }
 
+type decisionScheduledRun struct {
+	Name         string `json:"name,omitempty"`
+	Kind         string `json:"kind,omitempty"`
+	Cadence      string `json:"cadence,omitempty"`
+	OccurrenceAt string `json:"occurrenceAt,omitempty"`
+}
+
+type decisionActiveGoal struct {
+	OriginalInstruction string   `json:"originalInstruction,omitempty"`
+	CurrentObjective    string   `json:"currentObjective,omitempty"`
+	Status              string   `json:"status,omitempty"`
+	MissingInformation  []string `json:"missingInformation,omitempty"`
+}
+
 func buildDecisionState(request agentcontract.IntakeDecisionRequest, toolDescriptions []decisionTool) decisionState {
 	state := decisionState{
 		Agent:            decisionAgent{Name: request.AgentIdentity.DisplayName(), Mention: request.AgentIdentity.MentionExample()},
@@ -136,10 +152,34 @@ func buildDecisionState(request agentcontract.IntakeDecisionRequest, toolDescrip
 	if strings.TrimSpace(request.PriorTask.Prompt) != "" {
 		state.PriorTask = &decisionPriorTask{Prompt: request.PriorTask.Prompt, Result: request.PriorTask.Result}
 	}
+	if !request.ScheduledRun.IsEmpty() {
+		state.ScheduledRun = &decisionScheduledRun{
+			Name:         strings.TrimSpace(request.ScheduledRun.Name),
+			Kind:         strings.TrimSpace(request.ScheduledRun.Kind),
+			Cadence:      strings.TrimSpace(request.ScheduledRun.Cadence),
+			OccurrenceAt: strings.TrimSpace(request.ScheduledRun.OccurrenceAt),
+		}
+	}
+	if activeGoal, hasActiveGoal := decisionActiveGoalOf(request.ActiveGoal); hasActiveGoal {
+		state.ActiveGoal = &activeGoal
+	}
 	if request.AllowGiveUp {
 		state.GiveUpAllowance = strings.TrimSpace(request.AllowGiveUpReason)
 	}
 	return state
+}
+
+func decisionActiveGoalOf(activeGoal agentcontract.ActiveGoal) (decisionActiveGoal, bool) {
+	goal := decisionActiveGoal{
+		OriginalInstruction: strings.TrimSpace(activeGoal.OriginalInstruction),
+		CurrentObjective:    strings.TrimSpace(activeGoal.CurrentObjective),
+		Status:              strings.TrimSpace(string(activeGoal.Status)),
+		MissingInformation:  activeGoal.MissingInformation,
+	}
+	if goal.OriginalInstruction == "" && goal.CurrentObjective == "" {
+		return decisionActiveGoal{}, false
+	}
+	return goal, true
 }
 
 func decisionContextMessages(request agentcontract.IntakeDecisionRequest) []decisionContextMessage {
