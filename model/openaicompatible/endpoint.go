@@ -5,9 +5,6 @@ import (
 	"strings"
 )
 
-// Endpoint is everything a caller has to be given to reach one model: where to
-// ask, what to call the model there, and the key that endpoint wants. A ladder
-// of tiers is a ladder of these, so nothing below this line knows a model name.
 type Endpoint struct {
 	URL             string   `json:"url"`
 	ModelName       string   `json:"model"`

@@ -224,15 +224,11 @@ func filterGroupTools(toolSet *toolcontract.ToolSet, group toolExposureGroup) to
 	filteredToolIDs := []string{}
 	for _, toolID := range group.ToolIDs {
 		trimmedToolID := strings.TrimSpace(toolID)
-		if trimmedToolID != "" && toolIsModelCallable(trimmedToolID) && toolSet != nil && toolSet.CanExpose(trimmedToolID) {
+		if trimmedToolID != "" && toolcontract.ToolIsModelCallable(trimmedToolID) && toolSet != nil && toolSet.CanExpose(trimmedToolID) {
 			filteredToolIDs = appendUniqueStrings(filteredToolIDs, trimmedToolID)
 		}
 	}
 	return toolExposureGroup{Name: group.Name, ToolIDs: filteredToolIDs}
-}
-
-func toolIsModelCallable(toolID string) bool {
-	return strings.TrimSpace(toolID) != ""
 }
 
 func activeRecoveryToolNames(observations []turnObservation) []string {

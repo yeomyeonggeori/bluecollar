@@ -8,10 +8,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
-// Harness answers the agent harness port with canned decisions so host tests
-// can exercise the host without the agent turn loop. It settles a real task
-// run for every turn because the host reads the run the loop reports back,
-// using the one the host opened when it was given one.
 type Harness struct {
 	taskRunService *taskstate.TaskRunService
 

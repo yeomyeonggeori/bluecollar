@@ -42,9 +42,7 @@ const (
 	PriorTaskReferenceNone            PriorTaskReference = "none"
 	PriorTaskReferenceOutcomeRecovery PriorTaskReference = "outcome_recovery"
 
-	ApprovalSignalApprove ApprovalSignal = "approve"
-	// approve_task approves the whole family of work for the rest of this task, so
-	// the person is asked once instead of at every step of the same job.
+	ApprovalSignalApprove     ApprovalSignal = "approve"
 	ApprovalSignalApproveTask ApprovalSignal = "approve_task"
 	ApprovalSignalReject      ApprovalSignal = "reject"
 	ApprovalSignalUnclear     ApprovalSignal = "unclear"

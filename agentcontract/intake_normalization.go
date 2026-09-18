@@ -58,10 +58,10 @@ func RegisteredToolNamesOnly(toolRegistry *toolcontract.ToolSet, toolNames []str
 		return nil
 	}
 	registeredToolNames := []string{}
-	for _, toolName := range appendUniqueStrings([]string{}, toolNames...) {
+	for _, toolName := range toolcontract.AppendUniqueStrings([]string{}, toolNames...) {
 		trimmedToolName := strings.TrimSpace(toolName)
-		if toolRegistry.IsAllowed(trimmedToolName) || requiredEvidenceToolCanBeSatisfied(toolRegistry, trimmedToolName) {
-			registeredToolNames = appendUniqueStrings(registeredToolNames, trimmedToolName)
+		if toolRegistry.IsAllowed(trimmedToolName) || RequiredEvidenceToolCanBeSatisfied(toolRegistry, trimmedToolName) {
+			registeredToolNames = toolcontract.AppendUniqueStrings(registeredToolNames, trimmedToolName)
 		}
 	}
 	return registeredToolNames
@@ -95,24 +95,7 @@ func HasTool(toolRegistry *toolcontract.ToolSet, toolName string) bool {
 	return false
 }
 
-func appendUniqueStrings(values []string, candidates ...string) []string {
-	nextValues := append([]string{}, values...)
-	seenValue := map[string]bool{}
-	for _, value := range nextValues {
-		seenValue[value] = true
-	}
-	for _, candidate := range candidates {
-		trimmedCandidate := strings.TrimSpace(candidate)
-		if trimmedCandidate == "" || seenValue[trimmedCandidate] {
-			continue
-		}
-		seenValue[trimmedCandidate] = true
-		nextValues = append(nextValues, trimmedCandidate)
-	}
-	return nextValues
-}
-
-func requiredEvidenceToolCanBeSatisfied(toolSet *toolcontract.ToolSet, toolName string) bool {
+func RequiredEvidenceToolCanBeSatisfied(toolSet *toolcontract.ToolSet, toolName string) bool {
 	trimmedToolName := strings.TrimSpace(toolName)
 	if trimmedToolName == "" || toolSet == nil || !toolSet.IsRegistered(trimmedToolName) {
 		return false

@@ -62,8 +62,6 @@ func (recorder *Recorder) GenerateStructuredResponse(ctx context.Context, reques
 	return response, errorValue
 }
 
-// The loop picks its path by asking whether a chat completer is available, so a wrapper that
-// answers fewer questions than what it wraps changes the turn it is watching.
 func (recorder *Recorder) TextChatCompleter() (model.ChatCompleter, bool) {
 	completer, isAvailable := model.ResolveTextChatCompleter(recorder.languageModel)
 	if !isAvailable {
@@ -140,7 +138,6 @@ func (player *Player) GenerateResponse(_ context.Context, prompt string) (string
 	return call.Text, nil
 }
 
-// A tape is replayed down the path it was recorded on, for the same reason.
 func (player *Player) TextChatCompleter() (model.ChatCompleter, bool) {
 	return player, player.holds(KindChat)
 }
@@ -181,8 +178,6 @@ func (player *Player) GenerateStructuredResponse(_ context.Context, request mode
 	return call.Response, nil
 }
 
-// A tape that no longer answers the calls the loop makes has stopped describing this
-// loop, and saying so is the whole value of replaying it.
 func (player *Player) take(kind string, schemaName string) (Call, error) {
 	player.mutex.Lock()
 	defer player.mutex.Unlock()

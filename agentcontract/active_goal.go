@@ -120,12 +120,6 @@ func NormalizeExpectedResults(results []ExpectedResult) []ExpectedResult {
 	return foldMessageResultsIntoTheReply(normalizedResults)
 }
 
-// The gate can hold a message result to exactly one thing: the final reply is
-// not empty. Two message results are therefore the same requirement written
-// twice, and a model that reads them as two messages answers twice — once
-// through message_send and once by finishing. Fold them into one, keeping
-// every description and acceptance hint for the judge. A message that must
-// exist apart from the reply is an effect, not a result.
 func foldMessageResultsIntoTheReply(results []ExpectedResult) []ExpectedResult {
 	foldedResults := []ExpectedResult{}
 	replyIndex := -1
@@ -143,7 +137,7 @@ func foldMessageResultsIntoTheReply(results []ExpectedResult) []ExpectedResult {
 		if !strings.Contains(reply.Description, result.Description) {
 			reply.Description = reply.Description + " " + result.Description
 		}
-		reply.AcceptanceHints = AppendUniqueStrings(reply.AcceptanceHints, result.AcceptanceHints...)
+		reply.AcceptanceHints = toolcontract.AppendUniqueStrings(reply.AcceptanceHints, result.AcceptanceHints...)
 		reply.Required = reply.Required || result.Required
 	}
 	return foldedResults
@@ -156,7 +150,7 @@ func normalizeExpectedResult(result ExpectedResult, index int) ExpectedResult {
 	}
 	result.Type = normalizeExpectedResultType(result.Type)
 	result.Description = strings.TrimSpace(result.Description)
-	result.AcceptanceHints = AppendUniqueStrings(result.AcceptanceHints)
+	result.AcceptanceHints = toolcontract.AppendUniqueStrings(result.AcceptanceHints)
 	return result
 }
 
@@ -169,21 +163,4 @@ func normalizeExpectedResultType(value string) string {
 	default:
 		return ExpectedResultTypeMessage
 	}
-}
-
-func AppendUniqueStrings(values []string, candidates ...string) []string {
-	nextValues := append([]string{}, values...)
-	seenValue := map[string]bool{}
-	for _, value := range nextValues {
-		seenValue[value] = true
-	}
-	for _, candidate := range candidates {
-		trimmedCandidate := strings.TrimSpace(candidate)
-		if trimmedCandidate == "" || seenValue[trimmedCandidate] {
-			continue
-		}
-		seenValue[trimmedCandidate] = true
-		nextValues = append(nextValues, trimmedCandidate)
-	}
-	return nextValues
 }

@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// Two message results are one requirement written twice: the fold keeps every
-// description and hint for the judge, but the model sees one reply to give.
 func TestMessageResultsFoldIntoOneReply(t *testing.T) {
 	results := NormalizeExpectedResults([]ExpectedResult{
 		{ID: "content_suggestion", Type: "message", Description: "게시글 보충 아이디어를 제안한다", Required: true, AcceptanceHints: []string{"보충 목록"}},
