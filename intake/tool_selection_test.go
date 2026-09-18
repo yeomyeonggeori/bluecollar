@@ -63,6 +63,15 @@ func TestTheSelectionStopsAtTheCountLimitAndKeepsTheLikeliestTools(t *testing.T)
 	}
 }
 
+func TestTheLikelyToolLimitIsTakenFromTheExposureCapRatherThanDeclaredBesideIt(t *testing.T) {
+	if likelyToolCountLimit >= toolcontract.MaxExtensionCallableToolCount {
+		t.Fatalf("expected the likely tools to fit under the exposure cap of %d, got a limit of %d", toolcontract.MaxExtensionCallableToolCount, likelyToolCountLimit)
+	}
+	if spareSlots := toolcontract.MaxExtensionCallableToolCount - likelyToolCountLimit; spareSlots != toolExposureGroupsRankedBelowTheLikelyTools {
+		t.Fatalf("expected one exposure slot for each of the %d groups ranked below the pinned tools, got %d spare", toolExposureGroupsRankedBelowTheLikelyTools, spareSlots)
+	}
+}
+
 func TestTiedToolsAreOrderedByNameWhateverOrderTheCandidatesArrivedIn(t *testing.T) {
 	probabilities := map[string]float64{"task_add": 0.8, "task_list": 0.8, "web_search": 0.8}
 

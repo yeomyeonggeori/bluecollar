@@ -1,9 +1,14 @@
 package intake
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+)
 
 const likelyToolProbabilityThreshold = 0.3
-const likelyToolCountLimit = 24
+const toolExposureGroupsRankedBelowTheLikelyTools = 3
+const likelyToolCountLimit = toolcontract.MaxExtensionCallableToolCount - toolExposureGroupsRankedBelowTheLikelyTools
 
 const recordedToolProbabilityFloor = 0.05
 
