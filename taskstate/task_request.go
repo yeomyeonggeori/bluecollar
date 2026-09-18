@@ -9,13 +9,11 @@ type TaskRunOrigin struct {
 }
 
 type TaskRunCancelRequest struct {
-	TaskRunIDs                 []string
-	RequesterPersonID          string
-	OriginConversationIDs      []string
-	OriginConversationIDPrefix string
-	ScheduleOnly               bool
-	StaleBefore                *time.Time
-	Reason                     string
+	TaskRunIDs            []string
+	RequesterPersonID     string
+	OriginConversationIDs []string
+	StaleBefore           *time.Time
+	Reason                string
 }
 
 type RawTurnEvent struct {

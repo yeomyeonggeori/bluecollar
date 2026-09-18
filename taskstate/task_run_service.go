@@ -686,12 +686,6 @@ func taskRunMatchesCancelRequest(taskRun agentcontract.TaskRun, request TaskRunC
 	if requesterPersonID := strings.TrimSpace(request.RequesterPersonID); requesterPersonID != "" && taskRun.RequesterPersonID != requesterPersonID {
 		return false
 	}
-	if request.ScheduleOnly && !strings.HasPrefix(taskRun.OriginConversationID, "schedule:") {
-		return false
-	}
-	if originConversationIDPrefix := strings.TrimSpace(request.OriginConversationIDPrefix); originConversationIDPrefix != "" && !strings.HasPrefix(taskRun.OriginConversationID, originConversationIDPrefix) {
-		return false
-	}
 	if len(request.OriginConversationIDs) > 0 && !containsTrimmedString(request.OriginConversationIDs, taskRun.OriginConversationID) {
 		return false
 	}
