@@ -113,10 +113,9 @@ func firstError(errorValues ...error) error {
 	return nil
 }
 
-const decisionModelContextTokens = 32000
-const decisionRequestBytesPerToken = 4
-const decisionRequestShareOfContextWindow = 2
-const decisionRequestByteBudget = decisionModelContextTokens * decisionRequestBytesPerToken / decisionRequestShareOfContextWindow
+const largestDecisionRequestByteCountTheModelAccepted = 198185
+const decisionRequestByteBudgetTenthsOfThatCount = 9
+const decisionRequestByteBudget = largestDecisionRequestByteCountTheModelAccepted * decisionRequestByteBudgetTenthsOfThatCount / 10
 
 func DecisionRequestByteCount(request agentcontract.IntakeDecisionRequest) int {
 	return decisionRequestByteCount(buildDecisionRequest(request))

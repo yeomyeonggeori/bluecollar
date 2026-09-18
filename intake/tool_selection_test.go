@@ -233,7 +233,7 @@ func TestTheLedgerCarriesTheProbabilitiesTheSelectionWasMadeFrom(t *testing.T) {
 }
 
 func TestToolQuestionsSplitAcrossRequestsWhenOneWouldOverflowTheBudget(t *testing.T) {
-	request := burstDecisionRequest(4, measurementToolNames())
+	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 
 	requests := planDecisionRequests(request)
 
@@ -292,7 +292,7 @@ func TestASplitGivesEveryPartAlmostTheSameNumberOfTools(t *testing.T) {
 }
 
 func TestASplitRequestAsksOnlyAboutTheToolsItsOwnStateDescribes(t *testing.T) {
-	request := burstDecisionRequest(4, measurementToolNames())
+	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 
 	for _, decisionRequest := range planDecisionRequests(request) {
 		state, isDecisionState := decisionRequest.State.(decisionState)
@@ -313,7 +313,7 @@ func TestASplitRequestAsksOnlyAboutTheToolsItsOwnStateDescribes(t *testing.T) {
 }
 
 func TestASplitDecisionMergesTheProbabilitiesOfEveryPart(t *testing.T) {
-	request := burstDecisionRequest(4, measurementToolNames())
+	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 	outcome := startTaskOutcome()
 	outcome.TurnDecision.InitialToolNames = nil
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88, "task_update": 0.77}
@@ -335,7 +335,7 @@ func TestASplitDecisionMergesTheProbabilitiesOfEveryPart(t *testing.T) {
 }
 
 func TestOnePartFailingTakesTheFailurePathRatherThanSelectingFromTheRest(t *testing.T) {
-	request := burstDecisionRequest(4, measurementToolNames())
+	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88}
 
@@ -365,6 +365,8 @@ func (decisionModel *partFailingDecisionModel) Decide(_ context.Context, request
 	}
 	return model.DecisionResponse{Answers: intaketest.Answers(request.Questions, func(string) intaketest.Outcome { return decisionModel.outcome })}, nil
 }
+
+const burstMessageCountThatOverflowsTheBudget = 8
 
 func burstDecisionRequest(messageCount int, toolNames []string) agentcontract.IntakeDecisionRequest {
 	request := addressedDecisionRequest("지난 분기 매출 정리해서 덱 만들어줘")
