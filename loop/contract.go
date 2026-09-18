@@ -258,6 +258,8 @@ var (
 	activeGoalDescriptionForPrompt = agentcontract.ActiveGoalDescriptionForPrompt
 )
 
+var scheduledRunDescriptionForPrompt = agentcontract.ScheduledRunDescriptionForPrompt
+
 var (
 	normalizeIntakeOptions          = agentcontract.NormalizeIntakeOptions
 	NormalizeReactionEmojiName      = agentcontract.NormalizeReactionEmojiName

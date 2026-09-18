@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
@@ -1633,4 +1634,48 @@ func testToolSet(toolNames []string) *toolcontract.ToolSet {
 		})
 	}
 	return toolRegistry
+}
+
+func arbitrationSystemMessagesAboutAFiring(request AgentRequest) []string {
+	candidates := []SkillInstruction{{
+		Name:           "scheduled-task",
+		Description:    "Create and manage repeating schedules.",
+		Prompt:         "Follow the schedule workflow.",
+		ToolReferences: []string{"schedule_create"},
+	}}
+	firingMessages := []string{}
+	for _, message := range contractSkillArbitrationMessages(request, candidates, map[string]SkillCandidate{}) {
+		if message.Role == "system" && strings.Contains(message.Content, agentcontract.ScheduledRunReading) {
+			firingMessages = append(firingMessages, message.Content)
+		}
+	}
+	return firingMessages
+}
+
+func TestContractSkillArbitrationIsToldTheRequestIsAFiring(t *testing.T) {
+	firingMessages := arbitrationSystemMessagesAboutAFiring(AgentRequest{
+		Prompt: "매일 이 시간에 주간 보고 알림을 보내줘.",
+		ScheduledRun: ScheduledRunContext{
+			ScheduleID:   "schedule-1",
+			Name:         "주간 보고 알림",
+			Kind:         "cron",
+			Cadence:      "매일 22:08",
+			OccurrenceAt: "2026-09-18T22:08:00Z",
+		},
+	})
+
+	if len(firingMessages) != 1 {
+		t.Fatalf("expected exactly one system message about the firing, got %d", len(firingMessages))
+	}
+	if !strings.Contains(firingMessages[0], "schedule-1") {
+		t.Fatalf("expected the firing message to carry the schedule, got %q", firingMessages[0])
+	}
+}
+
+func TestContractSkillArbitrationHearsNothingAboutAFiringWithoutOne(t *testing.T) {
+	firingMessages := arbitrationSystemMessagesAboutAFiring(AgentRequest{Prompt: "주간 보고 알림 보내줘"})
+
+	if len(firingMessages) != 0 {
+		t.Fatalf("expected no system message about a firing, got %d", len(firingMessages))
+	}
 }
