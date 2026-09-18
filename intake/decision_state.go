@@ -149,7 +149,7 @@ func buildDecisionState(request agentcontract.IntakeDecisionRequest, toolDescrip
 			ExchangesSince: request.PendingChoice.ExchangesSince,
 		}
 	}
-	if strings.TrimSpace(request.PriorTask.Prompt) != "" {
+	if hasPriorTask(request) {
 		state.PriorTask = &decisionPriorTask{Prompt: request.PriorTask.Prompt, Result: request.PriorTask.Result}
 	}
 	if !request.ScheduledRun.IsEmpty() {
@@ -251,4 +251,8 @@ func openInteractionAge(askedAt time.Time, now time.Time) string {
 		return "just now"
 	}
 	return now.Sub(askedAt).Round(time.Minute).String() + " ago"
+}
+
+func hasPriorTask(request agentcontract.IntakeDecisionRequest) bool {
+	return strings.TrimSpace(request.PriorTask.Prompt) != ""
 }
