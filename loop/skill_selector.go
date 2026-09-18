@@ -22,7 +22,7 @@ func (skillSelector SkillSelector) Evaluate(skillInstruction SkillInstruction, r
 }
 
 func skillAvailabilityDecision(skillInstruction SkillInstruction, request AgentRequest, profileName string) SkillSelectionDecision {
-	normalizedProfileName := firstNonEmptySkillSelectionString(profileName, "default")
+	normalizedProfileName := firstNonEmptyString(profileName, "default")
 	if allToolReferencesMissing(skillInstruction, request) {
 		return skippedSkillDecision(skillInstruction, normalizedProfileName, "missing_tool_references", missingToolReferences(skillInstruction, request))
 	}
@@ -102,13 +102,4 @@ func skippedSkillDecision(skillInstruction SkillInstruction, profileName string,
 		MissingToolReferences: missingToolReferences,
 		Source:                skillInstruction.Source,
 	}
-}
-
-func firstNonEmptySkillSelectionString(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }

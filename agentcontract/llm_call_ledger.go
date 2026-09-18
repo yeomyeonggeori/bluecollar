@@ -332,10 +332,7 @@ func chatRequestSchemaName(request model.ChatCompletionRequest) string {
 func chatRequestByteCount(request model.ChatCompletionRequest) int {
 	byteCount := 0
 	for _, message := range request.Messages {
-		byteCount += len(message.Content)
-		for _, part := range message.Parts {
-			byteCount += len(part.Text) + len(part.DataBase64)
-		}
+		byteCount += messageByteCount(message.Content, message.Parts)
 	}
 	return byteCount
 }
@@ -355,10 +352,15 @@ func chatRequestToolByteCount(request model.ChatCompletionRequest) int {
 func structuredRequestByteCount(request model.StructuredResponseRequest) int {
 	byteCount := 0
 	for _, message := range request.Messages {
-		byteCount += len(message.Content)
-		for _, part := range message.Parts {
-			byteCount += len(part.Text) + len(part.DataBase64)
-		}
+		byteCount += messageByteCount(message.Content, message.Parts)
+	}
+	return byteCount
+}
+
+func messageByteCount(content string, parts []model.MessagePart) int {
+	byteCount := len(content)
+	for _, part := range parts {
+		byteCount += len(part.Text) + len(part.DataBase64)
 	}
 	return byteCount
 }

@@ -574,7 +574,7 @@ func (toolSet *ToolSet) IsAllowed(toolName string) bool {
 	if trimmedToolName == "" {
 		return false
 	}
-	if !toolIsModelCallable(trimmedToolName) {
+	if !ToolIsModelCallable(trimmedToolName) {
 		return false
 	}
 	boundTool, isRegistered := toolSet.boundToolByName[trimmedToolName]
@@ -605,7 +605,7 @@ func (toolSet *ToolSet) CanExpose(toolName string) bool {
 	if toolSet == nil {
 		return false
 	}
-	if !toolIsModelCallable(toolName) {
+	if !ToolIsModelCallable(toolName) {
 		return false
 	}
 	boundTool, isRegistered := toolSet.boundToolByName[strings.TrimSpace(toolName)]
@@ -686,7 +686,7 @@ func (toolSet *ToolSet) WithAdditionalAllowedToolNames(toolNames []string) *Tool
 		if trimmedToolName == "" || !toolSet.CanExpose(trimmedToolName) {
 			continue
 		}
-		allowedToolNames = appendUniqueStrings(allowedToolNames, trimmedToolName)
+		allowedToolNames = AppendUniqueStrings(allowedToolNames, trimmedToolName)
 	}
 	return toolSet.WithAllowedToolNames(allowedToolNames)
 }

@@ -22,11 +22,11 @@ func truncateText(value string, limit int) string {
 	return value[:limit] + "..."
 }
 
-func toolIsModelCallable(toolID string) bool {
+func ToolIsModelCallable(toolID string) bool {
 	return strings.TrimSpace(toolID) != ""
 }
 
-func appendUniqueStrings(values []string, candidates ...string) []string {
+func AppendUniqueStrings(values []string, candidates ...string) []string {
 	nextValues := append([]string{}, values...)
 	seenValue := map[string]bool{}
 	for _, value := range nextValues {

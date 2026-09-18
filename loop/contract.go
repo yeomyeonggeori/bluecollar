@@ -193,7 +193,7 @@ var (
 	WithTaskRunID                = toolcontract.WithTaskRunID
 	WithUserFacingMessage        = toolcontract.WithUserFacingMessage
 
-	appendUniqueStrings         = agentcontract.AppendUniqueStrings
+	appendUniqueStrings         = toolcontract.AppendUniqueStrings
 	taskLevelRank               = agentcontract.TaskLevelRank
 	normalizeClassification     = agentcontract.NormalizeIntakeClassification
 	normalizeExpectedResults    = agentcontract.NormalizeExpectedResults

@@ -273,7 +273,7 @@ func retrieveSkillsWithBM25(request AgentRequest, skillInstructions []SkillInstr
 	candidates = limitSkillCandidates(candidates, limit)
 	return SkillRetrievalResult{
 		RetrievalMode:      "bm25_fallback",
-		IndexStatus:        firstNonEmptySkillSelectionString(indexStatus, "fallback"),
+		IndexStatus:        firstNonEmptyString(indexStatus, "fallback"),
 		CandidateCount:     len(candidates),
 		QueryDescriptions:  skillSearchQueryDescriptions(SkillSearchQuerySet{Queries: []SkillSearchQuery{{Description: queryText}}}),
 		SelectedCandidates: candidates,

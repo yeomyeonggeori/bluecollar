@@ -395,7 +395,7 @@ func normalizeDecidedTurnFields(decision agentcontract.TurnDecision, request age
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid task level")
 	}
 	decision.TaskLevel = normalizedTaskLevel
-	decision.InitialToolNames = agentcontract.RegisteredToolNamesOnly(request.ToolSet, appendUniqueStrings(decision.InitialToolNames))
+	decision.InitialToolNames = agentcontract.RegisteredToolNamesOnly(request.ToolSet, toolcontract.AppendUniqueStrings(decision.InitialToolNames))
 	decision.ResponseLanguage = resolveDecisionResponseLanguage(decision.ResponseLanguage, request.ResponseLanguage)
 	decision.PriorTaskReference = agentcontract.NormalizePriorTaskReference(decision.PriorTaskReference)
 	return decision, nil
@@ -414,7 +414,7 @@ func normalizeWebsiteDeliverableKind(decision agentcontract.TurnDecision) agentc
 	if decision.DeliverableKind != agentcontract.DeliverableKindWebsite || decisionSuggestsSiteTool(decision) {
 		return decision
 	}
-	decision.InitialToolNames = appendUniqueStrings(decision.InitialToolNames, "site_serve")
+	decision.InitialToolNames = toolcontract.AppendUniqueStrings(decision.InitialToolNames, "site_serve")
 	return decision
 }
 
@@ -461,7 +461,7 @@ func normalizeSideEffectTurnDecision(decision agentcontract.TurnDecision, toolSe
 func includesRegisteredSideEffectEvidence(toolSet *toolcontract.ToolSet, toolNames []string) bool {
 	for _, toolName := range toolNames {
 		registeredToolName := strings.TrimSpace(toolName)
-		if !requiredEvidenceToolCanBeSatisfied(toolSet, registeredToolName) {
+		if !agentcontract.RequiredEvidenceToolCanBeSatisfied(toolSet, registeredToolName) {
 			continue
 		}
 		toolDefinition, isDefined := toolSet.ToolDefinition(registeredToolName)
@@ -531,14 +531,14 @@ func turnRouterCallableToolNames(request agentcontract.AgentRequest) []string {
 	callableToolNames := []string{}
 	if request.ToolSet != nil {
 		for _, toolName := range request.ToolSet.ListToolNames() {
-			if toolIsModelCallable(toolName) {
+			if toolcontract.ToolIsModelCallable(toolName) {
 				callableToolNames = append(callableToolNames, toolName)
 			}
 		}
 		for _, toolDefinition := range request.ToolSet.ListRegisteredToolDefinitions() {
 			toolName := strings.TrimSpace(toolDefinition.Name)
-			if toolName != "" && requiredEvidenceToolCanBeSatisfied(request.ToolSet, toolName) {
-				callableToolNames = appendUniqueStrings(callableToolNames, toolName)
+			if toolName != "" && agentcontract.RequiredEvidenceToolCanBeSatisfied(request.ToolSet, toolName) {
+				callableToolNames = toolcontract.AppendUniqueStrings(callableToolNames, toolName)
 			}
 		}
 	}
@@ -749,38 +749,6 @@ func clarificationOptionKey(index int) string {
 	return "O"
 }
 
-func toolIsModelCallable(toolID string) bool {
-	return strings.TrimSpace(toolID) != ""
-}
-
-func appendUniqueStrings(values []string, candidates ...string) []string {
-	nextValues := append([]string{}, values...)
-	seenValue := map[string]bool{}
-	for _, value := range nextValues {
-		seenValue[value] = true
-	}
-	for _, candidate := range candidates {
-		trimmedCandidate := strings.TrimSpace(candidate)
-		if trimmedCandidate == "" || seenValue[trimmedCandidate] {
-			continue
-		}
-		seenValue[trimmedCandidate] = true
-		nextValues = append(nextValues, trimmedCandidate)
-	}
-	return nextValues
-}
-
-func requiredEvidenceToolCanBeSatisfied(toolSet *toolcontract.ToolSet, toolName string) bool {
-	registeredToolName := strings.TrimSpace(toolName)
-	if registeredToolName == "" || toolSet == nil || !toolSet.IsRegistered(registeredToolName) {
-		return false
-	}
-	if toolSet.IsAllowed(registeredToolName) {
-		return true
-	}
-	return !toolcontract.IsKernelToolName(registeredToolName) && toolSet.CanExpose(registeredToolName)
-}
-
 func removeExpectedResultsByType(results []agentcontract.ExpectedResult, removedType string) []agentcontract.ExpectedResult {
 	filteredResults := []agentcontract.ExpectedResult{}
 	for _, result := range results {
@@ -795,7 +763,7 @@ func removeToolName(toolNames []string, removedToolName string) []string {
 	values := []string{}
 	for _, toolName := range toolNames {
 		if !toolcontract.ToolNamesMatch(toolName, removedToolName) {
-			values = appendUniqueStrings(values, toolName)
+			values = toolcontract.AppendUniqueStrings(values, toolName)
 		}
 	}
 	return values
