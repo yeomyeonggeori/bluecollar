@@ -617,9 +617,22 @@ func TestAgentKernelQuickReplyCanUseInitialTool(t *testing.T) {
 }
 
 func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T) {
-	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"expectedResults":[{"id":"interactive-choice","type":"message","description":"사용자가 직접 고를 수 있는 선택지 UI가 표시됨","required":true,"acceptanceHints":["ask_input"]}],"responseLanguage":"ko","reason":"choice probe","userFacingReply":""}`,
-	}}
+	routedDecision := TurnDecision{
+		Route:            TurnRouteStartTask,
+		Classification:   IntakeClassificationQuickReply,
+		TaskShape:        TaskShapeImmediateReply,
+		TaskLevel:        TaskLevelXLow,
+		ResponseLanguage: "ko",
+		Reason:           "choice probe",
+		ExpectedResults: []ExpectedResult{{
+			ID:              "interactive-choice",
+			Type:            "message",
+			Description:     "사용자가 직접 고를 수 있는 선택지 UI가 표시됨",
+			Required:        true,
+			AcceptanceHints: []string{"ask_input"},
+		}},
+	}
+	intakeLanguageModel := &sequenceLanguageModel{contents: []string{finishMessageDocument("아래 세 가지 중 하나를 선택해 주세요.")}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("아래 세 가지 중 하나를 선택해 주세요.\n\n1. 선택지 1\n2. 선택지 2\n3. 선택지 3"),
 		`{"action":"continue","toolName":"ask_input","toolInput":{"question":"아래 세 가지 중 하나를 선택해 주세요.","options":["선택지 1","선택지 2","선택지 3"],"recommendedOptionKey":"1","selectionMode":"single"}}`,
@@ -639,12 +652,13 @@ func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T)
 		return testToolSuccess(`{"kind":"choice_single","question":"아래 세 가지 중 하나를 선택해 주세요."}`), nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "나한테 1 2 3 선택지 줘봐. 잘 동작하는지 테스트해보게",
-		ToolSet:           toolRegistry,
-	}))
+	result, errorValue := services.kernel.RunAgentRequest(context.Background(), AgentRequest{
+		RequesterPersonID:       "person-1",
+		ConversationID:          "conversation-1",
+		Prompt:                  "나한테 1 2 3 선택지 줘봐. 잘 동작하는지 테스트해보게",
+		ToolSet:                 toolRegistry,
+		PrecomputedTurnDecision: &routedDecision,
+	})
 	if errorValue != nil {
 		t.Fatalf("expected choice request: %v", errorValue)
 	}

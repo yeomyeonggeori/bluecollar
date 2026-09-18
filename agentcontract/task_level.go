@@ -56,3 +56,9 @@ func legacyTaskLevel(value string) TaskLevel {
 		return ""
 	}
 }
+
+var IntakeTaskLevelNames = []string{string(TaskLevelLow), string(TaskLevelMedium), string(TaskLevelHigh)}
+
+func IsIntakeTaskLevelName(name string) bool {
+	return isListedName(IntakeTaskLevelNames, name)
+}

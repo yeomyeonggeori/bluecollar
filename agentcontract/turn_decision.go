@@ -109,6 +109,25 @@ type TurnDecision struct {
 	BusyInstruction        string                `json:"busyInstruction,omitempty"`
 }
 
+type TurnWords struct {
+	Reason                string                `json:"reason"`
+	UserFacingReply       string                `json:"userFacingReply"`
+	ClarificationQuestion string                `json:"clarificationQuestion"`
+	ClarificationOptions  []ClarificationOption `json:"clarificationOptions"`
+	BusyInstruction       string                `json:"busyInstruction"`
+	ExpectedResults       []ExpectedResult      `json:"expectedResults"`
+}
+
+func (turnDecision TurnDecision) WithTurnWords(turnWords TurnWords) TurnDecision {
+	turnDecision.Reason = turnWords.Reason
+	turnDecision.UserFacingReply = turnWords.UserFacingReply
+	turnDecision.ClarificationQuestion = turnWords.ClarificationQuestion
+	turnDecision.ClarificationOptions = turnWords.ClarificationOptions
+	turnDecision.BusyInstruction = turnWords.BusyInstruction
+	turnDecision.ExpectedResults = turnWords.ExpectedResults
+	return turnDecision
+}
+
 func (turnDecision TurnDecision) IntakeDecision() IntakeDecision {
 	return IntakeDecision{
 		Classification:         turnDecision.Classification,
@@ -145,19 +164,82 @@ func IsApprovingSignal(signal ApprovalSignal) bool {
 }
 
 func NormalizeIntakeClassification(classification IntakeClassification) IntakeClassification {
-	switch classification {
-	case IntakeClassificationQuickReply, IntakeClassificationBoundedTask, IntakeClassificationNeedsConfirmation, IntakeClassificationUnsupported:
+	if IsIntakeClassificationName(string(classification)) {
 		return classification
-	default:
-		return ""
 	}
+	return ""
 }
 
 func NormalizePriorTaskReference(reference PriorTaskReference) PriorTaskReference {
-	switch reference {
-	case PriorTaskReferenceOutcomeRecovery:
-		return PriorTaskReferenceOutcomeRecovery
-	default:
-		return PriorTaskReferenceNone
+	if IsPriorTaskReferenceName(string(reference)) {
+		return reference
 	}
+	return PriorTaskReferenceNone
+}
+
+var TurnRouteNames = []string{
+	string(TurnRouteConsume), string(TurnRouteAnswerQuestion), string(TurnRouteAnswerMeta), string(TurnRouteClarify),
+	string(TurnRouteStartTask), string(TurnRouteContinueTask), string(TurnRouteReviseTask), string(TurnRouteGiveUp),
+}
+
+var IntakeClassificationNames = []string{
+	string(IntakeClassificationQuickReply), string(IntakeClassificationBoundedTask),
+	string(IntakeClassificationNeedsConfirmation), string(IntakeClassificationUnsupported),
+}
+
+var TaskShapeNames = []string{
+	string(TaskShapeImmediateReply), string(TaskShapeResearchTask), string(TaskShapeMaintenanceTask),
+	string(TaskShapeScheduledTask), string(TaskShapeBrowserHandoffTask), string(TaskShapeApprovalGatedTask),
+}
+
+var DeliverableKindNames = []string{
+	string(DeliverableKindWebsite), string(DeliverableKindPresentation), string(DeliverableKindDocument), string(DeliverableKindNone),
+}
+
+var ApprovalSignalNames = []string{
+	string(ApprovalSignalApprove), string(ApprovalSignalApproveTask), string(ApprovalSignalReject), string(ApprovalSignalUnclear),
+}
+
+var BusyRouteNames = []string{
+	string(BusyRouteStatus), string(BusyRouteSteer), string(BusyRouteReplace),
+	string(BusyRouteCancel), string(BusyRouteNewTask), string(BusyRouteUnrelated),
+}
+
+var PriorTaskReferenceNames = []string{string(PriorTaskReferenceOutcomeRecovery), string(PriorTaskReferenceNone)}
+
+func IsTurnRouteName(name string) bool {
+	return isListedName(TurnRouteNames, name)
+}
+
+func IsIntakeClassificationName(name string) bool {
+	return isListedName(IntakeClassificationNames, name)
+}
+
+func IsTaskShapeName(name string) bool {
+	return isListedName(TaskShapeNames, name)
+}
+
+func IsDeliverableKindName(name string) bool {
+	return isListedName(DeliverableKindNames, name)
+}
+
+func IsApprovalSignalName(name string) bool {
+	return isListedName(ApprovalSignalNames, name)
+}
+
+func IsBusyRouteName(name string) bool {
+	return isListedName(BusyRouteNames, name)
+}
+
+func IsPriorTaskReferenceName(name string) bool {
+	return isListedName(PriorTaskReferenceNames, name)
+}
+
+func isListedName(names []string, name string) bool {
+	for _, listedName := range names {
+		if listedName == name {
+			return true
+		}
+	}
+	return false
 }

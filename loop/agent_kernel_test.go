@@ -204,7 +204,7 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
 	intakeModel := &sequenceLanguageModel{contents: []string{
 		`{"route":"consume","classification":"bounded_task","taskShape":"research_task","level":"low","responseLanguage":"ko","initialToolNames":["task_add"]}`,
-		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","responseLanguage":"ko","initialToolNames":["task_add"]}`,
+		`{"expectedResults":[]}`,
 	}}
 	agentKernel.UseIntakeLanguageModelProvider(intakeModel)
 
@@ -234,15 +234,6 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 	}
 	if result.ReplySuppressed {
 		t.Fatalf("expected a worked reply instead of a suppressed consume")
-	}
-	routerCallCount := 0
-	for _, request := range intakeModel.requests {
-		if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
-			routerCallCount++
-		}
-	}
-	if routerCallCount != 2 {
-		t.Fatalf("expected one informed intake correction, got %d router calls", routerCallCount)
 	}
 }
 

@@ -22,9 +22,9 @@ type Harness struct {
 	AddressingDecision   agentcontract.AddressingDecision
 	IsActiveTaskFollowUp bool
 
-	lastTurnRequest             agentcontract.AgentTurnRequest
-	runTurnCallCount            int
-	classifyAddressingCallCount int
+	lastTurnRequest  agentcontract.AgentTurnRequest
+	runTurnCallCount int
+	decideCallCount  int
 }
 
 func New(taskRunService *taskstate.TaskRunService) *Harness {
@@ -70,7 +70,7 @@ func (harness *Harness) Plan(context.Context, agentcontract.AgentRequest) (agent
 	return harness.TurnDecision, nil
 }
 
-func (harness *Harness) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error) {
+func (harness *Harness) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
 	return harness.TurnDecision, nil
 }
 
@@ -82,13 +82,20 @@ func (harness *Harness) GenerateReplyWithContext(context.Context, string, agentc
 	return harness.Reply, nil
 }
 
-func (harness *Harness) ClassifyAddressing(context.Context, agentcontract.AddressingClassificationRequest) (agentcontract.AddressingDecision, error) {
-	harness.classifyAddressingCallCount++
-	return harness.AddressingDecision, nil
-}
-
-func (harness *Harness) ClassifyActiveTaskFollowUp(context.Context, agentcontract.ActiveTaskFollowUpClassificationRequest) (bool, error) {
-	return harness.IsActiveTaskFollowUp, nil
+func (harness *Harness) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+	harness.decideCallCount++
+	decisions := agentcontract.IntakeDecisions{}
+	for _, message := range request.Messages {
+		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
+			MessageID:              message.MessageID,
+			Addressing:             harness.AddressingDecision,
+			RelatesToActiveTask:    harness.IsActiveTaskFollowUp,
+			HasRelatesToActiveTask: true,
+			TurnFields:             harness.TurnDecision,
+			Attachments:            message.Attachments,
+		})
+	}
+	return decisions, nil
 }
 
 func (harness *Harness) LastTurnRequest() agentcontract.AgentTurnRequest {
@@ -99,8 +106,8 @@ func (harness *Harness) RunTurnCallCount() int {
 	return harness.runTurnCallCount
 }
 
-func (harness *Harness) ClassifyAddressingCallCount() int {
-	return harness.classifyAddressingCallCount
+func (harness *Harness) DecideCallCount() int {
+	return harness.decideCallCount
 }
 
 func (harness *Harness) settleTaskRun(request agentcontract.AgentTurnRequest, status agentcontract.TaskStatus, message string) (agentcontract.TaskRun, error) {

@@ -28,17 +28,23 @@ func NormalizeReactionEmojiName(emojiName string) string {
 	return DefaultReactionEmojiName
 }
 
+var RequestedOutputFormatNames = []string{"html", "pptx", "pdf", "txt", "docx", "xlsx", "csv", "json"}
+
+func IsRequestedOutputFormatName(format string) bool {
+	for _, formatName := range RequestedOutputFormatNames {
+		if formatName == format {
+			return true
+		}
+	}
+	return false
+}
+
 func NormalizeRequestedOutputFormats(formats []string) []string {
 	normalizedFormats := []string{}
 	seenFormat := map[string]bool{}
 	for _, format := range formats {
 		normalizedFormat := strings.ToLower(strings.TrimSpace(format))
-		switch normalizedFormat {
-		case "html", "pptx", "pdf", "txt", "docx", "xlsx", "csv", "json":
-		default:
-			continue
-		}
-		if seenFormat[normalizedFormat] {
+		if !IsRequestedOutputFormatName(normalizedFormat) || seenFormat[normalizedFormat] {
 			continue
 		}
 		seenFormat[normalizedFormat] = true

@@ -1,11 +1,11 @@
 package loop
 
 import (
-	"encoding/base64"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type AgentMessage struct {
@@ -75,22 +75,7 @@ func AgentPartsToLLMParts(parts []AgentPart) []model.MessagePart {
 }
 
 func agentImageToLLMPart(part AgentPart) model.MessagePart {
-	if part.Image == nil {
-		return model.MessagePart{}
-	}
-	dataBase64 := strings.TrimSpace(part.Image.DataBase64)
-	if dataBase64 == "" && strings.TrimSpace(part.Image.Path) != "" {
-		return model.MessagePart{}
-	}
-	if _, errorValue := base64.StdEncoding.DecodeString(dataBase64); errorValue != nil {
-		return model.MessagePart{}
-	}
-	return model.MessagePart{
-		Type:       "image",
-		MimeType:   strings.TrimSpace(part.Image.MimeType),
-		DataBase64: dataBase64,
-		Text:       strings.TrimSpace(part.Image.Filename),
-	}
+	return agentcontract.AgentImageToMessagePart(part)
 }
 
 func agentFileContextText(part AgentPart) string {

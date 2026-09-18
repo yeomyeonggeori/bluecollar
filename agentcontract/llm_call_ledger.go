@@ -11,6 +11,8 @@ import (
 
 const llmCallErrorMaximumCharacters = 300
 const TurnRouterSchemaName = "bluecollar_turn_router"
+const AttachmentDescriptionSchemaName = "bluecollar_attachment_description"
+const LLMCallKindDecision = "decision"
 const AgentActionSchemaName = "bluecollar_agent_turn_action"
 
 type LLMCallRecord struct {
@@ -46,22 +48,40 @@ type LLMCallRecord struct {
 	DiagnosticToolName     string                                   `json:"diagnosticToolName,omitempty"`
 	DiagnosticIssues       []model.StructuredOutputValidationIssue  `json:"diagnosticIssues,omitempty"`
 	DiagnosticRepairStatus model.StructuredOutputRepairStatus       `json:"diagnosticRepairStatus,omitempty"`
+	DecisionAnswers        map[string]model.DecisionAnswer          `json:"decisionAnswers,omitempty"`
+	DecisionDraws          map[string]float64                       `json:"decisionDraws,omitempty"`
+	DecidedMessageCount    int                                      `json:"decidedMessageCount,omitempty"`
+	QuestionCount          int                                      `json:"questionCount,omitempty"`
+	AttachmentsDescribed   bool                                     `json:"attachmentsDescribed"`
+	AttachmentDescriptions []string                                 `json:"attachmentDescriptions,omitempty"`
 }
 
 type LLMCallObserver func(record LLMCallRecord)
 
-type TurnRouterCallLedger struct {
+type IntakeCallLedger struct {
 	Records []LLMCallRecord
 }
 
-func (ledger *TurnRouterCallLedger) Observe(record LLMCallRecord) {
-	if record.SchemaName != TurnRouterSchemaName {
+func (ledger *IntakeCallLedger) Observe(record LLMCallRecord) {
+	if !isIntakeCallRecord(record) {
 		return
 	}
 	ledger.Records = append(ledger.Records, record)
 }
 
-func (ledger *TurnRouterCallLedger) LanguageModel(provider model.LanguageModelProvider) model.LanguageModelProvider {
+func isIntakeCallRecord(record LLMCallRecord) bool {
+	if record.Kind == LLMCallKindDecision {
+		return true
+	}
+	switch record.SchemaName {
+	case TurnRouterSchemaName, AttachmentDescriptionSchemaName:
+		return true
+	default:
+		return false
+	}
+}
+
+func (ledger *IntakeCallLedger) LanguageModel(provider model.LanguageModelProvider) model.LanguageModelProvider {
 	return ObserveLanguageModel(provider, ledger.Observe)
 }
 
@@ -309,9 +329,6 @@ func chatRequestSchemaName(request model.ChatCompletionRequest) string {
 	return strings.TrimSpace(request.SchemaName)
 }
 
-// An image travels as a part beside the text, so counting only the text says a
-// prompt carrying a megabyte of picture is the same size as one carrying none.
-// The ledger is what an outage is read from; it has to see what was sent.
 func chatRequestByteCount(request model.ChatCompletionRequest) int {
 	byteCount := 0
 	for _, message := range request.Messages {
