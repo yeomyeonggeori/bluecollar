@@ -207,7 +207,7 @@ func (agentKernel *AgentKernel) taskRunForLaunchFailure(request AgentTurnRequest
 
 func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context, request AgentRequest) (AgentTurnResult, error) {
 	requestReceivedAt := time.Now()
-	routerCallLedger := &turnRouterCallLedger{}
+	routerCallLedger := &intakeCallLedger{}
 	request.ActiveGoal = normalizePersistedActiveGoal(request.ActiveGoal)
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = requestReceivedAt.Add(-2 * time.Second)

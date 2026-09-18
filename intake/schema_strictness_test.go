@@ -3,8 +3,6 @@ package intake
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func objectSchemasIn(node any, found *[]map[string]any) {
@@ -23,9 +21,9 @@ func objectSchemasIn(node any, found *[]map[string]any) {
 	}
 }
 
-func TestEveryPropertyIsRequiredSomewhereInTheRouterSchema(t *testing.T) {
+func TestEveryPropertyIsRequiredSomewhereInTheTurnWordsSchema(t *testing.T) {
 	var schema any
-	if errorValue := json.Unmarshal([]byte(turnRouterSchema(agentcontract.AgentRequest{})), &schema); errorValue != nil {
+	if errorValue := json.Unmarshal([]byte(turnWordsSchema()), &schema); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	objectSchemas := []map[string]any{}

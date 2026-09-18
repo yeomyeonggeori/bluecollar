@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/bench"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/model/tape"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
@@ -129,7 +130,7 @@ func collapsedWhitespace(text string) string {
 }
 
 func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(languageModel, agentcontract.IntakeOptions{IsEnabled: true})
+	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(configuredDecisionModel(), nil, nil), agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: request.RequesterPersonID,
 		RequesterName:     request.RequesterName,
@@ -138,6 +139,14 @@ func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, r
 		WorkspaceRootPath: request.WorkspaceRootPath,
 		ToolSet:           request.ToolSet,
 	})
+}
+
+func configuredDecisionModel() model.DecisionModel {
+	endpoint, isConfigured := decisions.EndpointFromEnvironment()
+	if !isConfigured {
+		return nil
+	}
+	return endpoint.DecisionModel()
 }
 
 func printResult(result agentcontract.AgentTurnResult) {

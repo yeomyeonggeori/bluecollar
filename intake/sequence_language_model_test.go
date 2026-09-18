@@ -2,7 +2,6 @@ package intake
 
 import (
 	"context"
-	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -47,17 +46,4 @@ func (languageModel *sequenceLanguageModel) GenerateStructuredResponse(_ context
 		index = len(languageModel.contents) - 1
 	}
 	return model.StructuredResponse{ModelTier: languageModel.modelTier, Content: languageModel.contents[index]}, nil
-}
-
-func joinMessageContent(messages []model.Message) string {
-	parts := []string{}
-	for _, message := range messages {
-		parts = append(parts, message.Content)
-		for _, messagePart := range message.Parts {
-			if messagePart.Type == "text" {
-				parts = append(parts, messagePart.Text)
-			}
-		}
-	}
-	return strings.Join(parts, "\n")
 }

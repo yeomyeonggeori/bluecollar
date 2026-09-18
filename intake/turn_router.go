@@ -8,7 +8,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -16,65 +15,44 @@ import (
 
 var allowedReactionEmojiNames = agentcontract.ReactionEmojiNames
 
-type TaskIntakePlanner struct {
-	languageModel model.LanguageModelProvider
-	options       agentcontract.IntakeOptions
-}
-
 type TurnRouter struct {
-	languageModel model.LanguageModelProvider
-	options       agentcontract.IntakeOptions
+	languageModel   model.LanguageModelProvider
+	decisionPlanner DecisionPlanner
+	options         agentcontract.IntakeOptions
 }
 
-const taskRecordRoutingInstruction = "Treat requests to add, update, list, or delete a task or reminder as management of the task record, not execution of the future work described in its title or notes. A task title, description, and any explicitly requested due date are sufficient to add the record. Do not ask for files, credentials, or other inputs that would only be needed when performing that future task. Editing a record's own fields — title, date, status, notes — with values the message already states is executable as written: route it as a bounded maintenance_task, never to clarify or needs_confirmation, and never treat the edit itself as approval-gated. A request to assess or choose field values delegates judgment: start by reading the records and registered choices or definitions. Do not require the requester to supply the values before that inspection, and do not invent choices absent from the records."
-const clarificationReviewInstruction = "Review the previous clarification decision. Use clarify with needs_confirmation only when essential user input is missing. Approval for risky, destructive, paid, or externally visible work is handled after routing, so never ask for approval here. If the request is executable as written, return start_task with bounded_task. If essential input is truly missing, keep clarify and ask exactly for that input."
+const turnWordsSystemPrompt = "You write the words for one turn of a workplace assistant. Every decision about this turn is already made and handed to you under \"Decided for this turn\"; do not re-decide it, do not argue with it, and do not mention it. Fill only the fields the schema asks for." +
+	"\n\nclarify: ask in clarificationQuestion for exactly the one thing only the requester can supply, and offer 2-5 clarificationOptions when the request itself implies a finite choice. Do not invent options the message does not imply, and never ask for approval." +
+	"\n\nanswer_question and answer_meta: write the answer itself in userFacingReply, like a concise coworker. Answer jokes and casual addressed remarks in kind rather than ignoring them." +
+	"\n\ngive_up: say in userFacingReply that this cannot be done, and why, without blaming the requester." +
+	"\n\nbusyRoute steer: write busyInstruction as the correction to hand the task already running, in the requester's own terms." +
+	"\n\nreason is one short line for the log and is never shown to anybody. Leave every field a route does not need empty." +
+	"\n\nWhat this agent said earlier is its own, not the requester's. A subject it named, a title it guessed at, or a thing it reported failing to find is never what the latest message is about unless the requester's own words say so."
 
-const turnRouterSystemPrompt = "You are a channel-agnostic turn router and task intake planner. Choose the route for the latest user message and classify the task shape. Keep terminal decisions consistent: needs_confirmation uses route=clarify, taskShape=approval_gated_task, and a clarificationQuestion naming the missing input; unsupported uses route=give_up and taskShape=immediate_reply; consume uses classification=quick_reply and taskShape=immediate_reply." +
-	"\n\nLatest message authority: The latest user message is authoritative. Prior conversation may be used only when it helps interpret whether the latest message continues, revises, asks about, cancels, replaces an active task, or is a bare assistant mention requesting a response to recent context. Do not carry stale subjects, tools, or artifact formats into a self-contained new request." +
-	"\n\nResolve an omitted subject in a follow-up from the requester's preceding instruction. An additional attribute can belong to the same records or artifact already under discussion; compare it with the available tools' fields before choosing a different domain. Do not invent a subject change from an ambiguous word alone, or retain the old subject when the latest request explicitly names a new one. When missing facts or available choices can be read through a tool, route that lookup before asking the requester. Do not invent values; ask only if the retrieved evidence still leaves an essential choice unresolved." +
-	"\n\nWhat this agent said earlier is its own, not the requester's. A subject it named, a title it guessed at, or a thing it reported failing to find is never what the latest message is about unless the requester's own words say so. Take the subject from what the requester wrote." +
-	"\n\nRouting: Use quick_reply for direct answers that may answer directly or use a small useful read-only or computation tool once, including greetings, jokes, playful office banter, capability questions, arithmetic, short synthetic verification probes, opinions, casual recommendations, brainstorming, and answers available from common knowledge or visible conversation context. research_task requires actual information acquisition from an external or private source, or synthesis across source material. Use bounded_task for executable tool work. Use maintenance_task or approval_gated_task only for work that changes state; use research_task for private or external reads and lookups, and immediate_reply for tool-free answers. Use needs_confirmation only when essential user input is missing; approval for risky, destructive, paid, or externally visible work is handled after routing. If the assistant can choose a useful answer from its own judgment, common knowledge, or visible context, use immediate_reply even when the user calls it a recommendation. Do not require a preference merely to improve an answer when a reasonable answer can be given now. Do not ignore jokes or casual addressed remarks; answer like a concise coworker." +
-	"\n\nUnsupported: unsupported ONLY for requests that are pointless to even attempt — physically impossible or nonsensical (for example fetching a physical object), or plainly improper on their face such as revealing another person's password or private national ID number. unsupported is NOT a security or permission gate: the operating system enforces real permission at execution, so an action the requester lacks rights for simply fails there — never pre-refuse over permissions, just attempt it. Answer ordinary work needs such as a coworker's contact details, schedules, or documents rather than refusing. Use common sense; whenever the work could plausibly be done with terminal commands, skills, file tools, or capability operations, prefer bounded_task and attempt it." +
-	"\n\nSizing: Set level to the single difficulty tier that sizes both the model and the work budget: low for ordinary bounded work with a clear short outcome that normally produces one final user reply even if it needs a few tools; medium for multi-step work, research, or artifact generation where progress updates are useful; high for long, wide, deployment, or verification-heavy work. Do not choose above high; the runtime raises the tier on its own for website and presentation deliverables." +
-	"\n\nClarification: Use clarify when the latest request cannot be routed safely without a user choice. When route is clarify, provide clarificationQuestion and 2-5 clarificationOptions whenever finite choices are natural. Do not use clarify for a message that only mentions the assistant when recent visible context gives a clear topic. Do not invent clarificationOptions the message does not imply; offer finite options only when the message itself implies a finite choice." +
-	"\n\nConsume: Use consume for addressed messages that need no text reply; consume is delivered as an emoji reaction, not a text reply. Prefer consume with reactionEmojiName for lightweight acknowledgement. Never consume a message that asks the assistant to do, check, read, verify, or report anything: a question or work request always needs a worked text reply even when the outcome seems obvious, so route direct text answers as answer_question or work as start_task with the appropriate taskShape. For consume, put a concise natural fallback acknowledgement in userFacingReply; the runtime sends it only when a direct-message reaction cannot be delivered. For non-consume routes, set reactionEmojiName to null or omit it." +
-	"\n\nPrior task reference: PriorTaskContext, when present, is a candidate previous task in the same conversation or reply target, not an active task. Set priorTaskReference=outcome_recovery only when the latest message asks to deliver, retry, continue, or revise that prior task's outcome. Set priorTaskReference=none for unrelated or self-contained requests, including a follow-up that asks to read, open, check, or summarize an artifact the prior task already delivered — that is a new read request, not a recovery." +
-	"\n\nOutput formats: Set requestedOutputFormats to the explicit deliverable file formats when the latest request asks to create, edit, convert, generate, or deliver a file artifact; leave it null for reading, summarizing, searching, or analyzing an input attachment, unless priorTaskReference=outcome_recovery and the prior task prompt, result, known contract, or latest message identifies the deliverable format. A request to read or confirm the content of an existing file is answered in the reply text and has no deliverable format, even when that file itself has one. Content the assistant posts as a message in the conversation is never a file deliverable: when the request is to write, rewrite, correct, or restore something that lives as a message, leave requestedOutputFormats null even under priorTaskReference=outcome_recovery, because recovering a message means posting the message again, not attaching a file of it. Under outcome_recovery, name a format only when the prior deliverable actually was a file; never pick one because a format is expected. requestedOutputFormats should contain only explicit deliverable formats such as html, pptx, pdf, txt, docx, xlsx, csv, or json. Use values like html, pptx, pdf, txt, docx, xlsx, csv, or json when explicit. Treat words like presentation, slides, deck, ppt, 피피티, and 발표자료 as the kind of artifact, not as a .pptx file format unless the user explicitly requests a PowerPoint/PPTX file or asks for all common slide formats. If the user asks for a presentation as HTML, requestedOutputFormats should be [\"html\"], not [\"html\",\"pptx\"]. A request to create or update a website or web page is a live site deliverable, not a file: leave requestedOutputFormats null unless the user explicitly asks for an HTML file to download or send." +
-	"\n\nInitial tools: Set initialToolNames to exact callable tool names copied from Available tools that this request will most likely call first; include only confident picks and leave it empty when unsure or when no tool is needed. When the visible conversation shows a site, document, or artifact the assistant already created for this requester, a request to change, extend, preview, or publish it is a follow-up edit on that same artifact: suggest its status or read tool and the edit tool, never the create tool. Pick tools whose effect matches the visible outcome the user asked for: a note, memo, or announcement the user wants visible in a conversation or channel is a message send, while memory tools store private assistant recall that nobody sees." +
-	"\n\nDeliverable kind: Set deliverableKind to the primary deliverable this request produces: website for live sites, web pages, landing pages, dashboards, or demos served at a URL — at every stage including a draft the user does not want published yet; presentation for slide decks; document for text documents that exist as files; none otherwise, including anything whose final form is a message in the conversation. deliverableKind is about what the work ultimately is, not which tool runs first." +
-	"\n\nResponse language: Set responseLanguage to the language the requester's message is written in — an English request is answered in English, a Korean one in Korean — unless an explicit runtime preference names another; use same_as_conversation only when such a preference already defines it."
+const expectedResultsSystemPrompt = "You write the acceptance contract for one task a workplace assistant is about to start. Every decision about this turn is already made and handed to you under \"Decided for this turn\"; do not re-decide it, and write nothing for the requester here." +
+	"\n\nList in expectedResults only what the request itself asks to exist when the work is done, each with the evidence that proves it: an id, a type, one sentence of description, whether it is required, and acceptanceHints naming the tool result, file, or link a reader would check." +
+	"\n\nWhen the request asks to put a choice in front of the requester, the result is the choice itself and its acceptance hint is the tool that asks it. Answer with an empty list when the whole outcome is the final reply."
 
 var ErrTurnRouterDisabled = errors.New("turn router disabled")
 var ErrTurnRouterLanguageModelUnavailable = errors.New("turn router language model unavailable")
 
-func NewTaskIntakePlanner(languageModel model.LanguageModelProvider, options agentcontract.IntakeOptions) TaskIntakePlanner {
-	return TaskIntakePlanner{
-		languageModel: languageModel,
-		options:       agentcontract.NormalizeIntakeOptions(options),
-	}
-}
-
-func NewTurnRouter(languageModel model.LanguageModelProvider, options agentcontract.IntakeOptions) TurnRouter {
+func NewTurnRouter(languageModel model.LanguageModelProvider, decisionPlanner DecisionPlanner, options agentcontract.IntakeOptions) TurnRouter {
 	return TurnRouter{
-		languageModel: languageModel,
-		options:       agentcontract.NormalizeIntakeOptions(options),
+		languageModel:   languageModel,
+		decisionPlanner: decisionPlanner,
+		options:         agentcontract.NormalizeIntakeOptions(options),
 	}
-}
-
-func (taskIntakePlanner TaskIntakePlanner) Plan(ctx context.Context, request agentcontract.AgentRequest) (agentcontract.IntakeDecision, error) {
-	turnDecision, errorValue := NewTurnRouter(taskIntakePlanner.languageModel, taskIntakePlanner.options).Plan(ctx, request)
-	return turnDecision.IntakeDecision(), errorValue
-}
-
-func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error) {
-	if callLedger == nil {
-		return turnRouter.Plan(ctx, request)
-	}
-	observedRouter := TurnRouter{languageModel: callLedger.LanguageModel(turnRouter.languageModel), options: turnRouter.options}
-	return observedRouter.Plan(ctx, request)
 }
 
 func (turnRouter TurnRouter) Plan(ctx context.Context, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+	return turnRouter.PlanObserved(ctx, request, nil)
+}
+
+// PlanObserved decides the turn and then, only for a route whose output is
+// words, asks the chat model to write them. The closed fields arrive already
+// decided on the request when the inbound pipeline made one decision call for
+// the whole burst; otherwise this asks for them itself.
+func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
 	if request.PrecomputedTurnDecision != nil {
 		if request.IsPrecomputedDecisionExact {
 			return *request.PrecomputedTurnDecision, nil
@@ -84,114 +62,170 @@ func (turnRouter TurnRouter) Plan(ctx context.Context, request agentcontract.Age
 	if !turnRouter.options.IsEnabled {
 		return agentcontract.TurnDecision{}, ErrTurnRouterDisabled
 	}
-	if turnRouter.languageModel == nil {
-		return agentcontract.TurnDecision{}, ErrTurnRouterLanguageModelUnavailable
+	decidedFields, errorValue := turnRouter.decideTurnFields(ctx, request, callLedger)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
 	}
-	turnDecision, errorValue := turnRouter.planWithLanguageModel(ctx, request)
+	decidedFields = canonicalizeTurnDecision(decidedFields)
+	wordsShape, needsChatCall := turnWordsShapeFor(decidedFields)
+	if !needsChatCall {
+		return turnRouter.normalizeDecision(decidedFields, request)
+	}
+	observedRouter := turnRouter
+	if callLedger != nil {
+		observedRouter = TurnRouter{languageModel: callLedger.LanguageModel(turnRouter.languageModel), decisionPlanner: turnRouter.decisionPlanner, options: turnRouter.options}
+	}
+	turnWords, errorValue := observedRouter.writeTurnWords(ctx, request, decidedFields, wordsShape)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, fmt.Errorf("turn router words: %w", errorValue)
+	}
+	return turnRouter.normalizeDecision(decidedFields.WithTurnWords(turnWords), request)
+}
+
+func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
+	if request.DecidedTurnFields != nil {
+		return *request.DecidedTurnFields, nil
+	}
+	decisions, errorValue := turnRouter.decisionPlanner.Decide(ctx, TurnRequestDecisionRequest(request), callLedger)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, fmt.Errorf("turn router: %w", errorValue)
 	}
-	normalizedDecision, normalizationError := turnRouter.normalizeDecision(turnDecision, request)
-	if !clarificationDecisionNeedsReview(turnDecision) {
-		return normalizedDecision, normalizationError
+	if len(decisions.Messages) == 0 {
+		return agentcontract.TurnDecision{}, errors.New("turn router: the decision model answered about no message")
 	}
-	reviewedDecision, errorValue := turnRouter.reviewClarificationDecision(ctx, request, turnDecision)
-	if errorValue != nil {
-		if normalizationError == nil {
-			return normalizedDecision, nil
-		}
-		return agentcontract.TurnDecision{}, fmt.Errorf("turn router clarification review: %w", errorValue)
-	}
-	return turnRouter.normalizeDecision(reviewedDecision, request)
+	return decisions.Messages[0].TurnFields, nil
 }
 
-func (turnRouter TurnRouter) planWithLanguageModel(ctx context.Context, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	return turnRouter.planWithMessages(ctx, request, turnRouter.buildMessages(request))
+// TurnRequestDecisionRequest assembles the one state a decision call reads from
+// a single agent request. The inbound pipeline builds the same state for a
+// whole burst before the engagement gate; this is the one-message form of it.
+func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontract.IntakeDecisionRequest {
+	return agentcontract.IntakeDecisionRequest{
+		Messages: []agentcontract.IntakeDecisionMessage{{
+			Prompt:       request.Prompt,
+			SenderName:   request.RequesterCallingName,
+			SenderHandle: request.RequesterHandle,
+			SentAt:       request.TurnStartedAt,
+			InputParts:   request.InputParts,
+			Attachments:  request.IntakeAttachmentFacts,
+
+			IsAttachmentsOnly: strings.TrimSpace(request.Prompt) == "" && len(agentcontract.ImagePartsOf(request.InputParts)) > 0,
+		}},
+		ConversationType:    request.ConversationType,
+		VisibleContext:      request.VisibleContext,
+		Company:             request.Company,
+		ActiveTask:          request.ActiveTask,
+		PendingConfirmation: request.PendingConfirmation,
+		PendingChoice:       pendingChoiceContext(request),
+		PriorTask:           request.PriorTask,
+		ScheduledRun:        request.ScheduledRun,
+		ActiveGoal:          request.ActiveGoal,
+		ToolSet:             request.ToolSet,
+		ResponseLanguage:    request.ResponseLanguage,
+		AllowGiveUp:         request.AllowGiveUp,
+		AllowGiveUpReason:   request.AllowGiveUpReason,
+		EnvironmentNow:      request.EnvironmentNow,
+	}
 }
 
-func (turnRouter TurnRouter) planWithMessages(ctx context.Context, request agentcontract.AgentRequest, messages []model.Message) (agentcontract.TurnDecision, error) {
-	initialRequest := turnRouterRequest(request, messages)
-	turnDecision, errorValue := turnRouter.generateTurnDecision(ctx, initialRequest, turnRouterCallableToolNames(request))
+// turnWordsShape is what the one remaining chat call is for. A route whose
+// output is words gets the reply schema; a route that starts work gets only the
+// acceptance contract, because the completion gate reads its acceptanceHints
+// and nothing else in intake can write them.
+type turnWordsShape struct {
+	systemPrompt   string
+	schemaDocument string
+}
+
+func turnWordsShapeFor(decision agentcontract.TurnDecision) (turnWordsShape, bool) {
+	if turnRouteNeedsWords(decision) {
+		return turnWordsShape{systemPrompt: turnWordsSystemPrompt, schemaDocument: turnWordsSchema()}, true
+	}
+	if turnRouteStartsWork(decision) {
+		return turnWordsShape{systemPrompt: expectedResultsSystemPrompt, schemaDocument: expectedResultsOnlySchema()}, true
+	}
+	return turnWordsShape{}, false
+}
+
+func turnRouteNeedsWords(decision agentcontract.TurnDecision) bool {
+	if decision.BusyRoute == agentcontract.BusyRouteSteer {
+		return true
+	}
+	switch decision.Route {
+	case agentcontract.TurnRouteClarify, agentcontract.TurnRouteAnswerQuestion, agentcontract.TurnRouteAnswerMeta, agentcontract.TurnRouteGiveUp:
+		return true
+	default:
+		return false
+	}
+}
+
+func turnRouteStartsWork(decision agentcontract.TurnDecision) bool {
+	switch decision.Route {
+	case agentcontract.TurnRouteStartTask, agentcontract.TurnRouteContinueTask, agentcontract.TurnRouteReviseTask:
+		return true
+	default:
+		return false
+	}
+}
+
+func (turnRouter TurnRouter) writeTurnWords(ctx context.Context, request agentcontract.AgentRequest, decidedFields agentcontract.TurnDecision, wordsShape turnWordsShape) (agentcontract.TurnWords, error) {
+	if turnRouter.languageModel == nil {
+		return agentcontract.TurnWords{}, ErrTurnRouterLanguageModelUnavailable
+	}
+	messages := turnRouter.buildWordsMessages(request, decidedFields, wordsShape.systemPrompt)
+	turnWords, errorValue := turnRouter.generateTurnWords(ctx, turnWordsRequest(messages, wordsShape), decidedFields)
 	if errorValue == nil {
-		return turnDecision, nil
+		return turnWords, nil
 	}
 	if errors.Is(errorValue, context.Canceled) || errors.Is(errorValue, context.DeadlineExceeded) || ctx.Err() != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return agentcontract.TurnWords{}, errorValue
 	}
 	correctionInstruction, isCorrectable := turnRouterCorrectionInstructionForError(errorValue)
 	if !isCorrectable {
-		return agentcontract.TurnDecision{}, errorValue
+		return agentcontract.TurnWords{}, errorValue
 	}
 	correctionMessages := append([]model.Message{}, messages...)
-	if previousDecision := previousTurnRouterDecision(errorValue); previousDecision != "" {
-		correctionMessages = append(correctionMessages, model.Message{Role: "assistant", Content: previousDecision})
+	if previousWords := previousTurnRouterDecision(errorValue); previousWords != "" {
+		correctionMessages = append(correctionMessages, model.Message{Role: "assistant", Content: previousWords})
 	}
 	correctionMessages = append(correctionMessages, model.Message{Role: "system", Content: correctionInstruction})
-	correctionRequest := turnRouterRequest(request, correctionMessages)
-	return turnRouter.generateTurnDecision(ctx, correctionRequest, turnRouterCallableToolNames(request))
+	return turnRouter.generateTurnWords(ctx, turnWordsRequest(correctionMessages, wordsShape), decidedFields)
 }
 
-func parseTurnDecision(content string) (agentcontract.TurnDecision, error) {
-	var decision agentcontract.TurnDecision
-	if errorValue := json.Unmarshal([]byte(content), &decision); errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
-	if decision.Route == agentcontract.TurnRouteConsume && len(decision.InitialToolNames) > 0 {
-		return agentcontract.TurnDecision{}, errors.New("consume ends the turn without executing tools, but initialToolNames declares work still to do; select an executable route for that work, or remove the plan only if no work remains")
-	}
-	return decision, nil
-}
-
-func validateTurnDecisionToolNames(decision agentcontract.TurnDecision, availableToolNames []string) error {
-	availableToolNameSet := map[string]bool{}
-	for _, toolName := range availableToolNames {
-		availableToolNameSet[toolName] = true
-	}
-	unknownToolNames := []string{}
-	for _, toolName := range decision.InitialToolNames {
-		if !availableToolNameSet[toolName] {
-			unknownToolNames = appendUniqueStrings(unknownToolNames, toolName)
-		}
-	}
-	if len(unknownToolNames) == 0 {
-		return nil
-	}
-	availableTools := strings.Join(availableToolNames, ", ")
-	if availableTools == "" {
-		availableTools = "none"
-	}
-	return fmt.Errorf("initialToolNames contains unavailable tool names: %s; available tools: %s", strings.Join(unknownToolNames, ", "), availableTools)
-}
-
-func (turnRouter TurnRouter) generateTurnDecision(ctx context.Context, request model.StructuredResponseRequest, availableToolNames []string) (agentcontract.TurnDecision, error) {
+func (turnRouter TurnRouter) generateTurnWords(ctx context.Context, request model.StructuredResponseRequest, decidedFields agentcontract.TurnDecision) (agentcontract.TurnWords, error) {
 	structuredResponse, errorValue := turnRouter.languageModel.GenerateStructuredResponse(ctx, request)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return agentcontract.TurnWords{}, errorValue
 	}
-	turnDecision, parseError := parseTurnDecision(structuredResponse.Content)
-	if parseError != nil {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: parseError, content: structuredResponse.Content}
+	var turnWords agentcontract.TurnWords
+	if parseError := json.Unmarshal([]byte(structuredResponse.Content), &turnWords); parseError != nil {
+		return agentcontract.TurnWords{}, turnRouterDecisionError{cause: parseError, content: structuredResponse.Content}
 	}
-	if validationError := validateTurnDecisionToolNames(turnDecision, availableToolNames); validationError != nil {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
+	if validationError := validateClarificationQuestion(decidedFields, turnWords); validationError != nil {
+		return agentcontract.TurnWords{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
 	}
-	if agentcontract.NormalizeIntakeClassification(turnDecision.Classification) == "" {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: fmt.Errorf("classification %q is invalid; use a value from the schema's classification enum, which is distinct from taskShape", turnDecision.Classification), content: structuredResponse.Content}
-	}
-	if validationError := validateClarificationQuestion(turnDecision); validationError != nil {
-		return agentcontract.TurnDecision{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
-	}
-	return turnDecision, nil
+	return turnWords, nil
 }
 
-func validateClarificationQuestion(decision agentcontract.TurnDecision) error {
-	if agentcontract.NormalizeIntakeClassification(decision.Classification) != agentcontract.IntakeClassificationNeedsConfirmation {
+func turnWordsRequest(messages []model.Message, wordsShape turnWordsShape) model.StructuredResponseRequest {
+	return model.StructuredResponseRequest{
+		Messages: messages,
+		StructuredOutputSchema: model.StructuredOutputSchema{
+			Name:               agentcontract.TurnRouterSchemaName,
+			Document:           wordsShape.schemaDocument,
+			IsStrictlyEnforced: true,
+		},
+	}
+}
+
+func validateClarificationQuestion(decidedFields agentcontract.TurnDecision, turnWords agentcontract.TurnWords) error {
+	if decidedFields.Route != agentcontract.TurnRouteClarify && agentcontract.NormalizeIntakeClassification(decidedFields.Classification) != agentcontract.IntakeClassificationNeedsConfirmation {
 		return nil
 	}
-	if strings.TrimSpace(decision.ClarificationQuestion) != "" {
+	if strings.TrimSpace(turnWords.ClarificationQuestion) != "" {
 		return nil
 	}
-	return errors.New("needs_confirmation requires a clarificationQuestion that names the missing user input; when nothing essential is missing, use bounded_task with an executable route")
+	return errors.New("a clarify turn requires a clarificationQuestion naming the one thing only the requester can supply")
 }
 
 type turnRouterDecisionError struct {
@@ -227,17 +261,6 @@ func turnRouterCorrectionInstructionForError(errorValue error) (string, bool) {
 	return turnRouterCorrectionInstruction(correction), true
 }
 
-func turnRouterRequest(request agentcontract.AgentRequest, messages []model.Message) model.StructuredResponseRequest {
-	return model.StructuredResponseRequest{
-		Messages: messages,
-		StructuredOutputSchema: model.StructuredOutputSchema{
-			Name:               "bluecollar_turn_router",
-			Document:           turnRouterSchema(request),
-			IsStrictlyEnforced: true,
-		},
-	}
-}
-
 func turnRouterCorrectionInstruction(correction model.StructuredOutputCorrection) string {
 	messageParts := []string{
 		"The previous response did not match the required structured output.",
@@ -254,53 +277,11 @@ func turnRouterCorrectionInstruction(correction model.StructuredOutputCorrection
 	return strings.Join(messageParts, " ")
 }
 
-func (turnRouter TurnRouter) reviewClarificationDecision(ctx context.Context, request agentcontract.AgentRequest, decision agentcontract.TurnDecision) (agentcontract.TurnDecision, error) {
-	document, errorValue := json.Marshal(decision)
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
-	messages := append(turnRouter.buildMessages(request),
-		model.Message{Role: "assistant", Content: string(document)},
-		model.Message{Role: "user", Content: clarificationReviewInstruction},
-	)
-	return turnRouter.planWithMessages(ctx, request, messages)
-}
-
-func clarificationDecisionNeedsReview(decision agentcontract.TurnDecision) bool {
-	if decision.Route != agentcontract.TurnRouteClarify && decision.Classification != agentcontract.IntakeClassificationNeedsConfirmation {
-		return false
-	}
-	return len(decision.RequestedOutputFormats) > 0 ||
-		len(decision.ExpectedResults) > 0 ||
-		len(decision.InitialToolNames) > 0
-}
-
-func (turnRouter TurnRouter) buildMessages(request agentcontract.AgentRequest) []model.Message {
-	toolDescriptions := "No tools are available."
-	if request.ToolSet != nil && len(request.ToolSet.ListToolNames()) > 0 {
-		toolDescriptions = intakeToolDescriptions(request.ToolSet)
-	}
+func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentRequest, decidedFields agentcontract.TurnDecision, systemPrompt string) []model.Message {
 	messages := []model.Message{
-		{
-			Role:    "system",
-			Content: turnRouterSystemPrompt,
-		},
-		{
-			Role:    "system",
-			Content: agentcontract.ResponseLanguageInstruction(request.ResponseLanguage),
-		},
-		{
-			Role:    "system",
-			Content: "bounded_task must use a task shape other than immediate_reply. immediate_reply is only for quick_reply and unsupported decisions.",
-		},
-		{
-			Role:    "system",
-			Content: taskRecordRoutingInstruction,
-		},
-		{
-			Role:    "system",
-			Content: toolDescriptions,
-		},
+		{Role: "system", Content: systemPrompt},
+		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(firstNonEmptyAddressingText(decidedFields.ResponseLanguage, request.ResponseLanguage))},
+		{Role: "system", Content: decidedTurnFactsDescription(request, decidedFields)},
 	}
 	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
@@ -311,49 +292,67 @@ func (turnRouter TurnRouter) buildMessages(request agentcontract.AgentRequest) [
 	if priorTaskDescription := agentcontract.PriorTaskContextDescription(request.PriorTask); priorTaskDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: priorTaskDescription})
 	}
-	if scheduledRunDescription := scheduledRunDescriptionFor(request.ScheduledRun); scheduledRunDescription != "" {
-		messages = append(messages, model.Message{Role: "system", Content: scheduledRunDescription})
-	}
-	if routingContext := turnRoutingContextDescription(request); routingContext != "" {
-		messages = append(messages, model.Message{Role: "system", Content: routingContext})
+	if pendingDescription := turnWordsPendingDescription(request); pendingDescription != "" {
+		messages = append(messages, model.Message{Role: "system", Content: pendingDescription})
 	}
 	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone); temporalContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: temporalContext})
 	}
-	messages = append(messages, model.Message{Role: "user", Content: request.Prompt})
-	return messages
+	return append(messages, turnWordsUserMessage(request))
 }
 
-func intakeToolDescriptions(toolSet *toolcontract.ToolSet) string {
-	callableToolDescriptions := callableToolDescriptionsForIntake(toolSet)
-	lines := []string{}
-	if len(callableToolDescriptions) > 0 {
-		lines = append(lines, "Available tools:\n"+strings.Join(callableToolDescriptions, "\n"))
+// A picture that came with the message is the only place the answer lives when
+// the message asks about it, so the words call carries the image itself rather
+// than a filename.
+func turnWordsUserMessage(request agentcontract.AgentRequest) model.Message {
+	message := model.Message{Role: "user", Content: request.Prompt}
+	imageParts := agentcontract.ImageMessageParts(request.InputParts)
+	if len(imageParts) == 0 {
+		return message
 	}
-	if len(lines) == 0 {
-		return "No tools are available."
+	message.Parts = append([]model.MessagePart{{Type: "text", Text: request.Prompt}}, imageParts...)
+	return message
+}
+
+func decidedTurnFactsDescription(request agentcontract.AgentRequest, decidedFields agentcontract.TurnDecision) string {
+	lines := []string{
+		"Decided for this turn:",
+		"- route: " + string(decidedFields.Route),
+		"- classification: " + string(decidedFields.Classification),
+		"- taskShape: " + string(decidedFields.TaskShape),
+		"- level: " + string(decidedFields.TaskLevel),
+		"- deliverableKind: " + string(decidedFields.DeliverableKind),
+	}
+	if decidedFields.BusyRoute != "" {
+		lines = append(lines, "- busyRoute: "+string(decidedFields.BusyRoute))
+	}
+	if len(decidedFields.InitialToolNames) > 0 {
+		lines = append(lines, "- first tools: "+strings.Join(decidedFields.InitialToolNames, ", "))
+	}
+	for _, attachment := range request.IntakeAttachmentFacts {
+		if description := strings.TrimSpace(attachment.Description); description != "" {
+			lines = append(lines, "- attachment "+strings.TrimSpace(attachment.FileName)+": "+description)
+		}
 	}
 	return strings.Join(lines, "\n")
 }
 
-func callableToolDescriptionsForIntake(toolSet *toolcontract.ToolSet) []string {
-	descriptions := []string{}
-	if toolSet == nil {
-		return descriptions
+func turnWordsPendingDescription(request agentcontract.AgentRequest) string {
+	lines := []string{}
+	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
+		lines = append(lines, "Pending confirmation:", "- Task: "+strings.TrimSpace(request.PendingConfirmation.Prompt), "- Question: "+strings.TrimSpace(request.PendingConfirmation.Question))
 	}
-	for _, toolDefinition := range toolSet.ListRegisteredToolDefinitions() {
-		toolName := strings.TrimSpace(toolDefinition.Name)
-		if !toolIsModelCallable(toolName) || !requestToolSetCanReachTool(toolSet, toolName) {
-			continue
+	if pendingChoice := pendingChoiceContext(request); strings.TrimSpace(pendingChoice.TaskRunID) != "" {
+		optionLines := []string{}
+		for index, option := range pendingChoice.Options {
+			optionLines = append(optionLines, strconv.Itoa(index+1)+". "+strings.TrimSpace(option.Label))
 		}
-		description := strings.TrimSpace(toolDefinition.Description)
-		if description == "" {
-			descriptions = append(descriptions, "- "+toolName)
-			continue
-		}
-		descriptions = append(descriptions, "- "+toolName+": "+description)
+		lines = append(lines, "Pending question: "+strings.TrimSpace(pendingChoice.Question), "Options: "+strings.Join(optionLines, "; "))
 	}
-	return descriptions
+	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {
+		lines = append(lines, "Task already running:", "- Original instruction: "+strings.TrimSpace(request.ActiveTask.Prompt), "- Current progress: "+strings.TrimSpace(request.ActiveTask.Summary))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (turnRouter TurnRouter) normalizeDecision(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
@@ -459,8 +458,8 @@ func normalizeSideEffectTurnDecision(decision agentcontract.TurnDecision, toolSe
 
 func includesRegisteredSideEffectEvidence(toolSet *toolcontract.ToolSet, toolNames []string) bool {
 	for _, toolName := range toolNames {
-		registeredToolName, isRegistered := requiredEvidenceRegisteredToolName(toolSet, toolName)
-		if !isRegistered || !requiredEvidenceToolCanBeSatisfied(toolSet, registeredToolName) {
+		registeredToolName := strings.TrimSpace(toolName)
+		if !requiredEvidenceToolCanBeSatisfied(toolSet, registeredToolName) {
 			continue
 		}
 		toolDefinition, isDefined := toolSet.ToolDefinition(registeredToolName)
@@ -542,120 +541,40 @@ func turnRouterCallableToolNames(request agentcontract.AgentRequest) []string {
 	return callableToolNames
 }
 
-func turnRouterSchema(request agentcontract.AgentRequest) string {
-	callableToolNames := turnRouterCallableToolNames(request)
-	routeValues := []string{
-		string(agentcontract.TurnRouteContinueTask),
-		string(agentcontract.TurnRouteReviseTask),
-		string(agentcontract.TurnRouteAnswerQuestion),
-		string(agentcontract.TurnRouteStartTask),
-		string(agentcontract.TurnRouteAnswerMeta),
-		string(agentcontract.TurnRouteClarify),
-		string(agentcontract.TurnRouteConsume),
-		string(agentcontract.TurnRouteGiveUp),
-	}
-	properties := map[string]any{
-		"route": map[string]any{"type": "string", "enum": routeValues},
-		"classification": map[string]any{"type": "string", "enum": []string{
-			string(agentcontract.IntakeClassificationQuickReply),
-			string(agentcontract.IntakeClassificationBoundedTask),
-			string(agentcontract.IntakeClassificationNeedsConfirmation),
-			string(agentcontract.IntakeClassificationUnsupported),
-		}},
-		"taskShape": map[string]any{"type": "string", "enum": []string{
-			string(agentcontract.TaskShapeImmediateReply),
-			string(agentcontract.TaskShapeResearchTask),
-			string(agentcontract.TaskShapeMaintenanceTask),
-			string(agentcontract.TaskShapeScheduledTask),
-			string(agentcontract.TaskShapeBrowserHandoffTask),
-			string(agentcontract.TaskShapeApprovalGatedTask),
-		}},
-		"level": map[string]any{"type": "string", "enum": []string{
-			string(agentcontract.TaskLevelLow),
-			string(agentcontract.TaskLevelMedium),
-			string(agentcontract.TaskLevelHigh),
-		}},
-		"requestedOutputFormats": map[string]any{"anyOf": []any{
-			map[string]any{"type": "array", "maxItems": 8, "items": map[string]any{"type": "string", "enum": []string{"html", "pptx", "pdf", "txt", "docx", "xlsx", "csv", "json"}}},
-			map[string]any{"type": "null"},
-		}},
-		"deliverableKind": map[string]any{"type": "string", "enum": []string{
-			string(agentcontract.DeliverableKindWebsite),
-			string(agentcontract.DeliverableKindPresentation),
-			string(agentcontract.DeliverableKindDocument),
-			string(agentcontract.DeliverableKindNone),
-		}},
-		"expectedResults":  expectedResultsSchema(),
-		"responseLanguage": map[string]any{"type": "string", "enum": []string{"ko", "en", "same_as_conversation"}},
-		"reason":           map[string]any{"type": "string", "maxLength": 512},
-		"userFacingReply":  map[string]any{"type": "string", "maxLength": 512},
-		"initialToolNames": boundedNamedStringArraySchema(callableToolNames),
-		"priorTaskReference": map[string]any{"type": "string", "enum": []string{
-			string(agentcontract.PriorTaskReferenceNone),
-			string(agentcontract.PriorTaskReferenceOutcomeRecovery),
-		}},
-		"clarificationQuestion": map[string]any{"anyOf": []any{
-			map[string]any{"type": "string", "maxLength": 256},
-			map[string]any{"type": "null"},
-		}},
-		"clarificationOptions": clarificationOptionsSchema(),
-		"reactionEmojiName": map[string]any{"anyOf": []any{
-			map[string]any{"type": "string", "enum": allowedReactionEmojiNames},
-			map[string]any{"type": "null"},
-		}},
-	}
-	requiredProperties := []string{"route", "classification", "taskShape", "level", "requestedOutputFormats", "deliverableKind", "responseLanguage", "reason", "userFacingReply", "priorTaskReference", "expectedResults", "initialToolNames", "clarificationQuestion", "clarificationOptions", "reactionEmojiName"}
-	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
-		properties["approval"] = map[string]any{"type": "string", "enum": []string{string(agentcontract.ApprovalSignalApprove), string(agentcontract.ApprovalSignalApproveTask), string(agentcontract.ApprovalSignalReject), string(agentcontract.ApprovalSignalUnclear)}}
-		requiredProperties = append(requiredProperties, "approval")
-	}
-	// An enum of nothing is not a schema a strict provider will take: it answers
-	// empty, the turn falls through to the local model, and the person is asked
-	// about something they never mentioned. A choice nobody is offering is a
-	// field with nothing to say, so it stays out.
-	if choiceKeys := pendingChoiceKeys(pendingChoiceContext(request)); len(choiceKeys) > 0 {
-		properties["choices"] = map[string]any{"type": "array", "maxItems": len(choiceKeys), "items": map[string]any{"type": "string", "enum": choiceKeys}}
-		requiredProperties = append(requiredProperties, "choices")
-	}
-	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {
-		properties["busyRoute"] = map[string]any{"type": "string", "enum": []string{
-			string(agentcontract.BusyRouteStatus),
-			string(agentcontract.BusyRouteSteer),
-			string(agentcontract.BusyRouteReplace),
-			string(agentcontract.BusyRouteCancel),
-			string(agentcontract.BusyRouteNewTask),
-			string(agentcontract.BusyRouteUnrelated),
-		}}
-		properties["busyInstruction"] = map[string]any{"type": "string", "maxLength": 512}
-		requiredProperties = append(requiredProperties, "busyRoute", "busyInstruction")
-	}
+func turnWordsSchema() string {
 	document, errorValue := json.Marshal(map[string]any{
-		"type":                 "object",
-		"properties":           properties,
-		"required":             requiredProperties,
+		"type": "object",
+		"properties": map[string]any{
+			"reason":          map[string]any{"type": "string", "maxLength": 512},
+			"userFacingReply": map[string]any{"type": "string", "maxLength": 512},
+			"clarificationQuestion": map[string]any{"anyOf": []any{
+				map[string]any{"type": "string", "maxLength": 256},
+				map[string]any{"type": "null"},
+			}},
+			"clarificationOptions": clarificationOptionsSchema(),
+			"busyInstruction":      map[string]any{"type": "string", "maxLength": 512},
+			"expectedResults":      expectedResultsSchema(),
+		},
+		"required":             []string{"reason", "userFacingReply", "clarificationQuestion", "clarificationOptions", "busyInstruction", "expectedResults"},
 		"additionalProperties": false,
 	})
 	if errorValue != nil {
-		return `{"type":"object","properties":{"route":{"type":"string"},"classification":{"type":"string"},"taskShape":{"type":"string"},"level":{"type":"string"},"requestedOutputFormats":{"type":"null"},"responseLanguage":{"type":"string"},"reason":{"type":"string"},"userFacingReply":{"type":"string"}},"required":["route","classification","taskShape","level","requestedOutputFormats","responseLanguage","reason","userFacingReply"],"additionalProperties":false}`
+		return `{"type":"object","properties":{"reason":{"type":"string"},"userFacingReply":{"type":"string"}},"required":["reason","userFacingReply"],"additionalProperties":false}`
 	}
 	return string(document)
 }
 
-const namedStringEnumLimit = 40
-
-func boundedNamedStringArraySchema(values []string) map[string]any {
-	itemSchema := map[string]any{"type": "string"}
-	if len(values) > 0 && len(values) <= namedStringEnumLimit {
-		itemSchema["enum"] = values
+func expectedResultsOnlySchema() string {
+	document, errorValue := json.Marshal(map[string]any{
+		"type":                 "object",
+		"properties":           map[string]any{"expectedResults": expectedResultsSchema()},
+		"required":             []string{"expectedResults"},
+		"additionalProperties": false,
+	})
+	if errorValue != nil {
+		return `{"type":"object","properties":{"expectedResults":{"type":"array","items":{"type":"object"}}},"required":["expectedResults"],"additionalProperties":false}`
 	}
-	if len(values) > namedStringEnumLimit {
-		itemSchema["description"] = "Use exact names from Available tools: " + strings.Join(values, ", ")
-	}
-	maximumItems := len(values)
-	if maximumItems > 16 {
-		maximumItems = 16
-	}
-	return map[string]any{"type": "array", "description": "Tools the request still needs. consume performs no work and requires an empty list.", "maxItems": maximumItems, "items": itemSchema}
+	return string(document)
 }
 
 func expectedResultsSchema() map[string]any {
@@ -696,24 +615,6 @@ func pendingChoiceContext(request agentcontract.AgentRequest) agentcontract.Pend
 	}
 }
 
-func pendingChoiceKeys(pendingChoice agentcontract.PendingChoiceContext) []string {
-	keys := []string{}
-	seenKeys := map[string]bool{}
-	for index, option := range pendingChoice.Options {
-		key := strings.TrimSpace(option.Key)
-		if key != "" && !seenKeys[key] {
-			keys = append(keys, key)
-			seenKeys[key] = true
-		}
-		indexKey := strconv.Itoa(index + 1)
-		if !seenKeys[indexKey] {
-			keys = append(keys, indexKey)
-			seenKeys[indexKey] = true
-		}
-	}
-	return keys
-}
-
 func clarificationOptionsSchema() map[string]any {
 	return map[string]any{
 		"type":     "array",
@@ -730,81 +631,6 @@ func clarificationOptionsSchema() map[string]any {
 			"additionalProperties": false,
 		},
 	}
-}
-
-func turnRoutingContextDescription(request agentcontract.AgentRequest) string {
-	lines := []string{}
-	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
-		lines = append(lines,
-			"Pending confirmation:",
-			"- Task: "+strings.TrimSpace(request.PendingConfirmation.Prompt),
-			"- Question: "+strings.TrimSpace(request.PendingConfirmation.Question),
-			"- "+openInteractionAgeLine(request.PendingConfirmation.AskedAt, request.PendingConfirmation.ExchangesSince, request.EnvironmentNow),
-			"- Return approval=approve or approval=approve_task only when the latest user message clearly authorizes this exact pending action. approve_task differs from approve only by covering the rest of this task's work of the same kind as well; it never authorizes an action the message did not authorize.",
-			"- Use answer_question only when the latest user message asks about this pending confirmation.",
-			"- If the latest user message changes the target, scope, conditions, or asks for a different action, use revise_task or start_task with approval=unclear. Redirecting the work is not approving it: when the message names a different action, the pending one stays unauthorized however agreeable the wording, and no approving signal may be returned for it.",
-		)
-	}
-	if pendingChoice := pendingChoiceContext(request); strings.TrimSpace(pendingChoice.TaskRunID) != "" {
-		optionLines := []string{}
-		for index, option := range pendingChoice.Options {
-			optionLines = append(optionLines, strconv.Itoa(index+1)+". "+strings.TrimSpace(option.Label)+" / key "+strings.TrimSpace(option.Key))
-		}
-		lines = append(lines,
-			"Pending input options:",
-			"- Question: "+strings.TrimSpace(pendingChoice.Question),
-			"- "+openInteractionAgeLine(pendingChoice.AskedAt, pendingChoice.ExchangesSince, request.EnvironmentNow),
-			"- Selection mode: "+strings.TrimSpace(pendingChoice.SelectionMode),
-			"- Options: "+strings.Join(optionLines, "; "),
-			"- Return choices as option keys when the latest natural-language answer matches options. Return an empty array for a valid custom answer.",
-			"- An answer names an option by its number, its label, or a paraphrase of it, in any language and any script, so read \"2\", \"두 번째\", and the label itself as the same option. Do not require a particular wording, and do not return an option the message does not point at.",
-			"- Preserve the latest user message as the task input; choices classify it but do not replace its wording.",
-		)
-	}
-	if strings.TrimSpace(request.PendingInput.TaskRunID) != "" {
-		lines = append(lines,
-			"Pending input:",
-			"- Question: "+strings.TrimSpace(request.PendingInput.Question),
-			"- "+openInteractionAgeLine(request.PendingInput.AskedAt, request.PendingInput.ExchangesSince, request.EnvironmentNow),
-			"- Use continue_task or revise_task when the latest message answers or modifies this pending input.",
-			"- Use start_task when the latest message is a self-contained question or independent request instead of an answer.",
-			"- Treat messages that delegate the missing choice back to the assistant as an answer to continue the task; do not ask the same question again.",
-		)
-	}
-	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {
-		lines = append(lines,
-			"Active task in this conversation:",
-			"- Task run ID: "+strings.TrimSpace(request.ActiveTask.TaskRunID),
-			"- Status: "+strings.TrimSpace(request.ActiveTask.Status),
-			"- Original instruction: "+strings.TrimSpace(request.ActiveTask.Prompt),
-			"- Current progress summary: "+strings.TrimSpace(request.ActiveTask.Summary),
-			"- Choose busyRoute=status when the latest message asks whether work is happening or asks for progress.",
-			"- Choose busyRoute=steer when the latest message corrects or redirects the active task without explicitly cancelling it.",
-			"- Choose busyRoute=replace only when the latest message clearly cancels or replaces the active task with a new instruction.",
-			"- Choose busyRoute=cancel when the latest message asks to stop, cancel, abort, or not continue the active task.",
-			"- Choose busyRoute=new_task when the latest message is independent and should not affect the active task.",
-			"- Choose busyRoute=unrelated when the message should not start or alter work.",
-			"- Natural-language stop requests are normal messages; classify them by intent instead of requiring slash commands.",
-		)
-	}
-	if request.AllowGiveUp {
-		lines = append(lines, "Give-up route is allowed because: "+strings.TrimSpace(request.AllowGiveUpReason))
-	}
-	if len(lines) == 0 {
-		return ""
-	}
-	return strings.Join(lines, "\n")
-}
-
-func openInteractionAgeLine(askedAt time.Time, exchangesSince int, now time.Time) string {
-	age := "just now"
-	if !askedAt.IsZero() && !now.IsZero() && now.After(askedAt) {
-		age = now.Sub(askedAt).Round(time.Minute).String() + " ago"
-	}
-	if exchangesSince == 0 {
-		return "Asked " + age + ", and nothing has been exchanged since: a bare yes, no, or option number answers it."
-	}
-	return "Asked " + age + ", and " + strconv.Itoa(exchangesSince) + " exchange(s) have happened since: a bare yes, no, or option number no longer names it. Only a message that names this action or this question answers it; otherwise treat the message as unrelated."
 }
 
 func resolveDecisionResponseLanguage(decisionLanguage string, requestLanguage string) string {
@@ -931,17 +757,6 @@ func clarificationOptionKey(index int) string {
 	return "O"
 }
 
-func scheduledRunDescriptionFor(scheduledRun agentcontract.ScheduledRunContext) string {
-	if scheduledRun.IsEmpty() {
-		return ""
-	}
-	document, errorValue := json.Marshal(scheduledRun)
-	if errorValue != nil {
-		return ""
-	}
-	return "Scheduled run:\n" + string(document)
-}
-
 func toolIsModelCallable(toolID string) bool {
 	return strings.TrimSpace(toolID) != ""
 }
@@ -970,37 +785,15 @@ func appendUniqueStrings(values []string, candidates ...string) []string {
 	return nextValues
 }
 
-const (
-	requiredEvidenceToolKindNativeTool          = "native_tool"
-	requiredEvidenceToolKindCapabilityOperation = "capability_operation"
-)
-
-func requiredEvidenceRegisteredToolName(toolSet *toolcontract.ToolSet, toolName string) (string, bool) {
-	trimmedToolName := strings.TrimSpace(toolName)
-	return trimmedToolName, toolSet.IsRegistered(trimmedToolName)
-}
-
-func requiredEvidenceToolKind(toolSet *toolcontract.ToolSet, toolName string) (string, bool) {
-	trimmedToolName := strings.TrimSpace(toolName)
-	if trimmedToolName == "" || toolSet == nil {
-		return "", false
-	}
-	registeredToolName, isRegistered := requiredEvidenceRegisteredToolName(toolSet, trimmedToolName)
-	if !isRegistered {
-		return "", false
+func requiredEvidenceToolCanBeSatisfied(toolSet *toolcontract.ToolSet, toolName string) bool {
+	registeredToolName := strings.TrimSpace(toolName)
+	if registeredToolName == "" || toolSet == nil || !toolSet.IsRegistered(registeredToolName) {
+		return false
 	}
 	if toolSet.IsAllowed(registeredToolName) {
-		return requiredEvidenceToolKindNativeTool, true
+		return true
 	}
-	if !toolcontract.IsKernelToolName(registeredToolName) && toolSet.CanExpose(registeredToolName) {
-		return requiredEvidenceToolKindCapabilityOperation, true
-	}
-	return "", false
-}
-
-func requiredEvidenceToolCanBeSatisfied(toolSet *toolcontract.ToolSet, toolName string) bool {
-	_, isValid := requiredEvidenceToolKind(toolSet, toolName)
-	return isValid
+	return !toolcontract.IsKernelToolName(registeredToolName) && toolSet.CanExpose(registeredToolName)
 }
 
 func removeExpectedResultsByType(results []agentcontract.ExpectedResult, removedType string) []agentcontract.ExpectedResult {
