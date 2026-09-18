@@ -170,37 +170,7 @@ func (observedModel observedLanguageModel) GenerateResponse(ctx context.Context,
 func (observedModel observedLanguageModel) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
 	startedAt := time.Now()
 	response, errorValue := observedModel.provider.GenerateStructuredResponse(ctx, request)
-	promptBytes := structuredRequestByteCount(request)
-	schemaBytes := len(request.StructuredOutputSchema.Document)
-	record := LLMCallRecord{
-		Kind:                  "structured",
-		Transport:             response.Transport,
-		SchemaName:            strings.TrimSpace(request.StructuredOutputSchema.Name),
-		Provider:              response.ProviderName,
-		UpstreamProvider:      response.UpstreamProvider,
-		Model:                 response.ModelName,
-		ModelTier:             response.ModelTier,
-		SelectedBackend:       response.SelectedBackend,
-		FinishReason:          response.FinishReason,
-		LatencyMS:             time.Since(startedAt).Milliseconds(),
-		PromptBytes:           promptBytes,
-		SchemaBytes:           schemaBytes,
-		ContentBytes:          len(response.Content),
-		UsedFallback:          response.UsedFallback,
-		FallbackReason:        truncateText(compactWhitespace(response.FallbackReason), llmCallErrorMaximumCharacters),
-		PromptTokens:          response.Usage.PromptTokens,
-		CompletionTokens:      response.Usage.CompletionTokens,
-		TotalTokens:           response.Usage.TotalTokens,
-		CachedPromptTokens:    response.Usage.CachedPromptTokens,
-		CacheWriteTokens:      response.Usage.CacheWriteTokens,
-		ReasoningTokens:       response.Usage.ReasoningTokens,
-		CostUSD:               response.Usage.CostUSD,
-		UpstreamInferenceCost: response.Usage.UpstreamInferenceCost,
-	}
-	if errorValue != nil {
-		applyLLMCallError(&record, errorValue)
-	}
-	observedModel.observe(record)
+	observedModel.observe(structuredCallRecord(request, response, startedAt, errorValue))
 	return response, errorValue
 }
 
@@ -293,31 +263,88 @@ func applyLLMCallError(record *LLMCallRecord, errorValue error) {
 }
 
 func chatCallRecord(kind string, request model.ChatCompletionRequest, response model.ChatCompletionResponse, startedAt time.Time, errorValue error) LLMCallRecord {
+	record := llmCallRecord(kind, chatResponseProvenance(response), startedAt, errorValue)
+	record.SchemaName = chatRequestSchemaName(request)
+	record.PromptBytes = chatRequestByteCount(request)
+	record.ToolCount = len(request.Tools)
+	record.ToolBytes = chatRequestToolByteCount(request)
+	record.ContentBytes = len(response.Message.Content)
+	return record
+}
+
+func structuredCallRecord(request model.StructuredResponseRequest, response model.StructuredResponse, startedAt time.Time, errorValue error) LLMCallRecord {
+	record := llmCallRecord("structured", structuredResponseProvenance(response), startedAt, errorValue)
+	record.SchemaName = strings.TrimSpace(request.StructuredOutputSchema.Name)
+	record.PromptBytes = structuredRequestByteCount(request)
+	record.SchemaBytes = len(request.StructuredOutputSchema.Document)
+	record.ContentBytes = len(response.Content)
+	return record
+}
+
+type llmCallProvenance struct {
+	Transport        string
+	ProviderName     string
+	UpstreamProvider string
+	ModelName        string
+	ModelTier        string
+	SelectedBackend  string
+	FinishReason     string
+	UsedFallback     bool
+	FallbackReason   string
+	Usage            model.Usage
+}
+
+func chatResponseProvenance(response model.ChatCompletionResponse) llmCallProvenance {
+	return llmCallProvenance{
+		Transport:        response.Transport,
+		ProviderName:     response.ProviderName,
+		UpstreamProvider: response.UpstreamProvider,
+		ModelName:        response.ModelName,
+		ModelTier:        response.ModelTier,
+		SelectedBackend:  response.SelectedBackend,
+		FinishReason:     response.FinishReason,
+		UsedFallback:     response.UsedFallback,
+		FallbackReason:   response.FallbackReason,
+		Usage:            response.Usage,
+	}
+}
+
+func structuredResponseProvenance(response model.StructuredResponse) llmCallProvenance {
+	return llmCallProvenance{
+		Transport:        response.Transport,
+		ProviderName:     response.ProviderName,
+		UpstreamProvider: response.UpstreamProvider,
+		ModelName:        response.ModelName,
+		ModelTier:        response.ModelTier,
+		SelectedBackend:  response.SelectedBackend,
+		FinishReason:     response.FinishReason,
+		UsedFallback:     response.UsedFallback,
+		FallbackReason:   response.FallbackReason,
+		Usage:            response.Usage,
+	}
+}
+
+func llmCallRecord(kind string, provenance llmCallProvenance, startedAt time.Time, errorValue error) LLMCallRecord {
 	record := LLMCallRecord{
 		Kind:                  kind,
-		Transport:             response.Transport,
-		SchemaName:            chatRequestSchemaName(request),
-		Provider:              response.ProviderName,
-		UpstreamProvider:      response.UpstreamProvider,
-		Model:                 response.ModelName,
-		ModelTier:             response.ModelTier,
-		SelectedBackend:       response.SelectedBackend,
-		FinishReason:          response.FinishReason,
+		Transport:             provenance.Transport,
+		Provider:              provenance.ProviderName,
+		UpstreamProvider:      provenance.UpstreamProvider,
+		Model:                 provenance.ModelName,
+		ModelTier:             provenance.ModelTier,
+		SelectedBackend:       provenance.SelectedBackend,
+		FinishReason:          provenance.FinishReason,
 		LatencyMS:             time.Since(startedAt).Milliseconds(),
-		PromptBytes:           chatRequestByteCount(request),
-		ToolCount:             len(request.Tools),
-		ToolBytes:             chatRequestToolByteCount(request),
-		ContentBytes:          len(response.Message.Content),
-		UsedFallback:          response.UsedFallback,
-		FallbackReason:        truncateText(compactWhitespace(response.FallbackReason), llmCallErrorMaximumCharacters),
-		PromptTokens:          response.Usage.PromptTokens,
-		CompletionTokens:      response.Usage.CompletionTokens,
-		TotalTokens:           response.Usage.TotalTokens,
-		CachedPromptTokens:    response.Usage.CachedPromptTokens,
-		CacheWriteTokens:      response.Usage.CacheWriteTokens,
-		ReasoningTokens:       response.Usage.ReasoningTokens,
-		CostUSD:               response.Usage.CostUSD,
-		UpstreamInferenceCost: response.Usage.UpstreamInferenceCost,
+		UsedFallback:          provenance.UsedFallback,
+		FallbackReason:        truncateText(compactWhitespace(provenance.FallbackReason), llmCallErrorMaximumCharacters),
+		PromptTokens:          provenance.Usage.PromptTokens,
+		CompletionTokens:      provenance.Usage.CompletionTokens,
+		TotalTokens:           provenance.Usage.TotalTokens,
+		CachedPromptTokens:    provenance.Usage.CachedPromptTokens,
+		CacheWriteTokens:      provenance.Usage.CacheWriteTokens,
+		ReasoningTokens:       provenance.Usage.ReasoningTokens,
+		CostUSD:               provenance.Usage.CostUSD,
+		UpstreamInferenceCost: provenance.Usage.UpstreamInferenceCost,
 	}
 	if errorValue != nil {
 		applyLLMCallError(&record, errorValue)
