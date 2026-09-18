@@ -101,41 +101,51 @@ func TestFreshTaskKeepsRouterInitialToolsWithoutRequiredEvidence(t *testing.T) {
 	}
 }
 
-func TestRequiredNextToolsPreferPersistedThenArbitratedThenRouterOrder(t *testing.T) {
+func TestRequiredNextToolsPreferPersistedThenArbitratedAndNothingElse(t *testing.T) {
 	testCases := []struct {
 		name              string
 		activeGoal        ActiveGoal
 		arbitratedTools   []string
-		routerTools       []string
 		expectedToolNames []string
 	}{
 		{
 			name:              "persisted continuation",
 			activeGoal:        ActiveGoal{RequiredNextTools: []string{"task_update", "file_deliver"}},
 			arbitratedTools:   []string{"calendar_update"},
-			routerTools:       []string{"file_write"},
 			expectedToolNames: []string{"task_update", "file_deliver"},
 		},
 		{
 			name:              "arbitrated workflow",
 			arbitratedTools:   []string{"file_write", toolcontract.ShellToolName, toolcontract.FileDeliverToolName},
-			routerTools:       []string{"file_write", toolcontract.FileDeliverToolName},
 			expectedToolNames: []string{"file_write", toolcontract.ShellToolName, toolcontract.FileDeliverToolName},
 		},
 		{
-			name:              "router fallback",
-			routerTools:       []string{"file_write", toolcontract.FileDeliverToolName},
-			expectedToolNames: []string{"file_write", toolcontract.FileDeliverToolName},
+			name:              "nothing to require",
+			expectedToolNames: []string{},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			toolNames := requiredNextToolNamesForResolvedRequest(testCase.activeGoal, testCase.arbitratedTools, testCase.routerTools)
+			toolNames := requiredNextToolNamesForResolvedRequest(testCase.activeGoal, testCase.arbitratedTools)
 			if !slices.Equal(toolNames, testCase.expectedToolNames) {
 				t.Fatalf("expected %v, got %v", testCase.expectedToolNames, toolNames)
 			}
 		})
+	}
+}
+
+func TestTheLikelyToolsAreExposedWithoutBecomingTheToolTheTurnMustCall(t *testing.T) {
+	likelyToolNames := []string{"event_list", "message_send"}
+
+	pinnedToolNames := pinnedToolNamesForResolvedRequest(nil, nil, likelyToolNames, nil, true)
+	requiredNextToolNames := requiredNextToolNamesForResolvedRequest(ActiveGoal{}, nil)
+
+	if !sameStringSet(pinnedToolNames, likelyToolNames) {
+		t.Fatalf("expected the likely tools to be pinned for exposure, got %+v", pinnedToolNames)
+	}
+	if len(requiredNextToolNames) != 0 {
+		t.Fatalf("expected a likely tool never to be forced on the model, got %+v", requiredNextToolNames)
 	}
 }
 
