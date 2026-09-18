@@ -20,6 +20,7 @@ type decisionState struct {
 	Messages            []decisionMessage        `json:"messages"`
 	StandingDuties      []decisionDuty           `json:"standingDuties,omitempty"`
 	AvailableTools      []decisionTool           `json:"availableTools,omitempty"`
+	ToolGuidance        string                   `json:"toolLikelihoodGuidance,omitempty"`
 	ActiveTask          *decisionActiveTask      `json:"activeTask,omitempty"`
 	RecentlyFinished    *decisionActiveTask      `json:"recentlyFinishedTask,omitempty"`
 	PendingConfirmation *decisionPending         `json:"pendingConfirmation,omitempty"`
@@ -124,6 +125,7 @@ func buildDecisionState(request agentcontract.IntakeDecisionRequest, toolDescrip
 		Messages:         decisionMessages(request),
 		StandingDuties:   decisionStandingDuties(),
 		AvailableTools:   toolDescriptions,
+		ToolGuidance:     toolLikelihoodGuidanceFor(toolDescriptions),
 		ResponseLanguage: strings.TrimSpace(request.ResponseLanguage),
 	}
 	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {

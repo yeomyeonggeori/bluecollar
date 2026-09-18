@@ -48,11 +48,36 @@ func newQuestionBuilder(request agentcontract.IntakeDecisionRequest) questionBui
 }
 
 func (builder questionBuilder) questions() map[string]model.DecisionQuestion {
+	return mergedQuestions(builder.questionsWithoutTools(), builder.toolQuestions(builder.toolNames))
+}
+
+func (builder questionBuilder) questionsWithoutTools() map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	for index := range builder.request.Messages {
 		messageKey := decisionMessageKey(index)
 		for name, question := range builder.questionsForMessage(messageKey) {
 			questions[messageKey+"."+name] = question
+		}
+	}
+	return questions
+}
+
+func (builder questionBuilder) toolQuestions(toolNames []string) map[string]model.DecisionQuestion {
+	questions := map[string]model.DecisionQuestion{}
+	for index := range builder.request.Messages {
+		messageKey := decisionMessageKey(index)
+		for _, toolName := range toolNames {
+			questions[messageKey+"."+agentcontract.IntakeQuestionPrefixTool+toolName] = builder.likelyToolQuestion(messageKey, toolName)
+		}
+	}
+	return questions
+}
+
+func mergedQuestions(questionSets ...map[string]model.DecisionQuestion) map[string]model.DecisionQuestion {
+	questions := map[string]model.DecisionQuestion{}
+	for _, questionSet := range questionSets {
+		for name, question := range questionSet {
+			questions[name] = question
 		}
 	}
 	return questions
@@ -174,9 +199,6 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	}
 	for _, formatName := range agentcontract.RequestedOutputFormatNames {
 		questions[agentcontract.IntakeQuestionPrefixFormat+formatName] = builder.outputFormatQuestion(messageKey, formatName)
-	}
-	for _, toolName := range builder.toolNames {
-		questions[agentcontract.IntakeQuestionPrefixTool+toolName] = builder.initialToolQuestion(messageKey, toolName)
 	}
 	for name, question := range builder.pendingChoiceQuestions(messageKey) {
 		questions[name] = question
@@ -324,12 +346,8 @@ func (builder questionBuilder) outputFormatQuestion(messageKey string, formatNam
 	}.Question()
 }
 
-func (builder questionBuilder) initialToolQuestion(messageKey string, toolName string) model.DecisionQuestion {
-	return model.NoulQuestion{
-		Instructions:     about(messageKey) + "Is " + toolName + " among the first tools the work will call? Its description is in availableTools in the state.",
-		TrueDescription:  "a confident pick: the tool's effect matches the outcome the message asks for. When the visible conversation shows an artifact already created for this sender, an edit to it uses that artifact's read and edit tools rather than its create tool",
-		FalseDescription: "anything else, including every tool you are unsure about and every tool when no tool is needed",
-	}.Question()
+func (builder questionBuilder) likelyToolQuestion(messageKey string, toolName string) model.DecisionQuestion {
+	return model.NoulQuestion{Instructions: about(messageKey) + "Will the work call " + toolName + "? " + toolLikelihoodGuidanceReference}.Question()
 }
 
 func (builder questionBuilder) choiceSelectionQuestion(messageKey string, optionIndex int) model.DecisionQuestion {

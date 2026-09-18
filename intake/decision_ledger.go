@@ -2,30 +2,36 @@ package intake
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-type decisionCallRecord struct {
-	request              model.DecisionRequest
-	response             model.DecisionResponse
-	latency              time.Duration
+type decisionCallContext struct {
 	errorValue           error
 	decisions            agentcontract.IntakeDecisions
 	messageCount         int
 	attachmentsDescribed bool
+	toolSelection        *agentcontract.ToolSelectionRecord
 }
 
-func recordDecisionCall(callLedger *agentcontract.IntakeCallLedger, call decisionCallRecord) {
+func recordDecisionCalls(callLedger *agentcontract.IntakeCallLedger, calls []decisionCall, callContext decisionCallContext) {
 	if callLedger == nil {
 		return
 	}
-	callLedger.Observe(decisionLLMCallRecord(call))
+	for index, call := range calls {
+		callLedger.Observe(decisionLLMCallRecord(call, decidedCallContext(callContext, index)))
+	}
 }
 
-func decisionLLMCallRecord(call decisionCallRecord) agentcontract.LLMCallRecord {
+func decidedCallContext(callContext decisionCallContext, index int) decisionCallContext {
+	if index == 0 {
+		return callContext
+	}
+	return decisionCallContext{errorValue: callContext.errorValue}
+}
+
+func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) agentcontract.LLMCallRecord {
 	record := agentcontract.LLMCallRecord{
 		Kind:                   agentcontract.LLMCallKindDecision,
 		Transport:              "decisions",
@@ -41,16 +47,40 @@ func decisionLLMCallRecord(call decisionCallRecord) agentcontract.LLMCallRecord 
 		TotalTokens:            call.response.Usage.TotalTokens,
 		CostUSD:                call.response.Usage.CostUSD,
 		DecisionAnswers:        call.response.Answers,
-		DecisionDraws:          reactionDrawsOf(call.decisions),
-		DecidedMessageCount:    call.messageCount,
-		AttachmentsDescribed:   call.attachmentsDescribed,
-		AttachmentDescriptions: attachmentDescriptionsOf(call.decisions),
+		DecisionDraws:          reactionDrawsOf(callContext.decisions),
+		ToolSelection:          callContext.toolSelection,
+		DecidedMessageCount:    callContext.messageCount,
+		AttachmentsDescribed:   callContext.attachmentsDescribed,
+		AttachmentDescriptions: attachmentDescriptionsOf(callContext.decisions),
 	}
-	if call.errorValue != nil {
+	if callContext.errorValue != nil {
 		record.IsError = true
-		record.Error = call.errorValue.Error()
+		record.Error = callContext.errorValue.Error()
 	}
 	return record
+}
+
+func toolSelectionRecord(request agentcontract.IntakeDecisionRequest, answers map[string]model.DecisionAnswer, callError error) *agentcontract.ToolSelectionRecord {
+	candidateToolNames := resolveCallableToolNames(request)
+	if callError != nil || len(candidateToolNames) == 0 {
+		return nil
+	}
+	record := agentcontract.ToolSelectionRecord{ProbabilityThreshold: likelyToolProbabilityThreshold, CountLimit: likelyToolCountLimit, Probabilities: map[string]float64{}}
+	for index := range request.Messages {
+		messageKey := decisionMessageKey(index)
+		reader := answerReader{answers: answers, messageKey: messageKey}
+		probabilityByToolName, errorValue := reader.toolProbabilities(candidateToolNames)
+		if errorValue != nil {
+			continue
+		}
+		for toolName, probability := range recordedToolProbabilities(probabilityByToolName) {
+			record.Probabilities[messageKey+"."+toolName] = probability
+		}
+		for _, toolName := range selectLikelyToolNames(probabilityByToolName, candidateToolNames) {
+			record.SelectedToolNames = append(record.SelectedToolNames, messageKey+"."+toolName)
+		}
+	}
+	return &record
 }
 
 func reactionDrawsOf(decisions agentcontract.IntakeDecisions) map[string]float64 {

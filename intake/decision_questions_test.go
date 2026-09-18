@@ -50,6 +50,12 @@ func TestEveryQuestionOptionIsAString(t *testing.T) {
 				t.Fatalf("expected %s to carry named string options, got %+v", questionName, question.Criteria)
 			}
 		case model.DecisionQuestionTypeNoul:
+			if strings.Contains(questionName, "."+agentcontract.IntakeQuestionPrefixTool) {
+				if question.Criteria != nil {
+					t.Fatalf("expected %s to leave its criterion to the shared guidance, got %+v", questionName, question.Criteria)
+				}
+				continue
+			}
 			criteria, isTwoSided := question.Criteria.(map[string]string)
 			if !isTwoSided || criteria["true"] == "" || criteria["false"] == "" {
 				t.Fatalf("expected %s to carry a two-sided criterion, got %+v", questionName, question.Criteria)

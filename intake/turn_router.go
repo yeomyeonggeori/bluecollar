@@ -314,7 +314,7 @@ func decidedTurnFactsDescription(request agentcontract.AgentRequest, decidedFiel
 		lines = append(lines, "- busyRoute: "+string(decidedFields.BusyRoute))
 	}
 	if len(decidedFields.InitialToolNames) > 0 {
-		lines = append(lines, "- first tools: "+strings.Join(decidedFields.InitialToolNames, ", "))
+		lines = append(lines, "- likely tools: "+strings.Join(decidedFields.InitialToolNames, ", "))
 	}
 	for _, attachment := range request.IntakeAttachmentFacts {
 		if description := strings.TrimSpace(attachment.Description); description != "" {
