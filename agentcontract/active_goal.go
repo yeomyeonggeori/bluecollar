@@ -120,12 +120,6 @@ func NormalizeExpectedResults(results []ExpectedResult) []ExpectedResult {
 	return foldMessageResultsIntoTheReply(normalizedResults)
 }
 
-// The gate can hold a message result to exactly one thing: the final reply is
-// not empty. Two message results are therefore the same requirement written
-// twice, and a model that reads them as two messages answers twice — once
-// through message_send and once by finishing. Fold them into one, keeping
-// every description and acceptance hint for the judge. A message that must
-// exist apart from the reply is an effect, not a result.
 func foldMessageResultsIntoTheReply(results []ExpectedResult) []ExpectedResult {
 	foldedResults := []ExpectedResult{}
 	replyIndex := -1

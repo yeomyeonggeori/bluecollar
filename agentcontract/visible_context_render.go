@@ -145,8 +145,6 @@ func formatSpeakerLabel(callingName string, handle string, fullName string) stri
 	return primary + " (@" + trimmedHandle + ")"
 }
 
-// What the messages are decides how they should be read, and the same heading
-// over both had one exchange's subject answer another's request.
 func visibleContextHeading(visibleContext VisibleContext) string {
 	if visibleContext.MessagesOpenOtherExchanges {
 		return "Other conversations in the same place, each shown as it was opened. They are separate from what is being asked now and may have nothing to do with it; decide for yourself whether any bears on it."

@@ -17,21 +17,17 @@ const (
 )
 
 type TurnOptions struct {
-	MaxIterationCount    int
-	MaxToolCallCount     int
-	MaxElapsedSecond     int
-	ElapsedBudgetSource  string
-	DeadlineSecond       int
-	ContextWindowTokens  int
-	RecoveryAttemptLimit int
-	RecoveryBudget       RecoveryBudget
-	TaskLevel            TaskLevel
-	GenerationOptions    model.GenerationOptions
-	// Zero keeps delegation off, and off costs a turn nothing: the delegate action is
-	// absent from the schema and the instruction says nothing about it.
-	DelegationLimit int
-	// The base instruction has one version. A host whose provider laddered the turn onto a
-	// different model states what that model needs here, so nothing forks the base to say it.
+	MaxIterationCount        int
+	MaxToolCallCount         int
+	MaxElapsedSecond         int
+	ElapsedBudgetSource      string
+	DeadlineSecond           int
+	ContextWindowTokens      int
+	RecoveryAttemptLimit     int
+	RecoveryBudget           RecoveryBudget
+	TaskLevel                TaskLevel
+	GenerationOptions        model.GenerationOptions
+	DelegationLimit          int
 	SystemInstructionOverlay func(AgentTurnRequest) string
 }
 
