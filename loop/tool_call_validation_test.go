@@ -104,7 +104,7 @@ func TestAgentTurnRunnerRejectsSecondDMSendAfterSuccess(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana","message":"first"}}`,
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana","message":"second"}}`,
-		finishMessageWithEvidence("Sent the first message.", "obs-001", "message_send", 0),
+		finishMessageCiting("Sent the first message.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
 	toolRegistry := newTestCapabilityToolSet([]string{"message_send"})
@@ -142,7 +142,7 @@ func TestAgentTurnRunnerAllowsSendToDifferentRecipients(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana","message":"please take a look"}}`,
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Grace","message":"please take a look"}}`,
-		finishMessageWithEvidence("Sent a DM to Dana and Grace.", "obs-001", "message_send", 0),
+		finishMessageCiting("Sent a DM to Dana and Grace.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
 	toolRegistry := newTestCapabilityToolSet([]string{"message_send"})
@@ -206,7 +206,7 @@ func TestAgentTurnRunnerRejectsMessageSendWithoutExternalSendIntent(t *testing.T
 func TestAgentTurnRunnerAllowsCurrentThreadSendWithoutExternalSendContract(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"currentThread","message":"note: weekly customer support check done"}}`,
-		finishMessageWithEvidence("Left a note on this conversation.", "obs-001", "message_send", 0),
+		finishMessageCiting("Left a note on this conversation.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
 	toolRegistry := newTestCapabilityToolSet([]string{"message_send"})
@@ -388,7 +388,7 @@ func TestAgentTurnRunnerRejectsEmptyBrowserPressAfterFill(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"browser_fill","toolInput":{"target":"@e5","text":"hello world"}}`,
 		`{"action":"continue","toolName":"browser_press","toolInput":{}}`,
-		finishMessageWithEvidence("searched", "obs-001", "browser_fill", 0),
+		finishMessageCiting("searched", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	pressCallCount := 0
@@ -426,7 +426,7 @@ func TestAgentTurnRunnerRejectsBrowserFillWithoutRequiredInput(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"browser_snapshot","toolInput":{}}`,
 		`{"action":"continue","toolName":"browser_fill","toolInput":{}}`,
-		finishMessageWithEvidence("filled", "obs-001", "browser_snapshot", 0),
+		finishMessageCiting("filled", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	fillCallCount := 0
@@ -464,7 +464,7 @@ func TestAgentTurnRunnerRejectsEmptyGoogleNavigate(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"browser_open","toolInput":{}}`,
 		`{"action":"continue","toolName":"browser_open","toolInput":{"url":"https://www.google.com"}}`,
-		finishMessageWithEvidence("opened", "obs-002", "browser_open", 0),
+		finishMessageCiting("opened", "obs-002"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	navigateCallCount := 0

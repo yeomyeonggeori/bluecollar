@@ -221,7 +221,7 @@ func buildObservationContext(observations []turnObservation, toolResultsCarriedN
 	if len(body) > progressMessageLimit {
 		body = body[:progressMessageLimit] + "\n[trimmed]"
 	}
-	return "Relevant observation ledger so far. Use observationID/toolName/attachmentIndex when citing completionEvidence:\n" + body
+	return "Relevant observation ledger so far. Cite its observationIDs in completionEvidenceIDs:\n" + body
 }
 
 func progressLedgerHeading(toolResultsCarriedNatively bool) string {

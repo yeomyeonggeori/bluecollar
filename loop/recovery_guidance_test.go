@@ -11,7 +11,7 @@ func TestAgentTurnRunnerAllowsCorrectedRetryAfterSafeFailure(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana","message":"please take a look"}}`,
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana Lee","message":"please take a look"}}`,
-		finishMessageWithEvidence("sent", "obs-003", "message_send", 0),
+		finishMessageCiting("sent", "obs-003"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{RecoveryAttemptLimit: 3})
 	toolRegistry := newTestCapabilityToolSet([]string{"message_send"})

@@ -27,7 +27,7 @@ type qualityReviewItem struct {
 	ID          string                        `json:"id"`
 	Passed      bool                          `json:"passed"`
 	EvidenceIDs []string                      `json:"evidenceIDs"`
-	Evidence    []completionEvidenceReference `json:"evidence"`
+	Evidence    []completionEvidenceReference `json:"-"`
 	Notes       string                        `json:"notes,omitempty"`
 }
 

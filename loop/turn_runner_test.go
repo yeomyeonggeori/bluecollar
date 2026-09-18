@@ -295,7 +295,7 @@ func TestAgentTurnRunnerCompletesWhenCallerContextExpiresDuringCompletionJudge(t
 func TestAgentTurnRunnerUsesPostEvidenceWordingAfterCheckpoint(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "추가할게요.", "task_add", `{"title":"고객지원 분기 결산","dueDate":"2026-07-17"}`),
-		`{"action":"finish","message":"고객지원 분기 결산 업무를 7월 17일 마감으로 등록했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-002","toolName":"task_add"}],"qualityReview":[]}`,
+		`{"action":"finish","message":"고객지원 분기 결산 업무를 7월 17일 마감으로 등록했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	toolRegistry := newTestCapabilityToolSet([]string{"task_add"})
@@ -960,7 +960,7 @@ func TestAgentTurnRunnerTerminalNoToolsRejectsFailWithoutReason(t *testing.T) {
 func TestAgentTurnRunnerCompletesBrowserOpenWithPostEvidenceReply(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "브라우저를 열었습니다. 완료했습니다.", "browser_open", `{"url":"https://www.google.com"}`),
-		`{"action":"finish","message":"구글 홈페이지를 브라우저에서 열었습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"browser_open"}],"qualityReview":[]}`,
+		`{"action":"finish","message":"구글 홈페이지를 브라우저에서 열었습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestCapabilityToolSet([]string{"browser_open"})
@@ -993,7 +993,7 @@ func TestAgentTurnRunnerRejectsBrowserFollowUpReplyWithoutToolEvidence(t *testin
 	languageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("말로만 답변"),
 		directToolAction("continue", "", "browser_open", `{"url":"https://console.cloud.google.com/"}`),
-		finishMessageWithEvidence("열었습니다", "obs-002", "browser_open", 0),
+		finishMessageCiting("열었습니다", "obs-002"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestCapabilityToolSet([]string{"browser_open"})
@@ -1116,7 +1116,7 @@ func TestAgentTurnRunnerSiteLoopBuildsReviewsPublishesBeforeFinish(t *testing.T)
 		`{"action":"continue","toolName":"artifact_review","toolInput":{"path":"home/sites/site-1/app/dist/index.html"},"nextStepPlan":{"objective":"publish reviewed site","expectedTools":["site_serve","site_list"],"doneCriteria":["publish succeeds"],"risk":"publish may reject stale build","workingSetReason":"review evidence allows publish"}}`,
 		`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1","message":"Publish portfolio"},"nextStepPlan":{"objective":"confirm final status","expectedTools":["site_list"],"doneCriteria":["status shows published URL"],"risk":"status may not reflect latest version","workingSetReason":"final status is required evidence"}}`,
 		`{"action":"continue","toolName":"site_list","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish with status evidence","expectedTools":[],"doneCriteria":["finish with published URL"],"risk":"none","workingSetReason":"all required evidence has been collected"}}`,
-		`{"action":"finish","message":"같은 URL에 배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-003","toolName":"site_build"},{"observationID":"obs-004","toolName":"artifact_review"},{"observationID":"obs-005","toolName":"site_serve"},{"observationID":"obs-006","toolName":"site_list"}]}`,
+		`{"action":"finish","message":"같은 URL에 배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003","obs-004","obs-005","obs-006"]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 8, MaxToolCallCount: 8})
 	toolRegistry := newTestCapabilityToolSet([]string{"site_list", "site_serve", "site_build", "artifact_review", "site_serve"})
@@ -1233,9 +1233,9 @@ func TestAgentTurnRunnerReselectsToolsAfterRejectedSiteFinish(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"site_serve","toolInput":{"slug":"portfolio","title":"Portfolio"},"nextStepPlan":{"objective":"build the draft before finishing","expectedTools":["site_build"],"doneCriteria":["build evidence exists"],"risk":"draft creation alone is not completion","workingSetReason":"site_build is required evidence"}}`,
-			`{"action":"finish","message":"초안이 만들어졌습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"site_serve"}]}`,
+			`{"action":"finish","message":"초안이 만들어졌습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 			`{"action":"continue","toolName":"site_build","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish after build evidence","expectedTools":[],"doneCriteria":["build observation exists"],"risk":"none","workingSetReason":"required evidence has been collected"}}`,
-			finishMessageWithEvidence("빌드까지 완료했습니다.", "obs-003", "site_build", 0),
+			finishMessageCiting("빌드까지 완료했습니다.", "obs-003"),
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 4})
@@ -1292,7 +1292,7 @@ func TestAgentTurnRunnerRejectsFailAfterSiteSourceWriteBeforeBuildPublish(t *tes
 			`{"action":"fail","reason":"cannot continue","goalStatus":"blocked","goalSatisfied":false,"remainingWork":"build and publish still needed"}`,
 			`{"action":"continue","toolName":"shell","toolInput":{"command":"npm run build","workingDirectoryPath":"/workspace/sites/site-1/draft/app"}}`,
 			directToolAction("continue", "", "site_serve", `{"siteID":"site-1"}`),
-			finishMessageWithEvidence("배포했습니다: https://pretty.example", "obs-004", "site_serve", 0),
+			finishMessageCiting("배포했습니다: https://pretty.example", "obs-004"),
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 8, MaxToolCallCount: 8})
@@ -1477,7 +1477,7 @@ func TestAgentTurnRunnerFinalizesSatisfiedGoalAtIterationEffort(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "", "browser_screenshot", `{}`),
 		directToolAction("continue", "", "browser_screenshot", `{}`),
-		finishMessageWithEvidence("캡처했습니다.", "obs-002", "browser_screenshot", 0),
+		finishMessageCiting("캡처했습니다.", "obs-002"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 2})
 	toolRegistry := newTestCapabilityToolSet([]string{"browser_screenshot"})
@@ -1525,7 +1525,7 @@ func TestAgentTurnRunnerFinalizesRepeatedSuccessfulSideEffectWithoutPlannedEvide
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "", "task_add", `{"prompt":"보고서 작성"}`),
 		directToolAction("continue", "", "task_add", `{"prompt":"보고서 작성"}`),
-		finishMessageWithEvidence("업무를 등록했습니다.", "obs-001", "task_add", 0),
+		finishMessageCiting("업무를 등록했습니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
 	toolRegistry := newTestCapabilityToolSet([]string{"task_add"})
@@ -1560,7 +1560,7 @@ func TestAgentTurnRunnerFinalizesRepeatedSuccessfulReadWithoutExecutingAgain(t *
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		finishMessageWithEvidence("업무가 있습니다.", "obs-001", "task_list", 0),
+		finishMessageCiting("업무가 있습니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
 	toolRegistry := newTestToolSet([]string{"task_list"})
@@ -1596,7 +1596,7 @@ func TestAgentTurnRunnerFinalizesReadAfterCorrectedInputRecovery(t *testing.T) {
 		`{"action":"continue","toolName":"task_list","toolInput":{"query":"invalid"}}`,
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		finishMessageWithEvidence("업무가 있습니다.", "obs-003", "task_list", 0),
+		finishMessageCiting("업무가 있습니다.", "obs-003"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	toolRegistry := newTestToolSet([]string{"task_list"})
@@ -1632,7 +1632,7 @@ func TestAgentTurnRunnerFinalizesSuccessfulReadDespiteUnsatisfiedReadHint(t *tes
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		finishMessageWithEvidence("업무가 있습니다.", "obs-001", "task_list", 0),
+		finishMessageCiting("업무가 있습니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
 	toolRegistry := newTestToolSet([]string{"task_list", "memory_search"})
@@ -2342,11 +2342,11 @@ func writeAgentTestFile(t *testing.T, path string, content string) {
 }
 
 func finishMessageDocument(reply string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[],"qualityReview":[]}`
+	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`
 }
 
 func noToolFallbackFinishMessageDocument(reply string) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[],"qualityReview":[],"failureResolution":"no_tool_fallback"}`
+	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[],"failureResolution":"no_tool_fallback"}`
 }
 
 func failureReportDocument(reason string, toolName string, inputSummary string, errorCode string, failureStage string, message string) string {
@@ -2385,8 +2385,9 @@ func terminalNoToolRecoveryBudgetForTest() RecoveryBudget {
 	return RecoveryBudget{CorrectedRetry: 0, AlternateRoute: 0, AdjacentTool: 0, NoToolFallback: 1}
 }
 
-func finishMessageWithEvidence(reply string, observationID string, toolName string, attachmentIndex int) string {
-	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":` + strconv.Quote(observationID) + `,"toolName":` + strconv.Quote(toolName) + `,"attachmentIndex":` + strconv.Itoa(attachmentIndex) + `}],"qualityReview":[]}`
+func finishMessageCiting(reply string, observationIDs ...string) string {
+	citedIDs, _ := json.Marshal(observationIDs)
+	return `{"action":"finish","message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":` + string(citedIDs) + `,"qualityReview":[]}`
 }
 
 func TestApprovalObservationUserFacingMessageReadsConfirmQuestion(t *testing.T) {

@@ -1993,3 +1993,16 @@ func TestNativeTextFinalCannotBypassRequiredToolEvidence(t *testing.T) {
 		t.Fatal("plain text falsely completed a mutation without tool evidence")
 	}
 }
+
+func TestParseAgentActionResponseCitesEvidenceByIDAlone(t *testing.T) {
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Attached.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"],"completionEvidence":[{"observationID":"obs-009","toolName":"file_deliver","attachmentIndex":3}],"qualityReview":[{"id":"qr-1","passed":true,"evidenceIDs":["obs-002"],"evidence":[{"observationID":"obs-009"}]}]}`})
+	if errorValue != nil {
+		t.Fatalf("expected parsed action: %v", errorValue)
+	}
+	if len(action.CompletionEvidence) != 1 || action.CompletionEvidence[0].ObservationID != "obs-002" || action.CompletionEvidence[0].AttachmentIndex != nil {
+		t.Fatalf("expected the cited IDs to be the only evidence, got %+v", action.CompletionEvidence)
+	}
+	if len(action.QualityReview[0].Evidence) != 1 || action.QualityReview[0].Evidence[0].ObservationID != "obs-002" {
+		t.Fatalf("expected the review to cite its IDs alone, got %+v", action.QualityReview[0].Evidence)
+	}
+}

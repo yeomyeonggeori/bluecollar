@@ -216,7 +216,7 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 	})
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"task_add","toolInput":{"prompt":"메일 페이지 앱 비밀번호 개선"}}`,
-		finishMessageWithEvidence("업무를 등록했습니다.", "obs-001", "task_add", 0),
+		finishMessageCiting("업무를 등록했습니다.", "obs-001"),
 	}}
 	agentKernel.UseLanguageModelProvider(languageModel)
 
@@ -320,7 +320,7 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 	})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"site_unserve","toolInput":{"siteID":"site-1"}}`,
-		finishMessageWithEvidence("웹사이트를 삭제했습니다.", "obs-001", "site_unserve", 0),
+		finishMessageCiting("웹사이트를 삭제했습니다.", "obs-001"),
 	}})
 
 	request := kernelTestRequest("응 확인했어, 진행해줘")
@@ -399,7 +399,7 @@ func TestSemanticRevisionStartsNewTaskRun(t *testing.T) {
 	}})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"task_add","toolInput":{"title":"새 업무"}}`,
-		finishMessageWithEvidence("새 업무를 추가했습니다.", "obs-001", "task_add", 0),
+		finishMessageCiting("새 업무를 추가했습니다.", "obs-001"),
 	}})
 	taskAddDefinition := testToolDescriptor("task_add")
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{taskAddDefinition})
@@ -442,7 +442,7 @@ func TestSemanticRevisionKeepsTheRunTheHostOpenedForThisTurn(t *testing.T) {
 	}})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"task_add","toolInput":{"title":"새 업무"}}`,
-		finishMessageWithEvidence("새 업무를 추가했습니다.", "obs-001", "task_add", 0),
+		finishMessageCiting("새 업무를 추가했습니다.", "obs-001"),
 	}})
 	taskAddDefinition := testToolDescriptor("task_add")
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{taskAddDefinition})
@@ -530,7 +530,7 @@ func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *test
 	})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"shell","toolInput":{"command":"do the side effect"}}`,
-		finishMessageWithEvidence("완료했습니다.", "obs-001", toolcontract.ShellToolName, 0),
+		finishMessageCiting("완료했습니다.", "obs-001"),
 	}})
 	request := kernelTestRequest("서버에 배포 스크립트 실행해줘")
 	request.ToolSet = toolSet
