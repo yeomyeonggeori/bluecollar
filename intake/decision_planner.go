@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -198,12 +199,18 @@ func largestDecisionRequestByteCount(requests []model.DecisionRequest) int {
 
 func resolveCallableToolNames(request agentcontract.IntakeDecisionRequest) []string {
 	if len(request.CallableToolNames) > 0 {
-		return request.CallableToolNames
+		return sortedToolNames(request.CallableToolNames)
 	}
 	if request.ToolSet == nil {
 		return []string{}
 	}
-	return turnRouterCallableToolNames(agentcontract.AgentRequest{ToolSet: request.ToolSet})
+	return sortedToolNames(turnRouterCallableToolNames(agentcontract.AgentRequest{ToolSet: request.ToolSet}))
+}
+
+func sortedToolNames(toolNames []string) []string {
+	sortedNames := append([]string{}, toolNames...)
+	sort.Strings(sortedNames)
+	return sortedNames
 }
 
 func (planner DecisionPlanner) describeAttachmentsOnlyMessages(ctx context.Context, request agentcontract.IntakeDecisionRequest) (agentcontract.IntakeDecisionRequest, bool) {

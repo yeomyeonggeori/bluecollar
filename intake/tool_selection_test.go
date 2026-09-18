@@ -2,6 +2,7 @@ package intake
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"sync"
 	"testing"
@@ -110,6 +111,37 @@ func TestTheAlwaysExposedKernelToolsAreNeverAskedAbout(t *testing.T) {
 	if !containsString(builder.toolNames, "task_add") || !containsString(builder.toolNames, "message_send") {
 		t.Fatalf("expected the extension tools to stay candidates, got %v", builder.toolNames)
 	}
+}
+
+func TestTheRequestIsIdenticalWhateverOrderTheToolsWereRegisteredIn(t *testing.T) {
+	forwardRequest := addressedDecisionRequest("이번 주 회의 일정 정리해서 공유해줘")
+	forwardRequest.ToolSet = newTestToolSet(measurementToolNames())
+	reversedRequest := addressedDecisionRequest("이번 주 회의 일정 정리해서 공유해줘")
+	reversedRequest.ToolSet = newTestToolSet(reversedToolNames(measurementToolNames()))
+
+	forwardDocument := decisionRequestDocument(t, buildDecisionRequest(forwardRequest))
+	reversedDocument := decisionRequestDocument(t, buildDecisionRequest(reversedRequest))
+
+	if forwardDocument != reversedDocument {
+		t.Fatal("expected registration order to leave the request unchanged; the order of the descriptions moves a mid-range probability by about 0.15")
+	}
+}
+
+func reversedToolNames(toolNames []string) []string {
+	reversedNames := make([]string, 0, len(toolNames))
+	for index := len(toolNames) - 1; index >= 0; index-- {
+		reversedNames = append(reversedNames, toolNames[index])
+	}
+	return reversedNames
+}
+
+func decisionRequestDocument(t *testing.T, request model.DecisionRequest) string {
+	t.Helper()
+	document, errorValue := json.Marshal(request)
+	if errorValue != nil {
+		t.Fatalf("expected the decision request to serialize: %v", errorValue)
+	}
+	return string(document)
 }
 
 func TestThePerToolQuestionStaysSmallEnoughToRepeatPerMessage(t *testing.T) {
