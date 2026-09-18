@@ -304,7 +304,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		return result, errorValue
 	}
 
-	requiredNextToolNames := requiredNextToolNamesForResolvedRequest(request.ActiveGoal, instructionBundle.RequiredNextTools, intakeDecision.InitialToolNames)
+	requiredNextToolNames := requiredNextToolNamesForResolvedRequest(request.ActiveGoal, instructionBundle.RequiredNextTools)
 	request.ActiveGoal.RequiredNextTools = requiredNextToolNames
 	intakeRequest.ActiveGoal = request.ActiveGoal
 	requiredAttachmentSuffixes := attachmentSuffixesForRequestedOutputFormats(intakeDecision.RequestedOutputFormats)
@@ -340,7 +340,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	if result, didExpire := agentKernel.completeIntakeIfElapsed(taskBudget, intakeRequest, intakeDecision, turnDecision.Route, routerCallLedger.Records); didExpire {
 		return result, nil
 	}
-	requiredNextToolNames = requiredNextToolNamesForResolvedRequest(request.ActiveGoal, instructionBundle.RequiredNextTools, intakeDecision.InitialToolNames)
+	requiredNextToolNames = requiredNextToolNamesForResolvedRequest(request.ActiveGoal, instructionBundle.RequiredNextTools)
 	request.ActiveGoal.RequiredNextTools = requiredNextToolNames
 	requiredEvidenceTools := outcomeContract.RequiredEvidenceTools
 	requiredAttachmentSuffixes = outcomeContract.RequiredAttachmentSuffixes
@@ -504,14 +504,11 @@ func pinnedToolNamesForResolvedRequest(
 	return appendUniqueStrings(append([]string{}, preservedToolNames...), selectedToolNames...)
 }
 
-func requiredNextToolNamesForResolvedRequest(activeGoal ActiveGoal, arbitratedToolNames []string, routerToolNames []string) []string {
+func requiredNextToolNamesForResolvedRequest(activeGoal ActiveGoal, arbitratedToolNames []string) []string {
 	if len(activeGoal.RequiredNextTools) > 0 {
 		return appendUniqueStrings(activeGoal.RequiredNextTools)
 	}
-	if len(arbitratedToolNames) > 0 {
-		return appendUniqueStrings(arbitratedToolNames)
-	}
-	return appendUniqueStrings(routerToolNames)
+	return appendUniqueStrings(arbitratedToolNames)
 }
 
 func (agentKernel *AgentKernel) completeTurnRouterFailure(responseContext context.Context, request AgentRequest, errorValue error, routerCallRecords []llmCallRecord) AgentTurnResult {

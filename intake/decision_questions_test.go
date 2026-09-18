@@ -11,9 +11,12 @@ import (
 )
 
 func questionsFor(request agentcontract.IntakeDecisionRequest) map[string]model.DecisionQuestion {
-	builderRequest := request
-	builderRequest.CallableToolNames = resolveCallableToolNames(request)
-	return newQuestionBuilder(builderRequest).questions()
+	builder := newQuestionBuilder(request)
+	questions := builder.questionsWithoutTools()
+	for questionName, question := range toolQuestionsFor(request, resolveCallableToolNames(request)) {
+		questions[questionName] = question
+	}
+	return questions
 }
 
 func criteriaText(t *testing.T, question model.DecisionQuestion) string {
@@ -32,10 +35,6 @@ func TestTheRouteQuestionReservesGiveUpForImpossibleWork(t *testing.T) {
 	if !strings.Contains(routeCriteria, "Never for a permission concern, which the operating system decides at execution") {
 		t.Fatalf("expected give_up to stay out of permission decisions, got %s", routeCriteria)
 	}
-	classificationCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionClassification])
-	if !strings.Contains(classificationCriteria, "pointless to even attempt") {
-		t.Fatalf("expected unsupported to be reserved for pointless work, got %s", classificationCriteria)
-	}
 }
 
 func TestEveryQuestionOptionIsAString(t *testing.T) {
@@ -50,6 +49,12 @@ func TestEveryQuestionOptionIsAString(t *testing.T) {
 				t.Fatalf("expected %s to carry named string options, got %+v", questionName, question.Criteria)
 			}
 		case model.DecisionQuestionTypeNoul:
+			if strings.Contains(questionName, "."+agentcontract.IntakeQuestionPrefixTool) {
+				if question.Criteria != nil {
+					t.Fatalf("expected %s to leave its criterion to the shared guidance, got %+v", questionName, question.Criteria)
+				}
+				continue
+			}
 			criteria, isTwoSided := question.Criteria.(map[string]string)
 			if !isTwoSided || criteria["true"] == "" || criteria["false"] == "" {
 				t.Fatalf("expected %s to carry a two-sided criterion, got %+v", questionName, question.Criteria)

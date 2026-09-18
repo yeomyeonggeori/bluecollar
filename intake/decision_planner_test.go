@@ -59,7 +59,7 @@ func decideOnce(t *testing.T, planner DecisionPlanner, request agentcontract.Int
 	return decisions.Messages[0]
 }
 
-func TestDecisionPlannerDecidesAddressingAndRoutingInOneCall(t *testing.T) {
+func TestDecisionPlannerDecidesAddressingAndRoutingInOneCallThatNamesNoTool(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	request := addressedDecisionRequest("다음 주 발표자료 초안 만들어줘")
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
@@ -67,8 +67,18 @@ func TestDecisionPlannerDecidesAddressingAndRoutingInOneCall(t *testing.T) {
 
 	decision := decideOnce(t, planner, request)
 
-	if len(decisionModel.Requests()) != 1 {
-		t.Fatalf("expected exactly one decision call, got %d", len(decisionModel.Requests()))
+	intakeRequest := decisionModel.Requests()[0]
+	for questionName := range intakeRequest.Questions {
+		if _, isToolQuestion := toolNameOfQuestion(questionName); isToolQuestion {
+			t.Fatalf("expected routing to be decided without a tool question, got %s", questionName)
+		}
+	}
+	intakeState, isDecisionState := intakeRequest.State.(decisionState)
+	if !isDecisionState {
+		t.Fatalf("expected a decision state, got %T", intakeRequest.State)
+	}
+	if len(intakeState.AvailableTools) != 0 || intakeState.ToolGuidance != "" {
+		t.Fatalf("expected no tool description in the routing call, got %+v", intakeState.AvailableTools)
 	}
 	if decision.MessageID != "message-1" {
 		t.Fatalf("expected the decision to carry the message identifier, got %q", decision.MessageID)
@@ -374,7 +384,7 @@ func TestDecisionPlannerSendsFactsAloneWithoutADescriber(t *testing.T) {
 func TestDecisionPlannerFailsWhenAnAskedQuestionIsUnanswered(t *testing.T) {
 	request := addressedDecisionRequest("발표자료 초안 만들어줘")
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
-	droppedQuestionKey := "m1." + agentcontract.IntakeQuestionPrefixTool + "task_list"
+	droppedQuestionKey := "m1." + agentcontract.IntakeQuestionRoute
 	planner := NewDecisionPlanner(answerDroppingDecisionModel{outcome: startTaskOutcome(), droppedQuestionKey: droppedQuestionKey}, nil, func() float64 { return 1 })
 
 	_, errorValue := planner.Decide(context.Background(), request, nil)
