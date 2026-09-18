@@ -346,18 +346,22 @@ func turnRouterCallableToolNames(request agentcontract.AgentRequest) []string {
 	callableToolNames := []string{}
 	if request.ToolSet != nil {
 		for _, toolName := range request.ToolSet.ListToolNames() {
-			if toolcontract.ToolIsModelCallable(toolName) {
+			if toolIsSelectableForTurn(toolName) {
 				callableToolNames = append(callableToolNames, toolName)
 			}
 		}
 		for _, toolDefinition := range request.ToolSet.ListRegisteredToolDefinitions() {
 			toolName := strings.TrimSpace(toolDefinition.Name)
-			if toolName != "" && agentcontract.RequiredEvidenceToolCanBeSatisfied(request.ToolSet, toolName) {
+			if toolIsSelectableForTurn(toolName) && agentcontract.RequiredEvidenceToolCanBeSatisfied(request.ToolSet, toolName) {
 				callableToolNames = toolcontract.AppendUniqueStrings(callableToolNames, toolName)
 			}
 		}
 	}
 	return callableToolNames
+}
+
+func toolIsSelectableForTurn(toolName string) bool {
+	return toolcontract.ToolIsModelCallable(toolName) && !toolcontract.IsKernelToolName(toolName)
 }
 
 func turnWordsSchema() string {

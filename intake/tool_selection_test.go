@@ -9,6 +9,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func measurementToolNames() []string {
@@ -80,6 +81,34 @@ func TestATurnThatNeedsNoToolSelectsNone(t *testing.T) {
 
 	if selectedToolNames := selectLikelyToolNames(probabilities, []string{"task_add", "task_list"}); len(selectedToolNames) != 0 {
 		t.Fatalf("expected nothing to be selected, got %v", selectedToolNames)
+	}
+}
+
+func TestTheAlwaysExposedKernelToolsAreNeverAskedAbout(t *testing.T) {
+	request := addressedDecisionRequest("워크스페이스 파일 정리해서 결과 알려줘")
+	request.ToolSet = newTestToolSet(append(toolcontract.KernelToolNames(), "task_add", "message_send"))
+	builderRequest, builder := decisionQuestionBuilder(request)
+
+	state := buildDecisionState(builderRequest, decisionToolDescriptions(request.ToolSet, builder.toolNames))
+	questions := builder.toolQuestions(builder.toolNames)
+
+	for _, kernelToolName := range toolcontract.KernelToolNames() {
+		if containsString(builder.toolNames, kernelToolName) {
+			t.Fatalf("expected %s to be exposed without being asked about, got %v", kernelToolName, builder.toolNames)
+		}
+		for questionName := range questions {
+			if askedToolName, isToolQuestion := toolNameOfQuestion(questionName); isToolQuestion && askedToolName == kernelToolName {
+				t.Fatalf("expected no question about %s, got %s", kernelToolName, questionName)
+			}
+		}
+		for _, describedTool := range state.AvailableTools {
+			if describedTool.Name == kernelToolName {
+				t.Fatalf("expected %s to stay out of the state, got %v", kernelToolName, state.AvailableTools)
+			}
+		}
+	}
+	if !containsString(builder.toolNames, "task_add") || !containsString(builder.toolNames, "message_send") {
+		t.Fatalf("expected the extension tools to stay candidates, got %v", builder.toolNames)
 	}
 }
 
