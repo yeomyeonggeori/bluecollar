@@ -11,6 +11,8 @@ import (
 
 const llmCallErrorMaximumCharacters = 300
 const TurnRouterSchemaName = "bluecollar_turn_router"
+const AttachmentDescriptionSchemaName = "bluecollar_attachment_description"
+const LLMCallKindDecision = "decision"
 const AgentActionSchemaName = "bluecollar_agent_turn_action"
 
 type LLMCallRecord struct {
@@ -46,22 +48,44 @@ type LLMCallRecord struct {
 	DiagnosticToolName     string                                   `json:"diagnosticToolName,omitempty"`
 	DiagnosticIssues       []model.StructuredOutputValidationIssue  `json:"diagnosticIssues,omitempty"`
 	DiagnosticRepairStatus model.StructuredOutputRepairStatus       `json:"diagnosticRepairStatus,omitempty"`
+	DecisionAnswers        map[string]model.DecisionAnswer          `json:"decisionAnswers,omitempty"`
+	DecisionDraws          map[string]float64                       `json:"decisionDraws,omitempty"`
+	DecidedMessageCount    int                                      `json:"decidedMessageCount,omitempty"`
+	QuestionCount          int                                      `json:"questionCount,omitempty"`
+	AttachmentsDescribed   bool                                     `json:"attachmentsDescribed"`
+	AttachmentDescriptions []string                                 `json:"attachmentDescriptions,omitempty"`
 }
 
 type LLMCallObserver func(record LLMCallRecord)
 
-type TurnRouterCallLedger struct {
+// IntakeCallLedger keeps every model call intake makes about one inbound
+// message: the decision call, the words-only router call, and the vision call
+// that describes an attachment nothing else can read. Keeping only the router
+// left the classifiers unmeasured, so nothing said what judging a message cost.
+type IntakeCallLedger struct {
 	Records []LLMCallRecord
 }
 
-func (ledger *TurnRouterCallLedger) Observe(record LLMCallRecord) {
-	if record.SchemaName != TurnRouterSchemaName {
+func (ledger *IntakeCallLedger) Observe(record LLMCallRecord) {
+	if !isIntakeCallRecord(record) {
 		return
 	}
 	ledger.Records = append(ledger.Records, record)
 }
 
-func (ledger *TurnRouterCallLedger) LanguageModel(provider model.LanguageModelProvider) model.LanguageModelProvider {
+func isIntakeCallRecord(record LLMCallRecord) bool {
+	if record.Kind == LLMCallKindDecision {
+		return true
+	}
+	switch record.SchemaName {
+	case TurnRouterSchemaName, AttachmentDescriptionSchemaName:
+		return true
+	default:
+		return false
+	}
+}
+
+func (ledger *IntakeCallLedger) LanguageModel(provider model.LanguageModelProvider) model.LanguageModelProvider {
 	return ObserveLanguageModel(provider, ledger.Observe)
 }
 

@@ -35,8 +35,8 @@ func TestObserveLanguageModelRecordsStructuredCalls(t *testing.T) {
 	}
 }
 
-func TestTurnRouterCallLedgerPreservesMissingModelTier(t *testing.T) {
-	ledger := &TurnRouterCallLedger{}
+func TestIntakeCallLedgerPreservesMissingModelTier(t *testing.T) {
+	ledger := &IntakeCallLedger{}
 	ledger.Observe(LLMCallRecord{SchemaName: TurnRouterSchemaName})
 
 	if len(ledger.Records) != 1 || ledger.Records[0].IsError || ledger.Records[0].ModelTier != "" {

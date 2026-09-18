@@ -1,7 +1,5 @@
 package agentcontract
 
-import "time"
-
 type AddressingTarget string
 
 const (
@@ -12,18 +10,6 @@ const (
 	AddressingTargetUnclear AddressingTarget = "unclear"
 )
 
-type AddressingClassificationRequest struct {
-	Prompt           string
-	BotMentioned     bool
-	MessageSentAt    time.Time
-	ConversationType string
-	SenderName       string
-	SenderHandle     string
-	VisibleContext   VisibleContext
-	AgentIdentity    AgentIdentity
-	Company          CompanyContext
-}
-
 type AddressingDecision struct {
 	Target         AddressingTarget
 	ShouldRespond  bool
@@ -31,10 +17,4 @@ type AddressingDecision struct {
 	DutyMatch      bool
 	DutyName       string
 	DutyConfidence float64
-}
-
-type ActiveTaskFollowUpClassificationRequest struct {
-	ActiveTaskPrompt string
-	ActiveTaskStatus string
-	LatestMessage    string
 }

@@ -70,7 +70,7 @@ func (harness *Harness) Plan(context.Context, agentcontract.AgentRequest) (agent
 	return harness.TurnDecision, nil
 }
 
-func (harness *Harness) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.TurnRouterCallLedger) (agentcontract.TurnDecision, error) {
+func (harness *Harness) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
 	return harness.TurnDecision, nil
 }
 
@@ -82,13 +82,20 @@ func (harness *Harness) GenerateReplyWithContext(context.Context, string, agentc
 	return harness.Reply, nil
 }
 
-func (harness *Harness) ClassifyAddressing(context.Context, agentcontract.AddressingClassificationRequest) (agentcontract.AddressingDecision, error) {
+func (harness *Harness) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
 	harness.classifyAddressingCallCount++
-	return harness.AddressingDecision, nil
-}
-
-func (harness *Harness) ClassifyActiveTaskFollowUp(context.Context, agentcontract.ActiveTaskFollowUpClassificationRequest) (bool, error) {
-	return harness.IsActiveTaskFollowUp, nil
+	decisions := agentcontract.IntakeDecisions{}
+	for _, message := range request.Messages {
+		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
+			MessageID:              message.MessageID,
+			Addressing:             harness.AddressingDecision,
+			RelatesToActiveTask:    harness.IsActiveTaskFollowUp,
+			HasRelatesToActiveTask: true,
+			TurnFields:             harness.TurnDecision,
+			Attachments:            message.Attachments,
+		})
+	}
+	return decisions, nil
 }
 
 func (harness *Harness) LastTurnRequest() agentcontract.AgentTurnRequest {

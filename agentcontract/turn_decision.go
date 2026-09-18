@@ -109,6 +109,27 @@ type TurnDecision struct {
 	BusyInstruction        string                `json:"busyInstruction,omitempty"`
 }
 
+// TurnWords is everything about a turn a chat model still writes once the
+// decision model has settled the closed fields.
+type TurnWords struct {
+	Reason                string                `json:"reason"`
+	UserFacingReply       string                `json:"userFacingReply"`
+	ClarificationQuestion string                `json:"clarificationQuestion"`
+	ClarificationOptions  []ClarificationOption `json:"clarificationOptions"`
+	BusyInstruction       string                `json:"busyInstruction"`
+	ExpectedResults       []ExpectedResult      `json:"expectedResults"`
+}
+
+func (turnDecision TurnDecision) WithTurnWords(turnWords TurnWords) TurnDecision {
+	turnDecision.Reason = turnWords.Reason
+	turnDecision.UserFacingReply = turnWords.UserFacingReply
+	turnDecision.ClarificationQuestion = turnWords.ClarificationQuestion
+	turnDecision.ClarificationOptions = turnWords.ClarificationOptions
+	turnDecision.BusyInstruction = turnWords.BusyInstruction
+	turnDecision.ExpectedResults = turnWords.ExpectedResults
+	return turnDecision
+}
+
 func (turnDecision TurnDecision) IntakeDecision() IntakeDecision {
 	return IntakeDecision{
 		Classification:         turnDecision.Classification,
