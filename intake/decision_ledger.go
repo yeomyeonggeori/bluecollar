@@ -64,7 +64,14 @@ func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers m
 	if selectionError != nil {
 		return nil
 	}
-	record := agentcontract.ToolSelectionRecord{ProbabilityThreshold: likelyToolProbabilityThreshold, CountLimit: likelyToolCountLimit, Probabilities: map[string]float64{}}
+	record := agentcontract.ToolSelectionRecord{
+		ProbabilityThreshold:    likelyToolProbabilityThreshold,
+		CountLimit:              likelyToolCountLimit,
+		CandidateCount:          len(plan.candidateToolNames),
+		BatchByteCounts:         batchByteCounts(plan.requests),
+		ClippedDescriptionCount: plan.clippedDescriptionCount,
+		Probabilities:           map[string]float64{},
+	}
 	for _, messageKey := range messageKeys {
 		reader := answerReader{answers: answers, messageKey: messageKey}
 		probabilityByToolName, errorValue := reader.toolProbabilities(plan.candidateToolNames)

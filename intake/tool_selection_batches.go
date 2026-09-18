@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"math"
 	"sort"
+
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 type toolSelectionRun struct {
@@ -160,4 +162,12 @@ func toolNamesOf(tools []decisionTool) []string {
 		toolNames = append(toolNames, tool.Name)
 	}
 	return toolNames
+}
+
+func batchByteCounts(requests []model.DecisionRequest) []int {
+	byteCounts := make([]int, 0, len(requests))
+	for _, request := range requests {
+		byteCounts = append(byteCounts, decisionRequestByteCount(request))
+	}
+	return byteCounts
 }

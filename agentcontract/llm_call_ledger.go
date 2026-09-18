@@ -58,10 +58,13 @@ type LLMCallRecord struct {
 }
 
 type ToolSelectionRecord struct {
-	ProbabilityThreshold float64            `json:"probabilityThreshold"`
-	CountLimit           int                `json:"countLimit"`
-	Probabilities        map[string]float64 `json:"probabilities,omitempty"`
-	SelectedToolNames    []string           `json:"selectedToolNames,omitempty"`
+	ProbabilityThreshold    float64            `json:"probabilityThreshold"`
+	CountLimit              int                `json:"countLimit"`
+	CandidateCount          int                `json:"candidateCount"`
+	BatchByteCounts         []int              `json:"batchByteCounts,omitempty"`
+	ClippedDescriptionCount int                `json:"clippedDescriptionCount,omitempty"`
+	Probabilities           map[string]float64 `json:"probabilities,omitempty"`
+	SelectedToolNames       []string           `json:"selectedToolNames,omitempty"`
 }
 
 type LLMCallObserver func(record LLMCallRecord)
