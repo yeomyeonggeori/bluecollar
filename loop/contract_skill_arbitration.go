@@ -251,6 +251,9 @@ func contractSkillArbitrationMessages(request AgentRequest, candidates []SkillIn
 	if contextDescription := buildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
 	}
+	if scheduledRunDescription := scheduledRunDescriptionForPrompt(request.ScheduledRun); scheduledRunDescription != "" {
+		messages = append(messages, model.Message{Role: "system", Content: scheduledRunDescription})
+	}
 	messages = append(messages, model.Message{
 		Role:    "system",
 		Content: "Candidate skills: " + contractSkillCandidateCardsJSON(candidates, candidateByName),

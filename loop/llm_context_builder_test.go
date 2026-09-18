@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
@@ -289,5 +290,33 @@ func TestARequestWithNoGoalIsStillLabelled(t *testing.T) {
 
 	if !strings.Contains(context, "Original user request:") {
 		t.Fatalf("with no goal carrying it this is the only labelled copy: %s", context)
+	}
+}
+
+func TestTheChatModelIsToldTheScheduledInstructionIsTheWorkNow(t *testing.T) {
+	taskContext := (LLMContextBuilder{}).taskContext(LLMContextInput{
+		UserPrompt: "매일 이 시간에 주간 보고 알림을 보내줘.",
+		ScheduledRun: ScheduledRunContext{
+			ScheduleID:   "schedule-1",
+			Name:         "주간 보고 알림",
+			Kind:         "cron",
+			Cadence:      "매일 22:08",
+			OccurrenceAt: "2026-09-18T22:08:00Z",
+		},
+	})
+
+	if occurrences := strings.Count(taskContext, agentcontract.ScheduledRunReading); occurrences != 1 {
+		t.Fatalf("expected the reading of a firing exactly once, got %d in %s", occurrences, taskContext)
+	}
+	if !strings.Contains(taskContext, "Scheduled task instruction:") {
+		t.Fatalf("expected the scheduled instruction label to survive: %s", taskContext)
+	}
+}
+
+func TestNothingAboutAFiringReachesAnOrdinaryTurn(t *testing.T) {
+	taskContext := (LLMContextBuilder{}).taskContext(LLMContextInput{UserPrompt: "주간 보고 알림 보내줘"})
+
+	if strings.Contains(taskContext, agentcontract.ScheduledRunReading) {
+		t.Fatalf("expected nothing about a firing without one: %s", taskContext)
 	}
 }

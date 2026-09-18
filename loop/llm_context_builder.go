@@ -295,10 +295,7 @@ func (builder LLMContextBuilder) userPromptContext(scheduledRun ScheduledRunCont
 }
 
 func (builder LLMContextBuilder) scheduledRunContext(scheduledRun ScheduledRunContext) string {
-	if scheduledRun.IsEmpty() {
-		return ""
-	}
-	return "Scheduled run:\n" + marshalEventBody(scheduledRun)
+	return scheduledRunDescriptionForPrompt(scheduledRun)
 }
 
 func (builder LLMContextBuilder) activeTaskContext(activeTask ActiveTaskContext) string {

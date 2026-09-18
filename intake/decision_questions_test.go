@@ -209,6 +209,9 @@ func TestEveryQuestionAboutAFiringSaysItIsTheWorkNow(t *testing.T) {
 		t.Fatal("expected the firing request to be asked about")
 	}
 	firingPreamble := newQuestionBuilder(firingRequest).about("m1")
+	if !strings.Contains(firingPreamble, agentcontract.ScheduledRunReading) {
+		t.Fatalf("expected the shared reading of a firing in the preamble, got %q", firingPreamble)
+	}
 	for questionName, question := range firingQuestions {
 		if !strings.HasPrefix(question.Instructions, firingPreamble) {
 			t.Fatalf("expected %s to open with the firing preamble, got %q", questionName, question.Instructions)

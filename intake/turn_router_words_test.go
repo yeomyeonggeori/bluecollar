@@ -7,6 +7,7 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
+	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
 func enabledIntakeOptions() agentcontract.IntakeOptions {
@@ -193,6 +194,47 @@ func TestTurnRouterUsesDecidedFieldsCarriedOnTheRequest(t *testing.T) {
 	}
 	if len(decisionModel.Requests()) != 0 {
 		t.Fatalf("expected no second decision call when the burst already decided, got %d", len(decisionModel.Requests()))
+	}
+}
+
+func systemMessagesAboutAFiring(messages []model.Message) []string {
+	firingMessages := []string{}
+	for _, message := range messages {
+		if message.Role == "system" && strings.Contains(message.Content, agentcontract.ScheduledRunReading) {
+			firingMessages = append(firingMessages, message.Content)
+		}
+	}
+	return firingMessages
+}
+
+func TestTheWordsCallIsToldTheMessageIsAFiring(t *testing.T) {
+	request := agentcontract.AgentRequest{
+		Prompt:           "매일 이 시간에 주간 보고 알림을 보내줘.",
+		ResponseLanguage: "ko",
+		ScheduledRun: agentcontract.ScheduledRunContext{
+			ScheduleID:   "schedule-1",
+			Name:         "주간 보고 알림",
+			Kind:         "cron",
+			Cadence:      "매일 22:08",
+			OccurrenceAt: "2026-09-18T22:08:00Z",
+		},
+	}
+
+	firingMessages := systemMessagesAboutAFiring(TurnRouter{}.buildWordsMessages(request, startTaskOutcome().TurnDecision, "system prompt"))
+	if len(firingMessages) != 1 {
+		t.Fatalf("expected exactly one system message about the firing, got %d", len(firingMessages))
+	}
+	if !strings.Contains(firingMessages[0], "schedule-1") {
+		t.Fatalf("expected the firing message to carry the schedule, got %q", firingMessages[0])
+	}
+}
+
+func TestTheWordsCallSaysNothingAboutAFiringWithoutOne(t *testing.T) {
+	request := agentcontract.AgentRequest{Prompt: "주간 보고 알림 보내줘", ResponseLanguage: "ko"}
+
+	firingMessages := systemMessagesAboutAFiring(TurnRouter{}.buildWordsMessages(request, startTaskOutcome().TurnDecision, "system prompt"))
+	if len(firingMessages) != 0 {
+		t.Fatalf("expected no system message about a firing, got %d", len(firingMessages))
 	}
 }
 

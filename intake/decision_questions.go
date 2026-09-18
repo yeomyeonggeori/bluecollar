@@ -78,8 +78,7 @@ func (builder questionBuilder) asksFollowUp() bool {
 
 const plainMessagePreambleEnding = " in the state. "
 
-const firingMessagePreambleEnding = " in the state, which is the schedule in scheduledRun firing now: its text is the work to carry out at this moment, " +
-	"not a request to schedule, remind, or repeat anything; judge everything else about it as for any message. "
+const firingMessagePreambleEnding = " in the state, which is the schedule in scheduledRun firing now: " + agentcontract.ScheduledRunReading + " "
 
 func (builder questionBuilder) about(messageKey string) string {
 	return "About message " + messageKey + builder.messagePreambleEnding()

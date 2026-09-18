@@ -282,6 +282,9 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	if priorTaskDescription := agentcontract.PriorTaskContextDescription(request.PriorTask); priorTaskDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: priorTaskDescription})
 	}
+	if scheduledRunDescription := agentcontract.ScheduledRunDescriptionForPrompt(request.ScheduledRun); scheduledRunDescription != "" {
+		messages = append(messages, model.Message{Role: "system", Content: scheduledRunDescription})
+	}
 	if pendingDescription := turnWordsPendingDescription(request); pendingDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: pendingDescription})
 	}
