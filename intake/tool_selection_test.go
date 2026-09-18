@@ -99,7 +99,7 @@ func TestTheAlwaysExposedKernelToolsAreNeverAskedAbout(t *testing.T) {
 	request.ToolSet = newTestToolSet(append(toolcontract.KernelToolNames(), "task_add", "message_send"))
 	candidateToolNames := resolveCallableToolNames(request)
 
-	state := buildDecisionState(request, decisionToolDescriptions(request.ToolSet, candidateToolNames))
+	state := buildDecisionState(request, decisionToolDescriptions(request.ToolSet, candidateToolNames).tools)
 	questions := toolQuestionsFor(request, candidateToolNames)
 
 	for _, kernelToolName := range toolcontract.KernelToolNames() {
@@ -180,7 +180,7 @@ func TestTheToolGuidanceIsCarriedOnceByTheStateRatherThanByEachQuestion(t *testi
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
 	candidateToolNames := resolveCallableToolNames(request)
 
-	state := buildDecisionState(request, decisionToolDescriptions(request.ToolSet, candidateToolNames))
+	state := buildDecisionState(request, decisionToolDescriptions(request.ToolSet, candidateToolNames).tools)
 	if !strings.Contains(state.ToolGuidance, "at any point before the work is done") {
 		t.Fatalf("expected the state to ask about the whole job, got %q", state.ToolGuidance)
 	}

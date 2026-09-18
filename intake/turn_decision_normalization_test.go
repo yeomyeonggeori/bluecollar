@@ -411,7 +411,7 @@ func TestEveryReachableToolIsOfferedToTheDecision(t *testing.T) {
 			t.Fatalf("expected %s to be callable, got %v", toolName, callableToolNames)
 		}
 	}
-	descriptions := decisionToolDescriptions(toolSet, callableToolNames)
+	descriptions := decisionToolDescriptions(toolSet, callableToolNames).tools
 	if len(descriptions) != len(callableToolNames) {
 		t.Fatalf("expected one description per callable tool, got %+v", descriptions)
 	}

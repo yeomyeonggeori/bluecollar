@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -67,6 +68,8 @@ type decisionDuty struct {
 type decisionTool struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+
+	providerID string
 }
 
 type decisionActiveTask struct {
@@ -230,18 +233,44 @@ func decisionChoiceOptions(options []agentcontract.ChoiceReplyOption) []decision
 	return choiceOptions
 }
 
-func decisionToolDescriptions(toolSet *toolcontract.ToolSet, callableToolNames []string) []decisionTool {
+const selectionToolDescriptionByteLimit = 1000
+
+type describedDecisionTools struct {
+	tools                   []decisionTool
+	clippedDescriptionCount int
+}
+
+func decisionToolDescriptions(toolSet *toolcontract.ToolSet, callableToolNames []string) describedDecisionTools {
 	descriptionByName := map[string]string{}
+	providerByName := map[string]string{}
 	if toolSet != nil {
 		for _, toolDefinition := range toolSet.ListRegisteredToolDefinitions() {
-			descriptionByName[strings.TrimSpace(toolDefinition.Name)] = strings.TrimSpace(toolDefinition.Description)
+			toolName := strings.TrimSpace(toolDefinition.Name)
+			descriptionByName[toolName] = strings.TrimSpace(toolDefinition.Description)
+			providerByName[toolName] = strings.TrimSpace(toolDefinition.ProviderID)
 		}
 	}
-	tools := make([]decisionTool, 0, len(callableToolNames))
+	described := describedDecisionTools{tools: make([]decisionTool, 0, len(callableToolNames))}
 	for _, toolName := range callableToolNames {
-		tools = append(tools, decisionTool{Name: toolName, Description: descriptionByName[toolName]})
+		description := descriptionByName[toolName]
+		clippedDescription := clipToolDescription(description)
+		if clippedDescription != description {
+			described.clippedDescriptionCount++
+		}
+		described.tools = append(described.tools, decisionTool{Name: toolName, Description: clippedDescription, providerID: providerByName[toolName]})
 	}
-	return tools
+	return described
+}
+
+func clipToolDescription(description string) string {
+	if len(description) <= selectionToolDescriptionByteLimit {
+		return description
+	}
+	clippedDescription := description[:selectionToolDescriptionByteLimit]
+	for len(clippedDescription) > 0 && !utf8.ValidString(clippedDescription) {
+		clippedDescription = clippedDescription[:len(clippedDescription)-1]
+	}
+	return clippedDescription
 }
 
 func decisionMessageKey(index int) string {

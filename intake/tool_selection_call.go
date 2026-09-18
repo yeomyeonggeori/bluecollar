@@ -91,7 +91,7 @@ func balancedToolNameParts(toolNames []string, partCount int) [][]string {
 
 func toolSelectionRequestPart(request agentcontract.IntakeDecisionRequest, messageKeys []string, toolNames []string) model.DecisionRequest {
 	return model.DecisionRequest{
-		State:     buildDecisionState(request, decisionToolDescriptions(request.ToolSet, toolNames)),
+		State:     buildDecisionState(request, decisionToolDescriptions(request.ToolSet, toolNames).tools),
 		Questions: newQuestionBuilder(request).toolQuestions(messageKeys, toolNames),
 	}
 }
