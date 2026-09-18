@@ -235,15 +235,21 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 		return agentcontract.TurnDecision{}, errorValue
 	}
 	turnFields := agentcontract.TurnDecision{
-		Route:                  agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute]),
-		Classification:         agentcontract.IntakeClassification(choices[agentcontract.IntakeQuestionClassification]),
-		TaskShape:              agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
-		TaskLevel:              agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
-		DeliverableKind:        agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
-		ResponseLanguage:       choices[agentcontract.IntakeQuestionResponseLanguage],
-		PriorTaskReference:     agentcontract.PriorTaskReference(choices[agentcontract.IntakeQuestionPriorTaskReference]),
-		RequestedOutputFormats: reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, agentcontract.RequestedOutputFormatNames),
-		InitialToolNames:       reader.yesMembers(agentcontract.IntakeQuestionPrefixTool, resolveCallableToolNames(request)),
+		Route:              agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute]),
+		Classification:     agentcontract.IntakeClassification(choices[agentcontract.IntakeQuestionClassification]),
+		TaskShape:          agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
+		TaskLevel:          agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
+		DeliverableKind:    agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
+		ResponseLanguage:   choices[agentcontract.IntakeQuestionResponseLanguage],
+		PriorTaskReference: agentcontract.PriorTaskReference(choices[agentcontract.IntakeQuestionPriorTaskReference]),
+	}
+	turnFields.RequestedOutputFormats, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, agentcontract.RequestedOutputFormatNames)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
+	turnFields.InitialToolNames, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixTool, resolveCallableToolNames(request))
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
 	}
 	if approvalChoice, isAsked := choices[agentcontract.IntakeQuestionApproval]; isAsked {
 		approval := agentcontract.ApprovalSignal(approvalChoice)
@@ -266,7 +272,7 @@ func readChoiceSelections(request agentcontract.IntakeDecisionRequest, reader an
 		return nil, nil
 	}
 	if isMultipleChoiceSelection(request.PendingChoice) {
-		return reader.yesMembers(agentcontract.IntakeQuestionPrefixChoice, choiceKeys), nil
+		return reader.yesMembers(agentcontract.IntakeQuestionPrefixChoice, choiceKeys)
 	}
 	selectedKey, errorValue := reader.choice(agentcontract.IntakeQuestionChoice)
 	if errorValue != nil {
@@ -332,15 +338,19 @@ func (reader answerReader) noul(questionName string) (bool, error) {
 	return answer.IsYes(), nil
 }
 
-func (reader answerReader) yesMembers(questionPrefix string, memberNames []string) []string {
+func (reader answerReader) yesMembers(questionPrefix string, memberNames []string) ([]string, error) {
 	members := []string{}
 	for _, memberName := range memberNames {
-		if reader.answer(questionPrefix + memberName).IsYes() {
+		isMember, errorValue := reader.noul(questionPrefix + memberName)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		if isMember {
 			members = append(members, memberName)
 		}
 	}
 	if len(members) == 0 {
-		return nil
+		return nil, nil
 	}
-	return members
+	return members, nil
 }
