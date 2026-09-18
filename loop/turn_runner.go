@@ -48,7 +48,7 @@ type turnActionDocument struct {
 	GoalSatisfied         *bool                         `json:"goalSatisfied"`
 	HasRemainingWork      bool                          `json:"hasRemainingWork"`
 	CompletionEvidenceIDs []string                      `json:"completionEvidenceIDs"`
-	CompletionEvidence    []completionEvidenceReference `json:"completionEvidence"`
+	CompletionEvidence    []completionEvidenceReference `json:"-"`
 	Instruction           string                        `json:"instruction,omitempty"`
 	ExpectedResult        string                        `json:"expectedResult,omitempty"`
 	QualityCriteria       []string                      `json:"qualityCriteria"`

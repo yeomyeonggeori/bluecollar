@@ -506,7 +506,7 @@ func TestExpectedResultCompletionGateSuggestsFileDelivery(t *testing.T) {
 func TestAgentTurnRunnerRejectsHtmlClaimBackedByMarkdownAttachment(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"DESIGN.md"}}`,
-		finishMessageWithEvidence("HTML 파일을 전달해 드립니다.", "obs-001", "file_deliver", 0),
+		finishMessageCiting("HTML 파일을 전달해 드립니다.", "obs-001"),
 		`{"action":"fail","reason":"html attachment missing"}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
@@ -544,7 +544,7 @@ func TestAgentTurnRunnerRejectsHtmlClaimBackedByMarkdownAttachment(t *testing.T)
 func TestAgentTurnRunnerAcceptsHtmlRequestWithHtmlAttachment(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"deck.html"}}`,
-		finishMessageWithEvidence("HTML 파일을 전달해 드립니다.", "obs-001", "file_deliver", 0),
+		finishMessageCiting("HTML 파일을 전달해 드립니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -610,7 +610,7 @@ func TestAgentTurnRunnerRequiresToolEvidenceBeforeFinishMessage(t *testing.T) {
 		`{"action":"continue","toolName":"memory_search","toolInput":{}}`,
 		finishMessageDocument("still no screenshot"),
 		`{"action":"continue","toolName":"browser_screenshot","toolInput":{}}`,
-		finishMessageWithEvidence("observed", "obs-004", "browser_screenshot", 0),
+		finishMessageCiting("observed", "obs-004"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestCapabilityToolSet([]string{"browser_screenshot", "memory_search"})
@@ -660,7 +660,7 @@ func TestAgentTurnRunnerRequiresSelectedSkillEvidenceBeforeFinishMessage(t *test
 	languageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("PPT 못 만들어요"),
 		`{"action":"continue","message":"PPTX를 첨부했습니다: deck.pptx","toolName":"file_deliver","toolInput":{"path":"deck.pptx"}}`,
-		finishMessageWithEvidence("PPTX를 첨부했습니다: deck.pptx", "obs-003", "file_deliver", 0),
+		finishMessageCiting("PPTX를 첨부했습니다: deck.pptx", "obs-003"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -703,7 +703,7 @@ func TestAgentTurnRunnerDoesNotRequireNonAttachmentToolInCompletionEvidence(t *t
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"deck.html"}}`,
-		finishMessageWithEvidence("HTML 파일을 첨부했습니다: deck.html", "obs-002", "file_deliver", 0),
+		finishMessageCiting("HTML 파일을 첨부했습니다: deck.html", "obs-002"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	toolRegistry := newTestToolSet([]string{"file_write", "file_deliver"})
@@ -743,9 +743,9 @@ func TestAgentTurnRunnerDoesNotRequireNonAttachmentToolInCompletionEvidence(t *t
 func TestAgentTurnRunnerRequiresAttachmentSuffixEvidence(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"DESIGN.md"}}`,
-		finishMessageWithEvidence("첨부했습니다.", "obs-001", "file_deliver", 0),
+		finishMessageCiting("첨부했습니다.", "obs-001"),
 		`{"action":"continue","message":"PPTX를 첨부했습니다: deck.pptx","toolName":"file_deliver","toolInput":{"path":"deck.pptx"}}`,
-		finishMessageWithEvidence("PPTX를 첨부했습니다: deck.pptx", "obs-004", "file_deliver", 0),
+		finishMessageCiting("PPTX를 첨부했습니다: deck.pptx", "obs-004"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -798,7 +798,7 @@ func TestAgentTurnRunnerAcceptsReadableFileAttachObservation(t *testing.T) {
 	writeAgentTestFile(t, filepath.Join(artifactDirectoryPath, "deck.html"), "<html><body>Hermes Agent 장단점 분석</body></html>")
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/deck/deck.html"}}`,
-		finishMessageWithEvidence("deck.html 파일을 첨부했습니다.", "obs-001", "file_deliver", 0),
+		finishMessageCiting("deck.html 파일을 첨부했습니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -847,7 +847,7 @@ func TestAgentTurnRunnerAutoAttachesRequiredWorkspaceArtifacts(t *testing.T) {
 	writeValidPDFTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pdf"))
 
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"finish","message":"자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"file_deliver","attachmentIndex":0},{"observationID":"obs-002","toolName":"file_deliver","attachmentIndex":0}],"qualityReview":[]}`,
+		`{"action":"finish","message":"자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001","obs-002"],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -905,7 +905,7 @@ func TestAgentTurnRunnerCompletesAfterRequiredArtifactsExist(t *testing.T) {
 	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","message":"자료를 완성했습니다.","toolName":"shell","toolInput":{"command":"build deck"}}`,
-		`{"action":"finish","message":"완성한 발표 자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-003","toolName":"file_deliver","attachmentIndex":0},{"observationID":"obs-004","toolName":"file_deliver","attachmentIndex":0}],"qualityReview":[]}`,
+		`{"action":"finish","message":"완성한 발표 자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003","obs-004"],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"shell", "file_deliver"})
@@ -1006,7 +1006,7 @@ func TestAgentTurnRunnerBlocksReadableArtifactWithWrongFormat(t *testing.T) {
 	writeAgentTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pptx"), "not a valid pptx")
 
 	languageModel := &sequenceLanguageModel{contents: []string{
-		finishMessageWithEvidence("자료를 첨부했습니다.", "obs-001", "file_deliver", 0),
+		finishMessageCiting("자료를 첨부했습니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -1095,7 +1095,7 @@ func TestAgentTurnRunnerAutoCompletionKeepsQualityOutOfCorePolicy(t *testing.T) 
 
 func TestAgentTurnRunnerRejectsUnsatisfiedFinishMessage(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"finish","message":"done","goalStatus":"in_progress","goalSatisfied":false,"completionEvidence":[]}`,
+		`{"action":"finish","message":"done","goalStatus":"in_progress","goalSatisfied":false,"completionEvidenceIDs":[]}`,
 		finishMessageDocument("now done"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
@@ -1125,7 +1125,7 @@ func TestAgentTurnRunnerRejectsUnsatisfiedFinishMessage(t *testing.T) {
 func TestAgentTurnRunnerRejectsCompletionEvidenceFromErrorObservation(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"unstable","toolInput":{}}`,
-		finishMessageWithEvidence("done", "obs-001", "unstable", 0),
+		finishMessageCiting("done", "obs-001"),
 		failureReportDocument("tool failed", "unstable", "{}", toolcontract.FailureCodes.OperationFailed.String(), "unstable", "failed"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{RecoveryBudget: exhaustedRecoveryBudgetForTest()})
@@ -1383,9 +1383,9 @@ func TestAgentTurnRunnerCanonicalLinkGateBlocksEarlyFinish(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"file_write","toolInput":{"path":"~/sites/portfolio/app/public/site-content.json","content":"{}"},"nextStepPlan":{"objective":"create draft","expectedTools":[],"expectedNextResults":["draft site project exists"],"doneCriteria":["draft exists"],"risk":"none","workingSetReason":"the draft prepares the project"}}`,
-			`{"action":"finish","message":"초안을 만들었습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"file_write"}]}`,
+			`{"action":"finish","message":"초안을 만들었습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 			`{"action":"continue","toolName":"site_serve","toolInput":{"title":"Portfolio","sourceWorkspacePath":"~/sites/portfolio","mode":"publish"},"nextStepPlan":{"objective":"finish after public URL","expectedTools":[],"expectedNextResults":["public URL exists"],"doneCriteria":["public URL exists"],"risk":"none","workingSetReason":"serve should satisfy the expected result"}}`,
-			`{"action":"finish","message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-003","toolName":"site_serve"}]}`,
+			`{"action":"finish","message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003"]}`,
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
@@ -1600,7 +1600,7 @@ func TestRejectedFinishWordingSurvivesAttachmentRepair(t *testing.T) {
 	finishMessage := "보고서 이름은 '고객지원 주간 운영 점검', 상태는 '검토 중', 담당은 '운영팀'입니다."
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_write","toolInput":{"path":"report.json","content":"{\"status\":\"ready\"}"}}`,
-		`{"action":"finish","message":"` + finishMessage + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"file_write"}]}`,
+		`{"action":"finish","message":"` + finishMessage + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"files":[{"path":"report.json"}]}}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
@@ -1771,7 +1771,7 @@ func TestAgentTurnRunnerExpectedResultsRequireTheirTypedToolEvidence(t *testing.
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1","message":"Publish"},"nextStepPlan":{"objective":"finish with public URL","expectedTools":[],"expectedNextResults":["public URL exists"],"doneCriteria":["public URL exists"],"risk":"none","workingSetReason":"publish should satisfy the expected result"}}`,
-			`{"action":"finish","message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"site_serve"}]}`,
+			`{"action":"finish","message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
@@ -1816,9 +1816,9 @@ func TestAgentTurnRunnerFileExpectedResultRequiresAttachment(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"file.promote","toolInput":{"path":"tmp/deck/build/deck.pptx","destinationDirectoryPath":"artifacts/deck","overwrite":true},"nextStepPlan":{"objective":"attach promoted file","expectedTools":["file_deliver"],"expectedNextResults":["attached pptx"],"doneCriteria":["file attached"],"risk":"none","workingSetReason":"file deliverable requires attachment"}}`,
-			`{"action":"finish","message":"PPTX를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-001","toolName":"file.promote"}]}`,
+			`{"action":"finish","message":"PPTX를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 			`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/deck/deck.pptx"},"nextStepPlan":{"objective":"finish","expectedTools":[],"expectedNextResults":["final message"],"doneCriteria":["attached file delivered"],"risk":"none","workingSetReason":"attachment now exists"}}`,
-			finishMessageWithEvidence("PPTX를 첨부했습니다.", "obs-003", "file_deliver", 0),
+			finishMessageCiting("PPTX를 첨부했습니다.", "obs-003"),
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
@@ -1871,7 +1871,7 @@ func TestAgentTurnRunnerFileExpectedResultRequiresAttachment(t *testing.T) {
 func TestAgentTurnRunnerFinalizesOneShotEvidenceToolAfterSuccess(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"calendar_add","toolInput":{"title":"휴가","startISO":"2026-05-10T00:00:00+09:00","endISO":"2026-05-13T00:00:00+09:00","timeZone":"Asia/Seoul","isAllDay":true}}`,
-		finishMessageWithEvidence("휴가 일정을 등록했습니다.", "obs-001", "calendar_add", 0),
+		finishMessageCiting("휴가 일정을 등록했습니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4, MaxToolCallCount: 4})
 	toolCallCount := 0
@@ -1912,7 +1912,7 @@ func TestAgentTurnRunnerFinalizesOneShotEvidenceToolAfterSuccess(t *testing.T) {
 func TestAgentTurnRunnerFinalizesScheduleCreateAfterSuccess(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"schedule_create","toolInput":{"taskInstruction":"현재 대화에 \"죄송합니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite","timeZone":"Asia/Seoul"}}`,
-		finishMessageWithEvidence("반복 일정을 만들었습니다.", "obs-001", "schedule_create", 0),
+		finishMessageCiting("반복 일정을 만들었습니다.", "obs-001"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4, MaxToolCallCount: 4})
 	toolCallCount := 0
@@ -2097,7 +2097,7 @@ func TestAgentTurnRunnerDoesNotBlockTerminalBeforeRequiredFileWrite(t *testing.T
 		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
 		`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
 		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
-		`{"action":"finish","message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidence":[{"observationID":"obs-002","toolName":"file_write"}]}`,
+		`{"action":"finish","message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5, MaxToolCallCount: 5})
 	terminalCallCount := 0

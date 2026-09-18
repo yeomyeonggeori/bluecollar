@@ -17,7 +17,7 @@ func TestAgentKernelPreservesScheduledIntakeRefusalAfterSkillSelection(t *testin
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"schedule_create","toolInput":{"taskInstruction":"현재 대화에 \"죄송합니다\"라고 보낸다.","kind":"interval","intervalSecond":60,"maxRunCount":10,"repeatPolicy":"finite","timeZone":"Asia/Seoul"}}`,
-		finishMessageWithEvidence("1분 간격으로 10번 보내도록 예약했습니다.", "obs-001", "schedule_create", 0),
+		finishMessageCiting("1분 간격으로 10번 보내도록 예약했습니다.", "obs-001"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	services.kernel.UseSkillRetriever(staticSkillRetriever{result: SkillRetrievalResult{SelectedCandidates: []SkillCandidate{{Name: "scheduled-task", Score: 1, Reason: "test"}}}})
@@ -55,7 +55,7 @@ func TestAgentKernelSelectsArtifactSkillOnceAfterRouting(t *testing.T) {
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/deck/deck.pptx"}}`,
-		finishMessageWithEvidence("deck.pptx 파일을 첨부했습니다.", "obs-001", "file_deliver", 0),
+		finishMessageCiting("deck.pptx 파일을 첨부했습니다.", "obs-001"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	skillRetriever := &countingSkillRetriever{result: SkillRetrievalResult{
@@ -170,7 +170,7 @@ func TestAgentKernelPreservesUnsupportedArtifactWithoutSelectedSkill(t *testing.
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/deck/deck.pptx"}}`,
-		finishMessageWithEvidence("deck.pptx 파일을 첨부했습니다.", "obs-001", "file_deliver", 0),
+		finishMessageCiting("deck.pptx 파일을 첨부했습니다.", "obs-001"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestToolSet([]string{"shell", "file_write", "file.promote", "file_deliver"})
@@ -211,7 +211,7 @@ func TestAgentKernelRecoversPriorTaskAttachmentContract(t *testing.T) {
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("기존 작업이 이미 완료되어 파일이 준비되었습니다."),
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/company-guide/company-guide.docx"}}`,
-		finishMessageWithEvidence("company-guide.docx 파일을 첨부했습니다.", "obs-002", "file_deliver", 0),
+		finishMessageCiting("company-guide.docx 파일을 첨부했습니다.", "obs-002"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -278,7 +278,7 @@ func TestAgentKernelRecoversLegacyPriorAttachmentContractFromIntakeOutput(t *tes
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("기존 작업이 이미 완료되어 파일이 준비되었습니다."),
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/company-guide/company-guide.docx"}}`,
-		finishMessageWithEvidence("company-guide.docx 파일을 첨부했습니다.", "obs-002", "file_deliver", 0),
+		finishMessageCiting("company-guide.docx 파일을 첨부했습니다.", "obs-002"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "file_write", "shell", "file.promote", "file_deliver"})
@@ -474,7 +474,7 @@ func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","message":"확인 중입니다.","toolName":"alpha","toolInput":{"value":"one"}}`,
-		finishMessageWithEvidence("done", "obs-002", "alpha", 0),
+		finishMessageCiting("done", "obs-002"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestCapabilityToolSet([]string{"alpha"})
@@ -525,7 +525,7 @@ func TestAgentKernelQuickReplyPromotesToolFailureToRecovery(t *testing.T) {
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"primary_lookup","toolInput":{"query":"hello"}}`,
 		`{"action":"continue","toolName":"backup_lookup","toolInput":{"query":"hello"}}`,
-		finishMessageWithEvidence("backup answer", "obs-003", "backup_lookup", 0),
+		finishMessageCiting("backup answer", "obs-003"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestCapabilityToolSet([]string{"primary_lookup", "backup_lookup"})
@@ -591,7 +591,7 @@ func TestAgentKernelQuickReplyCanUseInitialTool(t *testing.T) {
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"schedule_list","toolInput":{}}`,
-		finishMessageWithEvidence("오늘 등록된 일정은 없어요.", "obs-001", "schedule_list", 0),
+		finishMessageCiting("오늘 등록된 일정은 없어요.", "obs-001"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestCapabilityToolSet([]string{"schedule_list"})
@@ -670,7 +670,7 @@ func TestAgentKernelPreservesQuickReplyAfterSkillSelection(t *testing.T) {
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("deck created too early"),
 		`{"action":"continue","message":"deck attached: deck.pptx","toolName":"file_deliver","toolInput":{"path":"deck.pptx"}}`,
-		finishMessageWithEvidence("deck attached: deck.pptx", "obs-003", "file_deliver", 0),
+		finishMessageCiting("deck attached: deck.pptx", "obs-003"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	services.kernel.UseSkillRetriever(staticSkillRetriever{result: SkillRetrievalResult{SelectedCandidates: []SkillCandidate{{Name: "presentation", Score: 1, Reason: "test"}}}})
@@ -728,7 +728,7 @@ func TestAgentKernelUsesStructuredOutputFormatsForAttachmentRequirements(t *test
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"deck.html"}}`,
-		finishMessageWithEvidence("HTML 파일을 첨부했습니다: deck.html", "obs-001", "file_deliver", 0),
+		finishMessageCiting("HTML 파일을 첨부했습니다: deck.html", "obs-001"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	services.kernel.UseSkillRetriever(NewEmbeddingSkillRetriever(nil, ""))

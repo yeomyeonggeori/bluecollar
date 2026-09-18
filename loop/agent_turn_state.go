@@ -733,14 +733,10 @@ func normalizeParsedAction(actionDocument turnActionDocument) turnActionDocument
 }
 
 func normalizeParsedEvidence(actionDocument turnActionDocument) turnActionDocument {
-	if len(actionDocument.CompletionEvidence) == 0 {
-		actionDocument.CompletionEvidence = evidenceReferencesFromIDs(actionDocument.CompletionEvidenceIDs)
-	}
+	actionDocument.CompletionEvidence = evidenceReferencesFromIDs(actionDocument.CompletionEvidenceIDs)
 	for index, item := range actionDocument.QualityReview {
-		if len(item.Evidence) == 0 {
-			item.Evidence = evidenceReferencesFromIDs(item.EvidenceIDs)
-			actionDocument.QualityReview[index] = item
-		}
+		item.Evidence = evidenceReferencesFromIDs(item.EvidenceIDs)
+		actionDocument.QualityReview[index] = item
 	}
 	return actionDocument
 }
