@@ -68,16 +68,30 @@ type decisionCall struct {
 	errorValue error
 }
 
+const maxConcurrentDecisionRequestCount = 4
+
 func (planner DecisionPlanner) decideEveryRequest(ctx context.Context, requests []model.DecisionRequest) []decisionCall {
+	callContext, cancelRemainingCalls := context.WithCancel(ctx)
+	defer cancelRemainingCalls()
 	calls := make([]decisionCall, len(requests))
+	requestSlots := make(chan struct{}, maxConcurrentDecisionRequestCount)
 	waitGroup := sync.WaitGroup{}
 	for index, request := range requests {
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
+			requestSlots <- struct{}{}
+			defer func() { <-requestSlots }()
+			if callContext.Err() != nil {
+				calls[index] = decisionCall{request: request, errorValue: callContext.Err()}
+				return
+			}
 			startedAt := time.Now()
-			response, errorValue := planner.decisionModel.Decide(ctx, request)
+			response, errorValue := planner.decisionModel.Decide(callContext, request)
 			calls[index] = decisionCall{request: request, response: response, latency: time.Since(startedAt), errorValue: errorValue}
+			if errorValue != nil {
+				cancelRemainingCalls()
+			}
 		}()
 	}
 	waitGroup.Wait()
