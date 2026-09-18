@@ -106,8 +106,8 @@ func namedAnswer(shortName string, question model.DecisionQuestion, outcome Outc
 		return noulAnswer(outcome.RelatesToActiveTask)
 	case agentcontract.IntakeQuestionRoute:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
-	case agentcontract.IntakeQuestionClassification:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.Classification), string(agentcontract.IntakeClassificationQuickReply)))
+	case agentcontract.IntakeQuestionNeedsTool:
+		return noulAnswer(outcome.TurnDecision.Classification == agentcontract.IntakeClassificationBoundedTask)
 	case agentcontract.IntakeQuestionTaskShape:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskShape), string(agentcontract.TaskShapeImmediateReply)))
 	case agentcontract.IntakeQuestionLevel:

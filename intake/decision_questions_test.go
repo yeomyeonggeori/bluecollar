@@ -35,10 +35,6 @@ func TestTheRouteQuestionReservesGiveUpForImpossibleWork(t *testing.T) {
 	if !strings.Contains(routeCriteria, "Never for a permission concern, which the operating system decides at execution") {
 		t.Fatalf("expected give_up to stay out of permission decisions, got %s", routeCriteria)
 	}
-	classificationCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionClassification])
-	if !strings.Contains(classificationCriteria, "pointless to even attempt") {
-		t.Fatalf("expected unsupported to be reserved for pointless work, got %s", classificationCriteria)
-	}
 }
 
 func TestEveryQuestionOptionIsAString(t *testing.T) {

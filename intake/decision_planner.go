@@ -298,7 +298,7 @@ func readAddressingDecision(reader answerReader, isReacting bool) (agentcontract
 }
 
 func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) (agentcontract.TurnDecision, error) {
-	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionClassification, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage}
+	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage}
 	if hasPriorTask(request) {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionPriorTaskReference)
 	}
@@ -312,9 +312,14 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
+	needsTool, errorValue := reader.noul(agentcontract.IntakeQuestionNeedsTool)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
+	route := agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute])
 	turnFields := agentcontract.TurnDecision{
-		Route:              agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute]),
-		Classification:     agentcontract.IntakeClassification(choices[agentcontract.IntakeQuestionClassification]),
+		Route:              route,
+		Classification:     classificationOf(route, needsTool),
 		TaskShape:          agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
 		TaskLevel:          agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
 		DeliverableKind:    agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),

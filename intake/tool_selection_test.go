@@ -421,7 +421,7 @@ func TestOnlyAMessageRoutedToWorkCostsAToolSelectionCall(t *testing.T) {
 	}{
 		{name: "start_task", route: agentcontract.TurnRouteStartTask, classification: agentcontract.IntakeClassificationBoundedTask, expectedCallCount: 2},
 		{name: "continue_task", route: agentcontract.TurnRouteContinueTask, classification: agentcontract.IntakeClassificationBoundedTask, expectedCallCount: 2},
-		{name: "bounded task routed to clarify", route: agentcontract.TurnRouteClarify, classification: agentcontract.IntakeClassificationBoundedTask, expectedCallCount: 2},
+		{name: "an answer that needs a tool", route: agentcontract.TurnRouteAnswerQuestion, classification: agentcontract.IntakeClassificationBoundedTask, expectedCallCount: 2},
 		{name: "answer_question", route: agentcontract.TurnRouteAnswerQuestion, classification: agentcontract.IntakeClassificationQuickReply, expectedCallCount: 1},
 		{name: "clarify", route: agentcontract.TurnRouteClarify, classification: agentcontract.IntakeClassificationNeedsConfirmation, expectedCallCount: 1},
 		{name: "consume", route: agentcontract.TurnRouteConsume, classification: agentcontract.IntakeClassificationQuickReply, expectedCallCount: 1},

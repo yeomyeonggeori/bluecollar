@@ -124,10 +124,23 @@ func canonicalizeTurnDecision(decision agentcontract.TurnDecision) agentcontract
 
 func executableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
 	switch route {
-	case agentcontract.TurnRouteConsume, agentcontract.TurnRouteClarify, agentcontract.TurnRouteGiveUp:
-		return agentcontract.TurnRouteStartTask
-	default:
+	case agentcontract.TurnRouteContinueTask, agentcontract.TurnRouteReviseTask:
 		return route
+	default:
+		return agentcontract.TurnRouteStartTask
+	}
+}
+
+func classificationOf(route agentcontract.TurnRoute, needsTool bool) agentcontract.IntakeClassification {
+	switch {
+	case route == agentcontract.TurnRouteClarify:
+		return agentcontract.IntakeClassificationNeedsConfirmation
+	case route == agentcontract.TurnRouteGiveUp:
+		return agentcontract.IntakeClassificationUnsupported
+	case needsTool:
+		return agentcontract.IntakeClassificationBoundedTask
+	default:
+		return agentcontract.IntakeClassificationQuickReply
 	}
 }
 

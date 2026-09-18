@@ -171,7 +171,7 @@ func (builder questionBuilder) relatesToActiveTaskQuestion(messageKey string) mo
 func (builder questionBuilder) routerQuestions(messageKey string) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{
 		agentcontract.IntakeQuestionRoute:            builder.routeQuestion(messageKey),
-		agentcontract.IntakeQuestionClassification:   builder.classificationQuestion(messageKey),
+		agentcontract.IntakeQuestionNeedsTool:        builder.needsToolQuestion(messageKey),
 		agentcontract.IntakeQuestionTaskShape:        builder.taskShapeQuestion(messageKey),
 		agentcontract.IntakeQuestionLevel:            builder.levelQuestion(messageKey),
 		agentcontract.IntakeQuestionDeliverableKind:  builder.deliverableKindQuestion(messageKey),
@@ -219,7 +219,7 @@ func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQu
 		Instructions: about(messageKey) + "What should " + agentName + " do about it? The latest message is authoritative; earlier context only helps read it. When scheduledRun is in the state the message is a run of that schedule firing, and when activeGoal is in the state the message is input to that goal unless it plainly starts something unrelated.",
 		OptionDescriptions: optionDescriptions(agentcontract.TurnRouteNames, map[string]string{
 			string(agentcontract.TurnRouteConsume):        "nothing to say: an addressed message that needs no text reply, acknowledged with an emoji. Never consume a message that asks " + agentName + " to do, check, read, verify, or report anything",
-			string(agentcontract.TurnRouteAnswerQuestion): "answer in words right now, from common knowledge, judgment, or what is visible, possibly after one small read-only tool call",
+			string(agentcontract.TurnRouteAnswerQuestion): "answer in words right now, from common knowledge, judgment, or what is visible",
 			string(agentcontract.TurnRouteAnswerMeta):     "answer a question about " + agentName + " itself: what it can do, how it works, what it is",
 			string(agentcontract.TurnRouteClarify):        "ask one clarifying question first, because an essential choice only the sender can make is missing. Not for a bare mention when the visible context gives a clear topic, and never to ask for approval",
 			string(agentcontract.TurnRouteStartTask):      "start work that takes tools and time",
@@ -230,15 +230,11 @@ func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQu
 	}.Question()
 }
 
-func (builder questionBuilder) classificationQuestion(messageKey string) model.DecisionQuestion {
-	return model.ChoiceQuestion{
-		Instructions: about(messageKey) + "What kind of turn is it?",
-		OptionDescriptions: optionDescriptions(agentcontract.IntakeClassificationNames, map[string]string{
-			string(agentcontract.IntakeClassificationQuickReply):        "answerable in words now, with at most one small read-only or computation tool: greetings, jokes, office banter, capability questions, arithmetic, opinions, casual recommendations, brainstorming, and anything available from common knowledge or the visible conversation",
-			string(agentcontract.IntakeClassificationBoundedTask):       "executable tool work with a clear outcome",
-			string(agentcontract.IntakeClassificationNeedsConfirmation): "essential input only the sender can supply is missing. Approval for risky, destructive, paid, or externally visible work is handled after routing and is never this",
-			string(agentcontract.IntakeClassificationUnsupported):       "pointless to even attempt",
-		}),
+func (builder questionBuilder) needsToolQuestion(messageKey string) model.DecisionQuestion {
+	return model.NoulQuestion{
+		Instructions:     about(messageKey) + "Does doing what it asks require calling any tool at all?",
+		TrueDescription:  "it cannot be done without reading or changing company records, tasks, files, messages, calendars or the web, without arranging something to happen later, or without running something",
+		FalseDescription: "words from common knowledge, judgment, or the visible conversation are enough. A message that merely mentions work is not a reason to call a tool",
 	}.Question()
 }
 
