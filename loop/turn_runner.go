@@ -40,11 +40,9 @@ type turnActionDocument struct {
 	AssistantText         string                        `json:"assistantText,omitempty"`
 	ModelReasoning        string                        `json:"modelReasoning,omitempty"`
 	ModelReasoningField   string                        `json:"modelReasoningField,omitempty"`
-	CompletionSummary     string                        `json:"completionSummary,omitempty"`
 	ToolName              string                        `json:"toolName"`
 	ToolInput             json.RawMessage               `json:"toolInput"`
 	Reason                string                        `json:"reason"`
-	Reply                 string                        `json:"reply"`
 	FailureResolution     string                        `json:"failureResolution"`
 	GoalStatus            string                        `json:"goalStatus"`
 	GoalSatisfied         *bool                         `json:"goalSatisfied"`
@@ -1041,7 +1039,7 @@ func toolObservationMessage(observation turnObservation) string {
 }
 
 func finishActionMessage(actionDocument turnActionDocument) string {
-	return firstNonEmptyString(actionDocument.Message, actionDocument.Reply)
+	return strings.TrimSpace(actionDocument.Message)
 }
 
 func approvalObservationUserFacingMessage(observation turnObservation) string {
