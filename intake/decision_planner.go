@@ -23,6 +23,7 @@ type DecisionPlanner struct {
 	decisionModel       model.DecisionModel
 	attachmentDescriber AttachmentDescriber
 	randomSource        func() float64
+	callCost            modelCallCost
 }
 
 var ErrDecisionModelUnavailable = errors.New("intake decision model unavailable")
@@ -31,7 +32,7 @@ func NewDecisionPlanner(decisionModel model.DecisionModel, attachmentDescriber A
 	if randomSource == nil {
 		randomSource = rand.Float64
 	}
-	return DecisionPlanner{decisionModel: decisionModel, attachmentDescriber: attachmentDescriber, randomSource: randomSource}
+	return DecisionPlanner{decisionModel: decisionModel, attachmentDescriber: attachmentDescriber, randomSource: randomSource, callCost: newModelCallCost()}
 }
 
 func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
@@ -65,6 +66,7 @@ type decisionCall struct {
 	request    model.DecisionRequest
 	response   model.DecisionResponse
 	latency    time.Duration
+	wasCut     bool
 	errorValue error
 }
 
@@ -87,8 +89,8 @@ func (planner DecisionPlanner) decideEveryRequest(ctx context.Context, requests 
 				return
 			}
 			startedAt := time.Now()
-			response, errorValue := planner.decisionModel.Decide(callContext, request)
-			calls[index] = decisionCall{request: request, response: response, latency: time.Since(startedAt), errorValue: errorValue}
+			response, wasCut, errorValue := planner.decidePatiently(callContext, request)
+			calls[index] = decisionCall{request: request, response: response, latency: time.Since(startedAt), wasCut: wasCut, errorValue: errorValue}
 			if errorValue != nil {
 				cancelRemainingCalls()
 			}
@@ -96,6 +98,18 @@ func (planner DecisionPlanner) decideEveryRequest(ctx context.Context, requests 
 	}
 	waitGroup.Wait()
 	return calls
+}
+
+func (planner DecisionPlanner) decidePatiently(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, bool, error) {
+	return askPatiently(ctx, planner.callCost, func(callContext context.Context) (model.DecisionResponse, error) {
+		startedAt := time.Now()
+		response, errorValue := planner.decisionModel.Decide(callContext, request)
+		if errorValue != nil {
+			return model.DecisionResponse{}, errorValue
+		}
+		planner.callCost.record(response.ModelName, time.Since(startedAt))
+		return response, nil
+	})
 }
 
 func firstCallError(calls []decisionCall) error {
