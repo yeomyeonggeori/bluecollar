@@ -17,7 +17,7 @@ const (
 	FilePreviewToolName         = "file_preview"
 	ImageReadToolName           = "image_read"
 	ConversationHistoryToolName = "conversation_history"
-	PlanUpdateToolName          = "plan_update"
+	PlanToolName                = "plan"
 	RequestToolsToolName        = "request_tools"
 )
 
@@ -36,7 +36,7 @@ func KernelToolNames() []string {
 		FilePreviewToolName,
 		ImageReadToolName,
 		ConversationHistoryToolName,
-		PlanUpdateToolName,
+		PlanToolName,
 		RequestToolsToolName,
 	}
 }

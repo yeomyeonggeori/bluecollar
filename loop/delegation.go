@@ -131,5 +131,5 @@ func delegatedFailureText(childResult AgentTurnResult) string {
 	if reason := firstNonEmptyString(childResult.TaskRun.FailureReason, childResult.UserNotice, childResult.FinishMessage); reason != "" {
 		text += " It reported: " + strings.TrimSpace(reason)
 	}
-	return text + " Its work is not done, so finish it here or report what is missing."
+	return text + " Its work is not done, so close it here or report what is missing."
 }

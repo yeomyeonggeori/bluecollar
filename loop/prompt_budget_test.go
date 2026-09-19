@@ -80,7 +80,7 @@ func promptBudgetFixtures() map[string]agentTaskState {
 				TurnStartedAt:  turnStartedAt,
 				ConversationID: "conversation-1",
 				RequesterName:  "이샘플",
-				ToolSet:        newTestToolSet([]string{toolcontract.SkillSearchToolName, toolcontract.AskInputToolName, toolcontract.PlanUpdateToolName}),
+				ToolSet:        newTestToolSet([]string{toolcontract.SkillSearchToolName, toolcontract.AskInputToolName, toolcontract.PlanToolName}),
 				AvailableSkills: []SkillInstruction{
 					{Name: "calendar", ToolReferences: []string{"calendar_create", "calendar_list"}},
 					{Name: "direct-message", ToolReferences: []string{"message_send"}},

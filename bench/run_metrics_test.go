@@ -24,7 +24,7 @@ func twoTurnLedger() []agentcontract.TaskEvent {
 		taskEventAt(4, "tool.message_send.requested", `{"observationID":"obs-001"}`),
 		taskEventAt(5, "tool.message_send.result", `{"observationID":"obs-001","output":{"content":"sent"}}`),
 		taskEventAt(6, "llm.call", `{"schemaName":"bluecollar_agent_turn_action","model":"openai/gpt-5.6-luna","latencyMs":4000,"promptTokens":18000,"completionTokens":80,"totalTokens":18080,"costUSD":0.003}`),
-		taskEventAt(7, "agent.action", `{"action":"finish"}`),
+		taskEventAt(7, "agent.action", `{"action":"reply","final":true}`),
 		taskEventAt(10, "task.completed", "sent the summary"),
 	}
 }
@@ -63,7 +63,7 @@ func TestPromptBytesPerTurnSurvivesAServerThatMisreportsItsUsage(t *testing.T) {
 		taskEventAt(1, "llm.call", `{"promptBytes":40000,"promptTokens":3}`),
 		taskEventAt(2, "agent.action", `{"action":"continue"}`),
 		taskEventAt(3, "llm.call", `{"promptBytes":60000,"promptTokens":3}`),
-		taskEventAt(4, "agent.action", `{"action":"finish"}`),
+		taskEventAt(4, "agent.action", `{"action":"reply","final":true}`),
 	})
 
 	if metrics.PromptBytesPerTurn != 50000 {
@@ -141,7 +141,7 @@ func TestARowSaysWhichWindowItWasFittedInto(t *testing.T) {
 	ledger := []agentcontract.TaskEvent{
 		taskEventAt(0, "task.created", "count the likes"),
 		taskEventAt(1, "agent.conversation_budget", `{"contextWindowTokens":1048576,"windowWasDeclared":true,"compactionTriggerTokens":629145}`),
-		taskEventAt(2, "agent.action", `{"action":"finish"}`),
+		taskEventAt(2, "agent.action", `{"action":"reply","final":true}`),
 	}
 
 	metrics := MeasureTaskRun("run-1", ledger)

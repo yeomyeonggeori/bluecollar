@@ -15,10 +15,10 @@ var toolRepeatReminderRunLengths = []int{3, 5, 8}
 // past the chain. Only what the reminder quotes back is shortened.
 const toolRepeatArgumentsPreviewLimit = 500
 
-// Bookkeeping interleaved into a loop must not launder it: plan_update between two
+// Bookkeeping interleaved into a loop must not launder it: plan between two
 // identical searches still leaves two consecutive identical searches.
 func chainTransparentToolName(toolName string) bool {
-	return toolcontract.ToolNamesMatch(toolName, toolcontract.PlanUpdateToolName)
+	return toolcontract.ToolNamesMatch(toolName, toolcontract.PlanToolName)
 }
 
 func consecutiveIdenticalToolCallCount(observations []turnObservation, toolInputKey string) int {
@@ -57,7 +57,7 @@ func toolRepeatReminderMessage(toolName string, toolInputKey string, count int) 
 	return strings.Join([]string{
 		"Repeated call: " + strings.TrimSpace(toolName) + ", " + strconv.Itoa(count) + " times in a row with the same input.",
 		"Input: " + repeatedInputPreview(toolInputKey),
-		"Repeating it is not making progress. Do not call it with this input again — read the latest result and choose a different action, a different input, or finish if there is already enough to answer with.",
+		"Repeating it is not making progress. Do not call it with this input again — read the latest result and choose a different action, a different input, or a final reply if there is already enough to answer with.",
 	}, "\n")
 }
 
@@ -74,7 +74,7 @@ func repeatedInputPreview(toolInputKey string) string {
 }
 
 // Advisory only: the call already ran and its own result stands. Whether to retry
-// differently, gather more, or finish stays with the model.
+// differently, gather more, or close stays with the model.
 func toolRepeatReminderObservation(observations []turnObservation, observation turnObservation) (turnObservation, int, bool) {
 	if strings.TrimSpace(observation.ToolInputKey) == "" || chainTransparentToolName(observation.Tool) {
 		return turnObservation{}, 0, false

@@ -716,8 +716,8 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 	}
 
 	actionSchema := ActionSchemaForToolSet(afterNarrowing.ToolSet, false, nil, false)
-	if !strings.Contains(actionSchema, `"enum":["finish"]`) {
-		t.Fatalf("expected the finish action to remain available at the narrow_palette stage, got %s", actionSchema)
+	if !strings.Contains(actionSchema, `"enum":["reply"]`) {
+		t.Fatalf("expected the reply action to remain available at the narrow_palette stage, got %s", actionSchema)
 	}
 	if !strings.Contains(actionSchema, `"enum":["fail"]`) {
 		t.Fatalf("expected the fail action to remain available at the narrow_palette stage, got %s", actionSchema)

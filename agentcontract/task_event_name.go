@@ -64,6 +64,8 @@ const (
 	TaskEventAgentNoProgressLoopStopped            = "agent.no_progress_loop_stopped"
 	TaskEventAgentNonRetryableToolRefused          = "agent.non_retryable_tool_refused"
 	TaskEventAgentPlanNudged                       = "agent.plan.nudged"
+	TaskEventAgentReplyFailed                      = "agent.reply.failed"
+	TaskEventAgentReplySent                        = "agent.reply.sent"
 	TaskEventAgentPlanSized                        = "agent.plan.sized"
 	TaskEventAgentPlanUpdated                      = "agent.plan.updated"
 	TaskEventAgentQualityCriteria                  = "agent.quality_criteria"

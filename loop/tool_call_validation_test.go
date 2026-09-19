@@ -198,7 +198,7 @@ func TestAgentTurnRunnerRejectsMessageSendWithoutExternalSendIntent(t *testing.T
 	if result.FinishMessage != "stopping at the rest area is fine." {
 		t.Fatalf("expected final reply in current conversation, got %q", result.FinishMessage)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_intent_rejected", "finish.message") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_intent_rejected", "with a reply instead") {
 		t.Fatal("expected external send intent rejection event")
 	}
 }
@@ -256,7 +256,7 @@ func TestAgentTurnRunnerRejectsChannelSendWithoutExternalSendIntent(t *testing.T
 	if errorValue != nil {
 		t.Fatalf("expected turn to recover from rejected channel send: %v", errorValue)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_intent_rejected", "finish.message") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_intent_rejected", "with a reply instead") {
 		t.Fatal("expected external send intent rejection event for a channel target")
 	}
 }
@@ -940,7 +940,7 @@ func TestAnOrdinaryCommandIsNotAnAgentActionForMentioningOne(t *testing.T) {
 func TestAnAgentActionTypedAsTheWholeCommandIsStillRefused(t *testing.T) {
 	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
 
-	for _, command := range []string{"finish", "set_quality_criteria --strict"} {
+	for _, command := range []string{"reply", "set_quality_criteria --strict"} {
 		input, _ := json.Marshal(map[string]string{"command": command})
 		if validateTerminalToolInput(toolcontract.ShellToolName, input, toolSet) == nil {
 			t.Errorf("%q is an action the model meant to call directly, and no shell can run it", command)

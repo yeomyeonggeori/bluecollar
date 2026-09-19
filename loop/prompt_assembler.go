@@ -179,7 +179,7 @@ func inputImageContextMessage(inputParts []AgentPart) model.Message {
 	if len(message.Parts) == 0 {
 		return model.Message{}
 	}
-	message.Content = "Images the user's message came with. A claim the finish reply makes about one of these is judged against the image itself."
+	message.Content = "Images the user's message came with. A claim the final reply makes about one of these is judged against the image itself."
 	return message
 }
 

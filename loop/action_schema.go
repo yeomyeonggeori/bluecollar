@@ -28,20 +28,20 @@ func actionSchemaCitingEvidence(toolSet *toolcontract.ToolSet, citableEvidenceID
 
 func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
 	allowFail := true
-	allowFinish := true
+	allowReply := true
 	if len(terminalActionValues) > 0 {
 		allowFail = terminalActionValues[0]
 	}
 	if len(terminalActionValues) > 1 {
-		allowFinish = terminalActionValues[1]
+		allowReply = terminalActionValues[1]
 	}
 	allowDelegate := false
 	if len(terminalActionValues) > 2 {
 		allowDelegate = terminalActionValues[2]
 	}
 	var variants []any
-	if allowFinish {
-		variants = append(variants, finishActionSchema(hasFailureDebt, citableEvidenceIDs))
+	if allowReply {
+		variants = append(variants, replyActionSchema(hasFailureDebt, citableEvidenceIDs))
 	}
 	if allowFail {
 		variants = append(variants, failActionSchema(hasFailureDebt))
@@ -73,7 +73,7 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	return mustMarshalStructuredSchema(schema)
 }
 
-// nativeTerminalActionParameters extracts finish/fail/set_quality_criteria variants standalone, so only continue variants use this $defs block.
+// nativeTerminalActionParameters extracts reply/fail/set_quality_criteria variants standalone, so only continue variants use this $defs block.
 func actionSchemaSharedDefinitions() map[string]any {
 	return map[string]any{
 		"executionStateUpdate": executionStateSchema(),
@@ -84,16 +84,19 @@ func executionStateUpdateRefSchema() map[string]any {
 	return map[string]any{"$ref": "#/$defs/executionStateUpdate"}
 }
 
-func finishActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
+func replyActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
 	failureResolutionValues := []string{"none", "recovered_with_success", "no_tool_fallback"}
 	if hasFailureDebt {
 		failureResolutionValues = []string{"recovered_with_success", "no_tool_fallback"}
 	}
 	return closedObjectSchema(map[string]any{
-		"action":                enumStringSchema("finish"),
+		"action":                enumStringSchema("reply"),
 		"message":               stringSchema(),
+		"attachments":           replyAttachmentArraySchema(),
+		"expectsAnswer":         booleanSchema(),
+		"final":                 booleanSchema(),
 		"failureResolution":     enumValuesStringSchema(failureResolutionValues),
-		"goalStatus":            enumValuesStringSchema([]string{"satisfied"}),
+		"goalStatus":            enumValuesStringSchema([]string{"satisfied", "in_progress"}),
 		"goalSatisfied":         booleanSchema(),
 		"hasRemainingWork":      booleanSchema(),
 		"completionEvidenceIDs": completionEvidenceIDArraySchema(citableEvidenceIDs),
@@ -102,22 +105,12 @@ func finishActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[st
 	})
 }
 
-func agentPartArraySchema() map[string]any {
+func replyAttachmentArraySchema() map[string]any {
 	return map[string]any{
 		"type": "array",
 		"items": closedObjectSchema(map[string]any{
-			"type": enumValuesStringSchema([]string{"text", "image", "file"}),
-			"text": stringSchema(),
-			"image": closedObjectSchema(map[string]any{
-				"mimeType": stringSchema(),
-				"path":     stringSchema(),
-				"filename": stringSchema(),
-			}),
-			"file": closedObjectSchema(map[string]any{
-				"path":        stringSchema(),
-				"filename":    stringSchema(),
-				"contentType": stringSchema(),
-			}),
+			"path":     stringSchema(),
+			"filename": stringSchema(),
 		}),
 	}
 }
@@ -296,12 +289,13 @@ func failureReportFactsSchema() map[string]any {
 	})
 }
 
-// terminalActionUnifiedSchema is a flat closed object rather than a root-level oneOf of finish/fail branches; branch-specific requirements are enforced in Go instead of JSON schema required fields.
+// terminalActionUnifiedSchema is a flat closed object rather than a root-level oneOf of reply/fail branches; branch-specific requirements are enforced in Go instead of JSON schema required fields.
 func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
 	failureResolutionValues := []string{"none", failureResolutionRecoveredWithSuccess, failureResolutionNoToolFallback}
 	properties := map[string]any{
-		"action":                enumValuesStringSchema([]string{"finish", "fail"}),
+		"action":                enumValuesStringSchema([]string{"reply", "fail"}),
 		"message":               stringSchema(),
+		"final":                 booleanSchema(),
 		"reason":                stringSchema(),
 		"goalStatus":            enumValuesStringSchema([]string{"satisfied", "blocked"}),
 		"goalSatisfied":         booleanSchema(),

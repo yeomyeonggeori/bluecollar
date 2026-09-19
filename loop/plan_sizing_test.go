@@ -17,7 +17,7 @@ func planObservation(level string) turnObservation {
 	return turnObservation{
 		ObservationID: "obs-001",
 		Action:        "continue",
-		Tool:          toolcontract.PlanUpdateToolName,
+		Tool:          toolcontract.PlanToolName,
 		Output:        toolcontract.ToolOutput{Content: string(document), Data: document},
 	}
 }
@@ -68,7 +68,7 @@ func TestAPlanWithNoLevelLeavesTheBudgetAlone(t *testing.T) {
 }
 
 func TestThePlannedLevelIsReadBackFromThePlanObservation(t *testing.T) {
-	document, isPlanUpdate := planUpdateFromObservation(planObservation("high"))
+	document, isPlanUpdate := planFromObservation(planObservation("high"))
 
 	if !isPlanUpdate || document.Level != TaskLevelHigh {
 		t.Fatalf("the size the agent wrote on its plan has to survive the round trip, got %+v", document)

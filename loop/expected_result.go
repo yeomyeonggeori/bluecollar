@@ -30,12 +30,12 @@ func missingExpectedResultDelivery(expectedResult ExpectedResult, toolSet *toolc
 	switch expectedResult.Type {
 	case ExpectedResultTypeFile:
 		if len(attachments) == 0 {
-			return "finish requires a delivered file result"
+			return "a final reply requires a delivered file result"
 		}
 	case ExpectedResultTypeLink:
 		if len(observedURLs) == 0 {
 			if toolSetProducesCanonicalLinks(toolSet) {
-				return "finish requires a canonical link result"
+				return "a final reply requires a canonical link result"
 			}
 			return ""
 		}
@@ -44,7 +44,7 @@ func missingExpectedResultDelivery(expectedResult ExpectedResult, toolSet *toolc
 		}
 	case ExpectedResultTypeMessage:
 		if strings.TrimSpace(finishMessage) == "" {
-			return "finish requires a non-empty final message"
+			return "a final reply requires a non-empty final message"
 		}
 	}
 	return ""

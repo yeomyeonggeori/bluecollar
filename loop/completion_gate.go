@@ -297,6 +297,7 @@ func completionStateFinishDocument(state CompletionState, message string) turnAc
 	goalSatisfied := true
 	return turnActionDocument{
 		Action:             "finish",
+		Final:              true,
 		Message:            message,
 		GoalStatus:         "satisfied",
 		GoalSatisfied:      &goalSatisfied,
@@ -362,10 +363,10 @@ func completionRequirementsHaveEvidence(toolSet *toolcontract.ToolSet, requireme
 func validateCompletionGate(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
 	_ = criteria
 	if actionDocument.GoalSatisfied == nil || !*actionDocument.GoalSatisfied {
-		return completionGateResult{Message: "finish requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
+		return completionGateResult{Message: "a final reply requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
 	}
 	if strings.TrimSpace(actionDocument.GoalStatus) != "" && strings.TrimSpace(actionDocument.GoalStatus) != "satisfied" {
-		return completionGateResult{Message: "finish requires goalStatus=satisfied"}
+		return completionGateResult{Message: "a final reply requires goalStatus=satisfied"}
 	}
 	if result := validateFinishDoesNotHideUnresolvedWork(observations, actionDocument); !result.IsSatisfied {
 		return result
@@ -391,7 +392,7 @@ func validateCompletionGate(toolSet *toolcontract.ToolSet, requirements []toolUs
 func validateFinishDoesNotHideUnresolvedWork(observations []turnObservation, actionDocument turnActionDocument) completionGateResult {
 	_ = observations
 	if actionDocument.HasRemainingWork {
-		return completionGateResult{Message: "finish requires hasRemainingWork=false; recover the work or use fail"}
+		return completionGateResult{Message: "a final reply requires hasRemainingWork=false; recover the work or use fail"}
 	}
 	return completionGateResult{IsSatisfied: true}
 }
@@ -477,10 +478,10 @@ func validateOutcomeContractRequirements(contract OutcomeContract, observations 
 		}
 	}
 	if contractRequiresAttachment(contract) && len(attachments) == 0 {
-		return completionGateResult{Message: "finish requires a delivered file attachment", EvidenceKind: evidenceKindAttachment, SuggestedNextTools: []string{toolcontract.FileDeliverToolName}}
+		return completionGateResult{Message: "a final reply requires a delivered file attachment", EvidenceKind: evidenceKindAttachment}
 	}
 	if missingSuffix := missingRequiredAttachmentSuffix(attachments, contract.RequiredAttachmentSuffixes); missingSuffix != "" {
-		return completionGateResult{Message: "required file attachment must include suffix " + missingSuffix, EvidenceKind: evidenceKindAttachmentValid, SuggestedNextTools: []string{toolcontract.FileDeliverToolName}}
+		return completionGateResult{Message: "required file attachment must include suffix " + missingSuffix, EvidenceKind: evidenceKindAttachmentValid}
 	}
 	return completionGateResult{IsSatisfied: true, Attachments: attachments}
 }
@@ -500,7 +501,7 @@ func hasSuccessfulEvidenceToolObservation(observations []turnObservation, toolNa
 
 func missingContractToolResult(toolNames []string) completionGateResult {
 	return completionGateResult{
-		Message:            "finish requires successful evidence from one of these tools: " + strings.Join(toolNames, ", "),
+		Message:            "a final reply requires successful evidence from one of these tools: " + strings.Join(toolNames, ", "),
 		EvidenceKind:       evidenceKindRequiredTool,
 		SuggestedNextTools: appendUniqueStrings(nil, toolNames...),
 	}
@@ -513,10 +514,10 @@ func contractRequiresAttachment(contract OutcomeContract) bool {
 func validateExpectedResultCompletionGate(request AgentTurnRequest, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument, recoveryBudget RecoveryBudget) completionGateResult {
 	_ = criteria
 	if actionDocument.GoalSatisfied == nil || !*actionDocument.GoalSatisfied {
-		return completionGateResult{Message: "finish requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
+		return completionGateResult{Message: "a final reply requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
 	}
 	if strings.TrimSpace(actionDocument.GoalStatus) != "" && strings.TrimSpace(actionDocument.GoalStatus) != "satisfied" {
-		return completionGateResult{Message: "finish requires goalStatus=satisfied"}
+		return completionGateResult{Message: "a final reply requires goalStatus=satisfied"}
 	}
 	if result := validateFinishDoesNotHideUnresolvedWork(observations, actionDocument); !result.IsSatisfied {
 		return result
@@ -535,23 +536,20 @@ func validateExpectedResultCompletionGate(request AgentTurnRequest, observations
 	}
 	if expectedResultRequiresFileAttachment(request.OutcomeContract) && len(attachments) == 0 {
 		return completionGateResult{
-			Message:            "required file expected result must cite file_deliver completionEvidence",
-			EvidenceKind:       evidenceKindAttachment,
-			SuggestedNextTools: []string{toolcontract.FileDeliverToolName},
+			Message:      "required file expected result must attach the file to the final reply",
+			EvidenceKind: evidenceKindAttachment,
 		}
 	}
 	if missingSuffix := missingRequiredAttachmentSuffix(attachments, request.OutcomeContract.RequiredAttachmentSuffixes); len(attachments) > 0 && missingSuffix != "" {
 		return completionGateResult{
-			Message:            "required file expected result must include attachment suffix " + missingSuffix,
-			EvidenceKind:       evidenceKindAttachmentValid,
-			SuggestedNextTools: []string{toolcontract.FileDeliverToolName},
+			Message:      "required file expected result must include attachment suffix " + missingSuffix,
+			EvidenceKind: evidenceKindAttachmentValid,
 		}
 	}
 	if expectedResultRequiresTool(request.OutcomeContract, toolcontract.AskInputToolName) && !hasSuccessfulToolObservationForTurn(observations, toolcontract.AskInputToolName) {
 		return completionGateResult{
-			Message:            "required interactive choice expected result must use ask_input",
-			EvidenceKind:       evidenceKindRequiredTool,
-			SuggestedNextTools: []string{toolcontract.AskInputToolName},
+			Message:      "required interactive choice expected result must reply with expectsAnswer",
+			EvidenceKind: evidenceKindRequiredTool,
 		}
 	}
 	if projectionResult := validateObservedResultProjection(request, observations, attachments, actionDocument); !projectionResult.IsSatisfied {
@@ -656,9 +654,9 @@ func requiredSendToolNamesForRequest(request AgentTurnRequest) []string {
 
 func sendCompletionEvidenceRequiredMessage(toolNames []string) string {
 	if len(toolNames) == 0 {
-		return "finish requires completionEvidence from a successful send tool observation; call a send tool to perform the actual send, then cite that observation"
+		return "a final reply requires completionEvidence from a successful send tool observation; call a send tool to perform the actual send, then cite that observation"
 	}
-	return "finish requires completionEvidence from a successful send tool observation; call one of these tools to perform the actual send, then cite that observation: " + strings.Join(toolNames, ", ")
+	return "a final reply requires completionEvidence from a successful send tool observation; call one of these tools to perform the actual send, then cite that observation: " + strings.Join(toolNames, ", ")
 }
 
 func hasSendCompletionEvidence(toolSet *toolcontract.ToolSet, observations []turnObservation, references []completionEvidenceReference) bool {
@@ -761,7 +759,7 @@ func toolNameMatchesAny(toolName string, candidateToolNames []string) bool {
 }
 
 func stateChangeCompletionEvidenceRequiredMessage(toolNames []string) string {
-	return "finish requires completionEvidence citing the successful observation that did the work; run one of these tools, then cite that observation: " + strings.Join(toolNames, ", ")
+	return "a final reply requires completionEvidence citing the successful observation that did the work; run one of these tools, then cite that observation: " + strings.Join(toolNames, ", ")
 }
 
 func validateObservedResultProjection(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) completionGateResult {
@@ -781,7 +779,7 @@ func observedProjectionGateMessage(requirements []ProjectionMissingRequirement) 
 	for _, requirement := range requirements {
 		descriptions = append(descriptions, strings.TrimSpace(requirement.Description))
 	}
-	return "finish is not backed by observed results: " + strings.Join(nonEmptyStrings(descriptions), "; ")
+	return "a final reply is not backed by observed results: " + strings.Join(nonEmptyStrings(descriptions), "; ")
 }
 
 func observedProjectionSuggestedTools(requirements []ProjectionMissingRequirement) []string {
@@ -883,7 +881,7 @@ func withCompletionGateRecoveryPacket(observation turnObservation, result comple
 		RetryPolicy:      retryPolicyAfterPrecondition,
 		AllowedTools:     appendUniqueStrings(result.SuggestedNextTools),
 		EvidenceNeeded:   expectedResultRecoveryEvidence(result),
-		MustDoNext:       []string{"Produce or inspect the missing expected result, then try finish again."},
+		MustDoNext:       []string{"Produce or inspect the missing expected result, then try a final reply again."},
 		ForbiddenRepeats: nil,
 	}
 	return observation
@@ -903,11 +901,11 @@ func completionGateEventName(observation turnObservation) string {
 func evidenceMissingGuidance(evidenceKind string, message string) string {
 	switch evidenceKind {
 	case "expected_result_missing":
-		return "The Task expected result is not complete yet. Produce or inspect the missing result, then finish with exact typed delivery evidence. " + message
+		return "The Task expected result is not complete yet. Produce or inspect the missing result, then send a final reply with exact typed delivery evidence. " + message
 	case "required_tool_missing":
 		return "The final reply needs successful tool evidence before completion. Use the required tool if it has not run, or cite an existing successful observation. " + message
 	case "attachment_missing":
-		return "The final reply needs an attached artifact before completion. Find or create the artifact, then use file_deliver before finish. " + message
+		return "The final reply needs an attached artifact before completion. Find or create the artifact, then name its path in the final reply's attachments. " + message
 	case "attachment_invalid":
 		return "The final reply needs valid attachment evidence. Recheck the artifact path and required suffix, then attach a valid file. " + message
 	case "evidence_reference_invalid":
@@ -963,7 +961,7 @@ func validateObservedToolRequirements(toolSet *toolcontract.ToolSet, requirement
 		}
 		isSatisfied, _ := completionRequirementStatus(toolSet, requirement, observations)
 		if !isSatisfied {
-			return errors.New("finish requires successful observation for " + requirementLabel(requirement))
+			return errors.New("a final reply requires successful observation for " + requirementLabel(requirement))
 		}
 	}
 	return nil

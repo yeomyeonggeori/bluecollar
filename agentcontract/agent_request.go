@@ -200,8 +200,9 @@ type AgentTurnResult struct {
 type AgentCheckpointSender func(context.Context, AgentCheckpoint) error
 
 type AgentCheckpoint struct {
-	TaskRunID string
-	Message   string
-	ToolName  string
-	Durable   bool
+	TaskRunID   string
+	Message     string
+	ToolName    string
+	Attachments []toolcontract.FileAttachment
+	Durable     bool
 }

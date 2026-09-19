@@ -20,7 +20,7 @@ func TestBookkeepingBetweenTwoIdenticalCallsDoesNotLaunderTheLoop(t *testing.T) 
 	searchKey := "shell\x00{\"command\":\"grep -r needle .\"}"
 	observations := []turnObservation{
 		callObservation("obs-1", toolcontract.ShellToolName, searchKey),
-		callObservation("obs-2", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}"),
+		callObservation("obs-2", toolcontract.PlanToolName, "plan\x00{\"steps\":[]}"),
 		callObservation("obs-3", toolcontract.ShellToolName, searchKey),
 	}
 
@@ -106,7 +106,7 @@ func TestALongInputIsQuotedShortButComparedWhole(t *testing.T) {
 func toolSetDeclaringPlanUpdateWithoutSideEffect(t *testing.T) *toolcontract.ToolSet {
 	t.Helper()
 	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
-		{Name: toolcontract.PlanUpdateToolName, SideEffectClass: toolcontract.ToolSideEffectNone, Visibility: toolcontract.ToolVisibilityModel},
+		{Name: toolcontract.PlanToolName, SideEffectClass: toolcontract.ToolSideEffectNone, Visibility: toolcontract.ToolVisibilityModel},
 		{Name: toolcontract.ShellToolName, SideEffectClass: toolcontract.ToolSideEffectStateChange, Visibility: toolcontract.ToolVisibilityModel},
 	})
 }
@@ -114,10 +114,10 @@ func toolSetDeclaringPlanUpdateWithoutSideEffect(t *testing.T) *toolcontract.Too
 func TestAPlanResubmittedAcrossRealWorkStillChangedNothing(t *testing.T) {
 	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
 	observations := []turnObservation{
-		callObservation("obs-1", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}"),
+		callObservation("obs-1", toolcontract.PlanToolName, "plan\x00{\"steps\":[]}"),
 		callObservation("obs-2", toolcontract.ShellToolName, "shell\x00{\"command\":\"ls\"}"),
 	}
-	repeated := callObservation("obs-3", toolcontract.PlanUpdateToolName, "plan_update\x00{\"steps\":[]}")
+	repeated := callObservation("obs-3", toolcontract.PlanToolName, "plan\x00{\"steps\":[]}")
 	repeated.RepeatsObservationID = "obs-1"
 
 	reminder, hasReminder := unchangedResultReminderObservation(toolSet, observations, repeated)
@@ -163,7 +163,7 @@ func TestTheThirdIdenticalResultFromASideEffectingToolIsALoop(t *testing.T) {
 
 func TestANoSideEffectToolStillGetsToldOnTheFirstRepeat(t *testing.T) {
 	toolSet := toolSetDeclaringPlanUpdateWithoutSideEffect(t)
-	repeated := resultRepeating("obs-2", toolcontract.PlanUpdateToolName, "obs-1")
+	repeated := resultRepeating("obs-2", toolcontract.PlanToolName, "obs-1")
 
 	if _, hasReminder := unchangedResultReminderObservation(toolSet, []turnObservation{repeated}, repeated); !hasReminder {
 		t.Fatal("a tool that changes nothing of its own already proved nothing changed the first time")

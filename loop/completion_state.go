@@ -302,7 +302,7 @@ func recommendedCompletionAction(request AgentTurnRequest, requirements []toolUs
 	if !allMissingRequirementsAreFileAttachments(requirements, state.Requirements) {
 		return completionActionContinueWork
 	}
-	if request.ToolSet == nil || !request.ToolSet.IsAllowed(toolcontract.FileDeliverToolName) {
+	if request.ToolSet == nil || !request.ToolSet.CanInvoke(toolcontract.FileDeliverToolName) {
 		return completionActionBlockedMissingTool
 	}
 	if hasFailedArtifactDeliveryForPaths(observations, state.AttachmentPaths) {

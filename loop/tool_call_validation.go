@@ -83,7 +83,7 @@ func (agentTurnRunner *AgentTurnRunner) rejectRepeatedToolCall(taskRunID string,
 			ObservationID: nextObservationIDForObservations(state.Observations),
 			Action:        "policy",
 			Tool:          strings.TrimSpace(actionDocument.ToolName),
-			Output:        toolcontract.ToolOutput{Content: "This task already sent to that recipient as " + sentObservation.ObservationID + ". Do not send to the same recipient again. Send to a different recipient or use that observation for completionEvidence and finish."},
+			Output:        toolcontract.ToolOutput{Content: "This task already sent to that recipient as " + sentObservation.ObservationID + ". Do not send to the same recipient again. Send to a different recipient or use that observation for completionEvidence and send a final reply."},
 			Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: "This task already sent to that recipient."},
 		}
 		state.Observations = append(state.Observations, observation)
@@ -378,7 +378,7 @@ func validateBrowserToolInput(toolName string, toolInput json.RawMessage) error 
 	}
 }
 
-var agentActionsNoShellCanRun = []string{toolcontract.FileDeliverToolName, "set_quality_criteria", "finish"}
+var agentActionsNoShellCanRun = []string{"set_quality_criteria", "reply"}
 
 type terminalToolNameError struct {
 	toolName string
@@ -633,7 +633,7 @@ func unrequestedPlatformMessageSendObservation(request AgentTurnRequest, actionD
 	if requestRequiresExternalSendTool(request, toolName) {
 		return turnObservation{}, false
 	}
-	message := toolName + " requires an exact external-send outcome contract. Answer in the current conversation with finish.message instead."
+	message := toolName + " requires an exact external-send outcome contract. Answer in the current conversation with a reply instead."
 	return newFailureObservation(observationID, "policy", toolName, message, toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "policy"), true
 }
 

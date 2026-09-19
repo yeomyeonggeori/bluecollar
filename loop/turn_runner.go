@@ -37,6 +37,9 @@ type TaskLevelLanguageModelResolver func(TaskLevel) model.LanguageModelProvider
 type turnActionDocument struct {
 	Action                string                        `json:"action"`
 	Message               string                        `json:"message"`
+	Attachments           []replyAttachment             `json:"attachments,omitempty"`
+	ExpectsAnswer         bool                          `json:"expectsAnswer,omitempty"`
+	Final                 bool                          `json:"final,omitempty"`
 	AssistantText         string                        `json:"assistantText,omitempty"`
 	ModelReasoning        string                        `json:"modelReasoning,omitempty"`
 	ModelReasoningField   string                        `json:"modelReasoningField,omitempty"`
@@ -56,6 +59,11 @@ type turnActionDocument struct {
 	UsedFailureFacts      failureReportFacts            `json:"usedFailureFacts"`
 	ExecutionStateUpdate  ExecutionState                `json:"executionStateUpdate"`
 	BatchedActions        []turnActionDocument          `json:"batchedActions,omitempty"`
+}
+
+type replyAttachment struct {
+	Path     string `json:"path"`
+	Filename string `json:"filename,omitempty"`
 }
 
 func takeBatchedAction(state *agentTaskState) (turnActionDocument, bool) {
@@ -586,7 +594,13 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			agentTurnRunner.recordToolObservation(taskRun.TaskRunID, &state, actionDocument, successfulToolCalls, observation, "")
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "delegate", observation.ContentText())
 			continue
+		case "reply":
+			if result, shouldReturn := agentTurnRunner.handleReplyAction(workContext, taskRun.TaskRunID, stepID, iterationRequest, &state, successfulToolCalls, actionDocument); shouldReturn {
+				return result, nil
+			}
+			continue
 		case "finish":
+			actionDocument, _ = agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
 			completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(workContext, taskRun.TaskRunID, request, toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, actionDocument)
 			agentTurnRunner.appendValidityReview(taskRun.TaskRunID, "finish", completionGateResult.ValidityState)
 			if !completionGateResult.IsSatisfied {
@@ -780,7 +794,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		}
 	}
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, recoveryStep)
-	agentTurnRunner.applyPlanUpdateObservation(taskRunID, state, observation)
+	agentTurnRunner.applyPlanObservation(taskRunID, state, observation)
 	updateCompletionIntent(state, actionDocument, observation)
 	if pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments); isPaused {
 		agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "continue "+actionDocument.ToolName, observation.ContentText())
@@ -1453,7 +1467,7 @@ func (agentTurnRunner *AgentTurnRunner) steerStalledTurnTowardExit(taskRunID str
 }
 
 func suggestedNextToolDirectiveObservation(observationID string, suggestion observedSuggestedNextTool) turnObservation {
-	message := suggestion.Reason + " Call " + suggestion.ToolName + " now before repeating inspection, asking the user, or finishing."
+	message := suggestion.Reason + " Call " + suggestion.ToolName + " now before repeating inspection, asking the user, or closing the task."
 	observation := newContentObservation(observationID, "policy", "", marshalEventBody(map[string]string{
 		"directive":           message,
 		"suggestedTool":       suggestion.ToolName,
@@ -1469,10 +1483,10 @@ func stalledExitDirectiveObservation(observationID string, observations []turnOb
 	if failureDebt, hasFailureDebt := activeFailureDebt(observations); hasFailureDebt {
 		failedTool = strings.TrimSpace(failureDebt.LatestFailure.Tool)
 	}
-	message := "You are repeating actions without making progress. Stop retrying the same thing and stop re-emitting a finish that keeps getting rejected. Take one of two exits now: either take a genuinely different action that changes workspace, tool, or evidence state; or, if you cannot obtain what you need because a tool keeps failing or the required evidence is unavailable, end immediately with fail and failureResolution=failure_report, giving the user a short honest explanation of what you could not do. Do not loop and do not ask the user how to proceed."
+	message := "You are repeating actions without making progress. Stop retrying the same thing and stop re-emitting a final reply that keeps getting rejected. Take one of two exits now: either take a genuinely different action that changes workspace, tool, or evidence state; or, if you cannot obtain what you need because a tool keeps failing or the required evidence is unavailable, end immediately with fail and failureResolution=failure_report, giving the user a short honest explanation of what you could not do. Do not loop and do not ask the user how to proceed."
 	missingOperationName := latestMissingRequiredEvidenceOperationName(observations)
 	if missingOperationName != "" {
-		message = "You have not yet called " + missingOperationName + ". Call that direct tool with the appropriate input before attempting to finish again. If it is genuinely not needed for this request, end with fail and failureResolution=failure_report, explaining why in the user reply. Do not re-emit finish again without this evidence."
+		message = "You have not yet called " + missingOperationName + ". Call that direct tool with the appropriate input before attempting to close again. If it is genuinely not needed for this request, end with fail and failureResolution=failure_report, explaining why in the user reply. Do not re-emit a final reply again without this evidence."
 	}
 	observation := newContentObservation(observationID, "policy", "", marshalEventBody(map[string]string{
 		"directive":                message,
@@ -1789,7 +1803,7 @@ func estimateRemainingToolCallCount(elapsed time.Duration, maxElapsed time.Durat
 
 func wrapUpPressureMessage(remainingCallEstimate int) string {
 	return fmt.Sprintf(
-		"Budget check: roughly %d more tool calls fit in the remaining budget. Choose the shortest path to completion now: if a recorded successful observation already satisfies the request, call finish citing it; otherwise make the single most essential tool call, then finish. Do not start new exploration or re-verify work that is already recorded.",
+		"Budget check: roughly %d more tool calls fit in the remaining budget. Choose the shortest path to completion now: if a recorded successful observation already satisfies the request, send a final reply citing it; otherwise make the single most essential tool call, then send the final reply. Do not start new exploration or re-verify work that is already recorded.",
 		remainingCallEstimate,
 	)
 }
@@ -1984,7 +1998,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 	}
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFinalizerAction, marshalEventBody(actionDocument))
 	if strings.TrimSpace(actionDocument.Action) != "finish" {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": "finalizer did not return finish"}))
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": "finalizer did not return a final reply"}))
 		return AgentTurnResult{}, false
 	}
 	if !completionEvidenceIncludesSuccessfulTool(observations, actionDocument.CompletionEvidence, requiredToolName) {
@@ -2003,7 +2017,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 	agentTurnRunner.appendQualityReview(taskRunID, criteria, actionDocument.QualityReview, observations)
 	reply := finishActionMessage(actionDocument)
 	if reply == "" {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": "empty finish message"}))
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": "empty final reply message"}))
 		return AgentTurnResult{}, false
 	}
 	reply = agentTurnRunner.prepareFinishMessageForPlatform(finalizationContext, request, reply)
@@ -2072,7 +2086,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizerAction(ctx context.Context, req
 	messages := agentTurnRunner.buildTurnMessages(request, observations, executionState)
 	messages = append(messages, model.Message{
 		Role:    "system",
-		Content: "The required evidence is already available. Do not call tools. Use finish with goalSatisfied=true and cite successful completionEvidence. If the evidence does not actually satisfy the user's request, return a concise fail reply that accurately says what is missing.",
+		Content: "The required evidence is already available. Do not call tools. Reply with final=true, goalSatisfied=true, and cite successful completionEvidence. If the evidence does not actually satisfy the user's request, return a concise fail reply that accurately says what is missing.",
 	})
 	structuredResponse, errorValue := agentTurnRunner.languageModel.GenerateStructuredResponse(ctx, model.StructuredResponseRequest{
 		Messages: messages,
@@ -2110,7 +2124,7 @@ func (agentTurnRunner *AgentTurnRunner) runTerminalNoToolsStep(ctx context.Conte
 		rejectionReason = validationMessage
 		agentTurnRunner.recordTerminalNoToolsRejection(taskRunID, stepID, state, rejectionReason)
 	}
-	progressEvaluation := actionProgressEvaluation{Reason: "terminal no-tools action did not produce a valid finish or fail"}
+	progressEvaluation := actionProgressEvaluation{Reason: "terminal no-tools action did not produce a valid final reply or fail"}
 	allowance := recoveryAllowance{CanRecover: false, Reason: "tool recovery budget exhausted"}
 	result, _ := agentTurnRunner.blockTurnForStall(ctx, taskRunID, stepID, request, reason, progressEvaluation, allowance, *state)
 	return result
@@ -2142,7 +2156,7 @@ func terminalNoToolsInstruction(observations []turnObservation, budget RecoveryB
 	parts := []string{
 		"Recovery tool budget is exhausted. Do not call tools and do not select tools.",
 		"Return exactly one terminal action.",
-		"Use finish only when you can answer from current context with failureResolution=no_tool_fallback.",
+		"Use reply with final=true only when you can answer from current context with failureResolution=no_tool_fallback.",
 		"Use fail only when completion is blocked, with failureResolution=failure_report and usedFailureFacts copied from FailureReportFacts.",
 		"Only the recorded tool calls in FailureReportFacts were attempted. Guidance and model calls are not tool executions. Do not invent retries or infer that a failed response means a write was not saved; report an unverified outcome as uncertain.",
 		"FailureReportFacts:\n" + marshalEventBody(facts),
@@ -2160,13 +2174,13 @@ func (agentTurnRunner *AgentTurnRunner) applyTerminalNoToolsAction(ctx context.C
 	case "fail":
 		return agentTurnRunner.failTerminalNoToolsFailure(taskRunID, stepID, request, state, actionDocument)
 	default:
-		return AgentTurnResult{}, false, "terminal no-tools action must be finish or fail"
+		return AgentTurnResult{}, false, "terminal no-tools action must be a final reply or fail"
 	}
 }
 
 func (agentTurnRunner *AgentTurnRunner) completeTerminalNoToolsFinish(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, state *agentTaskState, actionDocument turnActionDocument) (AgentTurnResult, bool, string) {
 	if !isRecoveredFailureDebtResolution(actionDocument.FailureResolution) {
-		return AgentTurnResult{}, false, "finish requires failureResolution to be recovered_with_success or no_tool_fallback"
+		return AgentTurnResult{}, false, "a final reply requires failureResolution to be recovered_with_success or no_tool_fallback"
 	}
 	completionGateResult := validateCompletionGateForRequestWithExpectedResults(request, state.Requirements, state.Observations, state.Attachments, state.QualityCriteria, actionDocument, agentTurnRunner.options.RecoveryBudget)
 	agentTurnRunner.appendValidityReview(taskRunID, "terminal_no_tools_finish", completionGateResult.ValidityState)

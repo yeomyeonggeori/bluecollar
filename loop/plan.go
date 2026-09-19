@@ -6,27 +6,27 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-type planUpdateDocument struct {
+type planDocument struct {
 	Goal  string     `json:"goal,omitempty"`
 	Level TaskLevel  `json:"level,omitempty"`
 	Steps []PlanStep `json:"steps"`
 }
 
-func planUpdateFromObservation(observation turnObservation) (planUpdateDocument, bool) {
-	if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.PlanUpdateToolName) {
-		return planUpdateDocument{}, false
+func planFromObservation(observation turnObservation) (planDocument, bool) {
+	if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.PlanToolName) {
+		return planDocument{}, false
 	}
-	var document planUpdateDocument
+	var document planDocument
 	if json.Unmarshal(observation.Output.Data, &document) != nil {
-		return planUpdateDocument{}, false
+		return planDocument{}, false
 	}
 	document.Goal, document.Steps = NormalizePlan(document.Goal, document.Steps)
 	return document, true
 }
 
-func (agentTurnRunner *AgentTurnRunner) applyPlanUpdateObservation(taskRunID string, state *agentTaskState, observation turnObservation) {
-	document, isPlanUpdate := planUpdateFromObservation(observation)
-	if !isPlanUpdate {
+func (agentTurnRunner *AgentTurnRunner) applyPlanObservation(taskRunID string, state *agentTaskState, observation turnObservation) {
+	document, isPlan := planFromObservation(observation)
+	if !isPlan {
 		return
 	}
 	if document.Goal != "" {
@@ -34,7 +34,7 @@ func (agentTurnRunner *AgentTurnRunner) applyPlanUpdateObservation(taskRunID str
 	}
 	state.ExecutionState.Steps = document.Steps
 	agentTurnRunner.widenPaceForPlannedLevel(taskRunID, state, document.Level)
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentPlanUpdated, marshalEventBody(planUpdateDocument{Goal: state.ExecutionState.Goal, Level: document.Level, Steps: state.ExecutionState.Steps}))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentPlanUpdated, marshalEventBody(planDocument{Goal: state.ExecutionState.Goal, Level: document.Level, Steps: state.ExecutionState.Steps}))
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentExecutionState, marshalEventBody(normalizeExecutionState(state.ExecutionState)))
 }
 
@@ -42,7 +42,7 @@ func (agentTurnRunner *AgentTurnRunner) notePlanMissingBeforeStateChange(taskRun
 	if state.DidNudgePlan || len(state.ExecutionState.Steps) > 0 || !taskLevelRequiresPlan(request.TaskLevel) {
 		return
 	}
-	if request.ToolSet == nil || !requestToolSetCanReachTool(request.ToolSet, toolcontract.PlanUpdateToolName) {
+	if request.ToolSet == nil || !requestToolSetCanReachTool(request.ToolSet, toolcontract.PlanToolName) {
 		return
 	}
 	toolDefinition, isFound := request.ToolSet.ToolDefinition(actionDocument.ToolName)
@@ -50,7 +50,7 @@ func (agentTurnRunner *AgentTurnRunner) notePlanMissingBeforeStateChange(taskRun
 		return
 	}
 	state.DidNudgePlan = true
-	observation := newContentObservation(nextObservationIDForObservations(state.Observations), "policy", actionDocument.ToolName, "This multi-step task has no recorded plan yet. The current call proceeds; after it completes, record your goal and step plan with plan_update, then continue.")
+	observation := newContentObservation(nextObservationIDForObservations(state.Observations), "policy", actionDocument.ToolName, "This multi-step task has no recorded plan yet. The current call proceeds; after it completes, record your goal and step plan with plan, then continue.")
 	state.Observations = append(state.Observations, observation)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentPlanNudged, marshalEventBody(observation))
 }
@@ -64,13 +64,13 @@ func toolDefinitionIsStateChanging(toolDefinition toolcontract.ToolDefinition) b
 	}
 }
 
-func latestPlanUpdate(observations []turnObservation) (planUpdateDocument, bool) {
+func latestPlan(observations []turnObservation) (planDocument, bool) {
 	for index := len(observations) - 1; index >= 0; index-- {
-		if document, isPlanUpdate := planUpdateFromObservation(observations[index]); isPlanUpdate {
+		if document, isPlan := planFromObservation(observations[index]); isPlan {
 			return document, true
 		}
 	}
-	return planUpdateDocument{}, false
+	return planDocument{}, false
 }
 
 func (agentTurnRunner *AgentTurnRunner) widenPaceForPlannedLevel(taskRunID string, state *agentTaskState, plannedLevel TaskLevel) {
