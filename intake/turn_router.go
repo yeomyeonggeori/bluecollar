@@ -8,6 +8,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -17,6 +18,7 @@ type TurnRouter struct {
 	languageModel   model.LanguageModelProvider
 	decisionPlanner DecisionPlanner
 	options         agentcontract.IntakeOptions
+	callCost        modelCallCost
 }
 
 const turnWordsSystemPrompt = "You write the words for one turn of a workplace assistant. Every decision about this turn is already made and handed to you under \"Decided for this turn\"; do not re-decide it, do not argue with it, and do not mention it. Fill only the fields the schema asks for." +
@@ -39,6 +41,7 @@ func NewTurnRouter(languageModel model.LanguageModelProvider, decisionPlanner De
 		languageModel:   languageModel,
 		decisionPlanner: decisionPlanner,
 		options:         agentcontract.NormalizeIntakeOptions(options),
+		callCost:        newModelCallCost(),
 	}
 }
 
@@ -70,7 +73,7 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 	}
 	observedRouter := turnRouter
 	if callLedger != nil {
-		observedRouter = TurnRouter{languageModel: callLedger.LanguageModel(turnRouter.languageModel), decisionPlanner: turnRouter.decisionPlanner, options: turnRouter.options}
+		observedRouter = TurnRouter{languageModel: callLedger.LanguageModel(turnRouter.languageModel), decisionPlanner: turnRouter.decisionPlanner, options: turnRouter.options, callCost: turnRouter.callCost}
 	}
 	turnWords, errorValue := observedRouter.writeTurnWords(ctx, request, decidedFields, wordsShape)
 	if errorValue != nil {
@@ -163,7 +166,7 @@ func (turnRouter TurnRouter) writeTurnWords(ctx context.Context, request agentco
 		return agentcontract.TurnWords{}, ErrTurnRouterLanguageModelUnavailable
 	}
 	messages := turnRouter.buildWordsMessages(request, decidedFields, wordsShape.systemPrompt)
-	turnWords, errorValue := turnRouter.generateTurnWords(ctx, turnWordsRequest(messages, wordsShape), decidedFields)
+	turnWords, errorValue := turnRouter.generateTurnWordsPatiently(ctx, turnWordsRequest(messages, wordsShape), decidedFields)
 	if errorValue == nil {
 		return turnWords, nil
 	}
@@ -179,14 +182,23 @@ func (turnRouter TurnRouter) writeTurnWords(ctx context.Context, request agentco
 		correctionMessages = append(correctionMessages, model.Message{Role: "assistant", Content: previousWords})
 	}
 	correctionMessages = append(correctionMessages, model.Message{Role: "system", Content: correctionInstruction})
-	return turnRouter.generateTurnWords(ctx, turnWordsRequest(correctionMessages, wordsShape), decidedFields)
+	return turnRouter.generateTurnWordsPatiently(ctx, turnWordsRequest(correctionMessages, wordsShape), decidedFields)
+}
+
+func (turnRouter TurnRouter) generateTurnWordsPatiently(ctx context.Context, request model.StructuredResponseRequest, decidedFields agentcontract.TurnDecision) (agentcontract.TurnWords, error) {
+	turnWords, _, errorValue := askPatiently(ctx, turnRouter.callCost, func(callContext context.Context) (agentcontract.TurnWords, error) {
+		return turnRouter.generateTurnWords(callContext, request, decidedFields)
+	})
+	return turnWords, errorValue
 }
 
 func (turnRouter TurnRouter) generateTurnWords(ctx context.Context, request model.StructuredResponseRequest, decidedFields agentcontract.TurnDecision) (agentcontract.TurnWords, error) {
+	startedAt := time.Now()
 	structuredResponse, errorValue := turnRouter.languageModel.GenerateStructuredResponse(ctx, request)
 	if errorValue != nil {
 		return agentcontract.TurnWords{}, errorValue
 	}
+	turnRouter.callCost.record(structuredResponse.ModelName, time.Since(startedAt))
 	var turnWords agentcontract.TurnWords
 	if parseError := json.Unmarshal([]byte(structuredResponse.Content), &turnWords); parseError != nil {
 		return agentcontract.TurnWords{}, turnRouterDecisionError{cause: parseError, content: structuredResponse.Content}

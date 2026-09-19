@@ -53,6 +53,10 @@ func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) a
 		AttachmentsDescribed:   callContext.attachmentsDescribed,
 		AttachmentDescriptions: attachmentDescriptionsOf(callContext.decisions),
 	}
+	if call.wasCut {
+		record.UsedFallback = true
+		record.FallbackReason = "the first ask was cut at the measured patience and asked again"
+	}
 	if callContext.errorValue != nil {
 		record.IsError = true
 		record.Error = callContext.errorValue.Error()
