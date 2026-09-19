@@ -35,13 +35,11 @@ func toolSetForAgentTurnWithExposure(toolSet *toolcontract.ToolSet, instructionB
 	if hasAuthoritativeWorkingSet {
 		groups = []toolExposureGroup{interactionGroup, recoveryGroup, pendingGroup, requiredEvidenceGroup, pinnedGroup, requiredNextGroup, selectedSkillGroup, evidenceAlternativesGroup}
 	}
-	exposureGroups := groups
+	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(groups), toolcontract.MaxExtensionCallableToolCount)
 	kernelToolIDs := []string{}
 	if requestNeedsToolAccess(request, groups) {
-		exposureGroups = append(append([]toolExposureGroup{}, groups...), catalogToolGroup(toolSet))
 		kernelToolIDs = filterGroupTools(toolSet, toolExposureGroup{ToolIDs: kernelToolNamesForInstructionBundle(instructionBundle)}).ToolIDs
 	}
-	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(exposureGroups), toolcontract.MaxExtensionCallableToolCount)
 	exposedToolIDs := appendUniqueStrings(kernelToolIDs, extensionToolIDs...)
 	selectionEvent.SelectionSource = firstNonEmptyString(selectionEvent.SelectionSource, toolSelectionSource(selectedSkillGroup, hasAuthoritativeWorkingSet))
 	selectionEvent.SelectionReason = firstNonEmptyString(selectionEvent.SelectionReason, toolSelectionReason(selectedSkillGroup, hasAuthoritativeWorkingSet))
@@ -52,10 +50,6 @@ func toolSetForAgentTurnWithExposure(toolSet *toolcontract.ToolSet, instructionB
 	selectionEvent.DroppedGroups = droppedGroups
 	selectionEvent.UsedFallbackGroups = false
 	return toolSet.WithAllowedToolNames(exposedToolIDsForFiltering(exposedToolIDs)), selectionEvent
-}
-
-func catalogToolGroup(toolSet *toolcontract.ToolSet) toolExposureGroup {
-	return filterGroupTools(toolSet, toolExposureGroup{Name: "catalog tools", ToolIDs: toolSet.ListRegisteredToolNames()})
 }
 
 func kernelToolNamesForInstructionBundle(instructionBundle InstructionBundle) []string {

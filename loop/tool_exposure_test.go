@@ -262,6 +262,9 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 		"site_list", "site.history", "site.diff", "site.logs",
 		"site.rollback", "site.unpublish", "site.restore", "site_unserve",
 		"site.metrics", "site.backup", "site.scan", "site.verify", "site.export",
+		"site.clone", "site.compare", "site.deploy", "site.freeze", "site.index",
+		"site.lint", "site.migrate", "site.preview", "site.publish", "site.purge",
+		"site.redirect", "site.reindex", "site.stage",
 		"file_read", "file_write", "file_edit", "shell",
 	}
 	toolSet := testToolSet(append(toolcontract.KernelToolNames(), selectedToolNames...))
@@ -283,12 +286,12 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 	if !filteredToolSet.IsAllowed("shell") {
 		t.Fatalf("expected pinned direct tool inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
-	expectedToolNames := appendUniqueStrings(kernelToolNamesForInstructionBundle(instructionBundle), selectedToolNames...)
-	if !sameStringSet(filteredToolSet.ListToolNames(), expectedToolNames) {
-		t.Fatalf("expected the kernel and the whole catalog, got %+v", filteredToolSet.ListToolNames())
+	expectedToolCount := len(kernelToolNamesForInstructionBundle(instructionBundle)) + toolcontract.MaxExtensionCallableToolCount
+	if len(filteredToolSet.ListToolNames()) != expectedToolCount {
+		t.Fatalf("expected %d tools, got %+v", expectedToolCount, filteredToolSet.ListToolNames())
 	}
-	if len(event.DroppedGroups) != 0 {
-		t.Fatalf("expected the lifted budget to drop nothing, got %+v", event)
+	if len(event.DroppedGroups) == 0 {
+		t.Fatalf("expected oversized selected skill to report dropped tools, got %+v", event)
 	}
 	for _, toolName := range event.SelectedSkillToolIDs {
 		if !filteredToolSet.IsAllowed(toolName) {
@@ -329,13 +332,15 @@ func TestPendingRequiredToolWinsExtensionToolBudget(t *testing.T) {
 	selectedToolNames := []string{
 		"tool.01", "tool.02", "tool.03", "tool.04", "tool.05",
 		"tool.06", "tool.07", "tool.08", "tool.09", "tool.10", "tool.11",
-		"tool.12", "tool.13", "tool.14", "tool.15", "tool.16",
+		"tool.12", "tool.13", "tool.14", "tool.15", "tool.16", "tool.17",
+		"tool.18", "tool.19", "tool.20", "tool.21", "tool.22", "tool.23",
+		"tool.24", "tool.25", "tool.26", "tool.27", "tool.28", "tool.29",
 	}
 	toolSet := testToolSet(append(toolcontract.KernelToolNames(), selectedToolNames...))
 	instructionBundle := InstructionBundle{
 		Skills:            []SkillInstruction{{Name: "extension", ToolReferences: selectedToolNames}},
 		SkillDecisions:    []SkillSelectionDecision{{Name: "extension", Status: "selected"}},
-		RequiredNextTools: []string{"tool.16"},
+		RequiredNextTools: []string{"tool.29"},
 	}
 
 	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
@@ -348,11 +353,11 @@ func TestPendingRequiredToolWinsExtensionToolBudget(t *testing.T) {
 		ToolExposureEvent{},
 	)
 
-	if !filteredToolSet.IsAllowed("tool.16") {
+	if !filteredToolSet.IsAllowed("tool.29") {
 		t.Fatalf("expected pending operation inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
-	if !filteredToolSet.IsAllowed("tool.15") {
-		t.Fatalf("expected a non-pending extension to stay inside the lifted budget, got %+v", filteredToolSet.ListToolNames())
+	if filteredToolSet.IsAllowed("tool.28") {
+		t.Fatalf("expected a non-pending extension to leave the budget, got %+v", filteredToolSet.ListToolNames())
 	}
 }
 

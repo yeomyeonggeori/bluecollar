@@ -125,7 +125,7 @@ func TestSelectInstructionBundleDoesNotUseTriggerHintOutsideRetrievalCandidates(
 	}
 }
 
-func TestToolSetForAgentTurnExposesTheWholeCatalogAlongsideKernel(t *testing.T) {
+func TestToolSetForAgentTurnExposesSelectedSkillToolsAlongsideKernel(t *testing.T) {
 	fullToolSet := testToolSet([]string{
 		"conversation_history",
 		"memory_search",
@@ -157,8 +157,8 @@ func TestToolSetForAgentTurnExposesTheWholeCatalogAlongsideKernel(t *testing.T) 
 		}
 	}
 	for _, toolName := range []string{"memory_search", "schedule_create"} {
-		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected unselected catalog tool %s to reach the model, got %+v", toolName, filteredToolSet.ListToolNames())
+		if filteredToolSet.IsAllowed(toolName) {
+			t.Fatalf("expected unselected tool %s to stay hidden, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
 	}
 	for _, toolName := range []string{"site_serve", "site_serve"} {
@@ -198,7 +198,7 @@ func TestSelectedFlowSkillExposesRegisteredDirectToolsFromKernelPalette(t *testi
 	}
 }
 
-func TestToolSetForAgentTurnExposesUnpinnedNonKernelToolsToo(t *testing.T) {
+func TestToolSetForAgentTurnExposesOnlyPinnedNonKernelTools(t *testing.T) {
 	fullToolSet := testToolSet([]string{
 		"conversation_history",
 		"memory_search",
@@ -227,8 +227,8 @@ func TestToolSetForAgentTurnExposesUnpinnedNonKernelToolsToo(t *testing.T) {
 		}
 	}
 	for _, toolName := range []string{"memory_search", "schedule_list", "mail_message_search"} {
-		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected unpinned non-kernel tool %s to reach the model, got %+v", toolName, filteredToolSet.ListToolNames())
+		if filteredToolSet.IsAllowed(toolName) {
+			t.Fatalf("expected unpinned non-kernel tool %s to be hidden, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
 	}
 }
@@ -309,8 +309,8 @@ func TestAgentKernelActionSchemaExposesTypedInitialTools(t *testing.T) {
 		t.Fatalf("expected ask_input to stay hidden without a typed interaction requirement, got %s", actionSchema)
 	}
 	for _, domainToolName := range []string{"mail_message_search", "schedule_list"} {
-		if !strings.Contains(actionSchema, `"toolName":{"enum":["`+domainToolName+`"`) {
-			t.Fatalf("expected unselected catalog tool %s to be directly callable, got %s", domainToolName, actionSchema)
+		if strings.Contains(actionSchema, `"toolName":{"enum":["`+domainToolName+`"`) {
+			t.Fatalf("expected unselected tool %s not to be directly callable, got %s", domainToolName, actionSchema)
 		}
 	}
 }
