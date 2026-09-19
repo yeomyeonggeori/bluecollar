@@ -21,7 +21,7 @@ const (
 	RequestToolsToolName        = "request_tools"
 )
 
-const MaxExtensionCallableToolCount = 28
+const MaxExtensionCallableToolCount = 15
 
 func KernelToolNames() []string {
 	return []string{
