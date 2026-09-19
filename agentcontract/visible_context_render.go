@@ -52,7 +52,7 @@ func BuildVisibleContextDescription(visibleContext VisibleContext, timeZone stri
 
 	historyLine := "No earlier visible messages are available."
 	if visibleContext.HasMoreBefore {
-		historyLine = "There are earlier visible messages not included here. Ask for conversation_history if older context is needed."
+		historyLine = "There are earlier visible messages not included here."
 	}
 
 	if len(contextLines) == 0 && len(currentMaterialLines) == 0 && len(materialLines) == 0 {

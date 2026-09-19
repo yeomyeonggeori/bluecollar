@@ -6,7 +6,7 @@ import (
 
 import "testing"
 
-func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
+func TestToolExposureUsesKernelAndTheWholeCatalogWithoutSelectedSkills(t *testing.T) {
 	toolSet := testToolSet(append(toolcontract.KernelToolNames(),
 		"site_serve",
 		"site_serve",
@@ -23,12 +23,13 @@ func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 		ToolExposureEvent{},
 	)
 
-	if got := filteredToolSet.ListToolNames(); !sameStringSet(got, toolcontract.KernelToolNames()) {
-		t.Fatalf("expected fixed kernel tools, got %+v", got)
+	expectedToolNames := append(toolcontract.KernelToolNames(), "site_serve", "message_send")
+	if got := filteredToolSet.ListToolNames(); !sameStringSet(got, expectedToolNames) {
+		t.Fatalf("expected kernel tools plus the whole catalog, got %+v", got)
 	}
-	for _, hiddenToolName := range []string{"site_serve", "site_serve", "message_send"} {
-		if filteredToolSet.IsAllowed(hiddenToolName) {
-			t.Fatalf("expected non-kernel tool %s to be hidden, got %+v", hiddenToolName, filteredToolSet.ListToolNames())
+	for _, catalogToolName := range []string{"site_serve", "message_send"} {
+		if !filteredToolSet.IsAllowed(catalogToolName) {
+			t.Fatalf("expected non-kernel tool %s to reach the model, got %+v", catalogToolName, filteredToolSet.ListToolNames())
 		}
 	}
 	for _, kernelToolName := range []string{"file_read", "file_write", "file_edit", "file_preview", "image_read"} {

@@ -3,6 +3,7 @@ package intake
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -12,6 +13,14 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
+
+func numberedToolNames(count int) []string {
+	toolNames := make([]string, 0, count)
+	for index := range count {
+		toolNames = append(toolNames, "candidate_tool_"+strconv.Itoa(index))
+	}
+	return toolNames
+}
 
 func measurementToolNames() []string {
 	return []string{
@@ -47,10 +56,10 @@ func TestEveryToolAboveTheThresholdIsSelectedAndTheRestAreNot(t *testing.T) {
 }
 
 func TestTheSelectionStopsAtTheCountLimitAndKeepsTheLikeliestTools(t *testing.T) {
-	candidateToolNames := measurementToolNames()
+	candidateToolNames := numberedToolNames(likelyToolCountLimit + 5)
 	probabilities := map[string]float64{}
 	for index, toolName := range candidateToolNames {
-		probabilities[toolName] = 0.99 - float64(index)/10000
+		probabilities[toolName] = 0.99 - float64(index)/100000
 	}
 
 	selectedToolNames := selectLikelyToolNames(probabilities, candidateToolNames)

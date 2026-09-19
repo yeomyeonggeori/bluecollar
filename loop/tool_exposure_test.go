@@ -283,12 +283,12 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 	if !filteredToolSet.IsAllowed("shell") {
 		t.Fatalf("expected pinned direct tool inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
-	expectedToolCount := len(kernelToolNamesForInstructionBundle(instructionBundle)) + toolcontract.MaxExtensionCallableToolCount
-	if len(filteredToolSet.ListToolNames()) != expectedToolCount {
-		t.Fatalf("expected %d tools, got %+v", expectedToolCount, filteredToolSet.ListToolNames())
+	expectedToolNames := appendUniqueStrings(kernelToolNamesForInstructionBundle(instructionBundle), selectedToolNames...)
+	if !sameStringSet(filteredToolSet.ListToolNames(), expectedToolNames) {
+		t.Fatalf("expected the kernel and the whole catalog, got %+v", filteredToolSet.ListToolNames())
 	}
-	if len(event.DroppedGroups) == 0 {
-		t.Fatalf("expected oversized selected skill to report dropped tools, got %+v", event)
+	if len(event.DroppedGroups) != 0 {
+		t.Fatalf("expected the lifted budget to drop nothing, got %+v", event)
 	}
 	for _, toolName := range event.SelectedSkillToolIDs {
 		if !filteredToolSet.IsAllowed(toolName) {
@@ -351,8 +351,8 @@ func TestPendingRequiredToolWinsExtensionToolBudget(t *testing.T) {
 	if !filteredToolSet.IsAllowed("tool.16") {
 		t.Fatalf("expected pending operation inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
-	if filteredToolSet.IsAllowed("tool.15") {
-		t.Fatalf("expected a non-pending extension to leave the budget, got %+v", filteredToolSet.ListToolNames())
+	if !filteredToolSet.IsAllowed("tool.15") {
+		t.Fatalf("expected a non-pending extension to stay inside the lifted budget, got %+v", filteredToolSet.ListToolNames())
 	}
 }
 

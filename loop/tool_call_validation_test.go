@@ -17,7 +17,7 @@ func TestAgentTurnRunnerRecordsDeniedToolAsObservation(t *testing.T) {
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"allowed"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "forbidden"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "forbidden", Visibility: toolcontract.ToolVisibilityInternal}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("should not run"), nil
 	})
 

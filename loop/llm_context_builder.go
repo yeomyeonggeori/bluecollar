@@ -107,12 +107,12 @@ func (builder LLMContextBuilder) additionalToolsContext(input LLMContextInput) s
 	if len(toolNames) == 0 {
 		return ""
 	}
-	lines := []string{"Additional tools exist but are not loaded. When the task needs one, call request_tools with the exact names first; the loaded tools become callable on your next step."}
+	lines := []string{"Additional tools exist but are not callable in this step:"}
 	for _, toolName := range toolNames[:min(len(toolNames), additionalToolsContextPageSize)] {
 		lines = append(lines, "- "+toolName+additionalToolSummary(input.ToolSet, toolName))
 	}
 	if len(toolNames) > additionalToolsContextPageSize {
-		lines = append(lines, fmt.Sprintf("…and %d more; find them with skill_search or request them by exact name.", len(toolNames)-additionalToolsContextPageSize))
+		lines = append(lines, fmt.Sprintf("…and %d more.", len(toolNames)-additionalToolsContextPageSize))
 	}
 	return strings.Join(lines, "\n")
 }
