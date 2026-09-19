@@ -699,11 +699,6 @@ func (toolSet *ToolSet) Invoke(ctx context.Context, toolInvocation ToolInvocatio
 	return toolSet.invokeRegistered(ctx, toolInvocation)
 }
 
-// A hidden tool is one the model is not offered, not one nobody may call: a
-// persisted ledger, a resumed approval and a runtime-issued call still carry the
-// name a tool had when the call was recorded, so the name keeps working after it
-// leaves the model's palette. Per-step exposure narrows that palette, so it does
-// not decide what an internal tool may do.
 func (toolSet *ToolSet) CanInvoke(toolName string) bool {
 	trimmedToolName := strings.TrimSpace(toolName)
 	if toolSet.IsAllowed(trimmedToolName) {

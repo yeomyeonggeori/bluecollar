@@ -73,7 +73,6 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	return mustMarshalStructuredSchema(schema)
 }
 
-// nativeTerminalActionParameters extracts reply/fail/set_quality_criteria variants standalone, so only continue variants use this $defs block.
 func actionSchemaSharedDefinitions() map[string]any {
 	return map[string]any{
 		"executionStateUpdate": executionStateSchema(),
@@ -289,7 +288,6 @@ func failureReportFactsSchema() map[string]any {
 	})
 }
 
-// terminalActionUnifiedSchema is a flat closed object rather than a root-level oneOf of reply/fail branches; branch-specific requirements are enforced in Go instead of JSON schema required fields.
 func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
 	failureResolutionValues := []string{"none", failureResolutionRecoveredWithSuccess, failureResolutionNoToolFallback}
 	properties := map[string]any{

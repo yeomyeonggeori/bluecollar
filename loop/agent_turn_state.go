@@ -725,20 +725,14 @@ func normalizeParsedAction(actionDocument turnActionDocument) turnActionDocument
 		actionDocument.Action = "continue"
 		actionDocument.ToolName = strings.TrimSpace(actionDocument.ToolName)
 	case "reply":
-		actionDocument.Action = replyActionKind(actionDocument)
+		actionDocument.Action = "reply"
+		if actionDocument.Final {
+			actionDocument.Action = "finish"
+		}
 	default:
 		actionDocument.Action = action
 	}
 	return actionDocument
-}
-
-// A final reply is the task's last word, so it runs the completion path the rest of the
-// runtime, its ledger and its judge already name.
-func replyActionKind(actionDocument turnActionDocument) string {
-	if actionDocument.Final {
-		return "finish"
-	}
-	return "reply"
 }
 
 func normalizeParsedEvidence(actionDocument turnActionDocument) turnActionDocument {

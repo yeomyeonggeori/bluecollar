@@ -15,8 +15,6 @@ var toolRepeatReminderRunLengths = []int{3, 5, 8}
 // past the chain. Only what the reminder quotes back is shortened.
 const toolRepeatArgumentsPreviewLimit = 500
 
-// Bookkeeping interleaved into a loop must not launder it: plan between two
-// identical searches still leaves two consecutive identical searches.
 func chainTransparentToolName(toolName string) bool {
 	return toolcontract.ToolNamesMatch(toolName, toolcontract.PlanToolName)
 }
@@ -73,8 +71,6 @@ func repeatedInputPreview(toolInputKey string) string {
 	return kept + " … (+" + strconv.Itoa(len(canonicalInput)-len(kept)) + " more characters)"
 }
 
-// Advisory only: the call already ran and its own result stands. Whether to retry
-// differently, gather more, or close stays with the model.
 func toolRepeatReminderObservation(observations []turnObservation, observation turnObservation) (turnObservation, int, bool) {
 	if strings.TrimSpace(observation.ToolInputKey) == "" || chainTransparentToolName(observation.Tool) {
 		return turnObservation{}, 0, false
