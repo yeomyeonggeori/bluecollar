@@ -30,7 +30,7 @@ class PiAgent(AbstractInstalledAgent):
     def __init__(self, model_name: str, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._model_name = model_name
-        self._version = kwargs.get("version", "latest")
+        self._version = kwargs.get("version", "0.83.0")
 
     @property
     def _env(self) -> dict[str, str]:

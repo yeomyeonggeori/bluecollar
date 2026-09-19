@@ -927,6 +927,11 @@ waiting on the one thing the format forbade.
 
 ## A slower model, and the walls it found
 
+The internkim harness pilot (internkim#1789, `web/tests/pilot` there) runs
+every arm on the production model, `z-ai/glm-5.3-flash`, through this
+directory's prompt meter; the snapshot below is the one this bench's own
+comparison kept.
+
 The comparison then moved to a pinned snapshot, `deepseek-v4-flash-0731`,
 whose calls think server-side for ten to forty seconds. pi held its level.
 bluecollar collapsed to 1/24, and the autopsy of that collapse found four
