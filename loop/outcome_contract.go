@@ -29,7 +29,10 @@ func shouldBuildExecutionPlanForConfirmation(request AgentRequest, intakeDecisio
 	if intakeDecision.TaskShape == TaskShapeApprovalGatedTask {
 		return true
 	}
-	for _, toolName := range appendUniqueStrings(requiredEvidenceTools, intakeDecision.InitialToolNames...) {
+	if intakeDecision.IsExternalSendRequested {
+		return true
+	}
+	for _, toolName := range requiredEvidenceTools {
 		if isSendEvidenceTool(request.ToolSet, toolName) {
 			return true
 		}

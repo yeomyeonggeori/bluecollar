@@ -60,19 +60,20 @@ type ClarificationOption struct {
 }
 
 type IntakeDecision struct {
-	Classification         IntakeClassification  `json:"classification"`
-	TaskShape              TaskShape             `json:"taskShape"`
-	TaskLevel              TaskLevel             `json:"level"`
-	RequestedOutputFormats []string              `json:"requestedOutputFormats"`
-	DeliverableKind        DeliverableKind       `json:"deliverableKind,omitempty"`
-	ExpectedResults        []ExpectedResult      `json:"expectedResults,omitempty"`
-	ResponseLanguage       string                `json:"responseLanguage"`
-	Reason                 string                `json:"reason"`
-	UserFacingReply        string                `json:"userFacingReply"`
-	InitialToolNames       []string              `json:"initialToolNames,omitempty"`
-	PriorTaskReference     PriorTaskReference    `json:"priorTaskReference,omitempty"`
-	ClarificationQuestion  string                `json:"clarificationQuestion,omitempty"`
-	ClarificationOptions   []ClarificationOption `json:"clarificationOptions,omitempty"`
+	Classification          IntakeClassification  `json:"classification"`
+	TaskShape               TaskShape             `json:"taskShape"`
+	TaskLevel               TaskLevel             `json:"level"`
+	RequestedOutputFormats  []string              `json:"requestedOutputFormats"`
+	DeliverableKind         DeliverableKind       `json:"deliverableKind,omitempty"`
+	ExpectedResults         []ExpectedResult      `json:"expectedResults,omitempty"`
+	ResponseLanguage        string                `json:"responseLanguage"`
+	Reason                  string                `json:"reason"`
+	UserFacingReply         string                `json:"userFacingReply"`
+	IsExternalSendRequested bool                  `json:"isExternalSendRequested"`
+	InitialToolNames        []string              `json:"initialToolNames,omitempty"`
+	PriorTaskReference      PriorTaskReference    `json:"priorTaskReference,omitempty"`
+	ClarificationQuestion   string                `json:"clarificationQuestion,omitempty"`
+	ClarificationOptions    []ClarificationOption `json:"clarificationOptions,omitempty"`
 }
 
 func (intakeDecision IntakeDecision) Validate() error {
@@ -86,25 +87,26 @@ func (intakeDecision IntakeDecision) Validate() error {
 }
 
 type TurnDecision struct {
-	Route                  TurnRoute             `json:"route"`
-	Classification         IntakeClassification  `json:"classification"`
-	TaskShape              TaskShape             `json:"taskShape"`
-	TaskLevel              TaskLevel             `json:"level"`
-	RequestedOutputFormats []string              `json:"requestedOutputFormats"`
-	DeliverableKind        DeliverableKind       `json:"deliverableKind,omitempty"`
-	ExpectedResults        []ExpectedResult      `json:"expectedResults,omitempty"`
-	ResponseLanguage       string                `json:"responseLanguage"`
-	Reason                 string                `json:"reason"`
-	UserFacingReply        string                `json:"userFacingReply"`
-	InitialToolNames       []string              `json:"initialToolNames,omitempty"`
-	PriorTaskReference     PriorTaskReference    `json:"priorTaskReference,omitempty"`
-	Approval               *ApprovalSignal       `json:"approval,omitempty"`
-	Choices                []string              `json:"choices,omitempty"`
-	ClarificationQuestion  string                `json:"clarificationQuestion,omitempty"`
-	ClarificationOptions   []ClarificationOption `json:"clarificationOptions,omitempty"`
-	ReactionEmojiName      string                `json:"reactionEmojiName,omitempty"`
-	BusyRoute              BusyRoute             `json:"busyRoute,omitempty"`
-	BusyInstruction        string                `json:"busyInstruction,omitempty"`
+	Route                   TurnRoute             `json:"route"`
+	Classification          IntakeClassification  `json:"classification"`
+	TaskShape               TaskShape             `json:"taskShape"`
+	TaskLevel               TaskLevel             `json:"level"`
+	RequestedOutputFormats  []string              `json:"requestedOutputFormats"`
+	DeliverableKind         DeliverableKind       `json:"deliverableKind,omitempty"`
+	ExpectedResults         []ExpectedResult      `json:"expectedResults,omitempty"`
+	ResponseLanguage        string                `json:"responseLanguage"`
+	Reason                  string                `json:"reason"`
+	UserFacingReply         string                `json:"userFacingReply"`
+	IsExternalSendRequested bool                  `json:"isExternalSendRequested"`
+	InitialToolNames        []string              `json:"initialToolNames,omitempty"`
+	PriorTaskReference      PriorTaskReference    `json:"priorTaskReference,omitempty"`
+	Approval                *ApprovalSignal       `json:"approval,omitempty"`
+	Choices                 []string              `json:"choices,omitempty"`
+	ClarificationQuestion   string                `json:"clarificationQuestion,omitempty"`
+	ClarificationOptions    []ClarificationOption `json:"clarificationOptions,omitempty"`
+	ReactionEmojiName       string                `json:"reactionEmojiName,omitempty"`
+	BusyRoute               BusyRoute             `json:"busyRoute,omitempty"`
+	BusyInstruction         string                `json:"busyInstruction,omitempty"`
 }
 
 type TurnWords struct {
@@ -128,19 +130,20 @@ func (turnDecision TurnDecision) WithTurnWords(turnWords TurnWords) TurnDecision
 
 func (turnDecision TurnDecision) IntakeDecision() IntakeDecision {
 	return IntakeDecision{
-		Classification:         turnDecision.Classification,
-		TaskShape:              turnDecision.TaskShape,
-		TaskLevel:              NormalizeTaskLevel(string(turnDecision.TaskLevel)),
-		RequestedOutputFormats: append([]string{}, turnDecision.RequestedOutputFormats...),
-		DeliverableKind:        turnDecision.DeliverableKind,
-		ExpectedResults:        NormalizeExpectedResults(turnDecision.ExpectedResults),
-		ResponseLanguage:       turnDecision.ResponseLanguage,
-		Reason:                 turnDecision.Reason,
-		UserFacingReply:        turnDecision.UserFacingReply,
-		InitialToolNames:       append([]string{}, turnDecision.InitialToolNames...),
-		PriorTaskReference:     NormalizePriorTaskReference(turnDecision.PriorTaskReference),
-		ClarificationQuestion:  turnDecision.ClarificationQuestion,
-		ClarificationOptions:   append([]ClarificationOption{}, turnDecision.ClarificationOptions...),
+		Classification:          turnDecision.Classification,
+		TaskShape:               turnDecision.TaskShape,
+		TaskLevel:               NormalizeTaskLevel(string(turnDecision.TaskLevel)),
+		RequestedOutputFormats:  append([]string{}, turnDecision.RequestedOutputFormats...),
+		DeliverableKind:         turnDecision.DeliverableKind,
+		ExpectedResults:         NormalizeExpectedResults(turnDecision.ExpectedResults),
+		ResponseLanguage:        turnDecision.ResponseLanguage,
+		Reason:                  turnDecision.Reason,
+		UserFacingReply:         turnDecision.UserFacingReply,
+		IsExternalSendRequested: turnDecision.IsExternalSendRequested,
+		InitialToolNames:        append([]string{}, turnDecision.InitialToolNames...),
+		PriorTaskReference:      NormalizePriorTaskReference(turnDecision.PriorTaskReference),
+		ClarificationQuestion:   turnDecision.ClarificationQuestion,
+		ClarificationOptions:    append([]ClarificationOption{}, turnDecision.ClarificationOptions...),
 	}
 }
 
@@ -153,6 +156,7 @@ func (turnDecision TurnDecision) WithRestoredIntakeState(intakeDecision IntakeDe
 	turnDecision.TaskLevel = intakeDecision.TaskLevel
 	turnDecision.RequestedOutputFormats = append([]string{}, intakeDecision.RequestedOutputFormats...)
 	turnDecision.ExpectedResults = NormalizeExpectedResults(intakeDecision.ExpectedResults)
+	turnDecision.IsExternalSendRequested = intakeDecision.IsExternalSendRequested
 	turnDecision.InitialToolNames = append([]string{}, intakeDecision.InitialToolNames...)
 	return turnDecision
 }

@@ -117,6 +117,32 @@ func TestDestructiveSiteManagementStillBuildsConfirmationPlan(t *testing.T) {
 	}
 }
 
+func TestConfirmationPlanUsesExplicitExternalSendIntentInsteadOfLikelyToolNames(t *testing.T) {
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
+		Name:            "message_send",
+		Namespace:       "message",
+		SideEffectClass: toolcontract.ToolSideEffectExternalSend,
+	}})
+	request := AgentRequest{
+		Prompt:          "update the records",
+		ToolSet:         toolSet,
+		LikelyToolNames: []string{"message_send"},
+	}
+	intakeDecision := IntakeDecision{
+		Classification:   IntakeClassificationBoundedTask,
+		TaskShape:        TaskShapeMaintenanceTask,
+		InitialToolNames: []string{"message_send"},
+	}
+	if shouldBuildExecutionPlanForConfirmation(request, intakeDecision, nil) {
+		t.Fatal("a likely or available send tool does not mean the requester asked to send externally")
+	}
+
+	intakeDecision.IsExternalSendRequested = true
+	if !shouldBuildExecutionPlanForConfirmation(request, intakeDecision, nil) {
+		t.Fatal("explicit external-send intent must build a plan for a maintenance-shaped request")
+	}
+}
+
 func TestConfirmationMessageIncludesTemporalContextAndAvoidsInventedTiming(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"reply":"웹사이트 배포에 필요한 내용을 알려주세요."}`,
