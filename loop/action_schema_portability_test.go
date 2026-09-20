@@ -54,7 +54,7 @@ func TestSchemasSentWithoutTheirDefinitionsCarryNoReference(t *testing.T) {
 		}
 	}
 
-	state := nativeAgentActionTestStateWithTools("task_add", toolcontract.ShellToolName)
+	state := nativeAgentActionTestStateWithTools("task_add", toolcontract.BashToolName)
 	state.Observations = []turnObservation{newContentObservation("obs-001", "continue", "task_add", "added")}
 	tools, errorValue := nativeAgentActionTools(BuildAgentActionRequest(state).StructuredOutputSchema.Document)
 	if errorValue != nil {
@@ -81,7 +81,7 @@ func TestAWrongTypedActionFieldAsksAgainNamingTheField(t *testing.T) {
 			nativeAgentActionChatResponse("reply", `{"final":true,"message":"done"}`),
 		},
 	}
-	state := nativeAgentActionTestStateWithTools("task_add", toolcontract.ShellToolName)
+	state := nativeAgentActionTestStateWithTools("task_add", toolcontract.BashToolName)
 
 	action, errorValue := DecideAgentAction(context.Background(), &provider, state)
 

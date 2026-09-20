@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const executionStateMaxCharacters = 2500
@@ -154,7 +155,7 @@ func compactTerminalObservationTails(observations []turnObservation, limit int) 
 	tails := []TerminalObservationTail{}
 	for index := len(observations) - 1; index >= 0; index-- {
 		observation := observations[index]
-		if strings.TrimSpace(observation.Tool) != "shell" {
+		if strings.TrimSpace(observation.Tool) != toolcontract.BashToolName {
 			continue
 		}
 		tail, ok := terminalObservationTail(observation)

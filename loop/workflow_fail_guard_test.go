@@ -7,16 +7,16 @@ import (
 import "testing"
 
 func TestRecoverableWorkflowNextToolsSuggestsFileDeliveryAfterSourceProgress(t *testing.T) {
-	toolSet := newTestToolSet([]string{"shell", toolcontract.FileDeliverToolName})
+	toolSet := newTestToolSet([]string{"bash", toolcontract.FileDeliverToolName})
 	request := AgentTurnRequest{
 		RequiredAttachmentSuffixes: []string{".docx"},
 		ToolSet:                    toolSet,
 	}
-	observations := []turnObservation{successfulWorkflowObservation("file_write")}
+	observations := []turnObservation{successfulWorkflowObservation("write")}
 
 	nextTools := recoverableWorkflowNextTools(request, observations)
 
-	for _, toolName := range []string{"shell", toolcontract.FileDeliverToolName} {
+	for _, toolName := range []string{"bash", toolcontract.FileDeliverToolName} {
 		if !containsString(nextTools, toolName) {
 			t.Fatalf("expected file delivery recovery tools to include %s, got %+v", toolName, nextTools)
 		}
@@ -24,7 +24,7 @@ func TestRecoverableWorkflowNextToolsSuggestsFileDeliveryAfterSourceProgress(t *
 }
 
 func TestRecoverableWorkflowNextToolsStopsAfterDeliver(t *testing.T) {
-	toolSet := newTestToolSet([]string{"shell", toolcontract.FileDeliverToolName})
+	toolSet := newTestToolSet([]string{"bash", toolcontract.FileDeliverToolName})
 	request := AgentTurnRequest{
 		RequiredAttachmentSuffixes: []string{".docx"},
 		ToolSet:                    toolSet,

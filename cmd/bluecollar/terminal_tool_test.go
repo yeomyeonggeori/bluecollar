@@ -22,7 +22,7 @@ func invokeTerminalRunThrough(t *testing.T, runningShell shell, input string) to
 	t.Helper()
 	toolSet := newWorkspaceToolSet(runningShell, nil)
 	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: toolcontract.ShellToolName,
+		ToolName: toolcontract.BashToolName,
 		Input:    json.RawMessage(input),
 	})
 	if errorValue != nil {
@@ -150,7 +150,7 @@ func TestAClassifierCannotTalkTheRunnerOutOfTheTaskItWasGiven(t *testing.T) {
 		Route:            agentcontract.TurnRouteGiveUp,
 		Classification:   agentcontract.IntakeClassificationUnsupported,
 		TaskShape:        agentcontract.TaskShapeImmediateReply,
-		InitialToolNames: []string{toolcontract.ShellToolName},
+		InitialToolNames: []string{toolcontract.BashToolName},
 	}
 
 	started := startingTheTaskItWasGiven(refused)
@@ -207,10 +207,10 @@ func TestEveryWorkspaceToolReachesTheModel(t *testing.T) {
 	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: t.TempDir()}, nil)
 
 	for _, toolName := range []string{
-		toolcontract.ShellToolName,
+		toolcontract.BashToolName,
 		toolcontract.FileReadToolName,
-		toolcontract.FileWriteToolName,
-		toolcontract.FileEditToolName,
+		toolcontract.WriteToolName,
+		toolcontract.EditToolName,
 	} {
 		if !toolSet.CanExpose(toolName) {
 			t.Fatalf("%s registers without error and then never reaches the model, which reads as the model choosing not to use it", toolName)
@@ -262,7 +262,7 @@ func TestFileWriteResultSatisfiesItsOwnContract(t *testing.T) {
 	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: workspacePath}, nil)
 
 	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
-		ToolName: toolcontract.FileWriteToolName,
+		ToolName: toolcontract.WriteToolName,
 		Input:    json.RawMessage(`{"path":"out.txt","content":"hello\n"}`),
 	})
 

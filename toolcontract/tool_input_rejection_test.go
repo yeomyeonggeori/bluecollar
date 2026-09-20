@@ -8,15 +8,15 @@ import (
 )
 
 func TestARejectedToolInputNamesWhatWasWrongAndWhatExists(t *testing.T) {
-	toolSet := NewToolSet([]string{"file_edit"})
+	toolSet := NewToolSet([]string{"edit"})
 	schema := json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"},"oldText":{"type":"string"},"newText":{"type":"string"}},"required":["path","oldText","newText"],"additionalProperties":false}`)
-	if errorValue := registerTestTool(toolSet, ToolDefinition{Name: "file_edit", InputSchema: schema},
+	if errorValue := registerTestTool(toolSet, ToolDefinition{Name: "edit", InputSchema: schema},
 		func(context.Context, ToolInvocation) (ToolResult, error) { return testToolSuccess("ok"), nil }); errorValue != nil {
 		t.Fatalf("register failed: %v", errorValue)
 	}
 
 	result, _ := toolSet.Invoke(context.Background(), ToolInvocation{
-		ToolName: "file_edit",
+		ToolName: "edit",
 		Input:    json.RawMessage(`{"path":"a.go","oldText":"x","newText":"y","oldText2":"z","requireUnique":true}`),
 	})
 

@@ -70,7 +70,7 @@ func promptBudgetFixtures() map[string]agentTaskState {
 				Prompt:            "fix the failing test",
 				TurnStartedAt:     turnStartedAt,
 				WorkspaceRootPath: "/workspace",
-				ToolSet:           newTestToolSet([]string{toolcontract.ShellToolName, toolcontract.FileReadToolName, toolcontract.FileEditToolName}),
+				ToolSet:           newTestToolSet([]string{toolcontract.BashToolName, toolcontract.FileReadToolName, toolcontract.EditToolName}),
 			},
 		},
 		"conversation task with skills": {

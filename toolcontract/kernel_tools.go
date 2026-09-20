@@ -3,7 +3,7 @@ package toolcontract
 import "strings"
 
 const (
-	ShellToolName               = "shell"
+	BashToolName                = "bash"
 	ReadToolName                = "read"
 	AskInputToolName            = "ask_input"
 	AskConfirmToolName          = "ask_confirm"
@@ -11,14 +11,14 @@ const (
 	AskChoiceToolName           = "ask_choice"
 	SkillSearchToolName         = "skill_search"
 	FileReadToolName            = "file_read"
-	FileWriteToolName           = "file_write"
+	WriteToolName               = "write"
 	FileDeleteToolName          = "file_delete"
-	FileEditToolName            = "file_edit"
+	EditToolName                = "edit"
 	FilePreviewToolName         = "file_preview"
 	ImageReadToolName           = "image_read"
 	ConversationHistoryToolName = "conversation_history"
 	PlanToolName                = "plan"
-	FindToolsToolName           = "find_tools"
+	EquipToolName               = "equip"
 )
 
 const MaxExtensionCallableToolCount = 15
@@ -33,20 +33,35 @@ const MaxLikelyToolCountForOnePlanStep = min(ToolNamesOnePlanStepIsExpectedToNee
 
 func KernelToolNames() []string {
 	return []string{
-		ShellToolName,
+		BashToolName,
 		ReadToolName,
 		FileDeliverToolName,
 		SkillSearchToolName,
 		FileReadToolName,
-		FileWriteToolName,
+		WriteToolName,
 		FileDeleteToolName,
-		FileEditToolName,
+		EditToolName,
 		FilePreviewToolName,
 		ImageReadToolName,
 		ConversationHistoryToolName,
 		PlanToolName,
-		FindToolsToolName,
+		EquipToolName,
 	}
+}
+
+var currentNameByFormerKernelToolName = map[string]string{
+	"shell":      BashToolName,
+	"file_write": WriteToolName,
+	"file_edit":  EditToolName,
+	"find_tools": EquipToolName,
+}
+
+func CanonicalToolName(recordedToolName string) string {
+	trimmedToolName := strings.TrimSpace(recordedToolName)
+	if currentToolName, wasRenamed := currentNameByFormerKernelToolName[trimmedToolName]; wasRenamed {
+		return currentToolName
+	}
+	return trimmedToolName
 }
 
 func IsKernelToolName(toolName string) bool {

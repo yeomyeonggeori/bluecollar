@@ -116,8 +116,8 @@ func TestRequiredNextToolsPreferPersistedThenArbitratedAndNothingElse(t *testing
 		},
 		{
 			name:              "arbitrated workflow",
-			arbitratedTools:   []string{"file_write", toolcontract.ShellToolName, toolcontract.FileDeliverToolName},
-			expectedToolNames: []string{"file_write", toolcontract.ShellToolName, toolcontract.FileDeliverToolName},
+			arbitratedTools:   []string{"write", toolcontract.BashToolName, toolcontract.FileDeliverToolName},
+			expectedToolNames: []string{"write", toolcontract.BashToolName, toolcontract.FileDeliverToolName},
 		},
 		{
 			name:              "nothing to require",
@@ -691,18 +691,18 @@ func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *test
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeMaintenanceTask,
 		TaskLevel:        TaskLevelLow,
-		InitialToolNames: []string{toolcontract.ShellToolName},
+		InitialToolNames: []string{toolcontract.BashToolName},
 		ResponseLanguage: "ko",
 		Reason:           "side effect tool planned without a predicted evidence name",
 	}})
 	toolCallCount := 0
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName, "task_update"})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.ShellToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName, "task_update"})
+	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.BashToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		toolCallCount++
 		return testToolSuccess(`{"exitCode":0,"stdout":"done","stderr":"","timedOut":false}`), nil
 	})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"do the side effect"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"do the side effect"}}`,
 		finishMessageCiting("완료했습니다.", "obs-001"),
 	}})
 	request := kernelTestRequest("서버에 배포 스크립트 실행해줘")

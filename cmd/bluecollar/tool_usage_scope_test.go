@@ -25,14 +25,14 @@ func (stubToolSelector) SelectToolNames(context.Context, agentcontract.ToolSelec
 	return nil, nil
 }
 
-func TestTheHostOffersFindToolsOnlyWhenItCanAnswerIt(t *testing.T) {
+func TestTheHostOffersEquipOnlyWhenItCanAnswerIt(t *testing.T) {
 	withoutSelector := newWorkspaceToolSet(shell{workingDirectoryPath: t.TempDir()}, nil)
-	if withoutSelector.CanInvoke(toolcontract.FindToolsToolName) {
-		t.Fatal("expected a host with no tool selector to leave find_tools out of the kernel it offers")
+	if withoutSelector.CanInvoke(toolcontract.EquipToolName) {
+		t.Fatal("expected a host with no tool selector to leave equip out of the kernel it offers")
 	}
 	withSelector := newWorkspaceToolSet(shell{workingDirectoryPath: t.TempDir()}, stubToolSelector{})
-	if !withSelector.CanInvoke(toolcontract.FindToolsToolName) {
-		t.Fatal("expected a host with a tool selector to register the find_tools it names")
+	if !withSelector.CanInvoke(toolcontract.EquipToolName) {
+		t.Fatal("expected a host with a tool selector to register the equip it names")
 	}
 	for _, toolName := range withSelector.ListToolNames() {
 		if _, isRegistered := withSelector.ToolDefinition(toolName); !isRegistered {

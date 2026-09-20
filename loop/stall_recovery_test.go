@@ -28,7 +28,7 @@ func TestStalledRecoveryDirectiveNamesFailedToolAndForbidsAsking(t *testing.T) {
 	if !strings.Contains(directive.Summary, "site_build") {
 		t.Fatalf("expected directive to name the failed tool, got %q", directive.Summary)
 	}
-	if !strings.Contains(directive.Summary, "file_edit") || !strings.Contains(directive.Summary, "do not ask") {
+	if !strings.Contains(directive.Summary, "edit") || !strings.Contains(directive.Summary, "do not ask") {
 		t.Fatalf("expected directive to push an edit and forbid asking, got %q", directive.Summary)
 	}
 }
@@ -73,7 +73,7 @@ func TestStallRecoveryBudgetRefreshesAfterRealProgress(t *testing.T) {
 	progressObservations := []turnObservation{{
 		ObservationID: "obs-progress",
 		Action:        "continue",
-		Tool:          "file_write",
+		Tool:          "write",
 		Output:        toolcontract.ToolOutput{Content: `{"path":"app.tsx"}`},
 	}}
 	evaluation := tracker.evaluate(progressObservations)
@@ -88,8 +88,8 @@ func TestStallRecoveryBudgetRefreshesAfterRealProgress(t *testing.T) {
 
 func TestContinueStalledRecoverySkipsFinishStall(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{}, TurnOptions{})
-	failedBuild := newFailureObservation("obs-001", "continue", "shell", "EACCES", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
-	failedBuild.ToolInputKey = "shell:build"
+	failedBuild := newFailureObservation("obs-001", "continue", "bash", "EACCES", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "tool")
+	failedBuild.ToolInputKey = "bash:build"
 	state := &agentTaskState{Observations: []turnObservation{
 		failedBuild,
 		{ObservationID: "obs-002", Action: "evidence_missing", Summary: "finish is missing required expected result"},
@@ -130,11 +130,11 @@ func TestObservedSuggestedNextToolIgnoresUntrustedResultFields(t *testing.T) {
 func TestObservedSuggestedNextToolReadsRecoveryPacketAllowedTools(t *testing.T) {
 	observation := completionGateObservation(1, completionGateResult{Message: "finish is not backed by observed results", EvidenceKind: evidenceKindExpectedResult}, nil, nil)
 	observation.RecoveryPacket = &RecoveryPacket{
-		AllowedTools: []string{"file_write", "site_build"},
+		AllowedTools: []string{"write", "site_build"},
 	}
 
 	suggestion, isFound := latestObservedSuggestedNextTool([]turnObservation{observation})
-	if !isFound || suggestion.ToolName != "file_write" {
+	if !isFound || suggestion.ToolName != "write" {
 		t.Fatalf("expected recovery packet allowed tool suggestion, got %+v found=%v", suggestion, isFound)
 	}
 }
@@ -152,10 +152,10 @@ func TestTechnicalStallDoesNotPauseForUserInput(t *testing.T) {
 func TestRequestWorkingSetPinsObservedSuggestedNextTool(t *testing.T) {
 	request := AgentTurnRequest{}
 	observation := newContentObservation("obs-001", "continue", "site_list", `{"status":"failed"}`)
-	observation.RecoveryPacket = &RecoveryPacket{AllowedTools: []string{"file_edit"}}
+	observation.RecoveryPacket = &RecoveryPacket{AllowedTools: []string{"edit"}}
 
 	updatedRequest := requestWithStepWorkingSetTools(request, agentTaskState{Observations: []turnObservation{observation}})
-	if len(updatedRequest.PinnedToolNames) != 1 || updatedRequest.PinnedToolNames[0] != "file_edit" {
+	if len(updatedRequest.PinnedToolNames) != 1 || updatedRequest.PinnedToolNames[0] != "edit" {
 		t.Fatalf("expected observed suggested tool to be pinned, got %+v", updatedRequest.PinnedToolNames)
 	}
 }
@@ -163,9 +163,9 @@ func TestRequestWorkingSetPinsObservedSuggestedNextTool(t *testing.T) {
 func TestStalledTurnUsesSuggestedNextToolBeforeExit(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{}, TurnOptions{})
 	observation := newContentObservation("obs-001", "continue", "site_list", `{"status":"failed"}`)
-	observation.RecoveryPacket = &RecoveryPacket{AllowedTools: []string{"file_edit"}}
+	observation.RecoveryPacket = &RecoveryPacket{AllowedTools: []string{"edit"}}
 	state := &agentTaskState{
-		Request:      AgentTurnRequest{ToolSet: newTestToolSet([]string{"file_edit"})},
+		Request:      AgentTurnRequest{ToolSet: newTestToolSet([]string{"edit"})},
 		Observations: []turnObservation{observation},
 	}
 	tracker := newActionProgressTracker(nil)
@@ -174,10 +174,10 @@ func TestStalledTurnUsesSuggestedNextToolBeforeExit(t *testing.T) {
 		t.Fatal("expected suggested next tool directive")
 	}
 	lastObservation := state.Observations[len(state.Observations)-1]
-	if !strings.Contains(lastObservation.Summary, "file_edit") || strings.Contains(lastObservation.Summary, "finish") && !strings.Contains(lastObservation.Summary, "before") {
+	if !strings.Contains(lastObservation.Summary, "edit") || strings.Contains(lastObservation.Summary, "finish") && !strings.Contains(lastObservation.Summary, "before") {
 		t.Fatalf("expected directive to require suggested tool before finish, got %q", lastObservation.Summary)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent("task-suggested-next"), "agent.suggested_next_tool_directive", "file_edit") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent("task-suggested-next"), "agent.suggested_next_tool_directive", "edit") {
 		t.Fatal("expected suggested next tool event")
 	}
 }
@@ -191,7 +191,7 @@ func TestBrowserFailureRecoveryGuidanceRedirectsToWebFetch(t *testing.T) {
 	if !strings.Contains(guidance, "web_fetch") {
 		t.Fatalf("expected browser failure to steer toward web_fetch, got %q", guidance)
 	}
-	nonBrowser := newFailureObservation("obs-002", "continue", "shell", "boom", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell")
+	nonBrowser := newFailureObservation("obs-002", "continue", "bash", "boom", toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "bash")
 	if strings.Contains(recoveryGuidanceContent(browserToolSet, nonBrowser, ""), "browser capability operations run on the user's Companion") {
 		t.Fatal("expected non-browser failures not to get browser guidance")
 	}

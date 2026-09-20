@@ -368,7 +368,7 @@ func TestAToolCatalogCarriesTheHalfThatSaysWhenNotToUseIt(t *testing.T) {
 		Name:         "scoped_tool",
 		Description:  "Replace one exact passage of a file.",
 		WhenToUse:    "changing a file that already exists.",
-		WhenNotToUse: "creating a file; use file_write.",
+		WhenNotToUse: "creating a file; use write.",
 	}, func(context.Context, ToolInvocation) (ToolResult, error) {
 		return testToolSuccess("done"), nil
 	}); errorValue != nil {
@@ -385,7 +385,7 @@ func TestAToolCatalogCarriesTheHalfThatSaysWhenNotToUseIt(t *testing.T) {
 
 	descriptions := toolSet.Descriptions()
 
-	if !strings.Contains(descriptions, "Replace one exact passage of a file. When to use: changing a file that already exists. When not to use: creating a file; use file_write.") {
+	if !strings.Contains(descriptions, "Replace one exact passage of a file. When to use: changing a file that already exists. When not to use: creating a file; use write.") {
 		t.Fatalf("a wrong-tool failure is fixed once on the descriptor or corrected by recovery guidance on every model, every time: %s", descriptions)
 	}
 	if !strings.Contains(descriptions, "bare_tool: Do the thing. [") {
@@ -394,8 +394,8 @@ func TestAToolCatalogCarriesTheHalfThatSaysWhenNotToUseIt(t *testing.T) {
 }
 
 func TestAnInternalToolOutsideTheAllowListIsRefusedToTheModelAndReachableByTheRuntime(t *testing.T) {
-	toolSet := NewToolSet([]string{ShellToolName})
-	registerTestTool(toolSet, ToolDefinition{Name: ShellToolName}, func(context.Context, ToolInvocation) (ToolResult, error) {
+	toolSet := NewToolSet([]string{BashToolName})
+	registerTestTool(toolSet, ToolDefinition{Name: BashToolName}, func(context.Context, ToolInvocation) (ToolResult, error) {
 		return testToolSuccess("ran"), nil
 	})
 	registerTestTool(toolSet, ToolDefinition{Name: FileDeliverToolName, Visibility: ToolVisibilityInternal}, func(context.Context, ToolInvocation) (ToolResult, error) {
@@ -419,7 +419,7 @@ func TestAnInternalToolOutsideTheAllowListIsRefusedToTheModelAndReachableByTheRu
 	if runtimeResult.Failed() {
 		t.Fatalf("expected the runtime's own call to go through, got %+v", runtimeResult)
 	}
-	if toolSet.AllowingInternalTool(ShellToolName).CanInvoke(FileDeliverToolName) {
+	if toolSet.AllowingInternalTool(BashToolName).CanInvoke(FileDeliverToolName) {
 		t.Fatal("expected widening for one internal tool to leave the others refused")
 	}
 }

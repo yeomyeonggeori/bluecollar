@@ -51,7 +51,7 @@ func TestProgressEventsCapsFailureProgressWithoutSuccess(t *testing.T) {
 	}
 
 	withSuccess := append([]turnObservation{}, observations[:4]...)
-	withSuccess = append(withSuccess, turnObservation{ObservationID: "ok", Action: "continue", Tool: "file_write", Output: toolcontract.ToolOutput{Content: "wrote"}})
+	withSuccess = append(withSuccess, turnObservation{ObservationID: "ok", Action: "continue", Tool: "write", Output: toolcontract.ToolOutput{Content: "wrote"}})
 	withSuccess = append(withSuccess, observations[4:]...)
 	if got := countFailureProgress(progressEvents(withSuccess)); got != len(fingerprints) {
 		t.Fatalf("expected a success to reset the failure-progress cap, got %d", got)

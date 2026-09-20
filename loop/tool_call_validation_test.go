@@ -87,13 +87,13 @@ func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 }
 
 func TestValidateTerminalToolInputRejectsRegisteredToolNameAsCommand(t *testing.T) {
-	toolRegistry := newTestToolSet([]string{"shell"})
+	toolRegistry := newTestToolSet([]string{"bash"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_serve"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("created"), nil
 	})
 	input := toolcontract.MarshalToolInput(map[string]any{"command": "site_serve --slug demo"})
 
-	errorValue := validateTerminalToolInput("shell", input, toolRegistry)
+	errorValue := validateTerminalToolInput("bash", input, toolRegistry)
 
 	if errorValue == nil || !isTerminalToolNameError(errorValue) {
 		t.Fatalf("expected terminal tool-name error, got %v", errorValue)
@@ -618,14 +618,14 @@ func TestRepeatedSuccessfulReadIsNotACompletionCandidateWhenContractExpectsMutat
 
 func TestAgentTurnRunnerRejectsRepeatedSuccessfulToolCall(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"marp --version"}}`,
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"marp --version"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"marp --version"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"marp --version"}}`,
 		finishMessageDocument("The command finished running.\n\n@marp-team/marp-cli v4.3.1"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4, MaxToolCallCount: 4})
 	toolCallCount := 0
-	toolRegistry := newTestToolSet([]string{"shell"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{"bash"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		toolCallCount++
 		return testToolSuccess(`{"exitCode":0,"stdout":"@marp-team/marp-cli v4.3.1\n","stderr":"","timedOut":false}`), nil
 	})
@@ -716,7 +716,7 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileWrite(t *testing.T) {
 		{
 			ObservationID: "obs-002",
 			Action:        "continue",
-			Tool:          toolcontract.FileWriteToolName,
+			Tool:          toolcontract.WriteToolName,
 			Output:        toolcontract.ToolOutput{Content: `{"path":"` + path + `","sizeBytes":1200}`},
 		},
 	}
@@ -728,7 +728,7 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileWrite(t *testing.T) {
 	_, isRepeated := repeatedFileReadObservation(observations, actionDocument, "obs-003")
 
 	if isRepeated {
-		t.Fatal("expected file_read cache to be ignored after a newer file_write")
+		t.Fatal("expected file_read cache to be ignored after a newer write")
 	}
 }
 
@@ -744,7 +744,7 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileEdit(t *testing.T) {
 		{
 			ObservationID: "obs-002",
 			Action:        "continue",
-			Tool:          toolcontract.FileEditToolName,
+			Tool:          toolcontract.EditToolName,
 			Output:        toolcontract.ToolOutput{Content: `{"editCount":1,"editedFiles":["` + path + `"]}`},
 		},
 	}
@@ -756,7 +756,7 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileEdit(t *testing.T) {
 	_, isRepeated := repeatedFileReadObservation(observations, actionDocument, "obs-003")
 
 	if isRepeated {
-		t.Fatal("expected file_read cache to be ignored after a newer file_edit")
+		t.Fatal("expected file_read cache to be ignored after a newer edit")
 	}
 }
 
@@ -771,7 +771,7 @@ func TestRepeatedFileReadObservationMatchesMutationPathAcrossTildeSpelling(t *te
 		{
 			ObservationID: "obs-002",
 			Action:        "continue",
-			Tool:          toolcontract.FileWriteToolName,
+			Tool:          toolcontract.WriteToolName,
 			Output:        toolcontract.ToolOutput{Content: `{"path":"documents/report.md","sizeBytes":1200}`},
 		},
 	}
@@ -830,7 +830,7 @@ func TestAgentTurnRunnerRejectsRepeatedScheduleCreateWithoutExecutingAgain(t *te
 func TestAToolThatCannotSucceedIsNotOfferedAgain(t *testing.T) {
 	observations := []turnObservation{{
 		ObservationID: "obs-001",
-		Tool:          toolcontract.FileWriteToolName,
+		Tool:          toolcontract.WriteToolName,
 		Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureExternalService,
 			Stage:           "tool_result_contract",
@@ -839,7 +839,7 @@ func TestAToolThatCannotSucceedIsNotOfferedAgain(t *testing.T) {
 		},
 	}}
 
-	refused, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.FileWriteToolName)
+	refused, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.WriteToolName)
 
 	if !wasRefused || refused.ObservationID != "obs-001" {
 		t.Fatal("a call the runtime already declared unrepeatable spent 106 turns being repeated, because nothing but the wording stopped it")
@@ -849,11 +849,11 @@ func TestAToolThatCannotSucceedIsNotOfferedAgain(t *testing.T) {
 func TestAnOrdinaryToolFailureStaysAvailable(t *testing.T) {
 	observations := []turnObservation{{
 		ObservationID: "obs-001",
-		Tool:          toolcontract.FileWriteToolName,
+		Tool:          toolcontract.WriteToolName,
 		Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound, UserSafeSummary: "no such directory"},
 	}}
 
-	if _, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.FileWriteToolName); wasRefused {
+	if _, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.WriteToolName); wasRefused {
 		t.Fatal("most failures are answered by a different input, and refusing the tool after one of them would end the task at its first mistake")
 	}
 }
@@ -881,7 +881,7 @@ func TestALongEditResultStillSaysWhichFileItChanged(t *testing.T) {
 	document, _ := json.Marshal(map[string]any{"path": "src/main.go", "diff": strings.Repeat("x", 40000)})
 
 	observation := services.runner.saveToolObservation(context.Background(), taskRun.TaskRunID, "obs-1", "", "", "",
-		toolcontract.FileEditToolName, "", json.RawMessage(`{}`), toolcontract.FileEditToolName, "",
+		toolcontract.EditToolName, "", json.RawMessage(`{}`), toolcontract.EditToolName, "",
 		toolcontract.ToolSuccessData(string(document), json.RawMessage(document)), false, "", time.Time{}, 0)
 
 	if !strings.Contains(observation.ContentText(), "elided from the middle") {
@@ -894,10 +894,10 @@ func TestALongEditResultStillSaysWhichFileItChanged(t *testing.T) {
 }
 
 func TestATerminalCommandThatIsActuallyAToolNameIsRefusedBeforeTheShellRuns(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName, "get_weather"})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName, "get_weather"})
 
 	validationError, failureCode := malformedToolInputError(turnActionDocument{
-		ToolName:  toolcontract.ShellToolName,
+		ToolName:  toolcontract.BashToolName,
 		ToolInput: json.RawMessage(`{"command":"get_weather Seoul"}`),
 	}, toolSet)
 
@@ -913,10 +913,10 @@ func TestATerminalCommandThatIsActuallyAToolNameIsRefusedBeforeTheShellRuns(t *t
 }
 
 func TestAShellCommandThatMerelyResemblesAToolNameStillRuns(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName, "get_weather"})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName, "get_weather"})
 
 	validationError, _ := malformedToolInputError(turnActionDocument{
-		ToolName:  toolcontract.ShellToolName,
+		ToolName:  toolcontract.BashToolName,
 		ToolInput: json.RawMessage(`{"command":"cd /app && python convert.py"}`),
 	}, toolSet)
 
@@ -926,11 +926,11 @@ func TestAShellCommandThatMerelyResemblesAToolNameStillRuns(t *testing.T) {
 }
 
 func TestAnOrdinaryCommandIsNotAnAgentActionForMentioningOne(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 
 	for _, command := range []string{"grep -rn finish build.log", "ls /app/finished", "echo done > finish.txt"} {
 		input, _ := json.Marshal(map[string]string{"command": command})
-		validationError := validateTerminalToolInput(toolcontract.ShellToolName, input, toolSet)
+		validationError := validateTerminalToolInput(toolcontract.BashToolName, input, toolSet)
 		if validationError != nil {
 			t.Errorf("%q names no agent action and has to reach the shell, got %v", command, validationError)
 		}
@@ -938,11 +938,11 @@ func TestAnOrdinaryCommandIsNotAnAgentActionForMentioningOne(t *testing.T) {
 }
 
 func TestAnAgentActionTypedAsTheWholeCommandIsStillRefused(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 
 	for _, command := range []string{"reply", "set_quality_criteria --strict"} {
 		input, _ := json.Marshal(map[string]string{"command": command})
-		if validateTerminalToolInput(toolcontract.ShellToolName, input, toolSet) == nil {
+		if validateTerminalToolInput(toolcontract.BashToolName, input, toolSet) == nil {
 			t.Errorf("%q is an action the model meant to call directly, and no shell can run it", command)
 		}
 	}

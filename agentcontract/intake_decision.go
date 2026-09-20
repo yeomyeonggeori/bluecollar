@@ -193,6 +193,6 @@ type SelectedTool struct {
 	Description string `json:"description"`
 }
 
-type FoundTools struct {
+type EquippedTools struct {
 	SelectedTools []SelectedTool `json:"selectedTools"`
 }

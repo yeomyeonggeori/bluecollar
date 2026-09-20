@@ -28,7 +28,7 @@ func TestSelectInstructionBundleIncludesPresentationForKoreanPPTRequest(t *testi
 				Tags:           []string{"slides", "pptx"},
 				Prompt:         "Generate PPTX with Marp.",
 				TriggerHints:   []string{"피피티", "파워포인트", "발표자료", "pptx"},
-				ToolReferences: []string{"shell", "file_write", "file_deliver"},
+				ToolReferences: []string{"bash", "write", "file_deliver"},
 				Source:         InstructionSource{Path: "/srv/agent/skills/presentation/SKILL.md", SkillName: "presentation"},
 			},
 		},
@@ -36,7 +36,7 @@ func TestSelectInstructionBundleIncludesPresentationForKoreanPPTRequest(t *testi
 
 	selectedBundle := selectInstructionBundleForRequest(instructionBundle, AgentRequest{
 		Prompt:  "너 뭐 할 수 있는지 피피티 만들어서 보내줘봐",
-		ToolSet: testToolSet([]string{"shell", "file_write", "file_deliver"}),
+		ToolSet: testToolSet([]string{"bash", "write", "file_deliver"}),
 	})
 
 	if !strings.Contains(selectedBundle.Prompt, "Generate PPTX with Marp.") {
@@ -73,7 +73,7 @@ func TestSelectInstructionBundleDoesNotUseStaleVisibleContextForRetrieval(t *tes
 				WhenToUse:      "Use for 피피티 and PPTX requests.",
 				Prompt:         "Generate PPTX with Marp.",
 				TriggerHints:   []string{"피피티", "pptx"},
-				ToolReferences: []string{"shell", "file_write", "file_deliver"},
+				ToolReferences: []string{"bash", "write", "file_deliver"},
 				Source:         InstructionSource{Path: "/srv/agent/skills/presentation/SKILL.md", SkillName: "presentation"},
 			},
 		},
@@ -84,7 +84,7 @@ func TestSelectInstructionBundleDoesNotUseStaleVisibleContextForRetrieval(t *tes
 		VisibleContext: VisibleContext{Messages: []VisibleContextMessage{
 			{Speaker: "user", Text: "너 뭐 할 수 있는지 8장 피피티 만들어서 보내줘봐"},
 		}},
-		ToolSet: testToolSet([]string{"shell", "file_write", "file_deliver"}),
+		ToolSet: testToolSet([]string{"bash", "write", "file_deliver"}),
 	})
 
 	if len(selectedBundle.SkillDecisions) != 0 {
@@ -104,7 +104,7 @@ func TestSelectInstructionBundleDoesNotUseTriggerHintOutsideRetrievalCandidates(
 				Description:    "Create and publish web prototypes.",
 				WhenToUse:      "Use for website prototype requests.",
 				Prompt:         "Use site_serve, shell, and site.serve.",
-				ToolReferences: []string{"shell", "site_serve", "site_serve"},
+				ToolReferences: []string{"bash", "site_serve", "site_serve"},
 				Source:         InstructionSource{Path: "/srv/agent/skills/site-prototype/SKILL.md", SkillName: "site-prototype"},
 			},
 		},
@@ -112,7 +112,7 @@ func TestSelectInstructionBundleDoesNotUseTriggerHintOutsideRetrievalCandidates(
 
 	selectedBundle := selectInstructionBundleForRequest(instructionBundle, AgentRequest{
 		Prompt:  "웹사이트 하나 만들어서 배포해봐",
-		ToolSet: testToolSet([]string{"shell", "site_serve", "site_serve"}),
+		ToolSet: testToolSet([]string{"bash", "site_serve", "site_serve"}),
 	})
 
 	if strings.Contains(selectedBundle.Prompt, "Use site_serve") {
@@ -129,7 +129,7 @@ func TestToolSetForAgentTurnExposesSelectedSkillToolsAlongsideKernel(t *testing.
 	fullToolSet := testToolSet([]string{
 		"conversation_history",
 		"memory_search",
-		"shell",
+		"bash",
 		"site_serve",
 		"site_serve",
 		"schedule_create",
@@ -138,7 +138,7 @@ func TestToolSetForAgentTurnExposesSelectedSkillToolsAlongsideKernel(t *testing.
 		Skills: []SkillInstruction{
 			{
 				Name:           "site-prototype",
-				ToolReferences: []string{"shell", "site_serve", "site_serve"},
+				ToolReferences: []string{"bash", "site_serve", "site_serve"},
 			},
 			{
 				Name:           "scheduled-task",
@@ -151,7 +151,7 @@ func TestToolSetForAgentTurnExposesSelectedSkillToolsAlongsideKernel(t *testing.
 	filteredToolSet := toolSetForAgentTurn(fullToolSet, instructionBundle, AgentRequest{Prompt: "사이트 만들어줘"}, ExecutionPlan{}, false, OutcomeContract{})
 
 	// shell and conversation_history are kernel tools in this fixture; memory_search is not.
-	for _, toolName := range []string{"shell", "conversation_history"} {
+	for _, toolName := range []string{"bash", "conversation_history"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected kernel tool %s to remain available, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
@@ -203,8 +203,8 @@ func TestToolSetForAgentTurnExposesOnlyPinnedNonKernelTools(t *testing.T) {
 		"conversation_history",
 		"memory_search",
 		"schedule_list",
-		"shell",
-		"file_write",
+		"bash",
+		"write",
 		"schedule_create",
 		"mail_message_search",
 	})
@@ -221,7 +221,7 @@ func TestToolSetForAgentTurnExposesOnlyPinnedNonKernelTools(t *testing.T) {
 		PinnedToolNames: []string{"schedule_create"},
 	}, ExecutionPlan{}, false, OutcomeContract{})
 
-	for _, toolName := range []string{"shell", "file_write", "schedule_create", "conversation_history"} {
+	for _, toolName := range []string{"bash", "write", "schedule_create", "conversation_history"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected tool %s to remain available, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
@@ -234,7 +234,7 @@ func TestToolSetForAgentTurnExposesOnlyPinnedNonKernelTools(t *testing.T) {
 }
 
 func TestToolSetForAgentTurnHidesSendToolButKeepsKernelToolForNonSendOutcome(t *testing.T) {
-	fullToolSet := testToolSet([]string{"message_send", "file_write"})
+	fullToolSet := testToolSet([]string{"message_send", "write"})
 	instructionBundle := InstructionBundle{
 		Skills: []SkillInstruction{{
 			Name:           "direct-message",
@@ -249,8 +249,8 @@ func TestToolSetForAgentTurnHidesSendToolButKeepsKernelToolForNonSendOutcome(t *
 	if !filteredToolSet.IsAllowed("message_send") {
 		t.Fatalf("expected selected send tool to be directly callable, got %+v", filteredToolSet.ListToolNames())
 	}
-	if !filteredToolSet.IsAllowed("file_write") {
-		t.Fatalf("expected kernel tool file_write to remain available, got %+v", filteredToolSet.ListToolNames())
+	if !filteredToolSet.IsAllowed("write") {
+		t.Fatalf("expected kernel tool write to remain available, got %+v", filteredToolSet.ListToolNames())
 	}
 }
 
@@ -320,9 +320,9 @@ func TestSkillSelectorOnlyChecksSkillAvailability(t *testing.T) {
 	skillInstruction := SkillInstruction{
 		Name:           "presentation",
 		TriggerHints:   []string{"피피티", "파워포인트", "발표자료", "pptx"},
-		ToolReferences: []string{"shell", "file_write", "file_deliver"},
+		ToolReferences: []string{"bash", "write", "file_deliver"},
 	}
-	request := AgentRequest{Prompt: "피피티 만들어줘", ToolSet: testToolSet([]string{"shell", "file_write", "file_deliver"})}
+	request := AgentRequest{Prompt: "피피티 만들어줘", ToolSet: testToolSet([]string{"bash", "write", "file_deliver"})}
 
 	if skillSelector.ShouldInclude(skillInstruction, request) {
 		t.Fatal("expected prompt hints not to select skills outside retrieval")
@@ -334,11 +334,11 @@ func TestSkillSelectorKeepsSkillWithPartiallyReachableTools(t *testing.T) {
 	skillInstruction := SkillInstruction{
 		Name:           "presentation",
 		TriggerHints:   []string{"피피티"},
-		ToolReferences: []string{"shell", "file_write", "file_deliver"},
+		ToolReferences: []string{"bash", "write", "file_deliver"},
 	}
 	request := AgentRequest{
 		Prompt:  "피피티 만들어줘",
-		ToolSet: testToolSet([]string{"shell", "file_write"}),
+		ToolSet: testToolSet([]string{"bash", "write"}),
 	}
 
 	if !skillSelector.IsAvailable(skillInstruction, request) {
@@ -356,7 +356,7 @@ func TestSkillSelectorSkipsSkillWhenEveryToolIsMissing(t *testing.T) {
 		Name:           "mattermost",
 		ToolReferences: []string{"message_send", "message_update"},
 	}
-	request := AgentRequest{ToolSet: testToolSet([]string{"shell"})}
+	request := AgentRequest{ToolSet: testToolSet([]string{"bash"})}
 
 	if skillSelector.IsAvailable(skillInstruction, request) {
 		t.Fatal("expected the skill to be unavailable when no tool reference is reachable")
@@ -368,8 +368,8 @@ func TestSkillSelectorSkipsSkillWhenEveryToolIsMissing(t *testing.T) {
 }
 
 func TestSelectInstructionBundleKeepsSkillWhenDirectToolsAreAvailable(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{"shell", "site_serve", "site_serve"})
-	for _, toolName := range []string{"shell", "site_serve", "site_serve"} {
+	toolSet := toolcontract.NewToolSet([]string{"bash", "site_serve", "site_serve"})
+	for _, toolName := range []string{"bash", "site_serve", "site_serve"} {
 		currentToolName := toolName
 		registerTestTool(toolSet, toolcontract.ToolDefinition{Name: currentToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return testToolSuccess("ok"), nil
@@ -379,7 +379,7 @@ func TestSelectInstructionBundleKeepsSkillWhenDirectToolsAreAvailable(t *testing
 		Name:           "site-prototype",
 		Description:    "Create and publish website prototypes.",
 		Prompt:         "SITE BODY",
-		ToolReferences: []string{"shell", "site_serve", "site_serve"},
+		ToolReferences: []string{"bash", "site_serve", "site_serve"},
 	}}}
 	retriever := staticSkillRetriever{result: SkillRetrievalResult{
 		RetrievalMode: "test",
@@ -405,8 +405,8 @@ func TestSelectInstructionBundleKeepsSkillWhenDirectToolsAreAvailable(t *testing
 }
 
 func TestSelectInstructionBundleSkipsSkillWhenDirectToolIsUnavailable(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{"shell"})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolSet := toolcontract.NewToolSet([]string{"bash"})
+	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("ok"), nil
 	})
 	for _, toolName := range []string{"site_serve", "site_serve"} {
@@ -422,7 +422,7 @@ func TestSelectInstructionBundleSkipsSkillWhenDirectToolIsUnavailable(t *testing
 		Name:           "site-prototype",
 		Description:    "Create and publish website prototypes.",
 		Prompt:         "SITE BODY",
-		ToolReferences: []string{"shell", "site_serve", "site_serve"},
+		ToolReferences: []string{"bash", "site_serve", "site_serve"},
 	}}}
 	retriever := staticSkillRetriever{result: SkillRetrievalResult{
 		RetrievalMode: "test",
@@ -452,21 +452,21 @@ func TestSelectInstructionBundleKeepsUnselectedFullSkillBodyOutOfPrompt(t *testi
 				Description:    "Create decks.",
 				Prompt:         "Generate PPTX with Marp.",
 				TriggerHints:   []string{"피피티"},
-				ToolReferences: []string{"shell"},
+				ToolReferences: []string{"bash"},
 			},
 			{
 				Name:           "create-gws-file",
 				Description:    "Create spreadsheets.",
 				Prompt:         "SECRET FULL BODY",
 				TriggerHints:   []string{"spreadsheet"},
-				ToolReferences: []string{"shell"},
+				ToolReferences: []string{"bash"},
 			},
 		},
 	}
 
 	selectedBundle := selectInstructionBundleForRequest(instructionBundle, AgentRequest{
 		Prompt:  "피피티 만들어줘",
-		ToolSet: testToolSet([]string{"shell"}),
+		ToolSet: testToolSet([]string{"bash"}),
 	})
 
 	if strings.Contains(selectedBundle.Prompt, "SECRET FULL BODY") {
@@ -593,7 +593,7 @@ func TestNonArtifactFlowTaskRequestIsNotDominatedByPresentation(t *testing.T) {
 				Description:    "Generate clean presentation slides with Marp and attach the requested files.",
 				WhenToUse:      "Use for slides, slide decks, presentations, PPTX, PowerPoint, 발표자료, 파워포인트, 피피티.",
 				Prompt:         "Follow slides workflow.",
-				ToolReferences: []string{"shell", "file_write", "file_deliver"},
+				ToolReferences: []string{"bash", "write", "file_deliver"},
 				Source:         InstructionSource{Path: "/srv/agent/skills/presentation/SKILL.md", SkillName: "presentation"},
 			},
 			{
@@ -618,8 +618,8 @@ func TestNonArtifactFlowTaskRequestIsNotDominatedByPresentation(t *testing.T) {
 	selectedBundle := selectInstructionBundleForRequestWithRetriever(context.Background(), instructionBundle, AgentRequest{
 		Prompt: "업무 등록해줘\n- 메일 페이지 앱 비밀번호, 다양한 사이트 관련 링크로 이동으로 개선하기",
 		ToolSet: testToolSet([]string{
-			"shell",
-			"file_write",
+			"bash",
+			"write",
 			"file_deliver",
 			"task_add",
 			"task_list",
@@ -783,7 +783,7 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 				Description:    "Create, update, build, and publish website prototypes with public URLs.",
 				WhenToUse:      "Use for website, homepage, web app, landing page, deploy, and publish requests.",
 				Prompt:         "Follow website build and publish workflow.",
-				ToolReferences: []string{"file_write", "shell", "site_serve", "site_build", "site_serve"},
+				ToolReferences: []string{"write", "bash", "site_serve", "site_build", "site_serve"},
 				Source:         InstructionSource{Path: "skills/public-web-builder/SKILL.md", SkillName: "public-web-builder"},
 			},
 			{
@@ -791,7 +791,7 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 				Description:    "Create, verify, promote, and attach Word documents in .docx format.",
 				WhenToUse:      "Use for Word documents, .docx files, memos, reports, and enterprise document deliverables.",
 				Prompt:         "Create the document, validate it, promote it, then attach it.",
-				ToolReferences: []string{"file_write", "shell", "file.promote", "file_deliver"},
+				ToolReferences: []string{"write", "bash", "file.promote", "file_deliver"},
 				Source:         InstructionSource{Path: "skills/enterprise-document-maker/SKILL.md", SkillName: "enterprise-document-maker"},
 			},
 		},
@@ -806,14 +806,14 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 	}}
 	languageModel := &schemaStructuredLanguageModel{contentBySchema: map[string]string{
 		"bluecollar_skill_search_queries":       `{"queries":[{"description":"Recover and attach the requested .docx enterprise guide file."}]}`,
-		"bluecollar_contract_skill_arbitration": `{"selectedSkillNames":["enterprise-document-maker"],"rejectedSkillNames":["public-web-builder"],"requiredNextToolNames":["file_write","shell","file.promote","file_deliver"],"expectedEvidence":["file_deliver"],"unmetPreconditions":[],"reason":"The outcome contract requires a .docx attachment, not a public website."}`,
+		"bluecollar_contract_skill_arbitration": `{"selectedSkillNames":["enterprise-document-maker"],"rejectedSkillNames":["public-web-builder"],"requiredNextToolNames":["write","bash","file.promote","file_deliver"],"expectedEvidence":["file_deliver"],"unmetPreconditions":[],"reason":"The outcome contract requires a .docx attachment, not a public website."}`,
 	}}
 
 	selectedBundle := selectInstructionBundleForRequestWithRetrieverAndRouter(context.Background(), instructionBundle, AgentRequest{
 		Prompt: "링크로 전달된 적 없어. 첨부파일로 줘야지 그리고.",
 		ToolSet: testToolSet([]string{
-			"file_write",
-			"shell",
+			"write",
+			"bash",
 			"file.promote",
 			"file_deliver",
 			"site_serve",
@@ -951,14 +951,14 @@ func TestContractSkillArbitrationCorrectsProseToExactCanonicalNames(t *testing.T
 		ToolReferences: []string{"document_read"},
 	}}
 	request := AgentRequest{
-		ToolSet: testToolSet([]string{"document_read", toolcontract.ShellToolName, toolcontract.FileWriteToolName, toolcontract.FileDeliverToolName}),
+		ToolSet: testToolSet([]string{"document_read", toolcontract.BashToolName, toolcontract.WriteToolName, toolcontract.FileDeliverToolName}),
 		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{toolcontract.FileWriteToolName, toolcontract.FileDeliverToolName},
+			RequiredEvidenceTools: []string{toolcontract.WriteToolName, toolcontract.FileDeliverToolName},
 		}},
 	}
 	languageModel := &contractArbitrationSequenceLanguageModel{contents: []string{
-		`{"selectedSkillNames":["document"],"rejectedSkillNames":[],"requiredNextToolNames":["file_write","shell","file_deliver"],"expectedEvidence":["file_deliver attaches the DOCX"],"unmetPreconditions":[],"reason":"document workflow"}`,
-		`{"selectedSkillNames":["document"],"rejectedSkillNames":[],"requiredNextToolNames":["file_write","shell","file_deliver"],"expectedEvidence":["file_deliver"],"unmetPreconditions":[],"reason":"document workflow"}`,
+		`{"selectedSkillNames":["document"],"rejectedSkillNames":[],"requiredNextToolNames":["write","bash","file_deliver"],"expectedEvidence":["file_deliver attaches the DOCX"],"unmetPreconditions":[],"reason":"document workflow"}`,
+		`{"selectedSkillNames":["document"],"rejectedSkillNames":[],"requiredNextToolNames":["write","bash","file_deliver"],"expectedEvidence":["file_deliver"],"unmetPreconditions":[],"reason":"document workflow"}`,
 	}}
 
 	result := NewSkillSearchQueryRouter(languageModel).ArbitrateContractSkills(
@@ -971,7 +971,7 @@ func TestContractSkillArbitrationCorrectsProseToExactCanonicalNames(t *testing.T
 	if result.Status != contractSkillArbitrationSucceeded {
 		t.Fatalf("expected corrected arbitration, got %+v", result)
 	}
-	if !reflect.DeepEqual(result.Arbitration.RequiredNextTools, []string{"file_write", "shell", "file_deliver"}) {
+	if !reflect.DeepEqual(result.Arbitration.RequiredNextTools, []string{"write", "bash", "file_deliver"}) {
 		t.Fatalf("expected exact kernel workflow, got %v", result.Arbitration.RequiredNextTools)
 	}
 	if !reflect.DeepEqual(result.Arbitration.ExpectedEvidence, []string{"file_deliver"}) {
@@ -983,8 +983,8 @@ func TestContractSkillArbitrationCorrectsProseToExactCanonicalNames(t *testing.T
 	assertContractArbitrationSchemaEnums(t, languageModel.requests[0].StructuredOutputSchema.Document, map[string][]string{
 		"selectedSkillNames":    {"document"},
 		"rejectedSkillNames":    {"document"},
-		"requiredNextToolNames": {"document_read", "shell", "file_deliver", "file_write"},
-		"expectedEvidence":      {"file_write", "file_deliver", "document_read"},
+		"requiredNextToolNames": {"document_read", "bash", "file_deliver", "write"},
+		"expectedEvidence":      {"write", "file_deliver", "document_read"},
 	})
 }
 
@@ -1002,7 +1002,7 @@ func TestContractSkillArbitrationFailureDegradesToScoreSelection(t *testing.T) {
 		"bluecollar_skill_search_queries":       `{"queries":[{"description":"Create a company task."}]}`,
 		"bluecollar_contract_skill_arbitration": `{}`,
 	}}
-	toolSet := testToolSet([]string{toolcontract.ShellToolName, "task_add", "task_list"})
+	toolSet := testToolSet([]string{toolcontract.BashToolName, "task_add", "task_list"})
 	outcomeContract := OutcomeContract{RequiredEvidenceTools: []string{"task_add"}}
 	request := AgentRequest{
 		Prompt:     "고객지원 분기 결산 누락 항목 확인 업무를 추가해줘",
@@ -1043,7 +1043,7 @@ func TestContractSkillArbitrationFailureDegradesToScoreSelection(t *testing.T) {
 		outcomeContract,
 		ToolExposureEvent{},
 	)
-	if !exposedToolSet.IsAllowed(toolcontract.ShellToolName) || !exposedToolSet.IsAllowed("task_add") {
+	if !exposedToolSet.IsAllowed(toolcontract.BashToolName) || !exposedToolSet.IsAllowed("task_add") {
 		t.Fatalf("expected kernel and explicit evidence tools, got %+v", exposedToolSet.ListToolNames())
 	}
 	if !exposedToolSet.IsAllowed("task_list") {
@@ -1102,7 +1102,7 @@ func TestSkillQueryRouterMessagesPrioritizeLatestRequest(t *testing.T) {
 			{Speaker: "user", Text: "example.com 스타일로 사업계획서 PPT 만들어줘."},
 		}},
 		ActiveGoal:    ActiveGoal{CurrentObjective: "example.com 발표 자료 생성"},
-		ToolSet:       testToolSet([]string{"site_serve", "site_serve", "shell"}),
+		ToolSet:       testToolSet([]string{"site_serve", "site_serve", "bash"}),
 		TurnStartedAt: time.Date(2026, time.May, 17, 1, 2, 3, 0, time.UTC),
 	})
 
@@ -1309,7 +1309,7 @@ func TestWebsiteSkillSurvivesWhenSkillIsFifthCandidate(t *testing.T) {
 			Name:           "site-prototype",
 			Description:    "Create and publish website prototypes.",
 			Prompt:         "SITE BODY",
-			ToolReferences: []string{"shell", "site_serve", "site_serve"},
+			ToolReferences: []string{"bash", "site_serve", "site_serve"},
 			Source:         InstructionSource{Path: "/srv/agent/skills/site-prototype/SKILL.md", SkillName: "site-prototype"},
 		},
 		{Name: "extra", Description: "Extra skill.", Prompt: "EXTRA BODY"},
@@ -1327,7 +1327,7 @@ func TestWebsiteSkillSurvivesWhenSkillIsFifthCandidate(t *testing.T) {
 	selectedBundle := selectInstructionBundleForRequestWithRetriever(context.Background(), instructionBundle, AgentRequest{
 		Prompt: "김인턴의 구조에 대해 웹사이트 하나 소개 형식으로 만들어줘.",
 		ToolSet: testToolSet([]string{
-			"shell",
+			"bash",
 			"site_serve",
 			"site_serve",
 		}),

@@ -12,10 +12,10 @@ func TestContractEvidenceUsesOnlySelectedRegisteredTools(t *testing.T) {
 		Name:           "internkim-flow",
 		ToolReferences: []string{"task_add", "task_list", "task_update", "task_delete"},
 	}}
-	request := AgentRequest{ToolSet: newTestToolSet([]string{"task_update", "file_edit"})}
+	request := AgentRequest{ToolSet: newTestToolSet([]string{"task_update", "edit"})}
 
 	result := validatedContractEvidenceTools(contractSkillArbitration{
-		ExpectedEvidence:  []string{"file_edit", "task_update", "task_delete"},
+		ExpectedEvidence:  []string{"edit", "task_update", "task_delete"},
 		RequiredNextTools: []string{"task_list", "task_update"},
 	}, selectedSkills, request)
 
@@ -29,13 +29,13 @@ func TestContractNextToolsUseOnlySelectedRegisteredTools(t *testing.T) {
 		Name:           "internkim-flow",
 		ToolReferences: []string{"task_add", "task_list", "task_update", "task_delete"},
 	}}
-	request := AgentRequest{ToolSet: newTestToolSet([]string{"task_add", "task_update", "file_edit"})}
+	request := AgentRequest{ToolSet: newTestToolSet([]string{"task_add", "task_update", "edit"})}
 
 	result := validatedContractNextTools(contractSkillArbitration{
-		RequiredNextTools: []string{"file_edit", "task_add", "task_update", "task_delete", "unknown.operation"},
+		RequiredNextTools: []string{"edit", "task_add", "task_update", "task_delete", "unknown.operation"},
 	}, selectedSkills, request)
 
-	if !reflect.DeepEqual(result, []string{"file_edit", "task_add", "task_update"}) {
+	if !reflect.DeepEqual(result, []string{"edit", "task_add", "task_update"}) {
 		t.Fatalf("expected registered kernel and selected next tools only, got %v", result)
 	}
 }
@@ -58,9 +58,9 @@ func TestContractEvidenceDoesNotPromoteRequiredNextTools(t *testing.T) {
 func TestContractEvidenceRejectsReadForSideEffectContract(t *testing.T) {
 	selectedSkills := []SkillInstruction{{Name: "internkim-flow", ToolReferences: []string{"task_list", "task_update"}}}
 	request := AgentRequest{
-		ToolSet: newTestToolSet([]string{"file_edit", "task_list", "task_update"}),
+		ToolSet: newTestToolSet([]string{"edit", "task_list", "task_update"}),
 		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"file_edit"},
+			RequiredEvidenceTools: []string{"edit"},
 		}},
 	}
 
@@ -98,7 +98,7 @@ func TestInstructionBundleWithToolOwningSkillsSelectsMissedOwner(t *testing.T) {
 		SkillDecisions: []SkillSelectionDecision{{Name: "web-search", Status: "selected", Reason: "embedding_similarity"}},
 	}
 
-	amendedBundle := instructionBundleWithToolOwningSkills(instructionBundle, AgentRequest{}, []string{"site_serve", "file_edit"})
+	amendedBundle := instructionBundleWithToolOwningSkills(instructionBundle, AgentRequest{}, []string{"site_serve", "edit"})
 
 	if !selectedSkillNames(amendedBundle.SkillDecisions)["website"] {
 		t.Fatalf("expected the skill owning a suggested tool to be selected, got %+v", amendedBundle.SkillDecisions)
@@ -129,7 +129,7 @@ func TestASkillWithSomethingToSayCarriesTheGuidance(t *testing.T) {
 }
 
 func TestASkillBodyRidesOnlyWithItsTools(t *testing.T) {
-	shellOnly := toolcontract.NewToolSet([]string{toolcontract.ShellToolName})
+	shellOnly := toolcontract.NewToolSet([]string{toolcontract.BashToolName})
 	memorySkill := SkillInstruction{Name: "memory", Prompt: "Call memory_search before answering.", ToolReferences: []string{"memory_search", "memory_remember"}}
 	workflowSkill := SkillInstruction{Name: "handbook", Prompt: "Follow the escalation order."}
 

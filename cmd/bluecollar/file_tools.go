@@ -98,7 +98,7 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 			ResultContract:  &toolcontract.ToolResultContract{Schema: fileReadOutputSchema},
 			Description:     "Read a file and get back its exact contents.",
 			WhenToUse:       "you need what a file actually says, before changing it or answering a question about it.",
-			WhenNotToUse:    "finding which files exist or which of them contain a string; run shell for that.",
+			WhenNotToUse:    "finding which files exist or which of them contain a string; run bash for that.",
 			Visibility:      toolcontract.ToolVisibilityModel,
 			InputSchema:     fileReadInputSchema,
 		},
@@ -116,14 +116,14 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[fileWriteInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			ID:              "bluecollar/file_write",
-			Name:            toolcontract.FileWriteToolName,
+			ID:              "bluecollar/write",
+			Name:            toolcontract.WriteToolName,
 			SideEffectClass: toolcontract.ToolSideEffectStateChange,
 			OutputSchema:    fileToolOutputSchema,
 			ResultContract:  &toolcontract.ToolResultContract{Schema: fileToolOutputSchema, Effects: changedFileEffectContract},
 			Description:     "Write a file from scratch, replacing whatever was there.",
 			WhenToUse:       "creating a file, or replacing one whose whole content you are producing.",
-			WhenNotToUse:    "changing part of a file that already exists; use file_edit, because retyping the rest from memory changes lines you did not mean to change.",
+			WhenNotToUse:    "changing part of a file that already exists; use edit, because retyping the rest from memory changes lines you did not mean to change.",
 			Visibility:      toolcontract.ToolVisibilityModel,
 			InputSchema:     fileWriteInputSchema,
 		},
@@ -131,7 +131,7 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 		Handler: func(ctx context.Context, input fileWriteInput) (toolcontract.ToolResult, error) {
 			if errorValue := runningShell.writeFile(ctx, input.Path, input.Content); errorValue != nil {
 				return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed,
-					toolcontract.FileWriteToolName, errorValue.Error()), nil
+					toolcontract.WriteToolName, errorValue.Error()), nil
 			}
 			return fileChangeResult(input.Path, "wrote "+input.Path), nil
 		},
@@ -139,14 +139,14 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[fileEditInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
-			ID:              "bluecollar/file_edit",
-			Name:            toolcontract.FileEditToolName,
+			ID:              "bluecollar/edit",
+			Name:            toolcontract.EditToolName,
 			SideEffectClass: toolcontract.ToolSideEffectStateChange,
 			OutputSchema:    fileToolOutputSchema,
 			ResultContract:  &toolcontract.ToolResultContract{Schema: fileToolOutputSchema, Effects: changedFileEffectContract},
 			Description:     "Replace one exact passage of a file with another, leaving every other line byte for byte as it was.",
 			WhenToUse:       "changing a file that already exists, however small or large the passage.",
-			WhenNotToUse:    "creating a file, or when the replacement is the entire content; use file_write.",
+			WhenNotToUse:    "creating a file, or when the replacement is the entire content; use write.",
 			Visibility:      toolcontract.ToolVisibilityModel,
 			InputSchema:     fileEditInputSchema,
 		},
@@ -161,20 +161,20 @@ func editFileThroughShell(ctx context.Context, runningShell shell, input fileEdi
 	content, errorValue := runningShell.readFile(ctx, input.Path)
 	if errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureNotFound, toolcontract.FailureCodes.NotFound,
-			toolcontract.FileEditToolName, errorValue.Error())
+			toolcontract.EditToolName, errorValue.Error())
 	}
 	occurrences := strings.Count(content, input.FindText)
 	if occurrences == 0 {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput,
-			toolcontract.FileEditToolName, "findText does not appear in "+input.Path+"; read the file and copy the passage exactly as it is written there")
+			toolcontract.EditToolName, "findText does not appear in "+input.Path+"; read the file and copy the passage exactly as it is written there")
 	}
 	if occurrences > 1 {
 		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput,
-			toolcontract.FileEditToolName, "findText appears "+strconv.Itoa(occurrences)+" times in "+input.Path+"; include enough surrounding lines to name one passage")
+			toolcontract.EditToolName, "findText appears "+strconv.Itoa(occurrences)+" times in "+input.Path+"; include enough surrounding lines to name one passage")
 	}
 	if errorValue := runningShell.writeFile(ctx, input.Path, strings.Replace(content, input.FindText, input.ReplaceText, 1)); errorValue != nil {
 		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed,
-			toolcontract.FileEditToolName, errorValue.Error())
+			toolcontract.EditToolName, errorValue.Error())
 	}
 	return fileChangeResult(input.Path, "edited "+input.Path)
 }

@@ -15,7 +15,7 @@ func delegateActionDocument(instruction string, expectedResult string) string {
 }
 
 func TestDelegationCostsNothingUntilAHostAsksForIt(t *testing.T) {
-	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.ShellToolName})}
+	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.BashToolName})}
 
 	withoutDelegation := buildAgentSystemInstruction(request, TurnOptions{}).Text()
 	if strings.Contains(withoutDelegation, "Delegation:") {
@@ -50,7 +50,7 @@ func TestADelegatedTurnReportsBackThroughTheParentsLedger(t *testing.T) {
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "무엇이 바뀌었는지 알려줘",
-		ToolSet:           newTestToolSet([]string{toolcontract.ShellToolName}),
+		ToolSet:           newTestToolSet([]string{toolcontract.BashToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)
@@ -86,7 +86,7 @@ func TestADelegatedChildFromAResumedParentGetsItsOwnTaskRun(t *testing.T) {
 		IsApprovalContinuation: true,
 		ConversationID:         "conversation-1",
 		Prompt:                 "무엇이 바뀌었는지 알려줘",
-		ToolSet:                newTestToolSet([]string{toolcontract.ShellToolName}),
+		ToolSet:                newTestToolSet([]string{toolcontract.BashToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)

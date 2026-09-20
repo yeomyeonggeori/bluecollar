@@ -31,7 +31,7 @@ func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 			t.Fatalf("expected non-kernel tool %s to be hidden, got %+v", hiddenToolName, filteredToolSet.ListToolNames())
 		}
 	}
-	for _, kernelToolName := range []string{"file_read", "file_write", "file_edit", "file_preview", "image_read"} {
+	for _, kernelToolName := range []string{"file_read", "write", "edit", "file_preview", "image_read"} {
 		if !filteredToolSet.IsAllowed(kernelToolName) {
 			t.Fatalf("expected coding kernel tool %s to be exposed, got %+v", kernelToolName, filteredToolSet.ListToolNames())
 		}

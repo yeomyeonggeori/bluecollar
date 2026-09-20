@@ -34,11 +34,11 @@ func modelFacingPromptStrings() map[string]string {
 func kernelPromptStates() map[string]agentTaskState {
 	kernelToolSet := newTestToolSet([]string{
 		toolcontract.ReadToolName,
-		toolcontract.FileWriteToolName,
-		toolcontract.FileEditToolName,
-		toolcontract.ShellToolName,
+		toolcontract.WriteToolName,
+		toolcontract.EditToolName,
+		toolcontract.BashToolName,
 		toolcontract.PlanToolName,
-		toolcontract.FindToolsToolName,
+		toolcontract.EquipToolName,
 	})
 	request := AgentTurnRequest{
 		Prompt:            "어제 회의록을 정리해서 파일로 보내줘",
@@ -53,7 +53,7 @@ func kernelPromptStates() map[string]agentTaskState {
 		},
 	}
 	failedState := buildInitialAgentTaskState(request, TurnOptions{}, "task-run-1")
-	failedState.Observations = []turnObservation{toolFailureObservation("obs-001", toolcontract.ShellToolName, "command exited with status 1")}
+	failedState.Observations = []turnObservation{toolFailureObservation("obs-001", toolcontract.BashToolName, "command exited with status 1")}
 	return map[string]agentTaskState{
 		"kernel turn":                buildInitialAgentTaskState(request, TurnOptions{}, "task-run-1"),
 		"kernel turn with a failure": failedState,
@@ -61,8 +61,8 @@ func kernelPromptStates() map[string]agentTaskState {
 }
 
 func TestOnlyATurnWithSomebodyToAnswerIsToldItCanAsk(t *testing.T) {
-	askingRequest := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.ShellToolName, toolcontract.AskInputToolName})}
-	silentRequest := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.ShellToolName})}
+	askingRequest := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.BashToolName, toolcontract.AskInputToolName})}
+	silentRequest := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.BashToolName})}
 
 	if !strings.Contains(systemInstructionFor(TurnOptions{}, askingRequest).Text(), "expectsAnswer=true") {
 		t.Fatal("expected a turn that can ask to be told how")

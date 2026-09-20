@@ -108,7 +108,7 @@ func TestAQuestionTheRuntimeCannotAskComesBackToTheModelAsAFailure(t *testing.T)
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "둘 중 하나 골라줘",
-		ToolSet:           newTestToolSet([]string{toolcontract.ShellToolName}),
+		ToolSet:           newTestToolSet([]string{toolcontract.BashToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to continue after an unaskable question: %v", errorValue)
@@ -165,7 +165,7 @@ func TestANonFinalReplyDeliversItsAttachmentOnlyOnce(t *testing.T) {
 		finishMessageDocument("초안을 보냈습니다."),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	toolRegistry := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolRegistry := newTestToolSet([]string{toolcontract.BashToolName})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName, Visibility: toolcontract.ToolVisibilityInternal}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output:      toolcontract.ToolOutput{Content: "file attached"},
@@ -243,7 +243,7 @@ func TestAFinalReplyWhoseAttachmentFailsNeverClosesTheTaskPromisingTheFile(t *te
 		finishMessageDocument("보고서를 첨부하지 못했습니다."),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	toolRegistry := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolRegistry := newTestToolSet([]string{toolcontract.BashToolName})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName, Visibility: toolcontract.ToolVisibilityInternal}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolFailureResult(toolcontract.FailureNotFound, toolcontract.FailureCodes.NotFound, toolcontract.FileDeliverToolName, "report.pdf does not exist"), nil
 	})

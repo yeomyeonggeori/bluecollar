@@ -707,13 +707,13 @@ func TestAgentTurnRunnerRequiresSelectedSkillEvidenceBeforeFinishMessage(t *test
 
 func TestAgentTurnRunnerDoesNotRequireNonAttachmentToolInCompletionEvidence(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
+		`{"action":"continue","toolName":"write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"deck.html"}}`,
 		finishMessageCiting("HTML 파일을 첨부했습니다: deck.html", "obs-002"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	toolRegistry := newTestToolSet([]string{"file_write", "file_deliver"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{"write", "file_deliver"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"path":"tmp/deck/presentation.md","sizeBytes":6}`), nil
 	})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -732,7 +732,7 @@ func TestAgentTurnRunnerDoesNotRequireNonAttachmentToolInCompletionEvidence(t *t
 		Prompt:                "html 만들어줘",
 		ToolSet:               toolRegistry,
 		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"file_write", "file_deliver"},
+		RequiredEvidenceTools: []string{"write", "file_deliver"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected required evidence to recover: %v", errorValue)
@@ -910,13 +910,13 @@ func TestAgentTurnRunnerCompletesAfterRequiredArtifactsExist(t *testing.T) {
 	workspaceRootPath := t.TempDir()
 	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","message":"자료를 완성했습니다.","toolName":"shell","toolInput":{"command":"build deck"}}`,
+		`{"action":"continue","message":"자료를 완성했습니다.","toolName":"bash","toolInput":{"command":"build deck"}}`,
 		`{"action":"reply","final":true,"message":"완성한 발표 자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003","obs-004"],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-	toolRegistry := newTestToolSet([]string{"shell", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"bash", "file_deliver"})
 	terminalCallCount := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		terminalCallCount++
 		if errorValue := os.MkdirAll(artifactDirectoryPath, 0700); errorValue != nil {
 			return toolcontract.ToolResult{}, errorValue
@@ -1292,7 +1292,7 @@ func TestCompletionGateRequiresFileDeliverEvidenceEvenWhenFileExists(t *testing.
 	result := validateCompletionGateForRequestWithRecoveryBudget(
 		request,
 		deriveToolUseRequirements(request),
-		[]turnObservation{newContentObservation("obs-001", "continue", toolcontract.FileWriteToolName, `{"path":"tmp/report.pdf"}`)},
+		[]turnObservation{newContentObservation("obs-001", "continue", toolcontract.WriteToolName, `{"path":"tmp/report.pdf"}`)},
 		nil,
 		turnActionDocument{
 			Action:             "finish",
@@ -1388,17 +1388,17 @@ func TestAgentTurnRunnerDoesNotBlockFinishedExpectedResultForMissingQualityRevie
 func TestAgentTurnRunnerCanonicalLinkGateBlocksEarlyFinish(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"~/sites/portfolio/app/public/site-content.json","content":"{}"},"nextStepPlan":{"objective":"create draft","expectedTools":[],"expectedNextResults":["draft site project exists"],"doneCriteria":["draft exists"],"risk":"none","workingSetReason":"the draft prepares the project"}}`,
+			`{"action":"continue","toolName":"write","toolInput":{"path":"~/sites/portfolio/app/public/site-content.json","content":"{}"},"nextStepPlan":{"objective":"create draft","expectedTools":[],"expectedNextResults":["draft site project exists"],"doneCriteria":["draft exists"],"risk":"none","workingSetReason":"the draft prepares the project"}}`,
 			`{"action":"reply","final":true,"message":"초안을 만들었습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 			`{"action":"continue","toolName":"site_serve","toolInput":{"title":"Portfolio","sourceWorkspacePath":"~/sites/portfolio","mode":"publish"},"nextStepPlan":{"objective":"finish after public URL","expectedTools":[],"expectedNextResults":["public URL exists"],"doneCriteria":["public URL exists"],"risk":"none","workingSetReason":"serve should satisfy the expected result"}}`,
 			`{"action":"reply","final":true,"message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003"]}`,
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
-	toolRegistry := newTestCapabilityToolSet([]string{"file_write", "site_serve"})
+	toolRegistry := newTestCapabilityToolSet([]string{"write", "site_serve"})
 	toolCalls := []string{}
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "file_write")
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		toolCalls = append(toolCalls, "write")
 		return testToolSuccess(`{"path":"~/sites/portfolio/app/public/site-content.json"}`), nil
 	})
 	registerTestTool(toolRegistry, canonicalLinkToolDefinition("site_serve"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -1424,7 +1424,7 @@ func TestAgentTurnRunnerCanonicalLinkGateBlocksEarlyFinish(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected run to complete after verifier-guided recovery: %v", errorValue)
 	}
-	if strings.Join(toolCalls, ",") != "file_write,site_serve" {
+	if strings.Join(toolCalls, ",") != "write,site_serve" {
 		t.Fatalf("expected draft creation then serve, got %+v", toolCalls)
 	}
 	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
@@ -1529,8 +1529,8 @@ func TestAgentTurnRunnerUsesNoToolChatWhenCompletionEvidenceIsReady(t *testing.T
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	workspaceRootPath := t.TempDir()
 	artifactPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "report", "report.json")
-	toolSet := newTestToolSet([]string{"file_write", toolcontract.FileDeliverToolName})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolSet := newTestToolSet([]string{"write", toolcontract.FileDeliverToolName})
+	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		if errorValue := os.MkdirAll(filepath.Dir(artifactPath), 0700); errorValue != nil {
 			return toolcontract.ToolResult{}, errorValue
 		}
@@ -1559,10 +1559,10 @@ func TestAgentTurnRunnerUsesNoToolChatWhenCompletionEvidenceIsReady(t *testing.T
 		TurnStartedAt:              time.Now().Add(-time.Minute),
 		ToolSet:                    toolSet,
 		PinnedToolNames:            toolSet.ListToolNames(),
-		RequiredEvidenceTools:      []string{"file_write", toolcontract.FileDeliverToolName},
+		RequiredEvidenceTools:      []string{"write", toolcontract.FileDeliverToolName},
 		RequiredAttachmentSuffixes: []string{".json"},
 		OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools:      []string{"file_write", toolcontract.FileDeliverToolName},
+			RequiredEvidenceTools:      []string{"write", toolcontract.FileDeliverToolName},
 			ArtifactRequirement:        ArtifactRequirementRequired,
 			RequiredAttachmentSuffixes: []string{".json"},
 			ExpectedResults: []ExpectedResult{{
@@ -1605,15 +1605,15 @@ func TestAgentTurnRunnerUsesNoToolChatWhenCompletionEvidenceIsReady(t *testing.T
 func TestRejectedFinishWordingSurvivesAttachmentRepair(t *testing.T) {
 	finishMessage := "보고서 이름은 '고객지원 주간 운영 점검', 상태는 '검토 중', 담당은 '운영팀'입니다."
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"file_write","toolInput":{"path":"report.json","content":"{\"status\":\"ready\"}"}}`,
+		`{"action":"continue","toolName":"write","toolInput":{"path":"report.json","content":"{\"status\":\"ready\"}"}}`,
 		`{"action":"reply","final":true,"message":"` + finishMessage + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"files":[{"path":"report.json"}]}}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
 	workspaceRootPath := t.TempDir()
 	artifactPath := filepath.Join(workspaceRootPath, "report.json")
-	toolSet := newTestToolSet([]string{"file_write", toolcontract.FileDeliverToolName})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolSet := newTestToolSet([]string{"write", toolcontract.FileDeliverToolName})
+	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		if errorValue := os.WriteFile(artifactPath, []byte(`{"status":"ready"}`), 0600); errorValue != nil {
 			return toolcontract.ToolResult{}, errorValue
 		}
@@ -1690,7 +1690,7 @@ func (languageModel *completionReplyLanguageModel) GenerateChatCompletion(_ cont
 			Message: model.ChatCompletionMessage{
 				Role: "assistant",
 				ToolCalls: []model.ChatCompletionToolCall{
-					nativeAgentActionToolCall("file_write", `{"path":"report.json","content":"{\"status\":\"ready\"}"}`),
+					nativeAgentActionToolCall("write", `{"path":"report.json","content":"{\"status\":\"ready\"}"}`),
 				},
 			},
 		}, nil
@@ -1960,22 +1960,22 @@ func TestAgentTurnRunnerFinalizesScheduleCreateAfterSuccess(t *testing.T) {
 
 func TestAgentTurnRunnerDoesNotBlockTerminalRerunForMissingFile(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
-		`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"NAME=deck ./build.sh"}}`,
+		`{"action":"continue","toolName":"write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"NAME=deck ./build.sh"}}`,
 		finishMessageDocument("done"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 6})
 	terminalCallCount := 0
-	toolRegistry := newTestToolSet([]string{"shell", "file_write"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{"bash", "write"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		terminalCallCount++
 		if terminalCallCount == 1 {
-			return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell", `{"exitCode":1,"stdout":"","stderr":"Error: presentation.md not found. Create presentation.md or set SRC=yourfile.md\n","timedOut":false}`), nil
+			return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "bash", `{"exitCode":1,"stdout":"","stderr":"Error: presentation.md not found. Create presentation.md or set SRC=yourfile.md\n","timedOut":false}`), nil
 		}
 		return testToolSuccess(`{"exitCode":0,"stdout":"built","stderr":"","timedOut":false}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "write"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		var input struct {
 			Path string `json:"path"`
 		}
@@ -2009,7 +2009,7 @@ func TestAgentTurnRunnerDoesNotBlockTerminalRerunForMissingFile(t *testing.T) {
 func TestAgentTurnRunnerStopsRepeatedMissingEvidenceState(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
-			`{"action":"continue","toolName":"shell","toolInput":{"command":"build deck"}}`,
+			`{"action":"continue","toolName":"bash","toolInput":{"command":"build deck"}}`,
 			noToolFallbackFinishMessageDocument("텍스트로 대신 드립니다."),
 			noToolFallbackFinishMessageDocument("텍스트로 대신 드립니다."),
 			noToolFallbackFinishMessageDocument("텍스트로 대신 드립니다."),
@@ -2019,10 +2019,10 @@ func TestAgentTurnRunnerStopsRepeatedMissingEvidenceState(t *testing.T) {
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 40, RecoveryAttemptLimit: 3})
 	terminalCallCount := 0
-	toolRegistry := newTestToolSet([]string{"shell", "file_deliver"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{"bash", "file_deliver"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		terminalCallCount++
-		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell", `{"exitCode":1,"stderr":"EACCES: permission denied, open 'deck.html'"}`), nil
+		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "bash", `{"exitCode":1,"stderr":"EACCES: permission denied, open 'deck.html'"}`), nil
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
@@ -2054,22 +2054,22 @@ func TestAgentTurnRunnerStopsRepeatedMissingEvidenceState(t *testing.T) {
 
 func TestAgentTurnRunnerDoesNotBlockTerminalRerunForMissingDesignFile(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
-		`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/deck/DESIGN.md","content":"colors: blue"}}`,
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"NAME=deck ./build.sh"}}`,
+		`{"action":"continue","toolName":"write","toolInput":{"path":"tmp/deck/DESIGN.md","content":"colors: blue"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"NAME=deck ./build.sh"}}`,
 		finishMessageDocument("done"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 6})
 	terminalCallCount := 0
-	toolRegistry := newTestToolSet([]string{"shell", "file_write"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{"bash", "write"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		terminalCallCount++
 		if terminalCallCount == 1 {
-			return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell", `{"exitCode":1,"stdout":"","stderr":"DESIGN.md is missing colors:\n","timedOut":false}`), nil
+			return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "bash", `{"exitCode":1,"stdout":"","stderr":"DESIGN.md is missing colors:\n","timedOut":false}`), nil
 		}
 		return testToolSuccess(`{"exitCode":0,"stdout":"built","stderr":"","timedOut":false}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "write"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		var input struct {
 			Path string `json:"path"`
 		}
@@ -2102,19 +2102,19 @@ func TestAgentTurnRunnerDoesNotBlockTerminalRerunForMissingDesignFile(t *testing
 
 func TestAgentTurnRunnerDoesNotBlockTerminalBeforeRequiredFileWrite(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
-		`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
-		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"NAME=deck ./build.sh"}}`,
+		`{"action":"continue","toolName":"write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
+		`{"action":"continue","toolName":"bash","toolInput":{"command":"NAME=deck ./build.sh"}}`,
 		`{"action":"reply","final":true,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5, MaxToolCallCount: 5})
 	terminalCallCount := 0
-	toolRegistry := newTestToolSet([]string{"shell", "file_write"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "shell"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{"bash", "write"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		terminalCallCount++
 		return testToolSuccess(`{"exitCode":0,"stdout":"built","stderr":"","timedOut":false}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "write"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		var input struct {
 			Path string `json:"path"`
 		}
@@ -2130,7 +2130,7 @@ func TestAgentTurnRunnerDoesNotBlockTerminalBeforeRequiredFileWrite(t *testing.T
 		Prompt:                "build deck",
 		ToolSet:               toolRegistry,
 		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"file_write"},
+		RequiredEvidenceTools: []string{"write"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to succeed: %v", errorValue)
@@ -2139,10 +2139,10 @@ func TestAgentTurnRunnerDoesNotBlockTerminalBeforeRequiredFileWrite(t *testing.T
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
 	if terminalCallCount != 2 {
-		t.Fatalf("expected rebuild after file_write to run instead of duplicate rejection, got %d calls", terminalCallCount)
+		t.Fatalf("expected rebuild after write to run instead of duplicate rejection, got %d calls", terminalCallCount)
 	}
 	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.tool_precondition_blocked", "first required workspace file") {
-		t.Fatal("did not expect required file_write precondition block event")
+		t.Fatal("did not expect required write precondition block event")
 	}
 }
 
@@ -2177,7 +2177,7 @@ func TestFinishHiddenAfterEvidenceMissingRejectionWithoutToolEvidence(t *testing
 }
 
 func TestASecondRefusalTheAgentDidNothingAboutWithdrawsFinish(t *testing.T) {
-	successfulSend := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "shell"}
+	successfulSend := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "bash"}
 	refusal := func(index int) turnObservation {
 		return completionGateObservation(index, completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}, nil, []turnObservation{successfulSend})
 	}
@@ -2202,7 +2202,7 @@ func TestFinishHiddenAfterAttachmentRejectionDespiteToolEvidence(t *testing.T) {
 }
 
 func TestAContractCannotRequireAToolThePaletteCannotCall(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 	contract := OutcomeContract{
 		ArtifactRequirement:        ArtifactRequirementRequired,
 		RequiredAttachmentSuffixes: []string{".txt"},
@@ -2217,7 +2217,7 @@ func TestAContractCannotRequireAToolThePaletteCannotCall(t *testing.T) {
 }
 
 func TestAContractStillRequiresAToolThePaletteDoesCall(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName, toolcontract.FileDeliverToolName})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName, toolcontract.FileDeliverToolName})
 	contract := OutcomeContract{RequiredEvidenceTools: []string{toolcontract.FileDeliverToolName}}
 
 	result := validateOutcomeContractRequirements(contractReducedToCallableTools(toolSet, contract), nil, nil)
@@ -2228,7 +2228,7 @@ func TestAContractStillRequiresAToolThePaletteDoesCall(t *testing.T) {
 }
 
 func TestARequiredFileResultIsNotRequiredWhenNothingCanDeliverIt(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 	contract := OutcomeContract{ExpectedResults: []ExpectedResult{{Type: ExpectedResultTypeFile, Required: true}}}
 
 	reduced := contractReducedToCallableTools(toolSet, contract)
@@ -2239,7 +2239,7 @@ func TestARequiredFileResultIsNotRequiredWhenNothingCanDeliverIt(t *testing.T) {
 }
 
 func TestEveryCopyOfTheContractIsReducedToWhatTheTaskCanCall(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 	undeliverable := OutcomeContract{
 		RequiredEvidenceTools:      []string{toolcontract.FileDeliverToolName},
 		RequiredAttachmentSuffixes: []string{".txt"},
@@ -2266,8 +2266,8 @@ func TestEveryCopyOfTheContractIsReducedToWhatTheTaskCanCall(t *testing.T) {
 
 func TestARejectedCitationNamesTheOnesThatWouldHaveDone(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: "shell", Summary: "listed the workspace"},
-		{ObservationID: "obs-002", Action: "continue", Tool: "shell", Summary: "wrote avg_temp.txt"},
+		{ObservationID: "obs-001", Action: "continue", Tool: "bash", Summary: "listed the workspace"},
+		{ObservationID: "obs-002", Action: "continue", Tool: "bash", Summary: "wrote avg_temp.txt"},
 	}
 
 	errorValue := validateCompletionEvidenceReferences(nil, observations, []completionEvidenceReference{{ObservationID: "obs-009"}})
@@ -2287,15 +2287,15 @@ func TestARejectedCitationNamesTheOnesThatWouldHaveDone(t *testing.T) {
 }
 
 func TestCitedEvidenceIsResolvedWhetherOrNotTheTurnHasRequirements(t *testing.T) {
-	toolSet := newTestToolSet([]string{toolcontract.ShellToolName})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 	observations := []turnObservation{
-		newContentObservation("obs-001", "continue", toolcontract.ShellToolName, "ok"),
+		newContentObservation("obs-001", "continue", toolcontract.BashToolName, "ok"),
 	}
 	citesNothingReal := []completionEvidenceReference{{ObservationID: "obs-999"}}
 
 	for _, requirements := range [][]toolUseRequirement{
 		nil,
-		{{ToolName: toolcontract.ShellToolName, Reason: "evidence"}},
+		{{ToolName: toolcontract.BashToolName, Reason: "evidence"}},
 	} {
 		if _, errorValue := validateCompletionEvidence(toolSet, requirements, observations, citesNothingReal); errorValue == nil {
 			t.Errorf("a finish citing an observation the task never made is not evidence, and a turn with %d requirements checked it less than one with none", len(requirements))
@@ -2325,11 +2325,11 @@ func TestARefusalNamesWhatAlreadyChangedSomething(t *testing.T) {
 
 func TestARefusalWithNothingChangedNamesNothing(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
-		Name:            toolcontract.ShellToolName,
+		Name:            toolcontract.BashToolName,
 		InputSchema:     json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		SideEffectClass: toolcontract.ToolSideEffectRead,
 	}})
-	read := turnObservation{ObservationID: "obs-002", Action: "continue", Tool: toolcontract.ShellToolName}
+	read := turnObservation{ObservationID: "obs-002", Action: "continue", Tool: toolcontract.BashToolName}
 	result := completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}
 
 	refusal := completionGateObservation(5, result, toolSet, []turnObservation{read})
@@ -2363,7 +2363,7 @@ func stateChangeEvidenceTestToolSet() *toolcontract.ToolSet {
 	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 		testToolDescriptor("event_add"),
 		testToolDescriptor("event_list"),
-		testToolDescriptor("file_write"),
+		testToolDescriptor("write"),
 	})
 }
 
@@ -2419,8 +2419,8 @@ func TestCompletionGateRejectsStateChangeFinishThatOnlyCitesAReadObservation(t *
 // written to the workspace is a successful state change and proves nothing about
 // a calendar entry.
 func TestCompletionGateRejectsStateChangeFinishThatCitesADifferentChange(t *testing.T) {
-	observations := append(addedEventObservations(), successfulSideEffectObservation("obs-002", "file_write", `{"path":"notes.txt"}`, "written"))
-	references := []completionEvidenceReference{{ObservationID: "obs-002", ToolName: "file_write"}}
+	observations := append(addedEventObservations(), successfulSideEffectObservation("obs-002", "write", `{"path":"notes.txt"}`, "written"))
+	references := []completionEvidenceReference{{ObservationID: "obs-002", ToolName: "write"}}
 
 	result := validateCompletionGateForRequestWithRecoveryBudget(stateChangeDemandedRequest(), nil, observations, nil, stateChangeClaimingFinish(references), defaultRecoveryBudget())
 

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const progressMessageLimit = 6000
@@ -591,7 +593,7 @@ func summarizeTerminalRun(observation turnObservation) string {
 }
 
 func summarizeTerminalFailure(observation turnObservation) string {
-	if strings.TrimSpace(observation.Tool) != "shell" {
+	if strings.TrimSpace(observation.Tool) != toolcontract.BashToolName {
 		return ""
 	}
 	tail, ok := terminalObservationTail(observation)

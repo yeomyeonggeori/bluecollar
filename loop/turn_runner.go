@@ -1384,10 +1384,10 @@ func withOwningSkillDecisions(decisions []SkillSelectionDecision, availableSkill
 func foundToolNamesFromObservations(observations []turnObservation) []string {
 	toolNames := []string{}
 	for _, observation := range observations {
-		if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.FindToolsToolName) {
+		if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.EquipToolName) {
 			continue
 		}
-		var foundTools agentcontract.FoundTools
+		var foundTools agentcontract.EquippedTools
 		if json.Unmarshal(observation.Output.Data, &foundTools) != nil {
 			continue
 		}
@@ -1406,7 +1406,7 @@ func pendingFileDeliveryToolNames(request AgentTurnRequest, observations []turnO
 }
 
 func availableFileDeliveryToolNames(request AgentTurnRequest) []string {
-	toolNames := []string{toolcontract.ShellToolName, toolcontract.FileDeliverToolName}
+	toolNames := []string{toolcontract.BashToolName, toolcontract.FileDeliverToolName}
 	if request.ToolSet == nil {
 		return toolNames
 	}
@@ -1652,7 +1652,7 @@ func stalledOnRedundantInspection(observations []turnObservation) bool {
 
 func stalledRecoveryDirectiveObservation(observationID string, failureDebt FailureDebt) turnObservation {
 	failedTool := strings.TrimSpace(failureDebt.LatestFailure.Tool)
-	message := "You are repeating actions without progress while " + failedTool + " is still failing. You already have the information you need. Make one concrete fix now by editing the offending file with file_edit, then re-run " + failedTool + ". Do not read the same content again and do not ask the user how to proceed."
+	message := "You are repeating actions without progress while " + failedTool + " is still failing. You already have the information you need. Make one concrete fix now by editing the offending file with edit, then re-run " + failedTool + ". Do not read the same content again and do not ask the user how to proceed."
 	observation := newContentObservation(observationID, "policy", "", marshalEventBody(map[string]string{
 		"directive":           message,
 		"failedTool":          failedTool,
