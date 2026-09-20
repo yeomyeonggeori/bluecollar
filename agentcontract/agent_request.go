@@ -31,6 +31,7 @@ type AgentRequest struct {
 	MemoryFacts                []MemoryFact
 	ToolSet                    *toolcontract.ToolSet
 	PinnedToolNames            []string
+	LikelyToolNames            []string
 	PinnedSkillNames           []string
 	WorkspaceRootPath          string
 	ActivePaths                []string
@@ -143,6 +144,7 @@ type AgentTurnRequest struct {
 	ToolSet                      *toolcontract.ToolSet
 	AvailableSkills              []SkillInstruction
 	PinnedToolNames              []string
+	LikelyToolNames              []string
 	PinnedSkillNames             []string
 	WorkspaceRootPath            string
 	WorkspaceDefaultPath         string
@@ -200,8 +202,9 @@ type AgentTurnResult struct {
 type AgentCheckpointSender func(context.Context, AgentCheckpoint) error
 
 type AgentCheckpoint struct {
-	TaskRunID string
-	Message   string
-	ToolName  string
-	Durable   bool
+	TaskRunID   string
+	Message     string
+	ToolName    string
+	Attachments []toolcontract.FileAttachment
+	Durable     bool
 }

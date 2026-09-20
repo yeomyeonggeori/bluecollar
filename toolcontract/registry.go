@@ -699,9 +699,6 @@ func (toolSet *ToolSet) Invoke(ctx context.Context, toolInvocation ToolInvocatio
 	return toolSet.invokeRegistered(ctx, toolInvocation)
 }
 
-// A hidden tool is one the model is not offered, not one nobody may call: a
-// persisted ledger and a resumed approval still carry the name a tool had when
-// the call was recorded, so the name keeps working after it leaves the catalog.
 func (toolSet *ToolSet) CanInvoke(toolName string) bool {
 	trimmedToolName := strings.TrimSpace(toolName)
 	if toolSet.IsAllowed(trimmedToolName) {
@@ -718,6 +715,18 @@ func (toolSet *ToolSet) CanInvoke(toolName string) bool {
 		return false
 	}
 	return IsKernelToolName(trimmedToolName) || isExposedToolAvailability(boundTool.Availability)
+}
+
+func (toolSet *ToolSet) AllowingInternalTool(toolName string) *ToolSet {
+	if toolSet == nil {
+		return nil
+	}
+	trimmedToolName := strings.TrimSpace(toolName)
+	boundTool, isRegistered := toolSet.boundToolByName[trimmedToolName]
+	if !isRegistered || strings.TrimSpace(boundTool.Definition.Visibility) != ToolVisibilityInternal {
+		return toolSet
+	}
+	return toolSet.WithAllowedToolNames(AppendUniqueStrings(toolSet.ListToolNames(), trimmedToolName))
 }
 
 func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation ToolInvocation) (ToolResult, error) {

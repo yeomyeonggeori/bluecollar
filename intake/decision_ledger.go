@@ -64,13 +64,13 @@ func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) a
 	return record
 }
 
-func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers map[string]model.DecisionAnswer, selectionError error) *agentcontract.ToolSelectionRecord {
+func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers map[string]model.DecisionAnswer, selectionError error, countLimit int) *agentcontract.ToolSelectionRecord {
 	if selectionError != nil {
 		return nil
 	}
 	record := agentcontract.ToolSelectionRecord{
 		ProbabilityThreshold:    likelyToolProbabilityThreshold,
-		CountLimit:              likelyToolCountLimit,
+		CountLimit:              countLimit,
 		CandidateCount:          len(plan.candidateToolNames),
 		BatchByteCounts:         batchByteCounts(plan.requests),
 		ClippedDescriptionCount: plan.clippedDescriptionCount,
@@ -85,7 +85,7 @@ func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers m
 		for toolName, probability := range recordedToolProbabilities(probabilityByToolName) {
 			record.Probabilities[messageKey+"."+toolName] = probability
 		}
-		for _, toolName := range selectLikelyToolNames(probabilityByToolName, plan.candidateToolNames) {
+		for _, toolName := range selectLikelyToolNames(probabilityByToolName, plan.candidateToolNames, countLimit) {
 			record.SelectedToolNames = append(record.SelectedToolNames, messageKey+"."+toolName)
 		}
 	}

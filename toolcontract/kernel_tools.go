@@ -17,11 +17,19 @@ const (
 	FilePreviewToolName         = "file_preview"
 	ImageReadToolName           = "image_read"
 	ConversationHistoryToolName = "conversation_history"
-	PlanUpdateToolName          = "plan_update"
-	RequestToolsToolName        = "request_tools"
+	PlanToolName                = "plan"
+	FindToolsToolName           = "find_tools"
 )
 
 const MaxExtensionCallableToolCount = 15
+
+const ToolExposureGroupsRankedBelowTheLikelyTools = 3
+
+const MaxLikelyToolCount = MaxExtensionCallableToolCount - ToolExposureGroupsRankedBelowTheLikelyTools
+
+const ToolNamesOnePlanStepIsExpectedToNeed = 5
+
+const MaxLikelyToolCountForOnePlanStep = min(ToolNamesOnePlanStepIsExpectedToNeed, MaxLikelyToolCount)
 
 func KernelToolNames() []string {
 	return []string{
@@ -36,8 +44,8 @@ func KernelToolNames() []string {
 		FilePreviewToolName,
 		ImageReadToolName,
 		ConversationHistoryToolName,
-		PlanUpdateToolName,
-		RequestToolsToolName,
+		PlanToolName,
+		FindToolsToolName,
 	}
 }
 

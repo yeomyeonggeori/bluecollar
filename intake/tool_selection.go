@@ -7,8 +7,7 @@ import (
 )
 
 const likelyToolProbabilityThreshold = 0.3
-const toolExposureGroupsRankedBelowTheLikelyTools = 3
-const likelyToolCountLimit = toolcontract.MaxExtensionCallableToolCount - toolExposureGroupsRankedBelowTheLikelyTools
+const likelyToolCountLimit = toolcontract.MaxLikelyToolCount
 
 const recordedToolProbabilityFloor = 0.05
 
@@ -27,10 +26,10 @@ func toolLikelihoodGuidanceFor(toolDescriptions []decisionTool) string {
 	return toolLikelihoodGuidance
 }
 
-func selectLikelyToolNames(probabilityByToolName map[string]float64, candidateToolNames []string) []string {
+func selectLikelyToolNames(probabilityByToolName map[string]float64, candidateToolNames []string, countLimit int) []string {
 	selectedToolNames := []string{}
 	for _, toolName := range toolNamesRankedByProbability(probabilityByToolName, candidateToolNames) {
-		if probabilityByToolName[toolName] < likelyToolProbabilityThreshold || len(selectedToolNames) >= likelyToolCountLimit {
+		if probabilityByToolName[toolName] < likelyToolProbabilityThreshold || len(selectedToolNames) >= countLimit {
 			break
 		}
 		selectedToolNames = append(selectedToolNames, toolName)

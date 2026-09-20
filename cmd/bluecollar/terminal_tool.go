@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -104,13 +105,8 @@ func (runningShell shell) resolvedWorkingDirectoryPath(ctx context.Context) stri
 	return resolvedPath
 }
 
-func newWorkspaceToolSet(runningShell shell) *toolcontract.ToolSet {
-	toolSet := toolcontract.NewToolSet([]string{
-		toolcontract.ShellToolName,
-		toolcontract.FileReadToolName,
-		toolcontract.FileWriteToolName,
-		toolcontract.FileEditToolName,
-	})
+func newWorkspaceToolSet(runningShell shell, toolSelector agentcontract.ToolSelector) *toolcontract.ToolSet {
+	toolSet := toolcontract.NewToolSet(workspaceToolNames(toolSelector))
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[shellInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/shell",
@@ -132,7 +128,23 @@ func newWorkspaceToolSet(runningShell shell) *toolcontract.ToolSet {
 	registerFileTools(toolSet, runningShell)
 	registerPlanTool(toolSet)
 	registerImageTool(toolSet, runningShell)
+	if toolSelector != nil {
+		registerFindToolsTool(toolSet, toolSelector)
+	}
 	return toolSet
+}
+
+func workspaceToolNames(toolSelector agentcontract.ToolSelector) []string {
+	toolNames := []string{
+		toolcontract.ShellToolName,
+		toolcontract.FileReadToolName,
+		toolcontract.FileWriteToolName,
+		toolcontract.FileEditToolName,
+	}
+	if toolSelector == nil {
+		return toolNames
+	}
+	return append(toolNames, toolcontract.FindToolsToolName)
 }
 
 func runShellCommand(ctx context.Context, runningShell shell, input shellInput) toolcontract.ToolResult {

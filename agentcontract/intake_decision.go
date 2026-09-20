@@ -1,6 +1,7 @@
 package agentcontract
 
 import (
+	"context"
 	"encoding/base64"
 	"strings"
 	"time"
@@ -172,3 +173,24 @@ const (
 	IntakeDutyOptionNone      = "none"
 	IntakeChoiceOptionNone    = "none_of_these"
 )
+
+type ToolSelectionNeed struct {
+	Need              string
+	ToolSet           *toolcontract.ToolSet
+	CallableToolNames []string
+	CountLimit        int
+	CallLedger        *IntakeCallLedger
+}
+
+type ToolSelector interface {
+	SelectToolNames(context.Context, ToolSelectionNeed) ([]SelectedTool, error)
+}
+
+type SelectedTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type FoundTools struct {
+	SelectedTools []SelectedTool `json:"selectedTools"`
+}

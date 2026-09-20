@@ -45,7 +45,7 @@ func TestActionSchemasRecursivelyCloseEveryObject(t *testing.T) {
 	}
 }
 
-const eightToolActionSchemaByteCeiling = 19500
+const eightToolActionSchemaByteCeiling = 19600
 
 func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 	toolDefinitions := eightToolCapabilityCatalogFixture(t)
@@ -66,7 +66,7 @@ func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 }
 
 func legacyRootOneOfFinalizerSchema(hasFailureDebt bool) string {
-	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{finishActionSchema(hasFailureDebt, nil), failActionSchema(hasFailureDebt)}})
+	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{replyActionSchema(hasFailureDebt, nil), failActionSchema(hasFailureDebt)}})
 }
 
 func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing.T) {
@@ -95,7 +95,7 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 				t.Fatalf("expected the flat schema to stay closed, got %s", testCase.flatSchema)
 			}
 			actionProperty := mapFromAny(mapFromAny(flatDocument["properties"])["action"])
-			for _, actionName := range []string{"finish", "fail"} {
+			for _, actionName := range []string{"reply", "fail"} {
 				if !containsString(stringSliceFromAny(actionProperty["enum"]), actionName) {
 					t.Fatalf("expected flat schema action enum to allow %q, got %+v", actionName, actionProperty)
 				}
@@ -108,11 +108,11 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 	}
 }
 
-func TestTerminalActionSchemasAcceptFinishAndFailDocuments(t *testing.T) {
-	finishDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"finish"}`
-	failDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail"}`
-	failWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","usedFailureFacts":{"attempts":[{"toolName":"shell","errorCode":"operation_failed","failureStage":"shell","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
-	finishWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"finish","usedFailureFacts":{"attempts":[],"budgetState":""}}`
+func TestTerminalActionSchemasAcceptFinalReplyAndFailDocuments(t *testing.T) {
+	finishDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"reply","final":true}`
+	failDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","final":false}`
+	failWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","final":false,"usedFailureFacts":{"attempts":[{"toolName":"shell","errorCode":"operation_failed","failureStage":"shell","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
+	finishWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"reply","final":true,"usedFailureFacts":{"attempts":[],"budgetState":""}}`
 
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), finishDocument)
 	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), failDocument)
@@ -357,7 +357,7 @@ func TestAContinueVariantAsksOnlyForWhatTheLoopReads(t *testing.T) {
 
 func TestAFinishHasOnePlaceForTheReply(t *testing.T) {
 	schemas := map[string]map[string]any{
-		"finish":   finishActionSchema(false, nil),
+		"reply":    replyActionSchema(false, nil),
 		"terminal": terminalActionUnifiedSchema(false),
 	}
 	for name, schema := range schemas {

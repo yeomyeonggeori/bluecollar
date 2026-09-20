@@ -698,7 +698,7 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 
 	belowNarrowStage := agentTaskState{IterationCount: 1, ToolCallCount: 5}
 	request.EffortStartedAt = time.Now().Add(-30 * time.Minute)
-	beforeNarrowing := runner.requestForStep(context.Background(), request, belowNarrowStage)
+	beforeNarrowing := runner.requestForStep(context.Background(), request, &belowNarrowStage)
 	exploratoryToolNames := beforeNarrowing.ToolSet.ListToolNames()
 	if !stringSliceContains(exploratoryToolNames, "file_read") || !stringSliceContains(exploratoryToolNames, toolcontract.FileDeliverToolName) {
 		t.Fatalf("expected the full working set below the narrow stage, got %v", exploratoryToolNames)
@@ -706,7 +706,7 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 
 	atNarrowStage := agentTaskState{IterationCount: 1, ToolCallCount: 12}
 	request.EffortStartedAt = time.Now().Add(-38 * time.Minute)
-	afterNarrowing := runner.requestForStep(context.Background(), request, atNarrowStage)
+	afterNarrowing := runner.requestForStep(context.Background(), request, &atNarrowStage)
 	narrowedToolNames := afterNarrowing.ToolSet.ListToolNames()
 	if stringSliceContains(narrowedToolNames, "file_read") {
 		t.Fatalf("expected exploration tools dropped at the narrow_palette stage, got %v", narrowedToolNames)
@@ -716,8 +716,8 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 	}
 
 	actionSchema := ActionSchemaForToolSet(afterNarrowing.ToolSet, false, nil, false)
-	if !strings.Contains(actionSchema, `"enum":["finish"]`) {
-		t.Fatalf("expected the finish action to remain available at the narrow_palette stage, got %s", actionSchema)
+	if !strings.Contains(actionSchema, `"enum":["reply"]`) {
+		t.Fatalf("expected the reply action to remain available at the narrow_palette stage, got %s", actionSchema)
 	}
 	if !strings.Contains(actionSchema, `"enum":["fail"]`) {
 		t.Fatalf("expected the fail action to remain available at the narrow_palette stage, got %s", actionSchema)

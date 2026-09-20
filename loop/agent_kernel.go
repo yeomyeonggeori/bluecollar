@@ -31,6 +31,7 @@ type AgentKernel struct {
 	instructionSources      []InstructionSource
 	instructionLoader       func() InstructionBundle
 	skillRetriever          SkillRetriever
+	toolSelector            ToolSelector
 	companyProvider         func() CompanyContext
 	toolResultSpillStore    ToolResultSpillStore
 	toolResultImageSource   ToolResultImageSource
@@ -100,6 +101,10 @@ func (agentKernel *AgentKernel) UseInstructionBundleLoader(instructionLoader fun
 	}
 }
 
+func (agentKernel *AgentKernel) UseToolSelector(toolSelector ToolSelector) {
+	agentKernel.toolSelector = toolSelector
+}
+
 func (agentKernel *AgentKernel) UseSkillRetriever(skillRetriever SkillRetriever) {
 	agentKernel.skillRetriever = skillRetriever
 }
@@ -145,6 +150,7 @@ func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request
 		MemoryFacts:                request.MemoryFacts,
 		ToolSet:                    request.ToolSet,
 		PinnedToolNames:            append([]string{}, request.PinnedToolNames...),
+		LikelyToolNames:            append([]string{}, request.LikelyToolNames...),
 		PinnedSkillNames:           append([]string{}, request.PinnedSkillNames...),
 		WorkspaceRootPath:          request.WorkspaceRootPath,
 		ActivePaths:                request.ActivePaths,
@@ -266,8 +272,10 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		}
 	}
 	startsNewSemanticRun := lifecycleMode == taskLifecycleFresh || lifecycleMode == taskLifecycleSemanticRevision
+	request.LikelyToolNames = appendUniqueStrings(nil, intakeDecision.InitialToolNames...)
 	request.PinnedToolNames = appendUniqueStrings(append([]string{}, request.PinnedToolNames...), intakeDecision.InitialToolNames...)
 	intakeRequest.PinnedToolNames = request.PinnedToolNames
+	intakeRequest.LikelyToolNames = request.LikelyToolNames
 	if turnDecision.Route == TurnRouteConsume {
 		result, errorValue := agentKernel.completeConsumedRequest(intakeRequest, turnDecision, routerCallLedger.Records)
 		return result, errorValue
@@ -380,6 +388,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		ToolSet:                    turnToolSet,
 		AvailableSkills:            append([]SkillInstruction{}, instructionBundle.Skills...),
 		PinnedToolNames:            append([]string{}, request.PinnedToolNames...),
+		LikelyToolNames:            append([]string{}, request.LikelyToolNames...),
 		PinnedSkillNames:           append([]string{}, request.PinnedSkillNames...),
 		WorkspaceRootPath:          request.WorkspaceRootPath,
 		InstructionPrompt:          instructionBundle.Prompt,
@@ -415,6 +424,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		turnOptions,
 	)
 	agentTurnRunner.UseIterationCostObserver(agentKernel.iterationCostObserver)
+	agentTurnRunner.UseToolSelector(agentKernel.toolSelector)
 	agentTurnRunner.UseToolResultSpillStore(agentKernel.toolResultSpillStore)
 	agentTurnRunner.UseToolResultImageSource(agentKernel.toolResultImageSource)
 	result, errorValue := agentTurnRunner.RunTurn(taskBudget.callerContext(), turnRequest)

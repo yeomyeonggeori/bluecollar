@@ -44,6 +44,24 @@ type agentTaskState struct {
 	CompletionIntentToolName           string
 	ShouldRestrictNextActionToTerminal bool
 	DidNudgePlan                       bool
+	SystemInstruction                  string
+	ActivePlanStepTitle                string
+	PlanStepToolNames                  []string
+	DeliveredAttachmentPaths           []string
+	StepExposure                       stepToolExposure
+}
+
+type stepToolExposure struct {
+	Key      string
+	ToolSet  *toolcontract.ToolSet
+	Exposure ToolExposureEvent
+}
+
+func (state agentTaskState) systemInstructionText() string {
+	if state.SystemInstruction != "" {
+		return state.SystemInstruction
+	}
+	return systemInstructionFor(state.Options, state.Request).Text()
 }
 
 func (state agentTaskState) didExtendBudgetOneLevel() bool {
@@ -119,17 +137,19 @@ func buildInitialAgentTaskState(request AgentTurnRequest, options TurnOptions, t
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now().Add(-2 * time.Second)
 	}
+	normalizedOptions := normalizeTurnOptions(options)
 	return agentTaskState{
-		TaskRunID:      taskRunID,
-		Status:         agentcontract.TaskStatusRunning,
-		Request:        request,
-		Options:        normalizeTurnOptions(options),
-		TurnStartedAt:  request.TurnStartedAt,
-		Requirements:   deriveToolUseRequirements(request),
-		Observations:   []turnObservation{},
-		Attachments:    []toolcontract.FileAttachment{},
-		ToolCallCount:  0,
-		IterationCount: 0,
+		TaskRunID:         taskRunID,
+		Status:            agentcontract.TaskStatusRunning,
+		Request:           request,
+		Options:           normalizedOptions,
+		SystemInstruction: systemInstructionFor(normalizedOptions, request).Text(),
+		TurnStartedAt:     request.TurnStartedAt,
+		Requirements:      deriveToolUseRequirements(request),
+		Observations:      []turnObservation{},
+		Attachments:       []toolcontract.FileAttachment{},
+		ToolCallCount:     0,
+		IterationCount:    0,
 	}
 }
 
@@ -154,6 +174,10 @@ func restoreAgentTaskState(request AgentTurnRequest, options TurnOptions, taskRu
 		state.Observations = observationsWithoutFailures(state.Observations)
 	}
 	state.Attachments = attachmentsFromObservations(state.Observations)
+	state.DeliveredAttachmentPaths = deliveredAttachmentPathsFromTaskEvents(events)
+	planStepSelection := planStepSelectionFromTaskEvents(events)
+	state.ActivePlanStepTitle = planStepSelection.Step
+	state.PlanStepToolNames = planStepSelection.ToolNames
 	state.ExecutionState = executionStateFromTaskEvents(events)
 	state.ToolCallCount = state.ContextSummary.CompactedToolCallCount + successfulToolCallCount(state.Observations)
 	state.IterationCount = state.ContextSummary.CompactedObservationCount + len(state.Observations)
@@ -224,6 +248,7 @@ func cleanRestartedAgentTaskState(request AgentTurnRequest, options TurnOptions,
 	durableObservations := durableDeliveryObservations(events)
 	state.Observations = append(durableObservations, regroundingObservation(len(durableObservations)+1, producedSourcePaths(events)))
 	state.Attachments = attachmentsFromObservations(state.Observations)
+	state.DeliveredAttachmentPaths = deliveredAttachmentPathsFromTaskEvents(events)
 	return state
 }
 
@@ -434,7 +459,7 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, 
 	messages := (PromptAssembler{}).buildTurnMessages(
 		state.Request,
 		state.Observations,
-		systemInstructionFor(state.Options, state.Request).Text(),
+		state.systemInstructionText(),
 		toolDescription,
 		toolResultsCarriedNatively,
 		state.ExecutionState,
@@ -591,11 +616,54 @@ func ParseAgentActionResponse(response model.StructuredResponse) (agentAction, e
 		return turnActionDocument{}, errorValue
 	}
 	var actionDocument turnActionDocument
-	errorValue = json.Unmarshal(content, &actionDocument)
-	if errorValue != nil {
-		return turnActionDocument{}, errorValue
+	if decodeError := json.Unmarshal(content, &actionDocument); decodeError != nil {
+		return turnActionDocument{}, actionDecodeError(content, decodeError)
 	}
 	return normalizeParsedAction(actionDocument), nil
+}
+
+func actionDecodeError(content []byte, decodeError error) error {
+	fieldNames := wrongTypedActionFieldNames(content)
+	if len(fieldNames) == 0 {
+		return decodeError
+	}
+	return wrongTypedActionFieldError{fieldNames: fieldNames}
+}
+
+func wrongTypedActionFieldNames(content []byte) []string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(content, &fields) != nil {
+		return nil
+	}
+	fieldNames := []string{}
+	for fieldName, fieldValue := range fields {
+		if fieldReadsIntoActionDocument(fieldName, fieldValue) {
+			continue
+		}
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames)
+	return fieldNames
+}
+
+func fieldReadsIntoActionDocument(fieldName string, fieldValue json.RawMessage) bool {
+	document, errorValue := json.Marshal(map[string]json.RawMessage{fieldName: fieldValue})
+	if errorValue != nil {
+		return false
+	}
+	return json.Unmarshal(document, &turnActionDocument{}) == nil
+}
+
+type wrongTypedActionFieldError struct {
+	fieldNames []string
+}
+
+func (errorValue wrongTypedActionFieldError) Error() string {
+	return "action fields carry a type the schema does not declare: " + strings.Join(errorValue.fieldNames, ", ")
+}
+
+func (errorValue wrongTypedActionFieldError) Unwrap() error {
+	return unreadableModelActionError{reason: errorValue.Error()}
 }
 
 func normalizeAgentActionResponseContent(content []byte) ([]byte, error) {
@@ -621,7 +689,7 @@ func normalizeAgentActionResponseContent(content []byte) ([]byte, error) {
 }
 
 func agentActionResponseCandidate(document map[string]json.RawMessage) (string, int) {
-	actionNames := []string{"finish", "continue", "fail", "set_quality_criteria"}
+	actionNames := []string{"reply", "continue", "fail", "set_quality_criteria"}
 	candidateAction := ""
 	candidateCount := 0
 	for _, actionName := range actionNames {
@@ -724,8 +792,11 @@ func normalizeParsedAction(actionDocument turnActionDocument) turnActionDocument
 	case "continue":
 		actionDocument.Action = "continue"
 		actionDocument.ToolName = strings.TrimSpace(actionDocument.ToolName)
-	case "finish":
-		actionDocument.Action = "finish"
+	case "reply":
+		actionDocument.Action = "reply"
+		if actionDocument.Final {
+			actionDocument.Action = "finish"
+		}
 	default:
 		actionDocument.Action = action
 	}
@@ -823,7 +894,7 @@ func retryAgentActionChatCompletionRequest(request model.ChatCompletionRequest, 
 		}
 		toolName = firstPendingActionToolName(state)
 		if toolName == "" && agentActionCompletionIsReady(state) {
-			toolName = "finish"
+			toolName = "reply"
 		}
 		if toolName == "" {
 			return retryRequest, true
@@ -914,9 +985,21 @@ func nativeActionParseCorrection(parseError error) model.StructuredOutputCorrect
 	return model.StructuredOutputCorrection{
 		Diagnostic: model.StructuredOutputDiagnostic{
 			Category:         model.StructuredOutputDiagnosticSchemaValidation,
-			ValidationIssues: []model.StructuredOutputValidationIssue{{FieldPath: parseError.Error()}},
+			ValidationIssues: actionParseValidationIssues(parseError),
 		},
 	}
+}
+
+func actionParseValidationIssues(parseError error) []model.StructuredOutputValidationIssue {
+	var wrongTypedFields wrongTypedActionFieldError
+	if !errors.As(parseError, &wrongTypedFields) {
+		return []model.StructuredOutputValidationIssue{{FieldPath: parseError.Error()}}
+	}
+	issues := make([]model.StructuredOutputValidationIssue, 0, len(wrongTypedFields.fieldNames))
+	for _, fieldName := range wrongTypedFields.fieldNames {
+		issues = append(issues, model.StructuredOutputValidationIssue{FieldPath: fieldName, Code: model.StructuredOutputValidationType})
+	}
+	return issues
 }
 
 func agentActionCorrectionMessage(correction model.StructuredOutputCorrection) string {
@@ -1240,7 +1323,7 @@ func containsNativeAgentTool(tools []model.ChatCompletionTool, toolName string) 
 
 func isNativeTerminalAction(action string) bool {
 	switch strings.TrimSpace(action) {
-	case "finish", "fail", "set_quality_criteria":
+	case "reply", "fail", "set_quality_criteria":
 		return true
 	default:
 		return false
@@ -1255,6 +1338,8 @@ func applyAgentAction(state agentTaskState, action agentAction) (agentTaskState,
 		state.ToolCallCount++
 	case "finish":
 		state.Status = agentcontract.TaskStatusCompleted
+	case "reply":
+		state.Status = agentcontract.TaskStatusRunning
 	case "fail":
 		state.Status = agentcontract.TaskStatusFailed
 	}
@@ -1316,6 +1401,10 @@ func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservat
 	for _, event := range events {
 		if requestedCall, isRequest := requestedToolCallFromTaskEvent(event); isRequest {
 			unanswered[requestedCall.ObservationID] = requestedCall
+			continue
+		}
+		if observation, isReplyReceipt := replyReceiptObservationFromTaskEvent(event); isReplyReceipt {
+			observations = append(observations, observation)
 			continue
 		}
 		if !isToolResultTaskEvent(event) {

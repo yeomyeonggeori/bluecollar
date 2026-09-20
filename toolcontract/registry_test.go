@@ -392,3 +392,34 @@ func TestAToolCatalogCarriesTheHalfThatSaysWhenNotToUseIt(t *testing.T) {
 		t.Fatalf("a tool that states neither half reads exactly as it did before: %s", descriptions)
 	}
 }
+
+func TestAnInternalToolOutsideTheAllowListIsRefusedToTheModelAndReachableByTheRuntime(t *testing.T) {
+	toolSet := NewToolSet([]string{ShellToolName})
+	registerTestTool(toolSet, ToolDefinition{Name: ShellToolName}, func(context.Context, ToolInvocation) (ToolResult, error) {
+		return testToolSuccess("ran"), nil
+	})
+	registerTestTool(toolSet, ToolDefinition{Name: FileDeliverToolName, Visibility: ToolVisibilityInternal}, func(context.Context, ToolInvocation) (ToolResult, error) {
+		return testToolSuccess("delivered"), nil
+	})
+
+	if toolSet.CanInvoke(FileDeliverToolName) {
+		t.Fatal("expected an internal tool outside the allow list to stay out of the model's reach")
+	}
+	modelResult, errorValue := toolSet.Invoke(context.Background(), ToolInvocation{ToolName: FileDeliverToolName})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !modelResult.Failed() {
+		t.Fatalf("expected the model's call to be refused, got %+v", modelResult)
+	}
+	runtimeResult, errorValue := toolSet.AllowingInternalTool(FileDeliverToolName).Invoke(context.Background(), ToolInvocation{ToolName: FileDeliverToolName})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if runtimeResult.Failed() {
+		t.Fatalf("expected the runtime's own call to go through, got %+v", runtimeResult)
+	}
+	if toolSet.AllowingInternalTool(ShellToolName).CanInvoke(FileDeliverToolName) {
+		t.Fatal("expected widening for one internal tool to leave the others refused")
+	}
+}

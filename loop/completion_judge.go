@@ -216,7 +216,7 @@ func completionJudgeMessages(request AgentTurnRequest, observations []turnObserv
 		messages = append(messages, model.Message{Role: "system", Content: "Expected results:\n" + expectedResultsDescription})
 	}
 	if finishReply := strings.TrimSpace(finishActionMessage(actionDocument)); finishReply != "" {
-		messages = append(messages, model.Message{Role: "system", Content: "Finish reply that accepting this completion delivers to the user:\n" + truncateForLedger(finishReply, completionJudgeInputMaxLength)})
+		messages = append(messages, model.Message{Role: "system", Content: "Final reply that accepting this completion delivers to the user:\n" + truncateForLedger(finishReply, completionJudgeInputMaxLength)})
 	}
 	if planContext := completionJudgePlanContext(observations); planContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: planContext})
@@ -270,8 +270,8 @@ func completionJudgeInstruction() string {
 		"Judge whether the recorded operations actually accomplish the user's original instruction. An operation marked failed=true attempted something and did not do it, so it is not evidence the thing was done.",
 		"The instruction's wording may be a bare confirmation such as 'ㅇ', '응', or 'yes'; the reading beneath it says what was confirmed and what the runtime already knows. Judge against that reading. Never mark unsatisfied because the wording alone names no work.",
 		"Judge only from the recorded ledger facts below. The executor's own completion claims are not evidence.",
-		"Accepting this completion delivers the finish reply to the user as the task's answer. Content the finish reply itself carries, such as links, results, and answers, is thereby delivered; never require a separate send or delivery operation for it. The reply's claims about operations it performed remain non-evidence and must match the ledger.",
-		"When the instruction asks only for words — a greeting, an answer, an explanation, advice — no recorded operation can exist for it: the finish reply is the work itself. Judge whether the reply's content accomplishes the instruction, and require no operation evidence for it.",
+		"Accepting this completion delivers the final reply to the user as the task's answer. Content the final reply itself carries, such as links, results, and answers, is thereby delivered; never require a separate send or delivery operation for it. The reply's claims about operations it performed remain non-evidence and must match the ledger.",
+		"When the instruction asks only for words — a greeting, an answer, an explanation, advice — no recorded operation can exist for it: the final reply is the work itself. Judge whether the reply's content accomplishes the instruction, and require no operation evidence for it.",
 		"Mark unsatisfied when the recorded operations do not plausibly accomplish the instruction: wrong target, wrong values, or a missing step.",
 		"When the instruction states an explicit deadline, date, time, quantity, title, or recipient, that value must appear in at least one successful recorded operation input; if a stated value appears nowhere and no relevant entry is display-truncated, mark unsatisfied and name exactly that value in missingWork.",
 		"When the instruction selects its target by a condition on an attribute — who has no account, which ones are over a count, what was sent this month — a successful recorded operation must show that attribute being read for the candidates. Acting on the unfiltered set is unfinished work: mark unsatisfied and name the condition that was never evaluated. A condition the instruction does not state is not a requirement, and an attribute already visible in a recorded result needs no separate lookup.",
@@ -280,7 +280,7 @@ func completionJudgeInstruction() string {
 		"When the verdict turns on content that is cut, dropped, or otherwise not visible, list those entries' observationIDs in needObservationIDs and decide from what is visible for now; they will be shown to you in full exactly once. Leave needObservationIDs empty when the visible parts already decide the verdict.",
 		"Resolve relative dates such as today, tomorrow, 오늘, and 내일 only from the runtime temporal context below. Never guess the current date from ledger values.",
 		"Judge state changes by the recorded operation results. Items that merely appear inside another result's diagnostic fields, such as candidate lists in a search result, are not additional requirements unless the instruction itself names them.",
-		"Images a recorded operation read, and images the user's message came with, are shown to you as image parts. When the finish reply makes a claim about one — that it holds no text, that it shows a particular thing — judge that claim against the image itself, and mark unsatisfied when the image contradicts it. Do not require anything of an image the instruction does not ask for, and an image nobody made a claim about is not a failure.",
+		"Images a recorded operation read, and images the user's message came with, are shown to you as image parts. When the final reply makes a claim about one — that it holds no text, that it shows a particular thing — judge that claim against the image itself, and mark unsatisfied when the image contradicts it. Do not require anything of an image the instruction does not ask for, and an image nobody made a claim about is not a failure.",
 		"Do not invent requirements the instruction does not state. Wording, formatting, phrasing, and which list or table a record appears in are not failures. If the right operations ran and every explicitly stated value appears in some recorded input, mark satisfied.",
 	}, "\n")
 }
@@ -299,14 +299,14 @@ func completionJudgePriorRejections(observations []turnObservation) string {
 		return ""
 	}
 	return strings.Join([]string{
-		"Earlier finishes of this task were rejected for these reasons:",
+		"Earlier final replies of this task were rejected for these reasons:",
 		strings.Join(rejectionReasons, "\n"),
 		"Each of these is an open gap. Mark satisfied only when visible ledger entries recorded after the rejection close every one of them; the same state that earned a rejection earns the same rejection again. A gap that later evidence genuinely closes is closed — these reasons are not permanent vetoes.",
 	}, "\n")
 }
 
 func completionJudgePlanContext(observations []turnObservation) string {
-	plan, hasPlan := latestPlanUpdate(observations)
+	plan, hasPlan := latestPlan(observations)
 	if !hasPlan || len(plan.Steps) == 0 {
 		return ""
 	}

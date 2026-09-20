@@ -35,6 +35,7 @@ type (
 	ClarificationOption        = agentcontract.ClarificationOption
 	CompanyContext             = agentcontract.CompanyContext
 	PlanStep                   = toolcontract.PlanStep
+	ToolSelector               = agentcontract.ToolSelector
 	ConfirmationReplyDecision  = agentcontract.ConfirmationReplyDecision
 	ContractToolWorkingSet     = agentcontract.ContractToolWorkingSet
 	DeliverableKind            = agentcontract.DeliverableKind

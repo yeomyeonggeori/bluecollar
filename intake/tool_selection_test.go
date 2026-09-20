@@ -39,7 +39,7 @@ func TestEveryToolAboveTheThresholdIsSelectedAndTheRestAreNot(t *testing.T) {
 	candidateToolNames := []string{"task_add", "task_list", "web_search"}
 	probabilities := map[string]float64{"task_add": 0.91, "task_list": likelyToolProbabilityThreshold, "web_search": likelyToolProbabilityThreshold - 0.01}
 
-	selectedToolNames := selectLikelyToolNames(probabilities, candidateToolNames)
+	selectedToolNames := selectLikelyToolNames(probabilities, candidateToolNames, likelyToolCountLimit)
 
 	if strings.Join(selectedToolNames, ",") != "task_add,task_list" {
 		t.Fatalf("expected the two tools at or above the threshold in probability order, got %v", selectedToolNames)
@@ -53,7 +53,7 @@ func TestTheSelectionStopsAtTheCountLimitAndKeepsTheLikeliestTools(t *testing.T)
 		probabilities[toolName] = 0.99 - float64(index)/10000
 	}
 
-	selectedToolNames := selectLikelyToolNames(probabilities, candidateToolNames)
+	selectedToolNames := selectLikelyToolNames(probabilities, candidateToolNames, likelyToolCountLimit)
 
 	if len(selectedToolNames) != likelyToolCountLimit {
 		t.Fatalf("expected the cap to hold at %d, got %d", likelyToolCountLimit, len(selectedToolNames))
@@ -67,16 +67,16 @@ func TestTheLikelyToolLimitIsTakenFromTheExposureCapRatherThanDeclaredBesideIt(t
 	if likelyToolCountLimit >= toolcontract.MaxExtensionCallableToolCount {
 		t.Fatalf("expected the likely tools to fit under the exposure cap of %d, got a limit of %d", toolcontract.MaxExtensionCallableToolCount, likelyToolCountLimit)
 	}
-	if spareSlots := toolcontract.MaxExtensionCallableToolCount - likelyToolCountLimit; spareSlots != toolExposureGroupsRankedBelowTheLikelyTools {
-		t.Fatalf("expected one exposure slot for each of the %d groups ranked below the pinned tools, got %d spare", toolExposureGroupsRankedBelowTheLikelyTools, spareSlots)
+	if spareSlots := toolcontract.MaxExtensionCallableToolCount - likelyToolCountLimit; spareSlots != toolcontract.ToolExposureGroupsRankedBelowTheLikelyTools {
+		t.Fatalf("expected one exposure slot for each of the %d groups ranked below the pinned tools, got %d spare", toolcontract.ToolExposureGroupsRankedBelowTheLikelyTools, spareSlots)
 	}
 }
 
 func TestTiedToolsAreOrderedByNameWhateverOrderTheCandidatesArrivedIn(t *testing.T) {
 	probabilities := map[string]float64{"task_add": 0.8, "task_list": 0.8, "web_search": 0.8}
 
-	forwardSelection := selectLikelyToolNames(probabilities, []string{"task_add", "task_list", "web_search"})
-	reversedSelection := selectLikelyToolNames(probabilities, []string{"web_search", "task_list", "task_add"})
+	forwardSelection := selectLikelyToolNames(probabilities, []string{"task_add", "task_list", "web_search"}, likelyToolCountLimit)
+	reversedSelection := selectLikelyToolNames(probabilities, []string{"web_search", "task_list", "task_add"}, likelyToolCountLimit)
 
 	if strings.Join(forwardSelection, ",") != "task_add,task_list,web_search" {
 		t.Fatalf("expected ties to be broken by name, got %v", forwardSelection)
@@ -89,7 +89,7 @@ func TestTiedToolsAreOrderedByNameWhateverOrderTheCandidatesArrivedIn(t *testing
 func TestATurnThatNeedsNoToolSelectsNone(t *testing.T) {
 	probabilities := map[string]float64{"task_add": 0.1, "task_list": 0.02}
 
-	if selectedToolNames := selectLikelyToolNames(probabilities, []string{"task_add", "task_list"}); len(selectedToolNames) != 0 {
+	if selectedToolNames := selectLikelyToolNames(probabilities, []string{"task_add", "task_list"}, likelyToolCountLimit); len(selectedToolNames) != 0 {
 		t.Fatalf("expected nothing to be selected, got %v", selectedToolNames)
 	}
 }
@@ -444,5 +444,38 @@ func TestOnlyAMessageRoutedToWorkCostsAToolSelectionCall(t *testing.T) {
 				t.Fatalf("expected %d decision call(s), got %d", testCase.expectedCallCount, len(decisionModel.Requests()))
 			}
 		})
+	}
+}
+
+func TestASelectionForOneNeedLandsInTheCallLedger(t *testing.T) {
+	outcome := startTaskOutcome()
+	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
+	callLedger := &agentcontract.IntakeCallLedger{}
+	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil, func() float64 { return 1 })
+
+	selectedTools, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
+		Need:       "이번 주 회의 일정을 읽는다",
+		ToolSet:    newTestToolSet([]string{"event_list", "message_send", "web_search"}),
+		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CallLedger: callLedger,
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the selection call to answer: %v", errorValue)
+	}
+	if len(selectedTools) == 0 {
+		t.Fatal("expected the need to select a tool")
+	}
+	if len(callLedger.Records) == 0 {
+		t.Fatal("expected the selection call to be recorded")
+	}
+	toolSelection := recordedToolSelection(callLedger)
+	if toolSelection == nil {
+		t.Fatal("expected the recorded call to carry what the selection was made from")
+	}
+	if toolSelection.CountLimit != toolcontract.MaxLikelyToolCountForOnePlanStep {
+		t.Fatalf("expected the need's own cap to be recorded, got %d", toolSelection.CountLimit)
+	}
+	if toolSelection.Probabilities["m1.event_list"] != 0.94 {
+		t.Fatalf("expected the probabilities behind the shortlist to be recorded, got %+v", toolSelection.Probabilities)
 	}
 }

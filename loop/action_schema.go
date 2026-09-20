@@ -28,20 +28,20 @@ func actionSchemaCitingEvidence(toolSet *toolcontract.ToolSet, citableEvidenceID
 
 func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
 	allowFail := true
-	allowFinish := true
+	allowReply := true
 	if len(terminalActionValues) > 0 {
 		allowFail = terminalActionValues[0]
 	}
 	if len(terminalActionValues) > 1 {
-		allowFinish = terminalActionValues[1]
+		allowReply = terminalActionValues[1]
 	}
 	allowDelegate := false
 	if len(terminalActionValues) > 2 {
 		allowDelegate = terminalActionValues[2]
 	}
 	var variants []any
-	if allowFinish {
-		variants = append(variants, finishActionSchema(hasFailureDebt, citableEvidenceIDs))
+	if allowReply {
+		variants = append(variants, replyActionSchema(hasFailureDebt, citableEvidenceIDs))
 	}
 	if allowFail {
 		variants = append(variants, failActionSchema(hasFailureDebt))
@@ -73,7 +73,6 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	return mustMarshalStructuredSchema(schema)
 }
 
-// nativeTerminalActionParameters extracts finish/fail/set_quality_criteria variants standalone, so only continue variants use this $defs block.
 func actionSchemaSharedDefinitions() map[string]any {
 	return map[string]any{
 		"executionStateUpdate": executionStateSchema(),
@@ -84,40 +83,46 @@ func executionStateUpdateRefSchema() map[string]any {
 	return map[string]any{"$ref": "#/$defs/executionStateUpdate"}
 }
 
-func finishActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
-	failureResolutionValues := []string{"none", "recovered_with_success", "no_tool_fallback"}
+func replyFailureResolutionValues(hasFailureDebt bool) []string {
 	if hasFailureDebt {
-		failureResolutionValues = []string{"recovered_with_success", "no_tool_fallback"}
+		return []string{failureResolutionRecoveredWithSuccess, failureResolutionNoToolFallback}
 	}
-	return closedObjectSchema(map[string]any{
-		"action":                enumStringSchema("finish"),
+	return []string{"none", failureResolutionRecoveredWithSuccess, failureResolutionNoToolFallback}
+}
+
+func replyVariantProperties(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
+	return map[string]any{
 		"message":               stringSchema(),
-		"failureResolution":     enumValuesStringSchema(failureResolutionValues),
-		"goalStatus":            enumValuesStringSchema([]string{"satisfied"}),
+		"final":                 booleanSchema(),
+		"failureResolution":     enumValuesStringSchema(replyFailureResolutionValues(hasFailureDebt)),
 		"goalSatisfied":         booleanSchema(),
 		"hasRemainingWork":      booleanSchema(),
 		"completionEvidenceIDs": completionEvidenceIDArraySchema(citableEvidenceIDs),
 		"qualityReview":         qualityReviewSchema(),
 		"executionStateUpdate":  executionStateSchema(),
-	})
+	}
 }
 
-func agentPartArraySchema() map[string]any {
+func replyActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
+	properties := replyVariantProperties(hasFailureDebt, citableEvidenceIDs)
+	properties["action"] = enumStringSchema("reply")
+	properties["attachments"] = replyAttachmentArraySchema()
+	properties["expectsAnswer"] = booleanSchema()
+	properties["choices"] = replyChoiceArraySchema()
+	properties["goalStatus"] = enumValuesStringSchema([]string{"satisfied", "in_progress"})
+	return closedObjectSchema(properties)
+}
+
+func replyChoiceArraySchema() map[string]any {
+	return map[string]any{"type": "array", "items": stringSchema()}
+}
+
+func replyAttachmentArraySchema() map[string]any {
 	return map[string]any{
 		"type": "array",
 		"items": closedObjectSchema(map[string]any{
-			"type": enumValuesStringSchema([]string{"text", "image", "file"}),
-			"text": stringSchema(),
-			"image": closedObjectSchema(map[string]any{
-				"mimeType": stringSchema(),
-				"path":     stringSchema(),
-				"filename": stringSchema(),
-			}),
-			"file": closedObjectSchema(map[string]any{
-				"path":        stringSchema(),
-				"filename":    stringSchema(),
-				"contentType": stringSchema(),
-			}),
+			"path":     stringSchema(),
+			"filename": stringSchema(),
 		}),
 	}
 }
@@ -296,25 +301,15 @@ func failureReportFactsSchema() map[string]any {
 	})
 }
 
-// terminalActionUnifiedSchema is a flat closed object rather than a root-level oneOf of finish/fail branches; branch-specific requirements are enforced in Go instead of JSON schema required fields.
 func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
-	failureResolutionValues := []string{"none", failureResolutionRecoveredWithSuccess, failureResolutionNoToolFallback}
-	properties := map[string]any{
-		"action":                enumValuesStringSchema([]string{"finish", "fail"}),
-		"message":               stringSchema(),
-		"reason":                stringSchema(),
-		"goalStatus":            enumValuesStringSchema([]string{"satisfied", "blocked"}),
-		"goalSatisfied":         booleanSchema(),
-		"hasRemainingWork":      booleanSchema(),
-		"completionEvidenceIDs": stringArraySchema(0),
-		"qualityReview":         qualityReviewSchema(),
-		"executionStateUpdate":  executionStateSchema(),
-	}
+	properties := replyVariantProperties(hasFailureDebt, nil)
+	properties["action"] = enumValuesStringSchema([]string{"reply", "fail"})
+	properties["goalStatus"] = enumValuesStringSchema([]string{"satisfied", "blocked"})
+	properties["reason"] = stringSchema()
 	if hasFailureDebt {
-		failureResolutionValues = []string{failureResolutionRecoveredWithSuccess, failureResolutionNoToolFallback, failureResolutionFailureReport}
+		properties["failureResolution"] = enumValuesStringSchema(append(replyFailureResolutionValues(hasFailureDebt), failureResolutionFailureReport))
 		properties["usedFailureFacts"] = failureReportFactsSchema()
 	}
-	properties["failureResolution"] = enumValuesStringSchema(failureResolutionValues)
 	return closedObjectSchema(properties)
 }
 

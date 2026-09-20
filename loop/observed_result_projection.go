@@ -106,7 +106,7 @@ func requiredProjectionRequirementsFromContract(request AgentTurnRequest) []Proj
 	for _, effect := range normalizeOutcomeEffects(request.OutcomeContract.RequiredEffects) {
 		description := effect.Description
 		if description == "" {
-			description = "finish is missing required observed effect " + effect.ObjectType + "/" + effect.Effect
+			description = "the final reply is missing required observed effect " + effect.ObjectType + "/" + effect.Effect
 		}
 		requirements = append(requirements, projectionRequirement(request, description, effect.ObjectType, effect.Effect, effect.SuggestedNextTools))
 	}

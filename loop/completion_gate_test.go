@@ -463,7 +463,7 @@ func TestAgentTurnRunnerRejectsRequiredFileWithoutAttachmentEvidence(t *testing.
 	}
 }
 
-func TestExpectedResultCompletionGateSuggestsFileDelivery(t *testing.T) {
+func TestExpectedResultCompletionGateNamesTheMissingAttachmentWithoutSuggestingATool(t *testing.T) {
 	goalSatisfied := true
 	request := AgentTurnRequest{
 		ToolSet: newTestToolSet([]string{toolcontract.FileDeliverToolName}),
@@ -486,7 +486,10 @@ func TestExpectedResultCompletionGateSuggestsFileDelivery(t *testing.T) {
 	t.Run("missing attachment", func(t *testing.T) {
 		result := validateExpectedResultCompletionGate(request, nil, nil, action, defaultRecoveryBudget())
 
-		assertSameStrings(t, result.SuggestedNextTools, []string{toolcontract.FileDeliverToolName})
+		assertSameStrings(t, result.SuggestedNextTools, nil)
+		if result.EvidenceKind != evidenceKindAttachment {
+			t.Fatalf("expected a missing attachment verdict, got %+v", result)
+		}
 	})
 
 	t.Run("wrong suffix", func(t *testing.T) {
@@ -499,7 +502,10 @@ func TestExpectedResultCompletionGateSuggestsFileDelivery(t *testing.T) {
 
 		result := validateExpectedResultCompletionGate(request, []turnObservation{observation}, nil, action, defaultRecoveryBudget())
 
-		assertSameStrings(t, result.SuggestedNextTools, []string{toolcontract.FileDeliverToolName})
+		assertSameStrings(t, result.SuggestedNextTools, nil)
+		if result.EvidenceKind != evidenceKindAttachment {
+			t.Fatalf("expected a missing attachment verdict, got %+v", result)
+		}
 	})
 }
 
@@ -847,7 +853,7 @@ func TestAgentTurnRunnerAutoAttachesRequiredWorkspaceArtifacts(t *testing.T) {
 	writeValidPDFTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pdf"))
 
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"finish","message":"자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001","obs-002"],"qualityReview":[]}`,
+		`{"action":"reply","final":true,"message":"자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001","obs-002"],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -905,7 +911,7 @@ func TestAgentTurnRunnerCompletesAfterRequiredArtifactsExist(t *testing.T) {
 	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","message":"자료를 완성했습니다.","toolName":"shell","toolInput":{"command":"build deck"}}`,
-		`{"action":"finish","message":"완성한 발표 자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003","obs-004"],"qualityReview":[]}`,
+		`{"action":"reply","final":true,"message":"완성한 발표 자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003","obs-004"],"qualityReview":[]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"shell", "file_deliver"})
@@ -1095,7 +1101,7 @@ func TestAgentTurnRunnerAutoCompletionKeepsQualityOutOfCorePolicy(t *testing.T) 
 
 func TestAgentTurnRunnerRejectsUnsatisfiedFinishMessage(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"finish","message":"done","goalStatus":"in_progress","goalSatisfied":false,"completionEvidenceIDs":[]}`,
+		`{"action":"reply","final":true,"message":"done","goalStatus":"in_progress","goalSatisfied":false,"completionEvidenceIDs":[]}`,
 		finishMessageDocument("now done"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
@@ -1114,8 +1120,8 @@ func TestAgentTurnRunnerRejectsUnsatisfiedFinishMessage(t *testing.T) {
 	if len(languageModel.requests) < 2 {
 		t.Fatalf("expected structured retry request after finish rejection, got %d requests", len(languageModel.requests))
 	}
-	if !messagesContain(languageModel.requests[1].Messages, "finish requires goalSatisfied=true") {
-		t.Fatalf("expected retry request to include finish rejection reason, got %+v", languageModel.requests[1].Messages)
+	if !messagesContain(languageModel.requests[1].Messages, "a final reply requires goalSatisfied=true") {
+		t.Fatalf("expected retry request to include the final reply rejection reason, got %+v", languageModel.requests[1].Messages)
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "goalSatisfied=true") {
 		t.Fatal("expected goalSatisfied completion gate event")
@@ -1310,7 +1316,7 @@ func TestAgentTurnRunnerRemovesQualityCriteriaActionAfterCriteriaAreSet(t *testi
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"set_quality_criteria","qualityCriteria":["done once: criteria are declared"],"goalStatus":"in_progress","goalSatisfied":false}`,
 		`{"action":"continue","toolName":"alpha","toolInput":{}}`,
-		`{"action":"finish","message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"],"qualityReview":[{"id":"done-once-criteria-are-declared","passed":true,"evidenceIDs":["obs-002"]}]}`,
+		`{"action":"reply","final":true,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"],"qualityReview":[{"id":"done-once-criteria-are-declared","passed":true,"evidenceIDs":["obs-002"]}]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	toolRegistry := newTestCapabilityToolSet([]string{"alpha"})
@@ -1347,7 +1353,7 @@ func TestAgentTurnRunnerDoesNotBlockFinishedExpectedResultForMissingQualityRevie
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"set_quality_criteria","qualityCriteria":["visual review: review the artifact"],"goalStatus":"in_progress","goalSatisfied":false}`,
 		`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish with the public URL","expectedTools":[],"expectedNextResults":["public URL"],"doneCriteria":["public URL is available"],"risk":"none","workingSetReason":"publish satisfies the link expected result"}}`,
-		`{"action":"finish","message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
+		`{"action":"reply","final":true,"message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
 	toolRegistry := newTestCapabilityToolSet([]string{"site_serve"})
@@ -1383,9 +1389,9 @@ func TestAgentTurnRunnerCanonicalLinkGateBlocksEarlyFinish(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"file_write","toolInput":{"path":"~/sites/portfolio/app/public/site-content.json","content":"{}"},"nextStepPlan":{"objective":"create draft","expectedTools":[],"expectedNextResults":["draft site project exists"],"doneCriteria":["draft exists"],"risk":"none","workingSetReason":"the draft prepares the project"}}`,
-			`{"action":"finish","message":"초안을 만들었습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+			`{"action":"reply","final":true,"message":"초안을 만들었습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 			`{"action":"continue","toolName":"site_serve","toolInput":{"title":"Portfolio","sourceWorkspacePath":"~/sites/portfolio","mode":"publish"},"nextStepPlan":{"objective":"finish after public URL","expectedTools":[],"expectedNextResults":["public URL exists"],"doneCriteria":["public URL exists"],"risk":"none","workingSetReason":"serve should satisfy the expected result"}}`,
-			`{"action":"finish","message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003"]}`,
+			`{"action":"reply","final":true,"message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003"]}`,
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
@@ -1600,7 +1606,7 @@ func TestRejectedFinishWordingSurvivesAttachmentRepair(t *testing.T) {
 	finishMessage := "보고서 이름은 '고객지원 주간 운영 점검', 상태는 '검토 중', 담당은 '운영팀'입니다."
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"file_write","toolInput":{"path":"report.json","content":"{\"status\":\"ready\"}"}}`,
-		`{"action":"finish","message":"` + finishMessage + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+		`{"action":"reply","final":true,"message":"` + finishMessage + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"files":[{"path":"report.json"}]}}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
@@ -1771,7 +1777,7 @@ func TestAgentTurnRunnerExpectedResultsRequireTheirTypedToolEvidence(t *testing.
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1","message":"Publish"},"nextStepPlan":{"objective":"finish with public URL","expectedTools":[],"expectedNextResults":["public URL exists"],"doneCriteria":["public URL exists"],"risk":"none","workingSetReason":"publish should satisfy the expected result"}}`,
-			`{"action":"finish","message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+			`{"action":"reply","final":true,"message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
@@ -1816,9 +1822,8 @@ func TestAgentTurnRunnerFileExpectedResultRequiresAttachment(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"file.promote","toolInput":{"path":"tmp/deck/build/deck.pptx","destinationDirectoryPath":"artifacts/deck","overwrite":true},"nextStepPlan":{"objective":"attach promoted file","expectedTools":["file_deliver"],"expectedNextResults":["attached pptx"],"doneCriteria":["file attached"],"risk":"none","workingSetReason":"file deliverable requires attachment"}}`,
-			`{"action":"finish","message":"PPTX를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
-			`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/deck/deck.pptx"},"nextStepPlan":{"objective":"finish","expectedTools":[],"expectedNextResults":["final message"],"doneCriteria":["attached file delivered"],"risk":"none","workingSetReason":"attachment now exists"}}`,
-			finishMessageCiting("PPTX를 첨부했습니다.", "obs-003"),
+			`{"action":"reply","final":true,"message":"PPTX를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+			`{"action":"reply","final":true,"message":"PPTX를 첨부했습니다.","attachments":[{"path":"artifacts/deck/deck.pptx","filename":"deck.pptx"}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
@@ -1826,7 +1831,7 @@ func TestAgentTurnRunnerFileExpectedResultRequiresAttachment(t *testing.T) {
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file.promote"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"path":"artifacts/deck/deck.pptx"}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver", Visibility: toolcontract.ToolVisibilityInternal}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "file attached"},
 			Attachments: []toolcontract.FileAttachment{{
@@ -1860,11 +1865,14 @@ func TestAgentTurnRunnerFileExpectedResultRequiresAttachment(t *testing.T) {
 	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "file_deliver") {
-		t.Fatal("expected completion gate to require file_deliver")
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "attach the file to the final reply") {
+		t.Fatal("expected the completion gate to require an attachment on the final reply")
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "tool.file_deliver.requested", "deck.pptx") {
-		t.Fatal("expected file_deliver after promoted-only finish was rejected")
+		t.Fatal("expected the final reply attachment to be resolved behind the reply")
+	}
+	if len(result.Attachments) != 1 || result.Attachments[0].Filename != "deck.pptx" {
+		t.Fatalf("expected the delivered attachment to reach the result, got %+v", result.Attachments)
 	}
 }
 
@@ -2097,7 +2105,7 @@ func TestAgentTurnRunnerDoesNotBlockTerminalBeforeRequiredFileWrite(t *testing.T
 		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
 		`{"action":"continue","toolName":"file_write","toolInput":{"path":"tmp/deck/presentation.md","content":"# Deck"}}`,
 		`{"action":"continue","toolName":"shell","toolInput":{"command":"NAME=deck ./build.sh"}}`,
-		`{"action":"finish","message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
+		`{"action":"reply","final":true,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5, MaxToolCallCount: 5})
 	terminalCallCount := 0

@@ -9,11 +9,13 @@ type PlanStep struct {
 	Status string `json:"status"`
 }
 
+const PlanStepStatusInProgress = "in_progress"
+
 var planStepStatuses = map[string]bool{
-	"pending":     true,
-	"in_progress": true,
-	"done":        true,
-	"skipped":     true,
+	"pending":                true,
+	PlanStepStatusInProgress: true,
+	"done":                   true,
+	"skipped":                true,
 }
 
 func NormalizePlan(goal string, steps []PlanStep) (string, []PlanStep) {
