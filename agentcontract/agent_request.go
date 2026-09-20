@@ -31,6 +31,7 @@ type AgentRequest struct {
 	MemoryFacts                []MemoryFact
 	ToolSet                    *toolcontract.ToolSet
 	PinnedToolNames            []string
+	LikelyToolNames            []string
 	PinnedSkillNames           []string
 	WorkspaceRootPath          string
 	ActivePaths                []string
@@ -143,6 +144,7 @@ type AgentTurnRequest struct {
 	ToolSet                      *toolcontract.ToolSet
 	AvailableSkills              []SkillInstruction
 	PinnedToolNames              []string
+	LikelyToolNames              []string
 	PinnedSkillNames             []string
 	WorkspaceRootPath            string
 	WorkspaceDefaultPath         string

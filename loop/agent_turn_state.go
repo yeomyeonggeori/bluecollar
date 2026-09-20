@@ -175,6 +175,9 @@ func restoreAgentTaskState(request AgentTurnRequest, options TurnOptions, taskRu
 	}
 	state.Attachments = attachmentsFromObservations(state.Observations)
 	state.DeliveredAttachmentPaths = deliveredAttachmentPathsFromTaskEvents(events)
+	planStepSelection := planStepSelectionFromTaskEvents(events)
+	state.ActivePlanStepTitle = planStepSelection.Step
+	state.PlanStepToolNames = planStepSelection.ToolNames
 	state.ExecutionState = executionStateFromTaskEvents(events)
 	state.ToolCallCount = state.ContextSummary.CompactedToolCallCount + successfulToolCallCount(state.Observations)
 	state.IterationCount = state.ContextSummary.CompactedObservationCount + len(state.Observations)
@@ -1398,6 +1401,10 @@ func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservat
 	for _, event := range events {
 		if requestedCall, isRequest := requestedToolCallFromTaskEvent(event); isRequest {
 			unanswered[requestedCall.ObservationID] = requestedCall
+			continue
+		}
+		if observation, isReplyReceipt := replyReceiptObservationFromTaskEvent(event); isReplyReceipt {
+			observations = append(observations, observation)
 			continue
 		}
 		if !isToolResultTaskEvent(event) {

@@ -2006,3 +2006,54 @@ func TestParseAgentActionResponseCitesEvidenceByIDAlone(t *testing.T) {
 		t.Fatalf("expected the review to cite its IDs alone, got %+v", action.QualityReview[0].Evidence)
 	}
 }
+
+func TestRestoreBringsBackTheRepliesAlreadySent(t *testing.T) {
+	events := []agentcontract.TaskEvent{
+		{Name: agentcontract.TaskEventAgentReplySent, Body: marshalEventBody(replyReceipt{ObservationID: "obs-001", Status: replyStatusDelivered, Message: "초안을 먼저 보냅니다.", AttachmentCount: 1, AttachmentPaths: []string{"/tmp/draft.pdf"}})},
+		{Name: agentcontract.TaskEventAgentReplyFailed, Body: marshalEventBody(replyReceipt{ObservationID: "obs-002", Status: replyStatusNotDelivered, Reason: "missing_sender", Message: "두 번째 보고입니다."})},
+	}
+
+	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "continue"}, TurnOptions{}, agentcontract.TaskRun{
+		TaskRunID: "task-1",
+		Status:    agentcontract.TaskStatusWaitingUserInput,
+	}, events)
+
+	if errorValue != nil {
+		t.Fatalf("expected restore to succeed: %v", errorValue)
+	}
+	if len(state.Observations) != 2 {
+		t.Fatalf("expected both reply receipts to come back, got %+v", state.Observations)
+	}
+	if sentMessage, wasSent := midTaskMessageSent(state.Observations[0]); !wasSent || sentMessage != "초안을 먼저 보냅니다." {
+		t.Fatalf("expected the delivered reply to be recognizable after restore, got %q", sentMessage)
+	}
+	if _, wasSent := midTaskMessageSent(state.Observations[1]); wasSent {
+		t.Fatal("expected an undelivered reply not to count as a message the requester saw")
+	}
+	if len(state.DeliveredAttachmentPaths) != 1 {
+		t.Fatalf("expected the delivered attachment path to survive, got %+v", state.DeliveredAttachmentPaths)
+	}
+}
+
+func TestRestoreBringsBackTheStepShortlist(t *testing.T) {
+	events := []agentcontract.TaskEvent{
+		{Name: agentcontract.TaskEventAgentStepToolsSelected, Body: marshalEventBody(planStepSelection{Step: "read the deal", ToolNames: []string{"deal_list"}, CountLimit: 5})},
+		{Name: agentcontract.TaskEventAgentStepToolsSelected, Body: marshalEventBody(planStepSelection{Step: "move the deal", ToolNames: []string{"deal_update"}, CountLimit: 5})},
+		{Name: agentcontract.TaskEventAgentStepToolsSelected, Body: marshalEventBody(planStepSelection{Step: "close the deal", Error: "the selector was unreachable"})},
+	}
+
+	state, errorValue := restoreAgentTaskState(AgentTurnRequest{Prompt: "continue"}, TurnOptions{}, agentcontract.TaskRun{
+		TaskRunID: "task-1",
+		Status:    agentcontract.TaskStatusWaitingUserInput,
+	}, events)
+
+	if errorValue != nil {
+		t.Fatalf("expected restore to succeed: %v", errorValue)
+	}
+	if state.ActivePlanStepTitle != "move the deal" {
+		t.Fatalf("expected the step the palette belongs to, got %q", state.ActivePlanStepTitle)
+	}
+	if len(state.PlanStepToolNames) != 1 || state.PlanStepToolNames[0] != "deal_update" {
+		t.Fatalf("expected the step shortlist to survive the pause, got %+v", state.PlanStepToolNames)
+	}
+}

@@ -59,3 +59,15 @@ func kernelPromptStates() map[string]agentTaskState {
 		"kernel turn with a failure": failedState,
 	}
 }
+
+func TestOnlyATurnWithSomebodyToAnswerIsToldItCanAsk(t *testing.T) {
+	askingRequest := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.ShellToolName, toolcontract.AskInputToolName})}
+	silentRequest := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.ShellToolName})}
+
+	if !strings.Contains(systemInstructionFor(TurnOptions{}, askingRequest).Text(), "expectsAnswer=true") {
+		t.Fatal("expected a turn that can ask to be told how")
+	}
+	if strings.Contains(systemInstructionFor(TurnOptions{}, silentRequest).Text(), "expectsAnswer") {
+		t.Fatal("expected a turn with nobody to answer not to be offered a question it cannot ask")
+	}
+}

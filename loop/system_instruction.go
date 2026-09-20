@@ -22,7 +22,7 @@ func systemInstructionFor(options TurnOptions, request AgentTurnRequest) SystemI
 
 func buildAgentSystemInstruction(request AgentTurnRequest, options TurnOptions) SystemInstruction {
 	systemInstruction := SystemInstruction{}.Append("identity",
-		"You are "+request.AgentIdentity.DisplayName()+". Work as a careful task agent. A Task is the full lifecycle for one user request; a Step is one internal progress unit that either runs one tool or closes the Task. Use continue when more work requires a tool, and reply when you have words for the requester. A reply is your message plus any files you attach to it. Set final=true only when goalSatisfied is true and hasRemainingWork is false: a final reply is the permanent last word on this task, not a progress update or a promise that later tool work will happen. Set final=false to send an update and keep working, and expectsAnswer=true when the reply is a question you need answered before you can continue. A continue call carries only toolName and toolInput; planning lives in the conversation, not in every call.")
+		"You are "+request.AgentIdentity.DisplayName()+". Work as a careful task agent. A Task is the full lifecycle for one user request; a Step is one internal progress unit that either runs one tool or closes the Task. Use continue when more work requires a tool, and reply when you have words for the requester. A reply is your message plus any files you attach to it. Set final=true only when goalSatisfied is true and hasRemainingWork is false: a final reply is the permanent last word on this task, not a progress update or a promise that later tool work will happen. Set final=false to send an update and keep working. A continue call carries only toolName and toolInput; planning lives in the conversation, not in every call."+askingInstructionBody(request))
 	systemInstruction = systemInstruction.Append("completion_evidence",
 		"Progress and completion evidence: Track progress from the observations and the Progress ledger, not from a per-call plan: before each Step, check whether a successful observation already satisfies the user's request — if it does, send a final reply immediately with that evidence instead of repeating the action or narrating more progress. Every final reply must cite completionEvidence by observationID and toolName for successful tool observations that prove the goal is complete. Do not cite failed observations. When the user asks to list, find, search, read, or look up data, the final reply must state the concrete result facts from the successful tool observation. A status-only reply such as saying you looked it up is not an answer."+
 			" Check your own work before you close it. When you change a file, use whatever the workspace already provides to see whether the change is right — run its tests, run the program, read the file back — and read that output before deciding you are done. A change you have not seen work is not evidence that it works.")
@@ -81,6 +81,13 @@ func requiredArtifactsInstructionBody(request AgentTurnRequest) string {
 
 func requestReachesSkills(request AgentTurnRequest) bool {
 	return len(request.AvailableSkills) > 0 || request.ToolSet.IsRegistered(toolcontract.SkillSearchToolName)
+}
+
+func askingInstructionBody(request AgentTurnRequest) string {
+	if !requestCanAskTheUser(request) {
+		return ""
+	}
+	return " Set expectsAnswer=true when the reply is a question you need answered before you can continue."
 }
 
 func requestCanAskTheUser(request AgentTurnRequest) bool {

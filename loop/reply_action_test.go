@@ -114,11 +114,11 @@ func TestAQuestionTheRuntimeCannotAskComesBackToTheModelAsAFailure(t *testing.T)
 		t.Fatalf("expected the turn to continue after an unaskable question: %v", errorValue)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, agentcontract.TaskEventAgentReplyFailed, "not_delivered") {
-		t.Fatalf("expected a reply.failed receipt in the ledger, got %+v", events)
+	if !taskEventsContain(events, agentcontract.TaskEventAgentReplyFailed, "no_requester_to_answer") {
+		t.Fatalf("expected a reply.failed receipt in the ledger, got %d events", len(events))
 	}
-	if !modelSawAFailedObservation(languageModel) {
-		t.Fatal("expected the failed ask to reach the model as an observation")
+	if !modelSawText(languageModel, "expectsAnswer is not available here") {
+		t.Fatal("expected the refused question to come back to the model as a validation issue")
 	}
 }
 
@@ -226,10 +226,10 @@ func TestRepeatedProgressRepliesStopTheTurn(t *testing.T) {
 	}
 }
 
-func modelSawAFailedObservation(languageModel *sequenceLanguageModel) bool {
+func modelSawText(languageModel *sequenceLanguageModel, text string) bool {
 	for _, request := range languageModel.requests {
 		for _, message := range request.Messages {
-			if strings.Contains(message.Content, "ask_input") && strings.Contains(message.Content, "not allowed") {
+			if strings.Contains(message.Content, text) {
 				return true
 			}
 		}
@@ -267,5 +267,133 @@ func TestAFinalReplyWhoseAttachmentFailsNeverClosesTheTaskPromisingTheFile(t *te
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
 	if !taskEventsContain(events, agentcontract.TaskEventAgentReplyFailed, "report.pdf does not exist") {
 		t.Fatal("expected the failed attachment to be recorded as a failed reply")
+	}
+}
+
+func TestACancelledTaskPostsNothingFurther(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		directToolAction("continue", "", "notes_write", `{"path":"draft.md"}`),
+		`{"action":"reply","final":false,"message":"계속 진행합니다."}`,
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
+	toolRegistry := newTestCapabilityToolSet([]string{"notes_write"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "notes_write"}, func(toolContext context.Context, _ toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		services.taskRunService.CancelTaskRun(TaskRunIDFromContext(toolContext), "person-1")
+		return testToolSuccess(`{"status":"written"}`), nil
+	})
+	sentCheckpoints := []AgentCheckpoint{}
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "초안 써줘",
+		ToolSet:           toolRegistry,
+		PinnedToolNames:   []string{"notes_write"},
+		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
+			sentCheckpoints = append(sentCheckpoints, checkpoint)
+			return nil
+		},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the cancelled turn to return: %v", errorValue)
+	}
+	if len(sentCheckpoints) != 0 {
+		t.Fatalf("expected a cancelled task to post nothing, got %+v", sentCheckpoints)
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusCancelled {
+		t.Fatalf("expected the cancelled run to be reported as cancelled, got %s", result.TaskRun.Status)
+	}
+}
+
+func TestATaskSendsAtMostThreeProgressRepliesAndNeverTheSameOneTwice(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		`{"action":"reply","final":false,"message":"첫 번째 보고입니다."}`,
+		`{"action":"reply","final":false,"message":"첫 번째 보고입니다."}`,
+		`{"action":"reply","final":false,"message":"두 번째 보고입니다."}`,
+		`{"action":"reply","final":false,"message":"세 번째 보고입니다."}`,
+		`{"action":"reply","final":false,"message":"네 번째 보고입니다."}`,
+		finishMessageDocument("끝났습니다."),
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 10})
+	sentCheckpoints := []AgentCheckpoint{}
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "진행 상황 알려줘",
+		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
+			sentCheckpoints = append(sentCheckpoints, checkpoint)
+			return nil
+		},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+	if len(sentCheckpoints) != 3 {
+		t.Fatalf("expected the duplicate and the fourth update to be refused, got %+v", sentCheckpoints)
+	}
+	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
+	if !taskEventsContain(events, agentcontract.TaskEventAgentReplyFailed, "rate_limited_or_duplicate") {
+		t.Fatal("expected the refused update to come back to the model as a receipt")
+	}
+	if !modelSawText(languageModel, "already sent its progress updates") {
+		t.Fatal("expected the model to read why its update did not go out")
+	}
+	deliveredStepCount := 0
+	refusedStepCount := 0
+	for _, taskStep := range services.taskStepService.ListTaskStep(result.TaskRun.TaskRunID) {
+		if taskStep.Instruction != "reply" {
+			continue
+		}
+		if taskStep.Status == agentcontract.TaskStatusCompleted {
+			deliveredStepCount++
+			continue
+		}
+		refusedStepCount++
+	}
+	if deliveredStepCount != 3 || refusedStepCount != 2 {
+		t.Fatalf("expected a step to be saved by what the receipt says, got %d delivered and %d refused", deliveredStepCount, refusedStepCount)
+	}
+}
+
+func TestADelegatedChildReportsToItsCallerRatherThanToTheRequester(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		delegateActionDocument("write the release notes", "the text"),
+		`{"action":"reply","final":false,"message":"중간 보고입니다."}`,
+		`{"action":"reply","expectsAnswer":true,"message":"어느 쪽으로 할까요?"}`,
+		finishMessageDocument("릴리스 노트를 정리했습니다."),
+		finishMessageDocument("정리해 두었습니다."),
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 8, DelegationLimit: 1})
+	toolRegistry := newTestToolSet([]string{toolcontract.AskInputToolName})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.AskInputToolName, Visibility: toolcontract.ToolVisibilityInternal}, func(toolContext context.Context, _ toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		services.taskRunService.PauseTaskRun(TaskRunIDFromContext(toolContext), agentcontract.TaskStatusWaitingUserInput, "어느 쪽으로 할까요?")
+		return testToolSuccess(`{"kind":"ask_input"}`), nil
+	})
+	sentCheckpoints := []AgentCheckpoint{}
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "릴리스 노트 정리해줘",
+		ToolSet:           toolRegistry,
+		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
+			sentCheckpoints = append(sentCheckpoints, checkpoint)
+			return nil
+		},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the delegated turn to run: %v", errorValue)
+	}
+	if len(sentCheckpoints) != 0 {
+		t.Fatalf("expected a child's words to reach its caller only, got %+v", sentCheckpoints)
+	}
+	for _, taskRun := range services.taskRunService.ListTaskRun() {
+		if taskRun.Status == agentcontract.TaskStatusWaitingUserInput {
+			t.Fatalf("a child that pauses for an answer strands its caller: %s", taskRun.TaskRunID)
+		}
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
+		t.Fatalf("expected the parent to finish, got %s", result.TaskRun.Status)
 	}
 }

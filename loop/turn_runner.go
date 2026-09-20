@@ -1043,15 +1043,23 @@ func checkpointMessageAllowed(message string, observations []turnObservation) bo
 	normalizedMessage := normalizeCheckpointMessage(message)
 	count := 0
 	for _, observation := range observations {
-		if observation.Action != "checkpoint" {
+		sentMessage, wasSent := midTaskMessageSent(observation)
+		if !wasSent {
 			continue
 		}
 		count++
-		if normalizeCheckpointMessage(checkpointObservationMessage(observation)) == normalizedMessage {
+		if normalizeCheckpointMessage(sentMessage) == normalizedMessage {
 			return false
 		}
 	}
 	return count < 3
+}
+
+func midTaskMessageSent(observation turnObservation) (string, bool) {
+	if observation.Action == "checkpoint" {
+		return checkpointObservationMessage(observation), true
+	}
+	return deliveredReplyMessage(observation)
 }
 
 func normalizeCheckpointMessage(message string) string {
@@ -1292,7 +1300,18 @@ func planStepPinnedToolNames(request AgentTurnRequest, state agentTaskState) []s
 	if len(state.PlanStepToolNames) == 0 {
 		return appendUniqueStrings(request.PinnedToolNames)
 	}
-	return appendUniqueStrings(append([]string{}, state.PlanStepToolNames...))
+	return appendUniqueStrings(toolNamesExcept(request.PinnedToolNames, request.LikelyToolNames), state.PlanStepToolNames...)
+}
+
+func toolNamesExcept(toolNames []string, excludedToolNames []string) []string {
+	remaining := []string{}
+	for _, toolName := range toolNames {
+		if stringSliceContains(excludedToolNames, toolName) {
+			continue
+		}
+		remaining = append(remaining, toolName)
+	}
+	return remaining
 }
 
 func withOwningSkillDecisions(decisions []SkillSelectionDecision, availableSkills []SkillInstruction, requestedToolNames []string) []SkillSelectionDecision {
@@ -1426,6 +1445,7 @@ func agentRequestFromTurnRequest(request AgentTurnRequest) AgentRequest {
 		MemoryFacts:            append([]MemoryFact{}, request.MemoryFacts...),
 		ToolSet:                request.ToolSet,
 		PinnedToolNames:        append([]string{}, request.PinnedToolNames...),
+		LikelyToolNames:        append([]string{}, request.LikelyToolNames...),
 		PinnedSkillNames:       append([]string{}, request.PinnedSkillNames...),
 		WorkspaceRootPath:      request.WorkspaceRootPath,
 		ActivePaths:            append([]string{}, request.ActivePaths...),

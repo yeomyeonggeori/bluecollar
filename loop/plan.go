@@ -56,8 +56,8 @@ func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context
 	if stepTitle == "" || stepTitle == state.ActivePlanStepTitle {
 		return
 	}
-	state.ActivePlanStepTitle = stepTitle
 	if agentTurnRunner.toolSelector == nil {
+		state.ActivePlanStepTitle = stepTitle
 		return
 	}
 	callLedger := &intakeCallLedger{}
@@ -69,18 +69,39 @@ func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context
 	})
 	agentTurnRunner.appendCallRecords(taskRunID, callLedger.Records)
 	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(map[string]any{
-			"step":  stepTitle,
-			"error": errorValue.Error(),
-		}))
+		state.PlanStepToolNames = nil
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(planStepSelection{Step: stepTitle, Error: errorValue.Error()}))
 		return
 	}
+	state.ActivePlanStepTitle = stepTitle
 	state.PlanStepToolNames = selectedToolNamesOf(selectedTools)
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(map[string]any{
-		"step":       stepTitle,
-		"toolNames":  state.PlanStepToolNames,
-		"countLimit": toolcontract.MaxLikelyToolCountForOnePlanStep,
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(planStepSelection{
+		Step:       stepTitle,
+		ToolNames:  state.PlanStepToolNames,
+		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
 	}))
+}
+
+type planStepSelection struct {
+	Step       string   `json:"step"`
+	ToolNames  []string `json:"toolNames,omitempty"`
+	CountLimit int      `json:"countLimit,omitempty"`
+	Error      string   `json:"error,omitempty"`
+}
+
+func planStepSelectionFromTaskEvents(events []agentcontract.TaskEvent) planStepSelection {
+	selection := planStepSelection{}
+	for _, event := range events {
+		if event.Name != agentcontract.TaskEventAgentStepToolsSelected {
+			continue
+		}
+		var recorded planStepSelection
+		if json.Unmarshal([]byte(event.Body), &recorded) != nil || len(recorded.ToolNames) == 0 {
+			continue
+		}
+		selection = recorded
+	}
+	return selection
 }
 
 func selectedToolNamesOf(selectedTools []agentcontract.SelectedTool) []string {
