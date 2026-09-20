@@ -1418,11 +1418,22 @@ func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservat
 		}
 		delete(unanswered, observation.ObservationID)
 		observation.Tool = toolcontract.CanonicalToolName(observation.Tool)
+		observation.ToolInputKey = canonicalizePersistedToolCallKey(observation.ToolInputKey)
+		observation.AttemptFingerprint = canonicalizePersistedToolCallKey(observation.AttemptFingerprint)
+		observation.RecoveryAttemptKey = canonicalizePersistedToolCallKey(observation.RecoveryAttemptKey)
 		if !isApprovalRequiredObservation(observation) {
 			observations = append(observations, observation)
 		}
 	}
 	return append(observations, interruptedCallObservations(unanswered)...)
+}
+
+func canonicalizePersistedToolCallKey(toolCallKey string) string {
+	toolName, toolInput, hasDelimiter := strings.Cut(toolCallKey, "\x00")
+	if !hasDelimiter {
+		return toolCallKey
+	}
+	return toolcontract.CanonicalToolName(toolName) + "\x00" + toolInput
 }
 
 type requestedToolCall struct {

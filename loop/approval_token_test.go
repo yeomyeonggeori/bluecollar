@@ -35,6 +35,33 @@ func TestAHeldCallIsSettledOnlyByTheTokenTheLoopMintedForIt(t *testing.T) {
 	}
 }
 
+func TestARestoredFormerKernelHeldCallMatchesOnlyItsCurrentEquivalent(t *testing.T) {
+	services := newTurnRunnerTestServices(nil, TurnOptions{})
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "run the command")
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHeldCall,
+		marshalEventBody(agentcontract.HeldCall{
+			ApprovalToken: "token-legacy-shell",
+			ToolName:      "shell",
+			ToolInput:     json.RawMessage(`{"command":"pwd"}`),
+			ObservationID: "obs-legacy-shell",
+		}))
+	heldCalls := services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)
+	carriedOutCall := CarriedOutCall{
+		ApprovalToken: "token-legacy-shell",
+		ToolName:      toolcontract.BashToolName,
+		ToolInput:     json.RawMessage(`{"command":"pwd"}`),
+	}
+
+	if _, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall); !isMatched {
+		t.Fatal("a held shell call must match its equivalent bash call after restart")
+	}
+
+	carriedOutCall.ToolInput = json.RawMessage(`{"command":"ls"}`)
+	if _, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall); isMatched {
+		t.Fatal("a legacy hold must reject a changed command even when it carries the same token")
+	}
+}
+
 func TestACarriedOutCallThatWasNeverHeldIsRecordedAsItHappened(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{modelTier: "xlow", contents: []string{finishMessageDocument("보냈습니다")}},
 		TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
