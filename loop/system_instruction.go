@@ -87,7 +87,7 @@ func askingInstructionBody(request AgentTurnRequest) string {
 	if !requestCanAskTheUser(request) {
 		return ""
 	}
-	return " Set expectsAnswer=true when the reply is a question you need answered before you can continue."
+	return " Set expectsAnswer=true when the reply is a question you need answered before you can continue. Before waiting for an answer, complete the independently requested work whose inputs and authorization are already clear. Ask only for the remaining choice; do not invent missing values or perform work that depends on that choice."
 }
 
 func requestCanAskTheUser(request AgentTurnRequest) bool {
