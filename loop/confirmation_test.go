@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func TestConfirmationPolicyAllowsLowRiskDailyReport(t *testing.T) {
@@ -177,6 +178,80 @@ func TestTheConfirmationPlannerIsToldWhoCanAuthorizeAndWhoIsJustTalking(t *testi
 	}
 	if !strings.Contains(assembled, "Authenticated requester:") || !strings.Contains(assembled, "person-1") {
 		t.Fatalf("a partition needs an identity: without the requester, the planner cannot tell which visible speaker is the one it is planning for: %s", assembled)
+	}
+}
+
+func TestConfirmationPlannerDoesNotBlockIndependentWorkForOneMissingChoice(t *testing.T) {
+	messages := confirmationPlanMessages(AgentRequest{Prompt: "update the records and change their owner"}, nil)
+	body := joinMessageContent(messages)
+	for _, instruction := range []string{
+		"blocks every independently requested part from starting",
+		"leave missingInformation empty so the agent can do that work",
+		"ask before the dependent remainder",
+		"Never guess a missing value",
+		"Do not invent dependencies between independent requested parts",
+		"mark a named target missing before the agent has tried to resolve it with tools",
+		"Do not treat optional unspecified details as blocking",
+		"Do not invent destinations, approval roles, or required inputs",
+		"let the execution loop inspect and try the tool before asking the requester",
+	} {
+		if !strings.Contains(body, instruction) {
+			t.Fatalf("the confirmation planner lacks %q, got %s", instruction, body)
+		}
+	}
+}
+
+func TestConfirmationPlannerIncludesOnlySelectedAvailableToolDescriptions(t *testing.T) {
+	toolSet := toolcontract.NewToolSet([]string{"selected_tool", "evidence_tool", "unrelated_tool", "unavailable_tool"})
+	for _, testCase := range []struct {
+		name         string
+		description  string
+		availability string
+	}{
+		{name: "selected_tool", description: "Selected tool description.", availability: toolcontract.ToolAvailabilityAvailable},
+		{name: "evidence_tool", description: "Evidence tool description.", availability: toolcontract.ToolAvailabilityAvailable},
+		{name: "unrelated_tool", description: "Unrelated tool description.", availability: toolcontract.ToolAvailabilityAvailable},
+		{name: "unavailable_tool", description: "Unavailable tool description.", availability: toolcontract.ToolAvailabilityUnavailable},
+	} {
+		definition := testToolDescriptor(testCase.name)
+		definition.Description = testCase.description
+		errorValue := toolSet.RegisterBoundTool(toolcontract.BoundTool{
+			Definition:   definition,
+			Availability: toolcontract.ToolAvailability{Status: testCase.availability},
+			Handler: func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+				return toolcontract.ToolResult{}, nil
+			},
+		})
+		if errorValue != nil {
+			t.Fatalf("register %s: %v", testCase.name, errorValue)
+		}
+	}
+
+	messages := confirmationPlanMessages(AgentRequest{
+		Prompt:          "complete the requested work",
+		ToolSet:         toolSet,
+		LikelyToolNames: []string{"selected_tool", "selected_tool", "unavailable_tool"},
+	}, []string{"evidence_tool", "selected_tool"})
+	body := joinMessageContent(messages)
+	for _, expected := range []string{"selected_tool: Selected tool description.", "evidence_tool: Evidence tool description."} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected selected tool context %q, got %s", expected, body)
+		}
+	}
+	for _, excluded := range []string{"Unrelated tool description.", "Unavailable tool description."} {
+		if strings.Contains(body, excluded) {
+			t.Fatalf("unexpected tool context %q, got %s", excluded, body)
+		}
+	}
+	if strings.Count(body, "selected_tool: Selected tool description.") != 1 {
+		t.Fatalf("expected duplicate selected tool names to be deduplicated, got %s", body)
+	}
+}
+
+func TestConfirmationPlannerAllowsMissingToolSet(t *testing.T) {
+	messages := confirmationPlanMessages(AgentRequest{Prompt: "complete the requested work"}, nil)
+	if !strings.Contains(joinMessageContent(messages), "Only return the structured plan") {
+		t.Fatal("expected confirmation planning to work when the request has no tool set")
 	}
 }
 
