@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -101,9 +102,9 @@ func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
 	if !originalRequest.ToolSet.IsAllowed("deal_list") {
 		t.Fatal("expected the initial model request to expose the queued read tool")
 	}
-	rememberBatchedActions(&state, turnActionDocument{BatchedActions: []turnActionDocument{{Action: "continue", ToolName: "deal_list"}}}, originalRequest.ToolSet.ListToolNames(), originalRequest.ToolExposure)
 	services.runner.applyPlanObservation(context.Background(), "task-step-batch", &state, planUpdateSuccessObservation("obs-plan-1",
 		`{"steps":[{"title":"move the deal","status":"in_progress"}]}`))
+	rememberBatchedActions(&state, turnActionDocument{BatchedActions: []turnActionDocument{{Action: "continue", ToolName: "deal_list"}}}, originalRequest.ToolSet.ListToolNames(), originalRequest.ToolExposure)
 
 	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
 	if !queuedRequest.ToolSet.IsAllowed("deal_list") {
@@ -148,6 +149,128 @@ func TestQueuedExposureRetainsApprovalAndDelegationGuards(t *testing.T) {
 	if handlerCallCount != 0 {
 		t.Fatalf("expected approval and delegation guards to prevent the effect, handler calls=%d", handlerCallCount)
 	}
+}
+
+func TestQueuedExposureFailsClosedWhenEveryCapturedToolIsDenied(t *testing.T) {
+	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	toolSet := toolcontract.NewToolSet([]string{"deal_list", "deal_update"})
+	registerTestTool(toolSet, testToolDescriptor("deal_list"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return testToolSuccess("read"), nil
+	})
+	if errorValue := toolSet.RegisterBoundTool(toolcontract.BoundTool{
+		Definition:   testToolDescriptor("deal_update"),
+		Availability: toolcontract.ToolAvailability{Status: toolcontract.ToolAvailabilityDenied},
+		Handler: func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+			return testToolSuccess("updated"), nil
+		},
+	}); errorValue != nil {
+		t.Fatalf("expected denied tool to register: %v", errorValue)
+	}
+	request := AgentTurnRequest{ToolSet: toolSet}
+	state := agentTaskState{
+		PendingBatchedActions:   []turnActionDocument{{Action: "continue", ToolName: "deal_update"}},
+		PendingBatchedToolNames: []string{"deal_update"},
+	}
+	state.PendingBatchedToolExposure.ExposedToolIDs = []string{"deal_update"}
+
+	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
+	if len(queuedRequest.ToolExposure.ExposedToolIDs) != 0 || len(queuedRequest.ToolSet.ListToolNames()) != 0 {
+		t.Fatalf("expected denied captured tool to leave no exposed tool, got exposure=%+v allowed=%+v", queuedRequest.ToolExposure, queuedRequest.ToolSet.ListToolNames())
+	}
+	if queuedRequest.ToolSet.IsRegistered("deal_update") || queuedRequest.ToolSet.IsRegistered("deal_list") {
+		t.Fatalf("expected no captured or unrelated tool to remain invocable, got deal_update=%v deal_list=%v", queuedRequest.ToolSet.IsRegistered("deal_update"), queuedRequest.ToolSet.IsRegistered("deal_list"))
+	}
+}
+
+func TestRunTurnExecutesBatchedReadAfterPlanChangesTheShortlist(t *testing.T) {
+	languageModel := &batchedPlanExposureLanguageModel{}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5, TaskLevel: TaskLevelMedium})
+	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
+	services.runner.UseToolSelector(selector)
+	toolSet := newTestToolSet([]string{toolcontract.PlanToolName, "deal_list", "deal_update"})
+	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.PlanToolName, SideEffectClass: toolcontract.ToolSideEffectNone, ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		var input planDocument
+		if errorValue := json.Unmarshal(invocation.Input, &input); errorValue != nil {
+			return toolcontract.ToolResult{}, errorValue
+		}
+		input.Goal, input.Steps = NormalizePlan(input.Goal, input.Steps)
+		document := marshalEventBody(input)
+		return toolcontract.ToolSuccessData(document, json.RawMessage(document)), nil
+	})
+	dealListCallCount := 0
+	registerTestTool(toolSet, testToolDescriptor("deal_list"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		dealListCallCount++
+		return testToolSuccess("deal list"), nil
+	})
+	registerTestTool(toolSet, testToolDescriptor("deal_update"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return testToolSuccess("deal updated"), nil
+	})
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "move the deal forward",
+		TaskLevel:         TaskLevelMedium,
+		ToolSet:           toolSet,
+		PinnedToolNames:   []string{toolcontract.PlanToolName, "deal_list", "deal_update"},
+		LikelyToolNames:   []string{"deal_list", "deal_update"},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected turn to complete: %v", errorValue)
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted || dealListCallCount != 1 {
+		t.Fatalf("expected the queued read and final reply to complete, status=%s deal_list calls=%d", result.TaskRun.Status, dealListCallCount)
+	}
+	if len(languageModel.actionRequests) != 2 {
+		t.Fatalf("expected one batched model response and one follow-up request, got %d calls", len(languageModel.actionRequests))
+	}
+	if !chatRequestIncludesTool(languageModel.actionRequests[0], "deal_list") {
+		t.Fatal("expected original model request to expose the queued read")
+	}
+	if chatRequestIncludesTool(languageModel.actionRequests[1], "deal_list") || !chatRequestIncludesTool(languageModel.actionRequests[1], "deal_update") {
+		t.Fatalf("expected follow-up model request to use the newly selected shortlist, tools=%+v", chatRequestToolNames(languageModel.actionRequests[1]))
+	}
+}
+
+type batchedPlanExposureLanguageModel struct {
+	actionRequests []model.ChatCompletionRequest
+}
+
+func (languageModel *batchedPlanExposureLanguageModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (languageModel *batchedPlanExposureLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	if request.StructuredOutputSchema.Name == completionJudgeSchemaName {
+		return model.StructuredResponse{Content: defaultCompletionJudgeTestDocument()}, nil
+	}
+	return model.StructuredResponse{Content: finishMessageDocument("done")}, nil
+}
+
+func (languageModel *batchedPlanExposureLanguageModel) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	if request.SchemaName != agentActionSchemaName {
+		return model.ChatCompletionResponse{FinishReason: "stop", Message: model.ChatCompletionMessage{Role: "assistant", Content: "done"}}, nil
+	}
+	languageModel.actionRequests = append(languageModel.actionRequests, request)
+	if len(languageModel.actionRequests) == 1 {
+		return model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{Role: "assistant", ToolCalls: []model.ChatCompletionToolCall{
+			nativeAgentActionToolCall(toolcontract.PlanToolName, `{"goal":"move the deal","steps":[{"title":"move the deal","status":"in_progress"}]}`),
+			nativeAgentActionToolCall("deal_list", `{}`),
+		}}}, nil
+	}
+	return nativeAgentActionChatResponse("reply", `{"final":true,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":[],"qualityReview":[]}`), nil
+}
+
+func chatRequestIncludesTool(request model.ChatCompletionRequest, toolName string) bool {
+	return stringSliceContains(chatRequestToolNames(request), toolName)
+}
+
+func chatRequestToolNames(request model.ChatCompletionRequest) []string {
+	toolNames := []string{}
+	for _, tool := range request.Tools {
+		toolNames = append(toolNames, tool.Function.Name)
+	}
+	return toolNames
 }
 
 func TestAClosingPlanKeepsTheCurrentShortlist(t *testing.T) {

@@ -1205,6 +1205,9 @@ func pendingBatchedToolExposure(toolSet *toolcontract.ToolSet, state agentTaskSt
 	}
 	exposure := state.PendingBatchedToolExposure
 	exposure.ExposedToolIDs = append([]string{}, exposedToolNames...)
+	if len(exposedToolNames) == 0 {
+		return toolSet.WithRegisteredToolNamesLimitedTo(nil), exposure
+	}
 	return toolSet.WithAllowedToolNames(exposedToolNames), exposure
 }
 
