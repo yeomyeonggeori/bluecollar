@@ -1831,7 +1831,7 @@ func TestAgentTurnRunnerFileExpectedResultRequiresAttachment(t *testing.T) {
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file.promote"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"path":"artifacts/deck/deck.pptx"}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver", Visibility: toolcontract.ToolVisibilityInternal}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "file attached"},
 			Attachments: []toolcontract.FileAttachment{{

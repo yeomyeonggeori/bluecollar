@@ -47,6 +47,7 @@ type agentTaskState struct {
 	SystemInstruction                  string
 	ActivePlanStepTitle                string
 	PlanStepToolNames                  []string
+	DeliveredAttachmentPaths           []string
 	StepExposure                       stepToolExposure
 }
 
@@ -173,6 +174,7 @@ func restoreAgentTaskState(request AgentTurnRequest, options TurnOptions, taskRu
 		state.Observations = observationsWithoutFailures(state.Observations)
 	}
 	state.Attachments = attachmentsFromObservations(state.Observations)
+	state.DeliveredAttachmentPaths = deliveredAttachmentPathsFromTaskEvents(events)
 	state.ExecutionState = executionStateFromTaskEvents(events)
 	state.ToolCallCount = state.ContextSummary.CompactedToolCallCount + successfulToolCallCount(state.Observations)
 	state.IterationCount = state.ContextSummary.CompactedObservationCount + len(state.Observations)
@@ -243,6 +245,7 @@ func cleanRestartedAgentTaskState(request AgentTurnRequest, options TurnOptions,
 	durableObservations := durableDeliveryObservations(events)
 	state.Observations = append(durableObservations, regroundingObservation(len(durableObservations)+1, producedSourcePaths(events)))
 	state.Attachments = attachmentsFromObservations(state.Observations)
+	state.DeliveredAttachmentPaths = deliveredAttachmentPathsFromTaskEvents(events)
 	return state
 }
 
@@ -609,43 +612,35 @@ func ParseAgentActionResponse(response model.StructuredResponse) (agentAction, e
 	if errorValue != nil {
 		return turnActionDocument{}, errorValue
 	}
-	actionDocument, wrongTypedFieldNames, errorValue := decodeActionDocumentLeniently(content)
-	if errorValue != nil {
-		return turnActionDocument{}, errorValue
-	}
-	if len(wrongTypedFieldNames) > 0 {
-		return turnActionDocument{}, wrongTypedActionFieldError{fieldNames: wrongTypedFieldNames}
+	var actionDocument turnActionDocument
+	if decodeError := json.Unmarshal(content, &actionDocument); decodeError != nil {
+		return turnActionDocument{}, actionDecodeError(content, decodeError)
 	}
 	return normalizeParsedAction(actionDocument), nil
 }
 
-func decodeActionDocumentLeniently(content []byte) (turnActionDocument, []string, error) {
-	var actionDocument turnActionDocument
-	if json.Unmarshal(content, &actionDocument) == nil {
-		return actionDocument, nil, nil
+func actionDecodeError(content []byte, decodeError error) error {
+	fieldNames := wrongTypedActionFieldNames(content)
+	if len(fieldNames) == 0 {
+		return decodeError
 	}
+	return wrongTypedActionFieldError{fieldNames: fieldNames}
+}
+
+func wrongTypedActionFieldNames(content []byte) []string {
 	var fields map[string]json.RawMessage
-	if errorValue := json.Unmarshal(content, &fields); errorValue != nil {
-		return turnActionDocument{}, nil, errorValue
+	if json.Unmarshal(content, &fields) != nil {
+		return nil
 	}
-	readableFields := map[string]json.RawMessage{}
-	wrongTypedFieldNames := []string{}
+	fieldNames := []string{}
 	for fieldName, fieldValue := range fields {
 		if fieldReadsIntoActionDocument(fieldName, fieldValue) {
-			readableFields[fieldName] = fieldValue
 			continue
 		}
-		wrongTypedFieldNames = append(wrongTypedFieldNames, fieldName)
+		fieldNames = append(fieldNames, fieldName)
 	}
-	sort.Strings(wrongTypedFieldNames)
-	readableContent, errorValue := json.Marshal(readableFields)
-	if errorValue != nil {
-		return turnActionDocument{}, nil, errorValue
-	}
-	if errorValue := json.Unmarshal(readableContent, &actionDocument); errorValue != nil {
-		return turnActionDocument{}, nil, errorValue
-	}
-	return actionDocument, wrongTypedFieldNames, nil
+	sort.Strings(fieldNames)
+	return fieldNames
 }
 
 func fieldReadsIntoActionDocument(fieldName string, fieldValue json.RawMessage) bool {

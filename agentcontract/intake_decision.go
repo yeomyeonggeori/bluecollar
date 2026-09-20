@@ -179,6 +179,7 @@ type ToolSelectionNeed struct {
 	ToolSet           *toolcontract.ToolSet
 	CallableToolNames []string
 	CountLimit        int
+	CallLedger        *IntakeCallLedger
 }
 
 type ToolSelector interface {
@@ -188,4 +189,8 @@ type ToolSelector interface {
 type SelectedTool struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
+}
+
+type FoundTools struct {
+	SelectedTools []SelectedTool `json:"selectedTools"`
 }

@@ -41,6 +41,7 @@ type turnActionDocument struct {
 	Message               string                        `json:"message"`
 	Attachments           []replyAttachment             `json:"attachments,omitempty"`
 	ExpectsAnswer         bool                          `json:"expectsAnswer,omitempty"`
+	Choices               []string                      `json:"choices,omitempty"`
 	Final                 bool                          `json:"final,omitempty"`
 	AssistantText         string                        `json:"assistantText,omitempty"`
 	ModelReasoning        string                        `json:"modelReasoning,omitempty"`
@@ -258,6 +259,12 @@ func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID stri
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventLLMCall, marshalEventBody(record))
 		agentTurnRunner.noteModelInUse(record.Model)
 		agentTurnRunner.noteContextInUse(record.PromptTokens)
+	}
+}
+
+func (agentTurnRunner *AgentTurnRunner) appendCallRecords(taskRunID string, records []llmCallRecord) {
+	for _, record := range records {
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventLLMCall, marshalEventBody(record))
 	}
 }
 
@@ -604,9 +611,26 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			if result, shouldReturn := agentTurnRunner.handleReplyAction(workContext, taskRun.TaskRunID, stepID, iterationRequest, &state, successfulToolCalls, actionDocument); shouldReturn {
 				return result, nil
 			}
+			if result, shouldStop := stopForNoProgress(stepID); shouldStop {
+				if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
+					return elapsedResult, errorValue
+				}
+				return result, nil
+			}
 			continue
 		case "finish":
-			actionDocument, _ = agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
+			deliveredDocument, _, isDelivered := agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
+			if !isDelivered {
+				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "reply", lastObservationText(state.Observations))
+				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
+					if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
+						return elapsedResult, errorValue
+					}
+					return result, nil
+				}
+				continue
+			}
+			actionDocument = deliveredDocument
 			completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(workContext, taskRun.TaskRunID, request, toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, actionDocument)
 			agentTurnRunner.appendValidityReview(taskRun.TaskRunID, "finish", completionGateResult.ValidityState)
 			if !completionGateResult.IsSatisfied {
@@ -634,8 +658,8 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			agentTurnRunner.appendQualityReview(taskRun.TaskRunID, state.QualityCriteria, actionDocument.QualityReview, state.Observations)
 			reply := finishActionMessage(actionDocument)
 			if reply == "" {
-				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "finish", "empty finish message")
-				return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "empty finish message", &state, iteration)
+				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "finish", "empty final reply message")
+				return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "empty final reply message", &state, iteration)
 			}
 			reply = agentTurnRunner.prepareFinishMessageForPlatform(workContext, request, reply)
 			if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
@@ -649,7 +673,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			if completeError != nil {
 				return agentTurnRunner.cancelledTaskResultOrCurrent(taskRun.TaskRunID, state.Attachments), nil
 			}
-			return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: completionGateResult.Attachments, RecoveryActions: recoveryActionsFromObservations(state.Observations)}, nil
+			return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths), RecoveryActions: recoveryActionsFromObservations(state.Observations)}, nil
 		case "continue":
 			outcome := agentTurnRunner.handleToolCallAction(workContext, taskContext, taskRun.TaskRunID, stepID, iteration, iterationRequest, toolUseRequirements, &state, actionDocument, successfulToolCalls, stopForNoProgress)
 			if outcome.ShouldReturn {
@@ -1308,13 +1332,11 @@ func foundToolNamesFromObservations(observations []turnObservation) []string {
 		if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.FindToolsToolName) {
 			continue
 		}
-		var output struct {
-			SelectedTools []agentcontract.SelectedTool `json:"selectedTools"`
-		}
-		if json.Unmarshal(observation.Output.Data, &output) != nil {
+		var foundTools agentcontract.FoundTools
+		if json.Unmarshal(observation.Output.Data, &foundTools) != nil {
 			continue
 		}
-		for _, selectedTool := range output.SelectedTools {
+		for _, selectedTool := range foundTools.SelectedTools {
 			toolNames = appendUniqueStrings(toolNames, selectedTool.Name)
 		}
 	}

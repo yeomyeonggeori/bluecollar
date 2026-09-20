@@ -20,6 +20,7 @@ const conversationHistoryLimit = 12
 
 type conversationSession struct {
 	options        runOptions
+	toolSelector   agentcontract.ToolSelector
 	kernel         *loop.AgentKernel
 	taskRunService *taskstate.TaskRunService
 	languageModel  model.LanguageModelProvider
@@ -40,11 +41,16 @@ func newConversationSession(ctx context.Context, options runOptions) (*conversat
 		return nil, tapeError
 	}
 	kernel.UseLanguageModelProvider(languageModel)
+	toolSelector := configuredToolSelector()
+	if toolSelector != nil {
+		kernel.UseToolSelector(toolSelector)
+	}
 	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: contextWindowTokens(ctx, options, endpointModel)})
 
 	runningShell := turnShellWithInterpreter(ctx, options)
 	return &conversationSession{
 		options:        options,
+		toolSelector:   toolSelector,
 		kernel:         kernel,
 		taskRunService: taskRunService,
 		languageModel:  languageModel,
@@ -64,7 +70,7 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 		WorkspaceRootPath:    session.workspacePath,
 		EnvironmentNow:       session.options.environmentNow,
 		WorkspaceDefaultPath: session.workspacePath,
-		ToolSet:              turnToolSet(session.options, session.runningShell),
+		ToolSet:              turnToolSet(session.options, session.runningShell, session.toolSelector),
 		VisibleContext:       agentcontract.VisibleContext{Messages: session.history},
 	}
 

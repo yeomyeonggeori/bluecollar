@@ -108,8 +108,13 @@ func replyActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[str
 	properties["action"] = enumStringSchema("reply")
 	properties["attachments"] = replyAttachmentArraySchema()
 	properties["expectsAnswer"] = booleanSchema()
+	properties["choices"] = replyChoiceArraySchema()
 	properties["goalStatus"] = enumValuesStringSchema([]string{"satisfied", "in_progress"})
 	return closedObjectSchema(properties)
+}
+
+func replyChoiceArraySchema() map[string]any {
+	return map[string]any{"type": "array", "items": stringSchema()}
 }
 
 func replyAttachmentArraySchema() map[string]any {

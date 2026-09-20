@@ -446,3 +446,36 @@ func TestOnlyAMessageRoutedToWorkCostsAToolSelectionCall(t *testing.T) {
 		})
 	}
 }
+
+func TestASelectionForOneNeedLandsInTheCallLedger(t *testing.T) {
+	outcome := startTaskOutcome()
+	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
+	callLedger := &agentcontract.IntakeCallLedger{}
+	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil, func() float64 { return 1 })
+
+	selectedTools, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
+		Need:       "이번 주 회의 일정을 읽는다",
+		ToolSet:    newTestToolSet([]string{"event_list", "message_send", "web_search"}),
+		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CallLedger: callLedger,
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the selection call to answer: %v", errorValue)
+	}
+	if len(selectedTools) == 0 {
+		t.Fatal("expected the need to select a tool")
+	}
+	if len(callLedger.Records) == 0 {
+		t.Fatal("expected the selection call to be recorded")
+	}
+	toolSelection := recordedToolSelection(callLedger)
+	if toolSelection == nil {
+		t.Fatal("expected the recorded call to carry what the selection was made from")
+	}
+	if toolSelection.CountLimit != toolcontract.MaxLikelyToolCountForOnePlanStep {
+		t.Fatalf("expected the need's own cap to be recorded, got %d", toolSelection.CountLimit)
+	}
+	if toolSelection.Probabilities["m1.event_list"] != 0.94 {
+		t.Fatalf("expected the probabilities behind the shortlist to be recorded, got %+v", toolSelection.Probabilities)
+	}
+}

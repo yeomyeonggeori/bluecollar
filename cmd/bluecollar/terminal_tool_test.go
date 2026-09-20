@@ -20,7 +20,7 @@ func invokeTerminalRun(t *testing.T, workspacePath string, input string) toolcon
 
 func invokeTerminalRunThrough(t *testing.T, runningShell shell, input string) toolcontract.ToolResult {
 	t.Helper()
-	toolSet := newWorkspaceToolSet(runningShell)
+	toolSet := newWorkspaceToolSet(runningShell, nil)
 	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: toolcontract.ShellToolName,
 		Input:    json.RawMessage(input),
@@ -126,10 +126,10 @@ func TestALongOutputKeepsItsEndBecauseThatIsWhereTheErrorIs(t *testing.T) {
 }
 
 func TestARunnerToldToBringNoShellBringsNone(t *testing.T) {
-	if turnToolSet(runOptions{withoutTools: true}, shell{}) != nil {
+	if turnToolSet(runOptions{withoutTools: true}, shell{}, nil) != nil {
 		t.Fatal("expected no tool set when the runner is asked to answer from reasoning alone")
 	}
-	if turnToolSet(runOptions{}, shell{workingDirectoryPath: t.TempDir()}) == nil {
+	if turnToolSet(runOptions{}, shell{workingDirectoryPath: t.TempDir()}, nil) == nil {
 		t.Fatal("expected a shell by default, because a runner with no tools cannot be benchmarked")
 	}
 }
@@ -204,7 +204,7 @@ func TestTruncatedOutputStaysDecodableWhenTheCutLandsMidCharacter(t *testing.T) 
 }
 
 func TestEveryWorkspaceToolReachesTheModel(t *testing.T) {
-	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: t.TempDir()})
+	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: t.TempDir()}, nil)
 
 	for _, toolName := range []string{
 		toolcontract.ShellToolName,
@@ -259,7 +259,7 @@ func TestFileEditRefusesAPassageItCannotPlace(t *testing.T) {
 
 func TestFileWriteResultSatisfiesItsOwnContract(t *testing.T) {
 	workspacePath := t.TempDir()
-	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: workspacePath})
+	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: workspacePath}, nil)
 
 	result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{
 		ToolName: toolcontract.FileWriteToolName,

@@ -48,9 +48,6 @@ func activePlanStepTitle(steps []PlanStep) string {
 			return step.Title
 		}
 	}
-	if len(steps) > 0 {
-		return steps[0].Title
-	}
 	return ""
 }
 
@@ -63,11 +60,14 @@ func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context
 	if agentTurnRunner.toolSelector == nil {
 		return
 	}
+	callLedger := &intakeCallLedger{}
 	selectedTools, errorValue := agentTurnRunner.toolSelector.SelectToolNames(ctx, agentcontract.ToolSelectionNeed{
 		Need:       stepTitle,
 		ToolSet:    state.Request.ToolSet,
 		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CallLedger: callLedger,
 	})
+	agentTurnRunner.appendCallRecords(taskRunID, callLedger.Records)
 	if errorValue != nil {
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(map[string]any{
 			"step":  stepTitle,

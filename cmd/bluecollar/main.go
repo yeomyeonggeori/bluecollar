@@ -196,11 +196,11 @@ func turnShellWithInterpreter(ctx context.Context, options runOptions) shell {
 	return turnShell(options).withInterpreterFound(ctx)
 }
 
-func turnToolSet(options runOptions, runningShell shell) *toolcontract.ToolSet {
+func turnToolSet(options runOptions, runningShell shell, toolSelector agentcontract.ToolSelector) *toolcontract.ToolSet {
 	if options.withoutTools {
 		return nil
 	}
-	return newWorkspaceToolSet(runningShell)
+	return newWorkspaceToolSet(runningShell, toolSelector)
 }
 
 func writeTrace(tracePath string, taskRunService *taskstate.TaskRunService, result agentcontract.AgentTurnResult) {

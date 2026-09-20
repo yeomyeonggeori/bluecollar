@@ -10,19 +10,20 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func (agentTurnRunner *AgentTurnRunner) deliverReplyAttachments(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation, actionDocument turnActionDocument) (turnActionDocument, []toolcontract.FileAttachment) {
+func (agentTurnRunner *AgentTurnRunner) deliverReplyAttachments(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation, actionDocument turnActionDocument) (turnActionDocument, []toolcontract.FileAttachment, bool) {
 	if len(actionDocument.Attachments) == 0 {
-		return actionDocument, nil
+		return actionDocument, nil, true
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
-	observation := agentTurnRunner.invokeTool(ctx, request.ToolSet, taskRunID, observationID, toolcontract.FileDeliverToolName, replyAttachmentToolInput(actionDocument.Attachments), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
+	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.FileDeliverToolName), taskRunID, observationID, toolcontract.FileDeliverToolName, replyAttachmentToolInput(actionDocument.Attachments), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, "")
 	if observation.Failed() {
-		return actionDocument, nil
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentReplyFailed, marshalEventBody(replyReceipt{Status: "not_delivered", Reason: observation.FailureSummary(), AttachmentCount: len(actionDocument.Attachments)}))
+		return actionDocument, nil, false
 	}
 	actionDocument.CompletionEvidenceIDs = appendUniqueStrings(actionDocument.CompletionEvidenceIDs, observation.ObservationID)
 	actionDocument.CompletionEvidence = evidenceReferencesFromIDs(actionDocument.CompletionEvidenceIDs)
-	return actionDocument, observation.Attachments
+	return actionDocument, observation.Attachments, true
 }
 
 func replyAttachmentToolInput(attachments []replyAttachment) json.RawMessage {
@@ -38,7 +39,11 @@ func replyAttachmentToolInput(attachments []replyAttachment) json.RawMessage {
 }
 
 func (agentTurnRunner *AgentTurnRunner) handleReplyAction(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation, actionDocument turnActionDocument) (AgentTurnResult, bool) {
-	actionDocument, attachments := agentTurnRunner.deliverReplyAttachments(ctx, taskRunID, request, state, successfulToolCalls, actionDocument)
+	actionDocument, attachments, isDelivered := agentTurnRunner.deliverReplyAttachments(ctx, taskRunID, request, state, successfulToolCalls, actionDocument)
+	if !isDelivered {
+		agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusFailed, "reply", lastObservationText(state.Observations))
+		return AgentTurnResult{}, false
+	}
 	if actionDocument.ExpectsAnswer {
 		return agentTurnRunner.askForReplyAnswer(ctx, taskRunID, stepID, request, state, successfulToolCalls, actionDocument)
 	}
@@ -49,16 +54,48 @@ func (agentTurnRunner *AgentTurnRunner) handleReplyAction(ctx context.Context, t
 
 func (agentTurnRunner *AgentTurnRunner) askForReplyAnswer(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation, actionDocument turnActionDocument) (AgentTurnResult, bool) {
 	observationID := nextObservationIDForObservations(state.Observations)
-	question := toolcontract.MarshalToolInput(map[string]any{"question": strings.TrimSpace(actionDocument.Message)})
-	observation := agentTurnRunner.invokeTool(ctx, request.ToolSet, taskRunID, observationID, toolcontract.AskInputToolName, question, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
+	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.AskInputToolName), taskRunID, observationID, toolcontract.AskInputToolName, replyQuestionToolInput(actionDocument), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, "")
 	pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments)
 	if !isPaused {
-		agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusCompleted, "reply", observation.ContentText())
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentReplyFailed, marshalEventBody(replyReceipt{Status: "not_delivered", Reason: askFailureReason(observation), Message: strings.TrimSpace(actionDocument.Message)}))
+		agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusFailed, "reply", observation.ContentText())
 		return AgentTurnResult{}, false
 	}
 	agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "reply", observation.ContentText())
 	return pausedResult, true
+}
+
+func askFailureReason(observation turnObservation) string {
+	if observation.Failed() {
+		return observation.FailureSummary()
+	}
+	return "the question did not leave the task waiting for an answer"
+}
+
+func replyQuestionToolInput(actionDocument turnActionDocument) json.RawMessage {
+	question := map[string]any{"question": strings.TrimSpace(actionDocument.Message)}
+	if choices := trimmedNonEmptyStrings(actionDocument.Choices); len(choices) > 0 {
+		question["choices"] = choices
+	}
+	return toolcontract.MarshalToolInput(question)
+}
+
+func trimmedNonEmptyStrings(values []string) []string {
+	trimmed := []string{}
+	for _, value := range values {
+		if trimmedValue := strings.TrimSpace(value); trimmedValue != "" {
+			trimmed = appendUniqueStrings(trimmed, trimmedValue)
+		}
+	}
+	return trimmed
+}
+
+func lastObservationText(observations []turnObservation) string {
+	if len(observations) == 0 {
+		return ""
+	}
+	return observations[len(observations)-1].ContentText()
 }
 
 func (agentTurnRunner *AgentTurnRunner) sendReply(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, actionDocument turnActionDocument, attachments []toolcontract.FileAttachment) turnObservation {
@@ -86,15 +123,57 @@ func (agentTurnRunner *AgentTurnRunner) sendReply(ctx context.Context, taskRunID
 	observation := replyReceiptObservation(observationID, "delivered", "", len(attachments))
 	state.Observations = append(state.Observations, observation)
 	state.LastModelMessage = ""
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentReplySent, marshalEventBody(replyReceipt{Status: "delivered", Message: message, AttachmentCount: len(attachments)}))
+	deliveredPaths := attachmentDevicePaths(attachments)
+	state.DeliveredAttachmentPaths = appendUniqueStrings(state.DeliveredAttachmentPaths, deliveredPaths...)
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentReplySent, marshalEventBody(replyReceipt{Status: "delivered", Message: message, AttachmentCount: len(attachments), AttachmentPaths: deliveredPaths}))
 	return observation
 }
 
+func attachmentDevicePaths(attachments []toolcontract.FileAttachment) []string {
+	devicePaths := []string{}
+	for _, attachment := range attachments {
+		if devicePath := strings.TrimSpace(attachment.DevicePath); devicePath != "" {
+			devicePaths = appendUniqueStrings(devicePaths, devicePath)
+		}
+	}
+	return devicePaths
+}
+
+func attachmentsNotYetDelivered(attachments []toolcontract.FileAttachment, deliveredPaths []string) []toolcontract.FileAttachment {
+	if len(deliveredPaths) == 0 {
+		return attachments
+	}
+	remaining := []toolcontract.FileAttachment{}
+	for _, attachment := range attachments {
+		if stringSliceContains(deliveredPaths, strings.TrimSpace(attachment.DevicePath)) {
+			continue
+		}
+		remaining = append(remaining, attachment)
+	}
+	return remaining
+}
+
+func deliveredAttachmentPathsFromTaskEvents(events []agentcontract.TaskEvent) []string {
+	devicePaths := []string{}
+	for _, event := range events {
+		if event.Name != agentcontract.TaskEventAgentReplySent {
+			continue
+		}
+		var receipt replyReceipt
+		if json.Unmarshal([]byte(event.Body), &receipt) != nil {
+			continue
+		}
+		devicePaths = appendUniqueStrings(devicePaths, receipt.AttachmentPaths...)
+	}
+	return devicePaths
+}
+
 type replyReceipt struct {
-	Status          string `json:"status"`
-	Message         string `json:"message,omitempty"`
-	Reason          string `json:"reason,omitempty"`
-	AttachmentCount int    `json:"attachmentCount"`
+	Status          string   `json:"status"`
+	Message         string   `json:"message,omitempty"`
+	Reason          string   `json:"reason,omitempty"`
+	AttachmentCount int      `json:"attachmentCount"`
+	AttachmentPaths []string `json:"attachmentPaths,omitempty"`
 }
 
 func replyReceiptObservation(observationID string, status string, reason string, attachmentCount int) turnObservation {

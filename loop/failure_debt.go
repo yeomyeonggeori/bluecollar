@@ -503,7 +503,7 @@ func failureDebtActionContractMessage(facts failureReportFacts) string {
 		"Budget is a ceiling, not an instruction to spend it. Judge whether the failure can be repaired with the tools, permissions, and information available to you.",
 		"If a RecoveryPacket is present, use its facts and suggested tools to identify a repair or an independent route. Before another attempt, explain in the action reason which evidence makes it useful. Do not change titles, people, or other unrelated fields merely to produce a different input.",
 		"Do not repeat a failed tool while RecoveryPacket.forbiddenRepeats applies; use an inspect/edit/repair/change-route action first.",
-		"If you can answer directly without tools, return finish with failureResolution=no_tool_fallback and do not apologize or mention the failed tool unless the user asked about internals.",
+		"If you can answer directly without tools, send a final reply with failureResolution=no_tool_fallback and do not apologize or mention the failed tool unless the user asked about internals.",
 		"If no evidence-backed recovery is available, return fail with failureResolution=failure_report immediately, even with budget remaining. Explain the blocker in reason and copy the recorded facts into usedFailureFacts. Do not invent a missing prerequisite or call an error temporary without evidence. A failed result check does not prove that a mutation was not saved; verify current state when possible and report uncertainty when it is not.",
 		"FailureReportFacts:\n" + marshalEventBody(facts),
 	}, "\n")

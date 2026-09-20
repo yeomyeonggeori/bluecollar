@@ -82,3 +82,23 @@ func TestAPlanStepChangeReselectsTheShortlist(t *testing.T) {
 		t.Fatalf("expected only the step shortlist exposed, got %+v", stepRequest.ToolSet.ListToolNames())
 	}
 }
+
+func TestAClosingPlanKeepsTheCurrentShortlist(t *testing.T) {
+	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
+	services.runner.UseToolSelector(selector)
+	request := AgentTurnRequest{ToolSet: testToolSet(append(toolcontract.KernelToolNames(), "deal_update", "deal_list"))}
+	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-3")
+
+	services.runner.applyPlanObservation(context.Background(), "task-step-3", &state, planUpdateSuccessObservation("obs-001",
+		`{"steps":[{"title":"move the deal","status":"in_progress"}]}`))
+	services.runner.applyPlanObservation(context.Background(), "task-step-3", &state, planUpdateSuccessObservation("obs-002",
+		`{"steps":[{"title":"move the deal","status":"done"}]}`))
+
+	if len(selector.needs) != 1 || selector.needs[0] != "move the deal" {
+		t.Fatalf("expected the closing plan to spend no selection call, got %+v", selector.needs)
+	}
+	if len(state.PlanStepToolNames) != 1 || state.PlanStepToolNames[0] != "deal_update" {
+		t.Fatalf("expected the shortlist to survive the closing plan, got %+v", state.PlanStepToolNames)
+	}
+}

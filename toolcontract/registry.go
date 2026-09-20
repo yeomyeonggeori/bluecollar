@@ -711,7 +711,22 @@ func (toolSet *ToolSet) CanInvoke(toolName string) bool {
 	if !isRegistered || strings.TrimSpace(boundTool.Definition.Visibility) != ToolVisibilityInternal {
 		return false
 	}
+	if len(toolSet.allowedToolNameByName) > 0 && !toolSet.allowedToolNameByName[trimmedToolName] {
+		return false
+	}
 	return IsKernelToolName(trimmedToolName) || isExposedToolAvailability(boundTool.Availability)
+}
+
+func (toolSet *ToolSet) AllowingInternalTool(toolName string) *ToolSet {
+	if toolSet == nil {
+		return nil
+	}
+	trimmedToolName := strings.TrimSpace(toolName)
+	boundTool, isRegistered := toolSet.boundToolByName[trimmedToolName]
+	if !isRegistered || strings.TrimSpace(boundTool.Definition.Visibility) != ToolVisibilityInternal {
+		return toolSet
+	}
+	return toolSet.WithAllowedToolNames(AppendUniqueStrings(toolSet.ListToolNames(), trimmedToolName))
 }
 
 func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation ToolInvocation) (ToolResult, error) {
