@@ -108,6 +108,8 @@ func namedAnswer(shortName string, question model.DecisionQuestion, outcome Outc
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
 	case agentcontract.IntakeQuestionNeedsTool:
 		return noulAnswer(outcome.TurnDecision.Classification == agentcontract.IntakeClassificationBoundedTask)
+	case agentcontract.IntakeQuestionIsExternalSendRequested:
+		return noulAnswer(outcome.TurnDecision.IsExternalSendRequested)
 	case agentcontract.IntakeQuestionTaskShape:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskShape), string(agentcontract.TaskShapeImmediateReply)))
 	case agentcontract.IntakeQuestionLevel:

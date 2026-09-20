@@ -330,15 +330,20 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
+	isExternalSendRequested, errorValue := reader.noul(agentcontract.IntakeQuestionIsExternalSendRequested)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
 	route := agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute])
 	turnFields := agentcontract.TurnDecision{
-		Route:              route,
-		Classification:     classificationOf(route, needsTool),
-		TaskShape:          agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
-		TaskLevel:          agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
-		DeliverableKind:    agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
-		ResponseLanguage:   choices[agentcontract.IntakeQuestionResponseLanguage],
-		PriorTaskReference: agentcontract.PriorTaskReferenceNone,
+		Route:                   route,
+		Classification:          classificationOf(route, needsTool),
+		TaskShape:               agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
+		TaskLevel:               agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
+		DeliverableKind:         agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
+		ResponseLanguage:        choices[agentcontract.IntakeQuestionResponseLanguage],
+		IsExternalSendRequested: isExternalSendRequested,
+		PriorTaskReference:      agentcontract.PriorTaskReferenceNone,
 	}
 	if priorTaskChoice, isAsked := choices[agentcontract.IntakeQuestionPriorTaskReference]; isAsked {
 		turnFields.PriorTaskReference = agentcontract.PriorTaskReference(priorTaskChoice)

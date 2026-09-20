@@ -388,6 +388,56 @@ func TestExistingTaskRunIDDoesNotAuthorizeConfirmationBypass(t *testing.T) {
 	}
 }
 
+func TestExternalSendPlanReachesApprovalGateBeforeEffect(t *testing.T) {
+	agentKernel, taskRunService := newKernelTestServices()
+	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
+		Route:                   TurnRouteStartTask,
+		Classification:          IntakeClassificationBoundedTask,
+		TaskShape:               TaskShapeMaintenanceTask,
+		TaskLevel:               TaskLevelLow,
+		ResponseLanguage:        "ko",
+		IsExternalSendRequested: true,
+		InitialToolNames:        []string{"message_send"},
+	}})
+	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
+		`{"summary":"send a direct message","targets":["이샘플"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":true,"thirdPartyExternalSend":true,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"requesterAuthorization":"explicit","missingInformation":[],"continuationInstruction":"send the message"}`,
+		directToolAction("continue", "", "message_send", `{"targetType":"directMessage","personHint":"이샘플","message":"Please review the report."}`),
+	}})
+	sendDefinition := testExternalSendToolDefinition("message_send")
+	sendDefinition.RequiresApproval = true
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{sendDefinition})
+	sendCallCount := 0
+	registerTestTool(toolSet, sendDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		sendCallCount++
+		return testToolSuccess("sent"), nil
+	})
+	toolSet.UseToolCallGate(holdingToolCallGate{
+		taskRunService: taskRunService,
+		confirmation:   "Send the message to 이샘플?",
+	})
+	request := kernelTestRequest("send 이샘플 a direct message asking them to review the report")
+	request.ToolSet = toolSet
+	request.SkipSkillSelection = true
+
+	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	if errorValue != nil {
+		t.Fatalf("expected the requested send to reach the runtime approval gate: %v", errorValue)
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("expected the external send to wait for approval, got %s events=%+v", result.TaskRun.Status, taskRunService.ListTaskEvent(result.TaskRun.TaskRunID))
+	}
+	if sendCallCount != 0 {
+		t.Fatalf("expected no send before approval, got %d handler calls", sendCallCount)
+	}
+	events := taskRunService.ListTaskEvent(result.TaskRun.TaskRunID)
+	if !taskEventsContain(events, "approval.held_call", "message_send") {
+		t.Fatalf("expected the exact external send call to be held for approval, got %+v", events)
+	}
+	if taskEventsContain(events, "agent.external_send_intent_rejected", "") {
+		t.Fatalf("expected the planned external-send contract to pass validation before approval, got %+v", events)
+	}
+}
+
 func TestSemanticRevisionStartsNewTaskRun(t *testing.T) {
 	agentKernel, taskRunService := newKernelTestServices()
 	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
