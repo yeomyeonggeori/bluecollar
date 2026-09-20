@@ -59,6 +59,17 @@ func TestClassificationRepairsTheRouteItContradicts(t *testing.T) {
 	}
 }
 
+func TestNormalizationPreservesAnExplicitClarificationDecision(t *testing.T) {
+	decision := normalizedTurnDecision(t, decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation), agentcontract.AgentRequest{})
+
+	if decision.Route != agentcontract.TurnRouteClarify {
+		t.Fatalf("expected a model-selected clarification route to remain, got %q", decision.Route)
+	}
+	if decision.Classification != agentcontract.IntakeClassificationNeedsConfirmation {
+		t.Fatalf("expected a model-selected clarification classification to remain, got %q", decision.Classification)
+	}
+}
+
 func TestAnUnsupportedTurnIsGivenUpOnStructurally(t *testing.T) {
 	decision := normalizedTurnDecision(t, decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationUnsupported), agentcontract.AgentRequest{})
 
