@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"time"
@@ -22,7 +21,6 @@ type LLMContextInput struct {
 	EnvironmentNow             time.Time
 	InstructionPrompt          string
 	ToolDescription            string
-	AdditionalToolNames        []string
 	WorkspaceContext           WorkspaceContext
 	VisibleContext             VisibleContext
 	MemoryFacts                []MemoryFact
@@ -65,7 +63,6 @@ func (builder LLMContextBuilder) BuildUnchangingContext(input LLMContextInput) s
 		builder.companyContext(input),
 		buildInstructionContext(input.InstructionPrompt),
 		strings.TrimSpace(input.ToolDescription),
-		builder.additionalToolsContext(input),
 		builder.workspaceContext(input.WorkspaceContext),
 		builder.conversationContext(input.VisibleContext, input.Company.TimeZone),
 		builder.taskContext(input),
@@ -98,41 +95,6 @@ func (builder LLMContextBuilder) toolResultContext(input LLMContextInput) string
 		return ""
 	}
 	return toolResultContextText(input.Observations)
-}
-
-const additionalToolsContextPageSize = 15
-
-func (builder LLMContextBuilder) additionalToolsContext(input LLMContextInput) string {
-	toolNames := appendUniqueStrings(input.AdditionalToolNames)
-	if len(toolNames) == 0 {
-		return ""
-	}
-	lines := []string{"Additional tools exist but are not callable in this step:"}
-	for _, toolName := range toolNames[:min(len(toolNames), additionalToolsContextPageSize)] {
-		lines = append(lines, "- "+toolName+additionalToolSummary(input.ToolSet, toolName))
-	}
-	if len(toolNames) > additionalToolsContextPageSize {
-		lines = append(lines, fmt.Sprintf("…and %d more.", len(toolNames)-additionalToolsContextPageSize))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func additionalToolSummary(toolSet *toolcontract.ToolSet, toolName string) string {
-	if toolSet == nil {
-		return ""
-	}
-	definition, isFound := toolSet.ToolDefinition(toolName)
-	if !isFound {
-		return ""
-	}
-	summary := strings.TrimSpace(definition.Description)
-	if sentenceEnd := strings.IndexAny(summary, ".;\n"); sentenceEnd > 0 {
-		summary = summary[:sentenceEnd]
-	}
-	if summary == "" {
-		return ""
-	}
-	return " — " + summary
 }
 
 func (builder LLMContextBuilder) requesterContext(input LLMContextInput) string {

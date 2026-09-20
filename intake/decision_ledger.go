@@ -85,7 +85,7 @@ func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers m
 		for toolName, probability := range recordedToolProbabilities(probabilityByToolName) {
 			record.Probabilities[messageKey+"."+toolName] = probability
 		}
-		for _, toolName := range selectLikelyToolNames(probabilityByToolName, plan.candidateToolNames) {
+		for _, toolName := range selectLikelyToolNames(probabilityByToolName, plan.candidateToolNames, likelyToolCountLimit) {
 			record.SelectedToolNames = append(record.SelectedToolNames, messageKey+"."+toolName)
 		}
 	}

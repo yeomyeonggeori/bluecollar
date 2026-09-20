@@ -3,10 +3,8 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
-	"strings"
 	"testing"
 )
 
@@ -53,9 +51,6 @@ func TestSelectedSkillExposesDirectTools(t *testing.T) {
 			t.Fatalf("expected selected skill tool %s, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
 	}
-	if filteredToolSet.IsAllowed(toolcontract.SkillSearchToolName) {
-		t.Fatalf("expected loaded skill instructions to hide skill_search, got %+v", filteredToolSet.ListToolNames())
-	}
 	if !sameStringSet(event.SelectedSkillToolIDs, []string{"task_add", "task_list"}) {
 		t.Fatalf("expected selected skill event, got %+v", event)
 	}
@@ -85,7 +80,7 @@ func TestAuthoritativeContractExposesWorkingSetWithSkillTools(t *testing.T) {
 		ToolExposureEvent{},
 	)
 
-	expectedToolNames := append(kernelToolNamesForInstructionBundle(instructionBundle), flowToolNames...)
+	expectedToolNames := append(toolcontract.KernelToolNames(), flowToolNames...)
 	if !sameStringSet(filteredToolSet.ListToolNames(), expectedToolNames) {
 		t.Fatalf("expected task contract working set with skill tools, got %+v", filteredToolSet.ListToolNames())
 	}
@@ -125,7 +120,7 @@ func TestAuthoritativeContractPreservesCompoundWorkflow(t *testing.T) {
 		ToolExposureEvent{},
 	)
 
-	expectedToolNames := append(append(kernelToolNamesForInstructionBundle(instructionBundle), flowToolNames...), calendarToolNames...)
+	expectedToolNames := append(append(toolcontract.KernelToolNames(), flowToolNames...), calendarToolNames...)
 	if !sameStringSet(filteredToolSet.ListToolNames(), expectedToolNames) {
 		t.Fatalf("expected compound contract working set with skill tools, got %+v", filteredToolSet.ListToolNames())
 	}
@@ -155,7 +150,7 @@ func TestAuthoritativeContractPreservesTypedRecoveryTool(t *testing.T) {
 		[]turnObservation{observation},
 	)
 
-	expectedToolNames := append(kernelToolNamesForInstructionBundle(instructionBundle), "task_add", "task_update")
+	expectedToolNames := append(toolcontract.KernelToolNames(), "task_add", "task_update")
 	if !sameStringSet(filteredToolSet.ListToolNames(), expectedToolNames) {
 		t.Fatalf("expected contract and recovery working set, got %+v", filteredToolSet.ListToolNames())
 	}
@@ -219,7 +214,7 @@ func TestEmptyArbitrationWorkingSetPreservesDocumentKernel(t *testing.T) {
 		ToolExposureEvent{},
 	)
 
-	if !sameStringSet(filteredToolSet.ListToolNames(), kernelToolNamesForInstructionBundle(instructionBundle)) {
+	if !sameStringSet(filteredToolSet.ListToolNames(), toolcontract.KernelToolNames()) {
 		t.Fatalf("expected document kernel fallback, got %+v", filteredToolSet.ListToolNames())
 	}
 	if event.SelectionSource != "fixed_kernel" {
@@ -283,7 +278,7 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 	if !filteredToolSet.IsAllowed("shell") {
 		t.Fatalf("expected pinned direct tool inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
-	expectedToolCount := len(kernelToolNamesForInstructionBundle(instructionBundle)) + toolcontract.MaxExtensionCallableToolCount
+	expectedToolCount := len(toolcontract.KernelToolNames()) + toolcontract.MaxExtensionCallableToolCount
 	if len(filteredToolSet.ListToolNames()) != expectedToolCount {
 		t.Fatalf("expected %d tools, got %+v", expectedToolCount, filteredToolSet.ListToolNames())
 	}
@@ -418,17 +413,17 @@ func TestInterleaveToolNameListsKeepsEverySkillRepresented(t *testing.T) {
 	}
 }
 
-func TestRequestedToolNamesFromObservationsPinsSuccessfulRequests(t *testing.T) {
-	successful := newContentObservation("obs-001", "continue", toolcontract.RequestToolsToolName, "")
-	successful.Output = toolcontract.ToolOutput{Data: json.RawMessage(`{"requestedToolNames":["calendar_update","message_delete"]}`)}
-	failed := newContentObservation("obs-002", "continue", toolcontract.RequestToolsToolName, "")
-	failed.Output = toolcontract.ToolOutput{Data: json.RawMessage(`{"requestedToolNames":["task_delete"]}`)}
+func TestFoundToolNamesFromObservationsPinsSuccessfulLookups(t *testing.T) {
+	successful := newContentObservation("obs-001", "continue", toolcontract.FindToolsToolName, "")
+	successful.Output = toolcontract.ToolOutput{Data: json.RawMessage(`{"selectedTools":[{"name":"calendar_update"},{"name":"message_delete"}]}`)}
+	failed := newContentObservation("obs-002", "continue", toolcontract.FindToolsToolName, "")
+	failed.Output = toolcontract.ToolOutput{Data: json.RawMessage(`{"selectedTools":[{"name":"task_delete"}]}`)}
 	failed.Failure = &toolcontract.ToolFailure{Kind: toolcontract.FailureInvalidInput}
 
-	toolNames := requestedToolNamesFromObservations([]turnObservation{successful, failed})
+	toolNames := foundToolNamesFromObservations([]turnObservation{successful, failed})
 
 	if !sameStringSet(toolNames, []string{"calendar_update", "message_delete"}) {
-		t.Fatalf("expected only successful requests to pin, got %+v", toolNames)
+		t.Fatalf("expected only successful lookups to pin, got %+v", toolNames)
 	}
 }
 
@@ -445,34 +440,14 @@ func TestDroppedExposureToolNamesFlattenGroups(t *testing.T) {
 	}
 }
 
-func TestAdditionalToolsContextListsPageWithSummaries(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{"calendar_update"})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "calendar_update", Description: "Update a calendar event. Provide an eventHint."}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess("ok"), nil
-	})
-	toolNames := []string{"calendar_update"}
-	for index := 0; index < additionalToolsContextPageSize; index++ {
-		toolNames = append(toolNames, fmt.Sprintf("filler.tool%02d", index))
-	}
-
-	rendered := (LLMContextBuilder{}).additionalToolsContext(LLMContextInput{AdditionalToolNames: toolNames, ToolSet: toolSet})
-
-	if !strings.Contains(rendered, "calendar_update — Update a calendar event") {
-		t.Fatalf("expected name with summary, got %s", rendered)
-	}
-	if !strings.Contains(rendered, "and 1 more") {
-		t.Fatalf("expected overflow page note, got %s", rendered)
-	}
-}
-
-func TestRequestedToolsAttachOwningSkillInstructions(t *testing.T) {
+func TestFoundToolsAttachOwningSkillInstructions(t *testing.T) {
 	calendarSkill := SkillInstruction{Name: "calendar", ToolReferences: []string{"calendar_add", "calendar_update"}}
 	request := AgentTurnRequest{
 		AvailableSkills: []SkillInstruction{calendarSkill},
 		SkillDecisions:  []SkillSelectionDecision{{Name: "internkim-flow", Status: "selected"}},
 	}
-	observation := newContentObservation("obs-001", "continue", toolcontract.RequestToolsToolName, "")
-	observation.Output = toolcontract.ToolOutput{Data: json.RawMessage(`{"requestedToolNames":["calendar_update"]}`)}
+	observation := newContentObservation("obs-001", "continue", toolcontract.FindToolsToolName, "")
+	observation.Output = toolcontract.ToolOutput{Data: json.RawMessage(`{"selectedTools":[{"name":"calendar_update"}]}`)}
 
 	amendedRequest := requestWithStepWorkingSetTools(request, []turnObservation{observation})
 
@@ -553,7 +528,7 @@ func TestRegisteredToolNameCeilingBlocksToolAcquisition(t *testing.T) {
 	ceilingToolSet := fullToolSet.WithRegisteredToolNamesLimitedTo([]string{"calendar_add"})
 
 	if ceilingToolSet.IsRegistered("message_send") {
-		t.Fatalf("expected message_send to be unregistered so request_tools cannot acquire it")
+		t.Fatalf("expected message_send to be unregistered so find_tools cannot acquire it")
 	}
 	if ceilingToolSet.CanExpose("message_send") {
 		t.Fatalf("expected message_send to be unexposable under the ceiling")

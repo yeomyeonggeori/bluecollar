@@ -37,7 +37,7 @@ func toolSetForAgentTurnWithExposure(toolSet *toolcontract.ToolSet, instructionB
 	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(groups), toolcontract.MaxExtensionCallableToolCount)
 	kernelToolIDs := []string{}
 	if requestNeedsToolAccess(request, groups) {
-		kernelToolIDs = filterGroupTools(toolSet, toolExposureGroup{ToolIDs: kernelToolNamesForInstructionBundle(instructionBundle)}).ToolIDs
+		kernelToolIDs = filterGroupTools(toolSet, toolExposureGroup{ToolIDs: toolcontract.KernelToolNames()}).ToolIDs
 	}
 	exposedToolIDs := appendUniqueStrings(kernelToolIDs, extensionToolIDs...)
 	selectionEvent.SelectionSource = firstNonEmptyString(selectionEvent.SelectionSource, toolSelectionSource(selectedSkillGroup, hasAuthoritativeWorkingSet))
@@ -49,19 +49,6 @@ func toolSetForAgentTurnWithExposure(toolSet *toolcontract.ToolSet, instructionB
 	selectionEvent.DroppedGroups = droppedGroups
 	selectionEvent.UsedFallbackGroups = false
 	return toolSet.WithAllowedToolNames(exposedToolIDsForFiltering(exposedToolIDs)), selectionEvent
-}
-
-func kernelToolNamesForInstructionBundle(instructionBundle InstructionBundle) []string {
-	if len(selectedSkillInstructionList(instructionBundle)) == 0 {
-		return toolcontract.KernelToolNames()
-	}
-	toolNames := []string{}
-	for _, toolName := range toolcontract.KernelToolNames() {
-		if toolName != toolcontract.SkillSearchToolName {
-			toolNames = append(toolNames, toolName)
-		}
-	}
-	return toolNames
 }
 
 func outcomeContractEvidenceGroups(toolSet *toolcontract.ToolSet, outcomeContract OutcomeContract) (toolExposureGroup, toolExposureGroup) {

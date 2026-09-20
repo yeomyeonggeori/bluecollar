@@ -18,10 +18,14 @@ const (
 	ImageReadToolName           = "image_read"
 	ConversationHistoryToolName = "conversation_history"
 	PlanToolName                = "plan"
-	RequestToolsToolName        = "request_tools"
+	FindToolsToolName           = "find_tools"
 )
 
 const MaxExtensionCallableToolCount = 15
+
+const ToolExposureGroupsRankedBelowTheLikelyTools = 3
+
+const MaxLikelyToolCount = MaxExtensionCallableToolCount - ToolExposureGroupsRankedBelowTheLikelyTools
 
 func KernelToolNames() []string {
 	return []string{
@@ -37,7 +41,7 @@ func KernelToolNames() []string {
 		ImageReadToolName,
 		ConversationHistoryToolName,
 		PlanToolName,
-		RequestToolsToolName,
+		FindToolsToolName,
 	}
 }
 

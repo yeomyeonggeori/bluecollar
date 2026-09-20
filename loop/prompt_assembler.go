@@ -38,7 +38,6 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 		EnvironmentNow:       input.EnvironmentNow,
 		InstructionPrompt:    input.InstructionPrompt,
 		ToolDescription:      input.ToolDescription,
-		AdditionalToolNames:  droppedExposureToolNames(input.RuntimeRequest.ToolExposure),
 		WorkspaceContext: WorkspaceContext{
 			RootPath:          input.RuntimeRequest.WorkspaceRootPath,
 			DefaultPath:       input.RuntimeRequest.WorkspaceDefaultPath,

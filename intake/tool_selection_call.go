@@ -2,9 +2,11 @@ package intake
 
 import (
 	"context"
+	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type toolSelectionPlan struct {
@@ -22,7 +24,7 @@ func (planner DecisionPlanner) withLikelyTools(ctx context.Context, request agen
 	plan := planToolSelection(request, messageKeys, candidateToolNames)
 	calls := planner.decideEveryRequest(ctx, plan.requests)
 	answers := mergedDecisionAnswers(calls)
-	selectedToolNames, selectionError := likelyToolNamesByMessageKey(messageKeys, candidateToolNames, answers, firstCallError(calls))
+	selectedToolNames, selectionError := likelyToolNamesByMessageKey(messageKeys, candidateToolNames, answers, firstCallError(calls), likelyToolCountLimit)
 	recordDecisionCalls(callLedger, calls, decisionCallContext{
 		errorValue:    selectionError,
 		toolSelection: toolSelectionRecord(messageKeys, plan, answers, selectionError),
@@ -40,7 +42,7 @@ func messageKeysThatStartWork(decisions agentcontract.IntakeDecisions) []string 
 	return messageKeys
 }
 
-func likelyToolNamesByMessageKey(messageKeys []string, candidateToolNames []string, answers map[string]model.DecisionAnswer, callError error) (map[string][]string, error) {
+func likelyToolNamesByMessageKey(messageKeys []string, candidateToolNames []string, answers map[string]model.DecisionAnswer, callError error, countLimit int) (map[string][]string, error) {
 	if callError != nil {
 		return nil, callError
 	}
@@ -51,7 +53,7 @@ func likelyToolNamesByMessageKey(messageKeys []string, candidateToolNames []stri
 		if errorValue != nil {
 			return nil, errorValue
 		}
-		selectedToolNames[messageKey] = selectLikelyToolNames(probabilityByToolName, candidateToolNames)
+		selectedToolNames[messageKey] = selectLikelyToolNames(probabilityByToolName, candidateToolNames, countLimit)
 	}
 	return selectedToolNames, nil
 }
@@ -97,4 +99,55 @@ func toolSelectionRequestPart(request agentcontract.IntakeDecisionRequest, messa
 		State:     buildDecisionState(request, tools),
 		Questions: newQuestionBuilder(request).toolQuestions(messageKeys, toolNamesOf(tools)),
 	}
+}
+
+func (planner DecisionPlanner) SelectToolNames(ctx context.Context, need agentcontract.ToolSelectionNeed) ([]agentcontract.SelectedTool, error) {
+	if planner.decisionModel == nil {
+		return nil, ErrDecisionModelUnavailable
+	}
+	request := toolSelectionNeedRequest(need)
+	candidateToolNames := resolveCallableToolNames(request)
+	if strings.TrimSpace(need.Need) == "" || len(candidateToolNames) == 0 {
+		return nil, nil
+	}
+	messageKeys := []string{decisionMessageKey(0)}
+	plan := planToolSelection(request, messageKeys, candidateToolNames)
+	calls := planner.decideEveryRequest(ctx, plan.requests)
+	selectedToolNames, selectionError := likelyToolNamesByMessageKey(messageKeys, candidateToolNames, mergedDecisionAnswers(calls), firstCallError(calls), toolSelectionCountLimit(need))
+	if selectionError != nil {
+		return nil, selectionError
+	}
+	return describedSelectedTools(need.ToolSet, selectedToolNames[messageKeys[0]]), nil
+}
+
+func toolSelectionNeedRequest(need agentcontract.ToolSelectionNeed) agentcontract.IntakeDecisionRequest {
+	return agentcontract.IntakeDecisionRequest{
+		Messages:          []agentcontract.IntakeDecisionMessage{{MessageID: "tool-need", Prompt: strings.TrimSpace(need.Need)}},
+		ToolSet:           need.ToolSet,
+		CallableToolNames: need.CallableToolNames,
+	}
+}
+
+func toolSelectionCountLimit(need agentcontract.ToolSelectionNeed) int {
+	if need.CountLimit > 0 && need.CountLimit < likelyToolCountLimit {
+		return need.CountLimit
+	}
+	return likelyToolCountLimit
+}
+
+func describedSelectedTools(toolSet *toolcontract.ToolSet, selectedToolNames []string) []agentcontract.SelectedTool {
+	described := decisionToolDescriptions(toolSet, selectedToolNames)
+	selectedTools := make([]agentcontract.SelectedTool, 0, len(described.tools))
+	for _, tool := range described.tools {
+		selectedTools = append(selectedTools, agentcontract.SelectedTool{Name: tool.Name, Description: firstSentenceOf(tool.Description)})
+	}
+	return selectedTools
+}
+
+func firstSentenceOf(description string) string {
+	summary := strings.TrimSpace(description)
+	if sentenceEnd := strings.IndexAny(summary, ".;\n"); sentenceEnd > 0 {
+		summary = summary[:sentenceEnd]
+	}
+	return strings.TrimSpace(summary)
 }

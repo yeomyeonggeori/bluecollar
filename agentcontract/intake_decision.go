@@ -172,3 +172,15 @@ const (
 	IntakeDutyOptionNone      = "none"
 	IntakeChoiceOptionNone    = "none_of_these"
 )
+
+type ToolSelectionNeed struct {
+	Need              string
+	ToolSet           *toolcontract.ToolSet
+	CallableToolNames []string
+	CountLimit        int
+}
+
+type SelectedTool struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}

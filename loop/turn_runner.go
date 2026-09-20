@@ -1220,9 +1220,9 @@ func (agentTurnRunner *AgentTurnRunner) stepBudgetContext(state agentTaskState) 
 func requestWithStepWorkingSetTools(request AgentTurnRequest, observations []turnObservation) AgentTurnRequest {
 	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, pendingFileDeliveryToolNames(request, observations)...)
 	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, observedSuggestedNextToolNames(observations)...)
-	requestedToolNames := requestedToolNamesFromObservations(observations)
-	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, requestedToolNames...)
-	request.SkillDecisions = withOwningSkillDecisions(request.SkillDecisions, request.AvailableSkills, requestedToolNames)
+	foundToolNames := foundToolNamesFromObservations(observations)
+	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, foundToolNames...)
+	request.SkillDecisions = withOwningSkillDecisions(request.SkillDecisions, request.AvailableSkills, foundToolNames)
 	return request
 }
 
@@ -1257,19 +1257,21 @@ func withOwningSkillDecisions(decisions []SkillSelectionDecision, availableSkill
 	return amendedDecisions
 }
 
-func requestedToolNamesFromObservations(observations []turnObservation) []string {
+func foundToolNamesFromObservations(observations []turnObservation) []string {
 	toolNames := []string{}
 	for _, observation := range observations {
-		if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.RequestToolsToolName) {
+		if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.FindToolsToolName) {
 			continue
 		}
 		var output struct {
-			RequestedToolNames []string `json:"requestedToolNames"`
+			SelectedTools []agentcontract.SelectedTool `json:"selectedTools"`
 		}
 		if json.Unmarshal(observation.Output.Data, &output) != nil {
 			continue
 		}
-		toolNames = appendUniqueStrings(toolNames, output.RequestedToolNames...)
+		for _, selectedTool := range output.SelectedTools {
+			toolNames = appendUniqueStrings(toolNames, selectedTool.Name)
+		}
 	}
 	return toolNames
 }
@@ -1282,7 +1284,7 @@ func pendingFileDeliveryToolNames(request AgentTurnRequest, observations []turnO
 }
 
 func availableFileDeliveryToolNames(request AgentTurnRequest) []string {
-	toolNames := []string{toolcontract.ShellToolName, toolcontract.FileDeliverToolName, toolcontract.SkillSearchToolName}
+	toolNames := []string{toolcontract.ShellToolName, toolcontract.FileDeliverToolName}
 	if request.ToolSet == nil {
 		return toolNames
 	}

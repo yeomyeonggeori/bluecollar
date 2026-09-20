@@ -41,54 +41,8 @@ func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 	}
 }
 
-func TestToolExposureHidesSkillSearchAfterSelectedInstructionsLoad(t *testing.T) {
+func TestToolExposureRequiresExplicitPinForImmediateReply(t *testing.T) {
 	toolSet := testToolSet(append(toolcontract.KernelToolNames(), "task_add"))
-	instructionBundle := InstructionBundle{
-		Skills:         []SkillInstruction{{Name: "internkim-flow", ToolReferences: []string{"task_add"}}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "internkim-flow", Status: "selected"}},
-	}
-
-	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
-		toolSet,
-		instructionBundle,
-		AgentRequest{},
-		ExecutionPlan{},
-		false,
-		OutcomeContract{},
-		ToolExposureEvent{},
-	)
-
-	if filteredToolSet.IsAllowed(toolcontract.SkillSearchToolName) {
-		t.Fatalf("expected loaded skill instructions to hide skill_search, got %+v", filteredToolSet.ListToolNames())
-	}
-	if !filteredToolSet.IsAllowed("task_add") {
-		t.Fatalf("expected selected skill tool to remain exposed, got %+v", filteredToolSet.ListToolNames())
-	}
-}
-
-func TestToolExposureKeepsSkillSearchWhenSelectedInstructionIsMissing(t *testing.T) {
-	toolSet := testToolSet(toolcontract.KernelToolNames())
-	instructionBundle := InstructionBundle{
-		SkillDecisions: []SkillSelectionDecision{{Name: "missing", Status: "selected"}},
-	}
-
-	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
-		toolSet,
-		instructionBundle,
-		AgentRequest{},
-		ExecutionPlan{},
-		false,
-		OutcomeContract{},
-		ToolExposureEvent{},
-	)
-
-	if !filteredToolSet.IsAllowed(toolcontract.SkillSearchToolName) {
-		t.Fatalf("expected unresolved skill discovery to keep skill_search, got %+v", filteredToolSet.ListToolNames())
-	}
-}
-
-func TestToolExposureRequiresExplicitSkillSearchForImmediateReply(t *testing.T) {
-	toolSet := testToolSet(toolcontract.KernelToolNames())
 	request := AgentRequest{TaskShape: TaskShapeImmediateReply}
 
 	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
@@ -100,11 +54,11 @@ func TestToolExposureRequiresExplicitSkillSearchForImmediateReply(t *testing.T) 
 		OutcomeContract{},
 		ToolExposureEvent{},
 	)
-	if filteredToolSet.IsAllowed(toolcontract.SkillSearchToolName) {
-		t.Fatalf("expected immediate reply to hide unrequested skill_search, got %+v", filteredToolSet.ListToolNames())
+	if filteredToolSet.IsAllowed("task_add") {
+		t.Fatalf("expected immediate reply to hide unpinned tools, got %+v", filteredToolSet.ListToolNames())
 	}
 
-	request.PinnedToolNames = []string{toolcontract.SkillSearchToolName}
+	request.PinnedToolNames = []string{"task_add"}
 	filteredToolSet, _ = toolSetForAgentTurnWithExposure(
 		toolSet,
 		InstructionBundle{},
@@ -114,8 +68,8 @@ func TestToolExposureRequiresExplicitSkillSearchForImmediateReply(t *testing.T) 
 		OutcomeContract{},
 		ToolExposureEvent{},
 	)
-	if !filteredToolSet.IsAllowed(toolcontract.SkillSearchToolName) {
-		t.Fatalf("expected typed initial tool to expose skill_search, got %+v", filteredToolSet.ListToolNames())
+	if !filteredToolSet.IsAllowed("task_add") {
+		t.Fatalf("expected the pinned tool to be exposed, got %+v", filteredToolSet.ListToolNames())
 	}
 }
 
@@ -164,7 +118,7 @@ func TestReconstructedEvidenceOnlyArbitrationPreservesEvidenceWorkingSet(t *test
 		ToolExposureEvent{},
 	)
 
-	expectedToolNames := append(kernelToolNamesForInstructionBundle(instructionBundleFromTurnRequest(request)), flowToolNames...)
+	expectedToolNames := append(toolcontract.KernelToolNames(), flowToolNames...)
 	if !sameStringSet(filteredToolSet.ListToolNames(), expectedToolNames) {
 		t.Fatalf("expected reconstructed evidence working set with skill tools, got %+v", filteredToolSet.ListToolNames())
 	}
