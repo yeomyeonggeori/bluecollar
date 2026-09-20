@@ -71,3 +71,17 @@ func TestOnlyATurnWithSomebodyToAnswerIsToldItCanAsk(t *testing.T) {
 		t.Fatal("expected a turn with nobody to answer not to be offered a question it cannot ask")
 	}
 }
+
+func TestAskingGuidanceKeepsIndependentWorkSeparateFromTheMissingChoice(t *testing.T) {
+	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.AskInputToolName})}
+	instruction := systemInstructionFor(TurnOptions{}, request).Text()
+	for _, requirement := range []string{
+		"complete the independently requested work whose inputs and authorization are already clear",
+		"Ask only for the remaining choice",
+		"do not invent missing values or perform work that depends on that choice",
+	} {
+		if !strings.Contains(instruction, requirement) {
+			t.Fatalf("asking guidance is missing %q", requirement)
+		}
+	}
+}
