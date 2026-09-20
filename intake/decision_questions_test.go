@@ -56,6 +56,12 @@ func TestClarificationQuestionDefersToolDiscoverableRequirementsToWork(t *testin
 	if !strings.Contains(shapeCriteria, "tool-discoverable operational requirements belong to the work itself") {
 		t.Fatalf("expected approval-gated task shape to exclude tool-discoverable requirements, got %s", shapeCriteria)
 	}
+	if !strings.Contains(routeCriteria, independentWorkBeforeClarificationInstruction) {
+		t.Fatalf("expected clarification routing to preserve independent work, got %s", routeCriteria)
+	}
+	if !strings.Contains(shapeCriteria, independentWorkBeforeClarificationInstruction) {
+		t.Fatalf("expected approval-gated task shape to preserve independent work, got %s", shapeCriteria)
+	}
 }
 
 func TestExternalSendQuestionSeparatesIntentFromCurrentConversationAndToolAvailability(t *testing.T) {
