@@ -180,6 +180,23 @@ func TestTheConfirmationPlannerIsToldWhoCanAuthorizeAndWhoIsJustTalking(t *testi
 	}
 }
 
+func TestConfirmationPlannerDoesNotBlockIndependentWorkForOneMissingChoice(t *testing.T) {
+	messages := confirmationPlanMessages(AgentRequest{Prompt: "update the records and change their owner"}, nil)
+	body := joinMessageContent(messages)
+	for _, instruction := range []string{
+		"blocks every independently requested part from starting",
+		"leave missingInformation empty so the agent can do that work",
+		"ask before the dependent remainder",
+		"Never guess a missing value",
+		"Do not invent dependencies between independent requested parts",
+		"mark a named target missing before the agent has tried to resolve it with tools",
+	} {
+		if !strings.Contains(body, instruction) {
+			t.Fatalf("the confirmation planner lacks %q, got %s", instruction, body)
+		}
+	}
+}
+
 func TestARiskyEffectTheRequesterNamedDoesNotHoldTheTask(t *testing.T) {
 	deleteWhatTheyAskedFor := ExecutionPlan{
 		Summary:                "delete the three temp files the requester listed",
