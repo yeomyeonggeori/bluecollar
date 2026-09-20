@@ -37,6 +37,27 @@ func TestNormalizePersistedActiveGoalMigratesLegacyToolNames(t *testing.T) {
 	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEffects[0].SuggestedNextTools, []string{"site_serve"})
 }
 
+func TestNormalizePersistedActiveGoalCanonicalizesRenamedKernelTools(t *testing.T) {
+	legacyToolNames := []string{"shell", "file_write", "file_edit", "find_tools"}
+	activeGoal := ActiveGoal{
+		SelectedToolNames: append([]string{}, legacyToolNames...),
+		OutcomeContract: OutcomeContract{
+			RequiredEvidenceTools: append([]string{}, legacyToolNames...),
+		},
+	}
+
+	normalizedGoal := normalizePersistedActiveGoal(activeGoal)
+
+	canonicalToolNames := []string{
+		toolcontract.BashToolName,
+		toolcontract.WriteToolName,
+		toolcontract.EditToolName,
+		toolcontract.EquipToolName,
+	}
+	assertSameStrings(t, normalizedGoal.SelectedToolNames, canonicalToolNames)
+	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEvidenceTools, canonicalToolNames)
+}
+
 func TestNormalizePersistedActiveGoalDoesNotMutateSource(t *testing.T) {
 	activeGoal := ActiveGoal{
 		RequiredNextTools: []string{"site.promote"},

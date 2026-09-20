@@ -48,7 +48,7 @@ func normalizePersistedToolName(toolName string) string {
 	case "terminal.session":
 		return toolcontract.BashToolName
 	default:
-		return strings.TrimSpace(toolName)
+		return toolcontract.CanonicalToolName(toolName)
 	}
 }
 
