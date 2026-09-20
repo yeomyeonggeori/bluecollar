@@ -25,6 +25,8 @@ type agentAction = turnActionDocument
 
 type agentTaskState struct {
 	PendingBatchedActions              []turnActionDocument
+	PendingBatchedToolNames            []string
+	PendingBatchedToolExposure         ToolExposureEvent
 	TaskRunID                          string
 	Status                             agentcontract.TaskStatus
 	Request                            AgentTurnRequest

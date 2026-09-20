@@ -71,19 +71,37 @@ type replyAttachment struct {
 
 func takeBatchedAction(state *agentTaskState) (turnActionDocument, bool) {
 	if len(state.PendingBatchedActions) == 0 {
+		clearPendingBatchedToolExposure(state)
 		return turnActionDocument{}, false
 	}
 	nextAction := state.PendingBatchedActions[0]
 	state.PendingBatchedActions = state.PendingBatchedActions[1:]
+	if len(state.PendingBatchedActions) == 0 {
+		clearPendingBatchedToolExposure(state)
+	}
 	return nextAction, true
 }
 
-func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocument) {
+func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocument, exposedToolNames []string, exposure ToolExposureEvent) {
 	if lastObservationFailed(state.Observations) {
-		state.PendingBatchedActions = nil
+		clearPendingBatchedActions(state)
 		return
 	}
 	state.PendingBatchedActions = append(state.PendingBatchedActions, actionDocument.BatchedActions...)
+	if len(actionDocument.BatchedActions) > 0 {
+		state.PendingBatchedToolNames = append([]string{}, exposedToolNames...)
+		state.PendingBatchedToolExposure = exposure
+	}
+}
+
+func clearPendingBatchedToolExposure(state *agentTaskState) {
+	state.PendingBatchedToolNames = nil
+	state.PendingBatchedToolExposure = ToolExposureEvent{}
+}
+
+func clearPendingBatchedActions(state *agentTaskState) {
+	state.PendingBatchedActions = nil
+	clearPendingBatchedToolExposure(state)
 }
 
 func lastObservationFailed(observations []turnObservation) bool {
@@ -684,7 +702,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				}
 				return outcome.Result, nil
 			}
-			rememberBatchedActions(&state, actionDocument)
+			rememberBatchedActions(&state, actionDocument, iterationRequest.ToolSet.ListToolNames(), iterationRequest.ToolExposure)
 			if outcome.WasHandled {
 				continue
 			}
@@ -1167,12 +1185,30 @@ func (agentTurnRunner *AgentTurnRunner) requestForStep(_ context.Context, reques
 	iterationRequest := plannedRequest
 	iterationRequest.ToolSet = state.StepExposure.ToolSet
 	iterationRequest.ToolExposure = state.StepExposure.Exposure
-	if pressureStage == limitPressureStageNarrowPalette {
+	if len(state.PendingBatchedActions) > 0 {
+		iterationRequest.ToolSet, iterationRequest.ToolExposure = pendingBatchedToolExposure(plannedRequest.ToolSet, *state)
+	}
+	if pressureStage == limitPressureStageNarrowPalette && len(state.PendingBatchedActions) == 0 {
 		iterationRequest.ToolSet = iterationRequest.ToolSet.WithAllowedToolNames(wrapUpDeliveryToolNames(plannedRequest))
 	}
 	iterationRequest.StepBudgetContext = agentTurnRunner.stepBudgetContext(*state)
 	iterationRequest.RestrictActionToTerminalOnly = state.ShouldRestrictNextActionToTerminal
 	return iterationRequest
+}
+
+func pendingBatchedToolExposure(toolSet *toolcontract.ToolSet, state agentTaskState) (*toolcontract.ToolSet, ToolExposureEvent) {
+	exposedToolNames := []string{}
+	for _, toolName := range state.PendingBatchedToolNames {
+		if toolSet.CanExpose(toolName) {
+			exposedToolNames = appendUniqueStrings(exposedToolNames, toolName)
+		}
+	}
+	exposure := state.PendingBatchedToolExposure
+	exposure.ExposedToolIDs = append([]string{}, exposedToolNames...)
+	if len(exposedToolNames) == 0 {
+		return toolSet.WithRegisteredToolNamesLimitedTo(nil), exposure
+	}
+	return toolSet.WithAllowedToolNames(exposedToolNames), exposure
 }
 
 func stepToolExposureKey(plannedRequest AgentTurnRequest, state agentTaskState) string {
