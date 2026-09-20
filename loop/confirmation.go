@@ -132,7 +132,10 @@ func confirmationPlanMessages(request AgentRequest, evidenceHints []string) []mo
 		RequesterPersonID:    request.RequesterPersonID,
 		RequesterName:        request.RequesterName,
 		RequesterCallingName: request.RequesterCallingName,
-		ExtraSections:        []string{"Selected skill evidence hints, not requirements: " + strings.Join(evidenceHints, ", ")},
+		ExtraSections: []string{
+			"Selected skill evidence hints, not requirements: " + strings.Join(evidenceHints, ", "),
+			confirmationToolContext(request, evidenceHints),
+		},
 	})
 	return []model.Message{
 		{Role: "system", Content: strings.Join([]string{
@@ -147,6 +150,7 @@ func confirmationPlanMessages(request AgentRequest, evidenceHints []string) []mo
 			"Set missingInformation only for a decision the requester alone can make that blocks every independently requested part from starting. If any requested part can proceed without that decision, leave missingInformation empty so the agent can do that work and ask before the dependent remainder.",
 			"Anything the agent can look up with the tools it has is not missing information. Names, contacts, addresses, records, current dates, and app data are looked up, not asked for. Listing them here stops the task before it tries.",
 			"Never guess a missing value, substitute an existing value, or change a field whose requested value is unknown. Do not invent dependencies between independent requested parts, or mark a named target missing before the agent has tried to resolve it with tools.",
+			"Do not treat optional unspecified details as blocking. Do not invent destinations, approval roles, or required inputs from the task domain. When a selected tool's actual requirements or resolvable details need inspection, let the execution loop inspect and try the tool before asking the requester. A requester-only unknown may block the dependent effect only when no available tool can resolve it.",
 			"Do not invent schedule, startAt, endAt, or cadence. Leave them empty unless the latest request explicitly asks for scheduled, delayed, recurring, repeated, or future work.",
 			"Do not ask the user here. Only return the structured plan.",
 		}, "\n")},
@@ -154,6 +158,24 @@ func confirmationPlanMessages(request AgentRequest, evidenceHints []string) []mo
 		{Role: "system", Content: contextText},
 		{Role: "user", Content: strings.TrimSpace(request.Prompt)},
 	}
+}
+
+func confirmationToolContext(request AgentRequest, evidenceHints []string) string {
+	if request.ToolSet == nil {
+		return ""
+	}
+	selectedToolNames := appendUniqueStrings(nil, request.LikelyToolNames...)
+	selectedToolNames = appendUniqueStrings(selectedToolNames, evidenceHints...)
+	availableToolNames := []string{}
+	for _, toolName := range selectedToolNames {
+		if request.ToolSet.CanExpose(toolName) {
+			availableToolNames = append(availableToolNames, toolName)
+		}
+	}
+	if len(availableToolNames) == 0 {
+		return ""
+	}
+	return "Selected available tools for this request, with descriptions only; inspect and use their actual contracts in the execution loop: " + request.ToolSet.WithAllowedToolNames(availableToolNames).Descriptions()
 }
 
 func executionPlanSchema() string {
