@@ -37,6 +37,27 @@ func TestTheRouteQuestionReservesGiveUpForImpossibleWork(t *testing.T) {
 	}
 }
 
+func TestClarificationQuestionDefersToolDiscoverableRequirementsToWork(t *testing.T) {
+	questions := questionsFor(addressedDecisionRequest("make a report"))
+	routeCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionRoute])
+	for _, expected := range []string{
+		"requested goal, target, or outcome",
+		"only the sender can resolve it",
+		"operational details, approval roles",
+		"a tool can inspect or resolve",
+		"Start any unambiguous requested parts",
+	} {
+		if !strings.Contains(routeCriteria, expected) {
+			t.Fatalf("expected the route question to include %q, got %s", expected, routeCriteria)
+		}
+	}
+
+	shapeCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionTaskShape])
+	if !strings.Contains(shapeCriteria, "tool-discoverable operational requirements belong to the work itself") {
+		t.Fatalf("expected approval-gated task shape to exclude tool-discoverable requirements, got %s", shapeCriteria)
+	}
+}
+
 func TestExternalSendQuestionSeparatesIntentFromCurrentConversationAndToolAvailability(t *testing.T) {
 	question := questionsFor(addressedDecisionRequest("deliver the report"))["m1."+agentcontract.IntakeQuestionIsExternalSendRequested]
 	criteria := criteriaText(t, question)
