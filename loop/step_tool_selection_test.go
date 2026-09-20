@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -81,6 +82,71 @@ func TestAPlanStepChangeReselectsTheShortlist(t *testing.T) {
 	stepRequest := services.runner.requestForStep(context.Background(), request, &state)
 	if !stepRequest.ToolSet.IsAllowed("deal_update") || stepRequest.ToolSet.IsAllowed("deal_list") {
 		t.Fatalf("expected only the step shortlist exposed, got %+v", stepRequest.ToolSet.ListToolNames())
+	}
+}
+
+func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
+	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
+	services.runner.UseToolSelector(selector)
+	toolSet := testToolSet(append(toolcontract.KernelToolNames(), "deal_list", "deal_update"))
+	request := AgentTurnRequest{
+		ToolSet:         toolSet,
+		PinnedToolNames: []string{"deal_list", "deal_update"},
+		LikelyToolNames: []string{"deal_list", "deal_update"},
+	}
+	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-batch")
+
+	originalRequest := services.runner.requestForStep(context.Background(), request, &state)
+	if !originalRequest.ToolSet.IsAllowed("deal_list") {
+		t.Fatal("expected the initial model request to expose the queued read tool")
+	}
+	rememberBatchedActions(&state, turnActionDocument{BatchedActions: []turnActionDocument{{Action: "continue", ToolName: "deal_list"}}}, originalRequest.ToolSet.ListToolNames(), originalRequest.ToolExposure)
+	services.runner.applyPlanObservation(context.Background(), "task-step-batch", &state, planUpdateSuccessObservation("obs-plan-1",
+		`{"steps":[{"title":"move the deal","status":"in_progress"}]}`))
+
+	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
+	if !queuedRequest.ToolSet.IsAllowed("deal_list") {
+		t.Fatalf("expected queued call to retain its request-time tool exposure, got %+v", queuedRequest.ToolSet.ListToolNames())
+	}
+	if !queuedRequest.ToolSet.CanExpose("deal_list") {
+		t.Fatal("expected the queued tool to pass current registration and availability checks")
+	}
+	if _, isBatched := takeBatchedAction(&state); !isBatched {
+		t.Fatal("expected queued action to run without another model call")
+	}
+
+	nextRequest := services.runner.requestForStep(context.Background(), request, &state)
+	if nextRequest.ToolSet.IsAllowed("deal_list") || !nextRequest.ToolSet.IsAllowed("deal_update") {
+		t.Fatalf("expected the next model call to use the newly selected shortlist, got %+v", nextRequest.ToolSet.ListToolNames())
+	}
+}
+
+func TestQueuedExposureRetainsApprovalAndDelegationGuards(t *testing.T) {
+	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	toolSet := newTestToolSet([]string{"calendar_delete"})
+	toolDefinition := testToolDescriptor("calendar_delete")
+	toolDefinition.RequiresApproval = true
+	handlerCallCount := 0
+	registerTestTool(toolSet, toolDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		handlerCallCount++
+		return testToolSuccess("deleted"), nil
+	})
+	toolSet.UseToolCallGate(holdingToolCallGate{taskRunService: services.taskRunService, confirmation: "Confirm deletion", denialNotice: "Delegated tasks cannot delete events"})
+	request := AgentTurnRequest{ToolSet: toolSet}
+	state := agentTaskState{PendingBatchedActions: []turnActionDocument{{Action: "continue", ToolName: "calendar_delete"}}, PendingBatchedToolNames: []string{"calendar_delete"}}
+	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
+
+	approvalResult, errorValue := queuedRequest.ToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "calendar_delete", Input: json.RawMessage(`{"eventHint":"event-1"}`)})
+	if errorValue != nil || approvalResult.Failure == nil || !approvalResult.Failure.RequiresApproval {
+		t.Fatalf("expected queued call to remain held for approval, result=%+v error=%v", approvalResult, errorValue)
+	}
+	delegatedResult, errorValue := queuedRequest.ToolSet.Invoke(toolcontract.WithDelegatedTurn(context.Background()), toolcontract.ToolInvocation{ToolName: "calendar_delete", Input: json.RawMessage(`{"eventHint":"event-1"}`)})
+	if errorValue != nil || delegatedResult.Failure == nil || delegatedResult.Failure.Code != toolcontract.FailureCodes.PolicyBlocked.String() {
+		t.Fatalf("expected queued delegated call to remain denied, result=%+v error=%v", delegatedResult, errorValue)
+	}
+	if handlerCallCount != 0 {
+		t.Fatalf("expected approval and delegation guards to prevent the effect, handler calls=%d", handlerCallCount)
 	}
 }
 

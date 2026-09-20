@@ -703,15 +703,18 @@ func TestBatchedActionsRunWithoutAModelCallUntilOneFails(t *testing.T) {
 	rememberBatchedActions(state, turnActionDocument{BatchedActions: []turnActionDocument{
 		{Action: "continue", ToolName: toolcontract.ShellToolName},
 		{Action: "continue", ToolName: toolcontract.ShellToolName},
-	}})
+	}}, []string{toolcontract.ShellToolName}, ToolExposureEvent{ExposedToolIDs: []string{toolcontract.ShellToolName}})
 
 	if _, isBatched := takeBatchedAction(state); !isBatched {
 		t.Fatal("expected the first batched action to run without a model call")
 	}
 	state.Observations = append(state.Observations, newFailureObservation("obs-1", "continue", toolcontract.ShellToolName, "failed", toolcontract.FailurePermissionDenied, toolcontract.FailureCodes.AccessDenied, toolcontract.ShellToolName))
-	rememberBatchedActions(state, turnActionDocument{})
+	rememberBatchedActions(state, turnActionDocument{}, nil, ToolExposureEvent{})
 	if _, isBatched := takeBatchedAction(state); isBatched {
 		t.Fatal("expected a failed observation to drop the rest of the batch")
+	}
+	if len(state.PendingBatchedToolNames) != 0 || len(state.PendingBatchedToolExposure.ExposedToolIDs) != 0 {
+		t.Fatalf("expected failed batch to clear its exposure snapshot, got %+v %+v", state.PendingBatchedToolNames, state.PendingBatchedToolExposure)
 	}
 }
 
