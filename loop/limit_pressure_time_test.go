@@ -698,7 +698,7 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 
 	belowNarrowStage := agentTaskState{IterationCount: 1, ToolCallCount: 5}
 	request.EffortStartedAt = time.Now().Add(-30 * time.Minute)
-	beforeNarrowing := runner.requestForStep(context.Background(), request, belowNarrowStage)
+	beforeNarrowing := runner.requestForStep(context.Background(), request, &belowNarrowStage)
 	exploratoryToolNames := beforeNarrowing.ToolSet.ListToolNames()
 	if !stringSliceContains(exploratoryToolNames, "file_read") || !stringSliceContains(exploratoryToolNames, toolcontract.FileDeliverToolName) {
 		t.Fatalf("expected the full working set below the narrow stage, got %v", exploratoryToolNames)
@@ -706,7 +706,7 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 
 	atNarrowStage := agentTaskState{IterationCount: 1, ToolCallCount: 12}
 	request.EffortStartedAt = time.Now().Add(-38 * time.Minute)
-	afterNarrowing := runner.requestForStep(context.Background(), request, atNarrowStage)
+	afterNarrowing := runner.requestForStep(context.Background(), request, &atNarrowStage)
 	narrowedToolNames := afterNarrowing.ToolSet.ListToolNames()
 	if stringSliceContains(narrowedToolNames, "file_read") {
 		t.Fatalf("expected exploration tools dropped at the narrow_palette stage, got %v", narrowedToolNames)

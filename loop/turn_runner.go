@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,7 @@ const maximumElapsedClosingDuration = time.Minute
 
 type AgentTurnRunner struct {
 	iterationCostObserver  *IterationCostObserver
+	toolSelector           ToolSelector
 	modelInUse             string
 	promptTokensInUse      int64
 	taskRunService         taskstate.TaskRunStore
@@ -237,6 +239,10 @@ func NewAgentTurnRunnerWithRecoveryModel(taskRunService taskstate.TaskRunStore, 
 		recoveryLanguageModel:  recoveryLanguageModel,
 		options:                normalizedOptions,
 	}
+}
+
+func (agentTurnRunner *AgentTurnRunner) UseToolSelector(toolSelector ToolSelector) {
+	agentTurnRunner.toolSelector = toolSelector
 }
 
 func (agentTurnRunner *AgentTurnRunner) UseToolResultSpillStore(toolResultSpillStore ToolResultSpillStore) {
@@ -525,7 +531,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "completion_state "+string(transition.Action), "")
 			continue
 		}
-		iterationRequest := agentTurnRunner.requestForStep(workContext, request, state)
+		iterationRequest := agentTurnRunner.requestForStep(workContext, request, &state)
 		state.ShouldRestrictNextActionToTerminal = false
 		agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentStepWorkingSet, marshalEventBody(map[string]any{
 			"step":     iteration,
@@ -536,7 +542,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		iterationSpentModelCall = !isBatched
 		var actionError error
 		if !isBatched {
-			actionDocument, actionError = agentTurnRunner.nextAction(workContext, taskRun.TaskRunID, iterationRequest, toolUseRequirements, state.Observations, state.ExecutionState, state.ContextSummary, allowQualityCriteria)
+			actionDocument, actionError = agentTurnRunner.nextAction(workContext, taskRun.TaskRunID, iterationRequest, toolUseRequirements, state, allowQualityCriteria)
 		}
 		if actionError != nil && isUnreadableModelActionError(actionError) {
 			state.Observations = append(state.Observations, unreadableActionObservation(state.Observations, actionError))
@@ -794,7 +800,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		}
 	}
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, recoveryStep)
-	agentTurnRunner.applyPlanObservation(taskRunID, state, observation)
+	agentTurnRunner.applyPlanObservation(effortContext, taskRunID, state, observation)
 	updateCompletionIntent(state, actionDocument, observation)
 	if pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments); isPaused {
 		agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "continue "+actionDocument.ToolName, observation.ContentText())
@@ -1068,18 +1074,23 @@ func approvalObservationUserFacingMessage(observation turnObservation) string {
 	return firstNonEmptyString(document.UserFacingMessage, document.Message, document.Question)
 }
 
-func (agentTurnRunner *AgentTurnRunner) nextAction(ctx context.Context, taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, executionState ExecutionState, contextSummary TaskContextSummary, allowQualityCriteria bool) (turnActionDocument, error) {
-	state := agentTaskState{
-		Request:         request,
-		Options:         agentTurnRunner.options,
-		Observations:    append([]turnObservation{}, observations...),
-		ExecutionState:  executionState,
-		ContextSummary:  contextSummary,
-		QualityCriteria: qualityCriteriaForActionRequest(allowQualityCriteria),
-		Requirements:    append([]toolUseRequirement{}, requirements...),
+func (agentTurnRunner *AgentTurnRunner) nextAction(ctx context.Context, taskRunID string, iterationRequest AgentTurnRequest, requirements []toolUseRequirement, state agentTaskState, allowQualityCriteria bool) (turnActionDocument, error) {
+	actionState := agentTurnRunner.actionStateForIteration(iterationRequest, requirements, state, allowQualityCriteria)
+	actionState.Observations = agentTurnRunner.promptVisibleObservationsForAction(ctx, taskRunID, actionState)
+	return agentTurnRunner.decideActionPatiently(ctx, taskRunID, actionState)
+}
+
+func (agentTurnRunner *AgentTurnRunner) actionStateForIteration(iterationRequest AgentTurnRequest, requirements []toolUseRequirement, state agentTaskState, allowQualityCriteria bool) agentTaskState {
+	return agentTaskState{
+		Request:           iterationRequest,
+		Options:           agentTurnRunner.options,
+		Observations:      append([]turnObservation{}, state.Observations...),
+		ExecutionState:    state.ExecutionState,
+		ContextSummary:    state.ContextSummary,
+		QualityCriteria:   qualityCriteriaForActionRequest(allowQualityCriteria),
+		Requirements:      append([]toolUseRequirement{}, requirements...),
+		SystemInstruction: state.SystemInstruction,
 	}
-	state.Observations = agentTurnRunner.promptVisibleObservationsForAction(ctx, taskRunID, state)
-	return agentTurnRunner.decideActionPatiently(ctx, taskRunID, state)
 }
 
 func (agentTurnRunner *AgentTurnRunner) decideActionPatiently(ctx context.Context, taskRunID string, state agentTaskState) (turnActionDocument, error) {
@@ -1113,8 +1124,36 @@ func outcomeContractNeedsQualityCriteria(toolSet *toolcontract.ToolSet, contract
 		expectedResultIncludesType(contract, ExpectedResultTypeLink)
 }
 
-func (agentTurnRunner *AgentTurnRunner) requestForStep(_ context.Context, request AgentTurnRequest, state agentTaskState) AgentTurnRequest {
-	plannedRequest := requestWithStepWorkingSetTools(request, state.Observations)
+func (agentTurnRunner *AgentTurnRunner) requestForStep(_ context.Context, request AgentTurnRequest, state *agentTaskState) AgentTurnRequest {
+	plannedRequest := requestWithStepWorkingSetTools(request, *state)
+	elapsed := agentTurnRunner.turnElapsed(request.EffortStartedAt)
+	pressureStage := limitPressureStageFor(state.IterationCount, state.ToolCallCount, elapsed, agentTurnRunner.reachableLimits(*state))
+	stepKey := stepToolExposureKey(plannedRequest, *state)
+	if state.StepExposure.Key != stepKey {
+		state.StepExposure = stepToolExposureFor(plannedRequest, *state, stepKey)
+	}
+	iterationRequest := plannedRequest
+	iterationRequest.ToolSet = state.StepExposure.ToolSet
+	iterationRequest.ToolExposure = state.StepExposure.Exposure
+	if pressureStage == limitPressureStageNarrowPalette {
+		iterationRequest.ToolSet = iterationRequest.ToolSet.WithAllowedToolNames(wrapUpDeliveryToolNames(plannedRequest))
+	}
+	iterationRequest.StepBudgetContext = agentTurnRunner.stepBudgetContext(*state)
+	iterationRequest.RestrictActionToTerminalOnly = state.ShouldRestrictNextActionToTerminal
+	return iterationRequest
+}
+
+func stepToolExposureKey(plannedRequest AgentTurnRequest, state agentTaskState) string {
+	instructionBundle := instructionBundleFromTurnRequest(plannedRequest)
+	return strings.Join([]string{
+		state.ActivePlanStepTitle,
+		strings.Join(sortedStrings(plannedRequest.PinnedToolNames), ","),
+		strings.Join(sortedStrings(activeRecoveryToolNames(state.Observations)), ","),
+		firstPendingRequiredToolName(instructionBundle.RequiredNextTools, state.Observations),
+	}, "\x00")
+}
+
+func stepToolExposureFor(plannedRequest AgentTurnRequest, state agentTaskState, stepKey string) stepToolExposure {
 	filteredToolSet, exposureEvent := toolSetForAgentTurnWithExposure(
 		plannedRequest.ToolSet,
 		instructionBundleFromTurnRequest(plannedRequest),
@@ -1125,16 +1164,13 @@ func (agentTurnRunner *AgentTurnRunner) requestForStep(_ context.Context, reques
 		ToolExposureEvent{},
 		state.Observations,
 	)
-	elapsed := agentTurnRunner.turnElapsed(request.EffortStartedAt)
-	if limitPressureStageFor(state.IterationCount, state.ToolCallCount, elapsed, agentTurnRunner.reachableLimits(state)) == limitPressureStageNarrowPalette {
-		filteredToolSet = filteredToolSet.WithAllowedToolNames(wrapUpDeliveryToolNames(plannedRequest))
-	}
-	iterationRequest := plannedRequest
-	iterationRequest.ToolSet = filteredToolSet
-	iterationRequest.ToolExposure = exposureEvent
-	iterationRequest.StepBudgetContext = agentTurnRunner.stepBudgetContext(state)
-	iterationRequest.RestrictActionToTerminalOnly = state.ShouldRestrictNextActionToTerminal
-	return iterationRequest
+	return stepToolExposure{Key: stepKey, ToolSet: filteredToolSet, Exposure: exposureEvent}
+}
+
+func sortedStrings(values []string) []string {
+	sorted := append([]string{}, values...)
+	sort.Strings(sorted)
+	return sorted
 }
 
 func wrapUpDeliveryToolNames(request AgentTurnRequest) []string {
@@ -1217,13 +1253,22 @@ func (agentTurnRunner *AgentTurnRunner) stepBudgetContext(state agentTaskState) 
 	}, "\n")
 }
 
-func requestWithStepWorkingSetTools(request AgentTurnRequest, observations []turnObservation) AgentTurnRequest {
+func requestWithStepWorkingSetTools(request AgentTurnRequest, state agentTaskState) AgentTurnRequest {
+	observations := state.Observations
+	request.PinnedToolNames = planStepPinnedToolNames(request, state)
 	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, pendingFileDeliveryToolNames(request, observations)...)
 	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, observedSuggestedNextToolNames(observations)...)
 	foundToolNames := foundToolNamesFromObservations(observations)
 	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, foundToolNames...)
 	request.SkillDecisions = withOwningSkillDecisions(request.SkillDecisions, request.AvailableSkills, foundToolNames)
 	return request
+}
+
+func planStepPinnedToolNames(request AgentTurnRequest, state agentTaskState) []string {
+	if len(state.PlanStepToolNames) == 0 {
+		return appendUniqueStrings(request.PinnedToolNames)
+	}
+	return appendUniqueStrings(append([]string{}, state.PlanStepToolNames...))
 }
 
 func withOwningSkillDecisions(decisions []SkillSelectionDecision, availableSkills []SkillInstruction, requestedToolNames []string) []SkillSelectionDecision {

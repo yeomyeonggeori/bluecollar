@@ -47,7 +47,7 @@ func TestApplyPlanUpdateObservationMergesExecutionStateAndAppendsEvents(t *testi
 	state := &agentTaskState{ExecutionState: ExecutionState{Goal: "previous goal"}}
 	observation := planUpdateSuccessObservation("obs-001", `{"goal":"ship the report","steps":[{"title":"gather data","status":"done"},{"title":"write summary","status":"in_progress"}]}`)
 
-	services.runner.applyPlanObservation("task-plan-1", state, observation)
+	services.runner.applyPlanObservation(context.Background(), "task-plan-1", state, observation)
 
 	if state.ExecutionState.Goal != "ship the report" {
 		t.Fatalf("expected merged goal, got %q", state.ExecutionState.Goal)
@@ -68,7 +68,7 @@ func TestApplyPlanUpdateObservationKeepsGoalWhenUpdateOmitsIt(t *testing.T) {
 	state := &agentTaskState{ExecutionState: ExecutionState{Goal: "previous goal"}}
 	observation := planUpdateSuccessObservation("obs-001", `{"steps":[{"title":"only step","status":"pending"}]}`)
 
-	services.runner.applyPlanObservation("task-plan-2", state, observation)
+	services.runner.applyPlanObservation(context.Background(), "task-plan-2", state, observation)
 
 	if state.ExecutionState.Goal != "previous goal" {
 		t.Fatalf("expected preserved goal, got %q", state.ExecutionState.Goal)
@@ -85,8 +85,8 @@ func TestApplyPlanUpdateObservationIgnoresFailedAndForeignObservations(t *testin
 	failedObservation.Failure = &toolcontract.ToolFailure{Kind: toolcontract.FailureUnknown}
 	foreignObservation := successfulSideEffectObservation("obs-002", "task_add", `{}`, "created")
 
-	services.runner.applyPlanObservation("task-plan-3", state, failedObservation)
-	services.runner.applyPlanObservation("task-plan-3", state, foreignObservation)
+	services.runner.applyPlanObservation(context.Background(), "task-plan-3", state, failedObservation)
+	services.runner.applyPlanObservation(context.Background(), "task-plan-3", state, foreignObservation)
 
 	if len(state.ExecutionState.Steps) != 0 {
 		t.Fatalf("expected no merge, got %+v", state.ExecutionState.Steps)

@@ -154,7 +154,7 @@ func TestRequestWorkingSetPinsObservedSuggestedNextTool(t *testing.T) {
 	observation := newContentObservation("obs-001", "continue", "site_list", `{"status":"failed"}`)
 	observation.RecoveryPacket = &RecoveryPacket{AllowedTools: []string{"file_edit"}}
 
-	updatedRequest := requestWithStepWorkingSetTools(request, []turnObservation{observation})
+	updatedRequest := requestWithStepWorkingSetTools(request, agentTaskState{Observations: []turnObservation{observation}})
 	if len(updatedRequest.PinnedToolNames) != 1 || updatedRequest.PinnedToolNames[0] != "file_edit" {
 		t.Fatalf("expected observed suggested tool to be pinned, got %+v", updatedRequest.PinnedToolNames)
 	}

@@ -1,6 +1,7 @@
 package agentcontract
 
 import (
+	"context"
 	"encoding/base64"
 	"strings"
 	"time"
@@ -178,6 +179,10 @@ type ToolSelectionNeed struct {
 	ToolSet           *toolcontract.ToolSet
 	CallableToolNames []string
 	CountLimit        int
+}
+
+type ToolSelector interface {
+	SelectToolNames(context.Context, ToolSelectionNeed) ([]SelectedTool, error)
 }
 
 type SelectedTool struct {

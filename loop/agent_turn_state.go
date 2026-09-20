@@ -44,6 +44,23 @@ type agentTaskState struct {
 	CompletionIntentToolName           string
 	ShouldRestrictNextActionToTerminal bool
 	DidNudgePlan                       bool
+	SystemInstruction                  string
+	ActivePlanStepTitle                string
+	PlanStepToolNames                  []string
+	StepExposure                       stepToolExposure
+}
+
+type stepToolExposure struct {
+	Key      string
+	ToolSet  *toolcontract.ToolSet
+	Exposure ToolExposureEvent
+}
+
+func (state agentTaskState) systemInstructionText() string {
+	if state.SystemInstruction != "" {
+		return state.SystemInstruction
+	}
+	return systemInstructionFor(state.Options, state.Request).Text()
 }
 
 func (state agentTaskState) didExtendBudgetOneLevel() bool {
@@ -119,17 +136,19 @@ func buildInitialAgentTaskState(request AgentTurnRequest, options TurnOptions, t
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now().Add(-2 * time.Second)
 	}
+	normalizedOptions := normalizeTurnOptions(options)
 	return agentTaskState{
-		TaskRunID:      taskRunID,
-		Status:         agentcontract.TaskStatusRunning,
-		Request:        request,
-		Options:        normalizeTurnOptions(options),
-		TurnStartedAt:  request.TurnStartedAt,
-		Requirements:   deriveToolUseRequirements(request),
-		Observations:   []turnObservation{},
-		Attachments:    []toolcontract.FileAttachment{},
-		ToolCallCount:  0,
-		IterationCount: 0,
+		TaskRunID:         taskRunID,
+		Status:            agentcontract.TaskStatusRunning,
+		Request:           request,
+		Options:           normalizedOptions,
+		SystemInstruction: systemInstructionFor(normalizedOptions, request).Text(),
+		TurnStartedAt:     request.TurnStartedAt,
+		Requirements:      deriveToolUseRequirements(request),
+		Observations:      []turnObservation{},
+		Attachments:       []toolcontract.FileAttachment{},
+		ToolCallCount:     0,
+		IterationCount:    0,
 	}
 }
 
@@ -434,7 +453,7 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, 
 	messages := (PromptAssembler{}).buildTurnMessages(
 		state.Request,
 		state.Observations,
-		systemInstructionFor(state.Options, state.Request).Text(),
+		state.systemInstructionText(),
 		toolDescription,
 		toolResultsCarriedNatively,
 		state.ExecutionState,

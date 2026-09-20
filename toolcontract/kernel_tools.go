@@ -27,6 +27,10 @@ const ToolExposureGroupsRankedBelowTheLikelyTools = 3
 
 const MaxLikelyToolCount = MaxExtensionCallableToolCount - ToolExposureGroupsRankedBelowTheLikelyTools
 
+const ToolNamesOnePlanStepIsExpectedToNeed = 5
+
+const MaxLikelyToolCountForOnePlanStep = min(ToolNamesOnePlanStepIsExpectedToNeed, MaxLikelyToolCount)
+
 func KernelToolNames() []string {
 	return []string{
 		ShellToolName,

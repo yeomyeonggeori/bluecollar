@@ -81,6 +81,7 @@ const (
 	TaskEventAgentStallPauseReply                  = "agent.stall_pause_reply"
 	TaskEventAgentStallRecoveryDirective           = "agent.stall_recovery_directive"
 	TaskEventAgentStepWorkingSet                   = "agent.step_working_set"
+	TaskEventAgentStepToolsSelected                = "agent.step_tools.selected"
 	TaskEventAgentSuggestedNextToolDirective       = "agent.suggested_next_tool_directive"
 	TaskEventAgentTaskLaunched                     = "agent.task_launched"
 	TaskEventAgentTaskSource                       = "agent.task_source"

@@ -31,6 +31,7 @@ type AgentKernel struct {
 	instructionSources      []InstructionSource
 	instructionLoader       func() InstructionBundle
 	skillRetriever          SkillRetriever
+	toolSelector            ToolSelector
 	companyProvider         func() CompanyContext
 	toolResultSpillStore    ToolResultSpillStore
 	toolResultImageSource   ToolResultImageSource
@@ -98,6 +99,10 @@ func (agentKernel *AgentKernel) UseInstructionBundleLoader(instructionLoader fun
 	if instructionLoader != nil {
 		agentKernel.UseInstructionBundle(instructionLoader())
 	}
+}
+
+func (agentKernel *AgentKernel) UseToolSelector(toolSelector ToolSelector) {
+	agentKernel.toolSelector = toolSelector
 }
 
 func (agentKernel *AgentKernel) UseSkillRetriever(skillRetriever SkillRetriever) {
@@ -415,6 +420,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		turnOptions,
 	)
 	agentTurnRunner.UseIterationCostObserver(agentKernel.iterationCostObserver)
+	agentTurnRunner.UseToolSelector(agentKernel.toolSelector)
 	agentTurnRunner.UseToolResultSpillStore(agentKernel.toolResultSpillStore)
 	agentTurnRunner.UseToolResultImageSource(agentKernel.toolResultImageSource)
 	result, errorValue := agentTurnRunner.RunTurn(taskBudget.callerContext(), turnRequest)

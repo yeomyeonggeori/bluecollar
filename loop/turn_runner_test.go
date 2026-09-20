@@ -1221,7 +1221,7 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 		},
 	}
 
-	stepRequest := services.runner.requestForStep(context.Background(), request, agentTaskState{Request: request})
+	stepRequest := services.runner.requestForStep(context.Background(), request, &agentTaskState{Request: request})
 	for _, toolName := range []string{"site_list", "site_serve", "file_write", "site_build", "artifact_review", "site_serve"} {
 		if !stepRequest.ToolSet.CanExpose(toolName) {
 			t.Fatalf("expected initial site working set to expose %s, got %+v", toolName, stepRequest.ToolExposure.ExposedToolIDs)
@@ -1360,7 +1360,7 @@ func TestSiteRequestWithCalendarContentDoesNotPinCalendarTools(t *testing.T) {
 		},
 	}
 
-	updatedRequest := requestWithStepWorkingSetTools(request, nil)
+	updatedRequest := requestWithStepWorkingSetTools(request, agentTaskState{})
 
 	if stringSliceContains(updatedRequest.PinnedToolNames, "calendar_add") || stringSliceContains(updatedRequest.PinnedToolNames, "calendar_delete") {
 		t.Fatalf("did not expect calendar operations pinned for site content mention, got %+v", updatedRequest.PinnedToolNames)
@@ -1378,7 +1378,7 @@ func TestSlidesRequestWithCalendarContentDoesNotPinCalendarTools(t *testing.T) {
 		},
 	}
 
-	updatedRequest := requestWithStepWorkingSetTools(request, nil)
+	updatedRequest := requestWithStepWorkingSetTools(request, agentTaskState{})
 
 	if stringSliceContains(updatedRequest.PinnedToolNames, "calendar_add") || stringSliceContains(updatedRequest.PinnedToolNames, "calendar_delete") {
 		t.Fatalf("did not expect calendar operations pinned for slides content mention, got %+v", updatedRequest.PinnedToolNames)

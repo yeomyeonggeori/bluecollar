@@ -449,7 +449,7 @@ func TestFoundToolsAttachOwningSkillInstructions(t *testing.T) {
 	observation := newContentObservation("obs-001", "continue", toolcontract.FindToolsToolName, "")
 	observation.Output = toolcontract.ToolOutput{Data: json.RawMessage(`{"selectedTools":[{"name":"calendar_update"}]}`)}
 
-	amendedRequest := requestWithStepWorkingSetTools(request, []turnObservation{observation})
+	amendedRequest := requestWithStepWorkingSetTools(request, agentTaskState{Observations: []turnObservation{observation}})
 
 	hasCalendarDecision := false
 	for _, decision := range amendedRequest.SkillDecisions {

@@ -1,7 +1,10 @@
 package loop
 
 import (
+	"context"
 	"encoding/json"
+	"strings"
+
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
@@ -24,7 +27,7 @@ func planFromObservation(observation turnObservation) (planDocument, bool) {
 	return document, true
 }
 
-func (agentTurnRunner *AgentTurnRunner) applyPlanObservation(taskRunID string, state *agentTaskState, observation turnObservation) {
+func (agentTurnRunner *AgentTurnRunner) applyPlanObservation(ctx context.Context, taskRunID string, state *agentTaskState, observation turnObservation) {
 	document, isPlan := planFromObservation(observation)
 	if !isPlan {
 		return
@@ -36,6 +39,58 @@ func (agentTurnRunner *AgentTurnRunner) applyPlanObservation(taskRunID string, s
 	agentTurnRunner.widenPaceForPlannedLevel(taskRunID, state, document.Level)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentPlanUpdated, marshalEventBody(planDocument{Goal: state.ExecutionState.Goal, Level: document.Level, Steps: state.ExecutionState.Steps}))
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentExecutionState, marshalEventBody(normalizeExecutionState(state.ExecutionState)))
+	agentTurnRunner.selectToolsForActivePlanStep(ctx, taskRunID, state)
+}
+
+func activePlanStepTitle(steps []PlanStep) string {
+	for _, step := range steps {
+		if step.Status == toolcontract.PlanStepStatusInProgress {
+			return step.Title
+		}
+	}
+	if len(steps) > 0 {
+		return steps[0].Title
+	}
+	return ""
+}
+
+func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context.Context, taskRunID string, state *agentTaskState) {
+	stepTitle := activePlanStepTitle(state.ExecutionState.Steps)
+	if stepTitle == "" || stepTitle == state.ActivePlanStepTitle {
+		return
+	}
+	state.ActivePlanStepTitle = stepTitle
+	if agentTurnRunner.toolSelector == nil {
+		return
+	}
+	selectedTools, errorValue := agentTurnRunner.toolSelector.SelectToolNames(ctx, agentcontract.ToolSelectionNeed{
+		Need:       stepTitle,
+		ToolSet:    state.Request.ToolSet,
+		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
+	})
+	if errorValue != nil {
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(map[string]any{
+			"step":  stepTitle,
+			"error": errorValue.Error(),
+		}))
+		return
+	}
+	state.PlanStepToolNames = selectedToolNamesOf(selectedTools)
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(map[string]any{
+		"step":       stepTitle,
+		"toolNames":  state.PlanStepToolNames,
+		"countLimit": toolcontract.MaxLikelyToolCountForOnePlanStep,
+	}))
+}
+
+func selectedToolNamesOf(selectedTools []agentcontract.SelectedTool) []string {
+	toolNames := []string{}
+	for _, selectedTool := range selectedTools {
+		if toolName := strings.TrimSpace(selectedTool.Name); toolName != "" {
+			toolNames = appendUniqueStrings(toolNames, toolName)
+		}
+	}
+	return toolNames
 }
 
 func (agentTurnRunner *AgentTurnRunner) notePlanMissingBeforeStateChange(taskRunID string, request AgentTurnRequest, state *agentTaskState, actionDocument turnActionDocument) {
