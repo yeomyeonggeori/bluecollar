@@ -87,31 +87,6 @@ func TestToolExposureKeepsSkillSearchWhenSelectedInstructionIsMissing(t *testing
 	}
 }
 
-func TestToolExposureAddsAskInputOnlyForTypedInteraction(t *testing.T) {
-	toolSet := testToolSet(append(toolcontract.KernelToolNames(), toolcontract.AskInputToolName))
-	outcomeContract := OutcomeContract{ExpectedResults: []ExpectedResult{{
-		ID:              "interactive-choice",
-		Type:            ExpectedResultTypeMessage,
-		Description:     "The user can choose one of the presented options.",
-		Required:        true,
-		AcceptanceHints: []string{toolcontract.AskInputToolName},
-	}}}
-
-	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
-		toolSet,
-		InstructionBundle{},
-		AgentRequest{},
-		ExecutionPlan{},
-		false,
-		outcomeContract,
-		ToolExposureEvent{},
-	)
-
-	if !filteredToolSet.IsAllowed(toolcontract.AskInputToolName) {
-		t.Fatalf("expected typed interactive outcome to expose ask_input, got %+v", filteredToolSet.ListToolNames())
-	}
-}
-
 func TestToolExposureRequiresExplicitSkillSearchForImmediateReply(t *testing.T) {
 	toolSet := testToolSet(toolcontract.KernelToolNames())
 	request := AgentRequest{TaskShape: TaskShapeImmediateReply}

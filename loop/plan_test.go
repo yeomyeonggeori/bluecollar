@@ -12,7 +12,7 @@ func planUpdateSuccessObservation(observationID string, planDocument string) tur
 	return turnObservation{
 		ObservationID: observationID,
 		Action:        "continue",
-		Tool:          toolcontract.PlanUpdateToolName,
+		Tool:          toolcontract.PlanToolName,
 		Output:        toolcontract.ToolOutput{Content: planDocument, Data: json.RawMessage(planDocument)},
 	}
 }
@@ -47,7 +47,7 @@ func TestApplyPlanUpdateObservationMergesExecutionStateAndAppendsEvents(t *testi
 	state := &agentTaskState{ExecutionState: ExecutionState{Goal: "previous goal"}}
 	observation := planUpdateSuccessObservation("obs-001", `{"goal":"ship the report","steps":[{"title":"gather data","status":"done"},{"title":"write summary","status":"in_progress"}]}`)
 
-	services.runner.applyPlanUpdateObservation("task-plan-1", state, observation)
+	services.runner.applyPlanObservation("task-plan-1", state, observation)
 
 	if state.ExecutionState.Goal != "ship the report" {
 		t.Fatalf("expected merged goal, got %q", state.ExecutionState.Goal)
@@ -68,7 +68,7 @@ func TestApplyPlanUpdateObservationKeepsGoalWhenUpdateOmitsIt(t *testing.T) {
 	state := &agentTaskState{ExecutionState: ExecutionState{Goal: "previous goal"}}
 	observation := planUpdateSuccessObservation("obs-001", `{"steps":[{"title":"only step","status":"pending"}]}`)
 
-	services.runner.applyPlanUpdateObservation("task-plan-2", state, observation)
+	services.runner.applyPlanObservation("task-plan-2", state, observation)
 
 	if state.ExecutionState.Goal != "previous goal" {
 		t.Fatalf("expected preserved goal, got %q", state.ExecutionState.Goal)
@@ -85,8 +85,8 @@ func TestApplyPlanUpdateObservationIgnoresFailedAndForeignObservations(t *testin
 	failedObservation.Failure = &toolcontract.ToolFailure{Kind: toolcontract.FailureUnknown}
 	foreignObservation := successfulSideEffectObservation("obs-002", "task_add", `{}`, "created")
 
-	services.runner.applyPlanUpdateObservation("task-plan-3", state, failedObservation)
-	services.runner.applyPlanUpdateObservation("task-plan-3", state, foreignObservation)
+	services.runner.applyPlanObservation("task-plan-3", state, failedObservation)
+	services.runner.applyPlanObservation("task-plan-3", state, foreignObservation)
 
 	if len(state.ExecutionState.Steps) != 0 {
 		t.Fatalf("expected no merge, got %+v", state.ExecutionState.Steps)
@@ -102,7 +102,7 @@ func nudgeTestRequest(taskLevel TaskLevel) AgentTurnRequest {
 		ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 			testToolDescriptor("task_add"),
 			testToolDescriptor("task_list"),
-			testToolDescriptor(toolcontract.PlanUpdateToolName),
+			testToolDescriptor(toolcontract.PlanToolName),
 		}),
 	}
 }
@@ -118,8 +118,8 @@ func TestNudgePlanFiresOnceForStateChangingToolWithoutPlan(t *testing.T) {
 	if !state.DidNudgePlan {
 		t.Fatal("expected DidNudgePlan to be set")
 	}
-	if len(state.Observations) != 1 || !strings.Contains(state.Observations[0].ContentText(), "plan_update") {
-		t.Fatalf("expected a plan_update policy observation, got %+v", state.Observations)
+	if len(state.Observations) != 1 || !strings.Contains(state.Observations[0].ContentText(), "plan") {
+		t.Fatalf("expected a plan policy observation, got %+v", state.Observations)
 	}
 	if !hasTaskEvent(services, "task-nudge-1", "agent.plan.nudged") {
 		t.Fatal("expected agent.plan.nudged event")
@@ -169,14 +169,14 @@ func TestNudgePlanDoesNotFireOnceStepsExist(t *testing.T) {
 
 func TestRunTurnMergesPlanUpdateObservationIntoExecutionState(t *testing.T) {
 	languageModel := &sequenceLanguageModel{modelTier: "low", contents: []string{
-		`{"action":"continue","toolName":"plan_update","toolInput":{"goal":"answer the question","steps":[{"title":"look up the fact","status":"in_progress"}]}}`,
+		`{"action":"continue","toolName":"plan","toolInput":{"goal":"answer the question","steps":[{"title":"look up the fact","status":"in_progress"}]}}`,
 		finishMessageDocument("done"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
-	toolRegistry := newTestToolSet([]string{toolcontract.PlanUpdateToolName})
+	toolRegistry := newTestToolSet([]string{toolcontract.PlanToolName})
 	planResultContract := &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.PlanUpdateToolName, SideEffectClass: toolcontract.ToolSideEffectNone, ResultContract: planResultContract}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		var input planUpdateDocument
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.PlanToolName, SideEffectClass: toolcontract.ToolSideEffectNone, ResultContract: planResultContract}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		var input planDocument
 		if errorValue := json.Unmarshal(invocation.Input, &input); errorValue != nil {
 			return toolcontract.ToolResult{}, errorValue
 		}
@@ -212,7 +212,7 @@ func TestRunTurnExecutesTheStateChangingCallTheNudgeAnnotates(t *testing.T) {
 		finishMessageDocument("done"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
-	toolSet := newTestToolSet([]string{"task_add", toolcontract.PlanUpdateToolName})
+	toolSet := newTestToolSet([]string{"task_add", toolcontract.PlanToolName})
 	wasToolInvoked := false
 	registerTestTool(toolSet, testToolDescriptor("task_add"), func(_ context.Context, _ toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		wasToolInvoked = true
@@ -256,7 +256,7 @@ func TestCompletionJudgeMessagesIncludePlanChecklistHint(t *testing.T) {
 
 	messagesWithoutPlan := completionJudgeMessages(AgentTurnRequest{Prompt: "make a deck"}, nil, nil, turnActionDocument{}, nil)
 	if strings.Contains(joinedMessageContent(messagesWithoutPlan), "checklist hint") {
-		t.Fatal("expected no plan hint without a plan_update observation")
+		t.Fatal("expected no plan hint without a plan observation")
 	}
 }
 

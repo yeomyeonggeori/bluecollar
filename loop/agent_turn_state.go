@@ -621,7 +621,7 @@ func normalizeAgentActionResponseContent(content []byte) ([]byte, error) {
 }
 
 func agentActionResponseCandidate(document map[string]json.RawMessage) (string, int) {
-	actionNames := []string{"finish", "continue", "fail", "set_quality_criteria"}
+	actionNames := []string{"reply", "continue", "fail", "set_quality_criteria"}
 	candidateAction := ""
 	candidateCount := 0
 	for _, actionName := range actionNames {
@@ -724,8 +724,11 @@ func normalizeParsedAction(actionDocument turnActionDocument) turnActionDocument
 	case "continue":
 		actionDocument.Action = "continue"
 		actionDocument.ToolName = strings.TrimSpace(actionDocument.ToolName)
-	case "finish":
-		actionDocument.Action = "finish"
+	case "reply":
+		actionDocument.Action = "reply"
+		if actionDocument.Final {
+			actionDocument.Action = "finish"
+		}
 	default:
 		actionDocument.Action = action
 	}
@@ -823,7 +826,7 @@ func retryAgentActionChatCompletionRequest(request model.ChatCompletionRequest, 
 		}
 		toolName = firstPendingActionToolName(state)
 		if toolName == "" && agentActionCompletionIsReady(state) {
-			toolName = "finish"
+			toolName = "reply"
 		}
 		if toolName == "" {
 			return retryRequest, true
@@ -1240,7 +1243,7 @@ func containsNativeAgentTool(tools []model.ChatCompletionTool, toolName string) 
 
 func isNativeTerminalAction(action string) bool {
 	switch strings.TrimSpace(action) {
-	case "finish", "fail", "set_quality_criteria":
+	case "reply", "fail", "set_quality_criteria":
 		return true
 	default:
 		return false
@@ -1255,6 +1258,8 @@ func applyAgentAction(state agentTaskState, action agentAction) (agentTaskState,
 		state.ToolCallCount++
 	case "finish":
 		state.Status = agentcontract.TaskStatusCompleted
+	case "reply":
+		state.Status = agentcontract.TaskStatusRunning
 	case "fail":
 		state.Status = agentcontract.TaskStatusFailed
 	}

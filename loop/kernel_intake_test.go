@@ -616,7 +616,7 @@ func TestAgentKernelQuickReplyCanUseInitialTool(t *testing.T) {
 	}
 }
 
-func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T) {
+func TestAgentKernelQuickReplyAsksWithExpectsAnswerForExplicitChoiceRequest(t *testing.T) {
 	routedDecision := TurnDecision{
 		Route:            TurnRouteStartTask,
 		Classification:   IntakeClassificationQuickReply,
@@ -635,11 +635,11 @@ func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T)
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{finishMessageDocument("아래 세 가지 중 하나를 선택해 주세요.")}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("아래 세 가지 중 하나를 선택해 주세요.\n\n1. 선택지 1\n2. 선택지 2\n3. 선택지 3"),
-		`{"action":"continue","toolName":"ask_input","toolInput":{"question":"아래 세 가지 중 하나를 선택해 주세요.","options":["선택지 1","선택지 2","선택지 3"],"recommendedOptionKey":"1","selectionMode":"single"}}`,
+		`{"action":"reply","expectsAnswer":true,"message":"아래 세 가지 중 하나를 선택해 주세요.\n\n1. 선택지 1\n2. 선택지 2\n3. 선택지 3"}`,
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
-	toolRegistry := newTestToolSet([]string{"ask_input"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "ask_input"}, func(toolContext context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestToolSet([]string{toolcontract.AskInputToolName})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.AskInputToolName, Visibility: toolcontract.ToolVisibilityInternal}, func(toolContext context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		taskRunID := TaskRunIDFromContext(toolContext)
 		if taskRunID == "" {
 			return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "ask_choice", "missing task run"), nil
@@ -666,14 +666,14 @@ func TestAgentKernelQuickReplyUsesAskInputForExplicitChoiceRequest(t *testing.T)
 		t.Fatalf("expected waiting user input, got %s", result.TaskRun.Status)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.completion_required", "ask_input") {
-		t.Fatalf("expected text-only finish to be rejected, got %+v", events)
+	if !taskEventsContain(events, "agent.completion_required", "reply with expectsAnswer") {
+		t.Fatalf("expected a text-only final reply to be rejected, got %+v", events)
 	}
-	if !taskEventsContain(events, "ask.requested", `"selectionMode":"single"`) {
-		t.Fatalf("expected ask_input request event, got %+v", events)
+	if !taskEventsContain(events, "ask.requested", "선택지 1") {
+		t.Fatalf("expected the question to reach the ask request event, got %+v", events)
 	}
 	if len(replyLanguageModel.requests) != 2 {
-		t.Fatalf("expected finish rejection then ask_input action, got %d requests", len(replyLanguageModel.requests))
+		t.Fatalf("expected a rejected final reply then the expectsAnswer reply, got %d requests", len(replyLanguageModel.requests))
 	}
 }
 

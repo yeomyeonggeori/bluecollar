@@ -13,13 +13,13 @@ var standingDuties = []StandingDuty{
 	{
 		Name:        "calendar_upkeep",
 		Description: "a specific meeting, deadline, or scheduled event that should be created or updated as a calendar event right now",
-		Instruction: "Record the concrete meeting, deadline, or scheduled event the overheard message states as a calendar entry. List the existing entries around that date first and update the matching one instead of creating a duplicate. When the message states nothing concrete enough to put on a calendar, finish without changing anything.",
+		Instruction: "Record the concrete meeting, deadline, or scheduled event the overheard message states as a calendar entry. List the existing entries around that date first and update the matching one instead of creating a duplicate. When the message states nothing concrete enough to put on a calendar, send a final reply without changing anything.",
 		ToolNames:   []string{"event_list", "event_add", "event_update", "conversation_history", "memory_search"},
 	},
 	{
 		Name:        "team_flow_update",
 		Description: "a specific work task assigned to a person that should be added, or whose status or details should be updated or completed right now",
-		Instruction: "Record the concrete work task the overheard message assigns, or update the existing task whose status or details it changes. List the existing tasks first and update the matching one instead of creating a duplicate. When the message assigns nothing concrete enough to track, finish without changing anything.",
+		Instruction: "Record the concrete work task the overheard message assigns, or update the existing task whose status or details it changes. List the existing tasks first and update the matching one instead of creating a duplicate. When the message assigns nothing concrete enough to track, send a final reply without changing anything.",
 		ToolNames:   []string{"task_list", "task_add", "task_update", "conversation_history", "memory_search"},
 	},
 }

@@ -17,7 +17,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
-func TestDecideAgentActionUsesNativeChatForFinishAndContinue(t *testing.T) {
+func TestDecideAgentActionUsesNativeChatForFinalReplyAndContinue(t *testing.T) {
 	testCases := []struct {
 		name         string
 		toolName     string
@@ -26,13 +26,13 @@ func TestDecideAgentActionUsesNativeChatForFinishAndContinue(t *testing.T) {
 		check        func(*testing.T, agentAction)
 	}{
 		{
-			name:         "finish",
-			toolName:     "finish",
-			arguments:    `{"message":"done","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":["obs-1"],"qualityReview":[],"executionStateUpdate":{"goal":"done"}}`,
+			name:         "final reply",
+			toolName:     "reply",
+			arguments:    `{"message":"done","final":true,"goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":["obs-1"],"qualityReview":[],"executionStateUpdate":{"goal":"done"}}`,
 			expectedType: "finish",
 			check: func(t *testing.T, action agentAction) {
 				if action.Message != "done" || len(action.CompletionEvidenceIDs) != 1 || action.ExecutionStateUpdate.Goal != "done" {
-					t.Fatalf("expected finish fields to survive native action parsing, got %+v", action)
+					t.Fatalf("expected final reply fields to survive native action parsing, got %+v", action)
 				}
 			},
 		},
@@ -68,7 +68,7 @@ func TestDecideAgentActionUsesNativeChatForFinishAndContinue(t *testing.T) {
 }
 
 func TestDecideAgentActionNativeChatOmitsTextToolCatalog(t *testing.T) {
-	provider := nativeAgentActionLanguageModel{chatResponse: nativeAgentActionChatResponse("finish", `{}`)}
+	provider := nativeAgentActionLanguageModel{chatResponse: nativeAgentActionChatResponse("reply", `{"final":true}`)}
 
 	_, errorValue := DecideAgentAction(context.Background(), &provider, nativeAgentActionTestState())
 	if errorValue != nil {
@@ -108,9 +108,9 @@ func TestBuildAgentActionChatRequestExposesDirectToolsAndTerminalControls(t *tes
 	if !strings.Contains(parameters, `"command":{"type":"string"}`) || !strings.Contains(parameters, `"required":["command","reasoning"]`) {
 		t.Fatalf("expected the callable input schema plus the reasoning slot, got %s", parameters)
 	}
-	finishTool := nativeChatTool(t, chatRequest.Tools, "finish")
-	if strings.Contains(string(finishTool.Function.Parameters), `"action"`) {
-		t.Fatalf("expected terminal control schema without redundant action discriminator, got %s", finishTool.Function.Parameters)
+	replyTool := nativeChatTool(t, chatRequest.Tools, "reply")
+	if strings.Contains(string(replyTool.Function.Parameters), `"action"`) {
+		t.Fatalf("expected terminal control schema without redundant action discriminator, got %s", replyTool.Function.Parameters)
 	}
 	if len(chatRequest.ToolChoice) != 0 {
 		t.Fatalf("naming tool_choice, even as the default, excludes providers that serve tools but reject the parameter, got %s", chatRequest.ToolChoice)
@@ -153,7 +153,7 @@ func TestBuildAgentActionRequestKeepsTextToolCatalogForStructuredFallback(t *tes
 }
 
 func TestDecideAgentActionNativeChatRejectsInvalidCallsWithoutStructuredFallback(t *testing.T) {
-	blankToolCallIDResponse := nativeAgentActionChatResponse("finish", `{}`)
+	blankToolCallIDResponse := nativeAgentActionChatResponse("reply", `{"final":true}`)
 	blankToolCallIDResponse.Message.ToolCalls[0].ID = " "
 	testCases := []struct {
 		name     string
@@ -400,12 +400,12 @@ func TestAgentActionFinishCorrectionUsesCompleteTypedState(t *testing.T) {
 			}
 
 			retryRequest := finishReasonRetryRequest(t, state)
-			isFinishRequired := len(retryRequest.Tools) == 1 && retryRequest.Tools[0].Function.Name == "finish"
+			isFinishRequired := len(retryRequest.Tools) == 1 && retryRequest.Tools[0].Function.Name == "reply"
 			if isFinishRequired != testCase.expectsFinish {
 				t.Fatalf("expected finish required=%t, got %+v", testCase.expectsFinish, retryRequest.Tools)
 			}
 			if isFinishRequired {
-				assertRequiredAgentActionTool(t, retryRequest, "finish")
+				assertRequiredAgentActionTool(t, retryRequest, "reply")
 			}
 		})
 	}
@@ -422,7 +422,7 @@ func TestAgentActionFinishCorrectionPrecedenceAndFailClosed(t *testing.T) {
 		state := nativeAgentActionCompletionReadyState()
 		request := nativeAgentActionChatCompletionRequest(t, state)
 		request.Tools = slices.DeleteFunc(request.Tools, func(tool model.ChatCompletionTool) bool {
-			return tool.Function.Name == "finish"
+			return tool.Function.Name == "reply"
 		})
 
 		_, canRetry := retryAgentActionChatCompletionRequest(request, finishReasonCorrection(), state)
@@ -454,7 +454,7 @@ func TestDecideAgentActionNativeChatRetryPreservesModelChoiceOutsidePendingContr
 				}
 				return state
 			},
-			expectedCall: "finish",
+			expectedCall: "reply",
 		},
 		{
 			name: "failure debt",
@@ -716,7 +716,7 @@ func TestBatchedActionsRunWithoutAModelCallUntilOneFails(t *testing.T) {
 }
 
 func TestDecideAgentActionKeepsImagePartsOnNativeChatPath(t *testing.T) {
-	provider := nativeAgentActionLanguageModel{chatResponse: nativeAgentActionChatResponse("finish", `{}`)}
+	provider := nativeAgentActionLanguageModel{chatResponse: nativeAgentActionChatResponse("reply", `{"final":true}`)}
 	state := nativeAgentActionTestState()
 	state.Request.InputParts = []AgentPart{{
 		Type:  AgentPartTypeImage,
@@ -777,7 +777,7 @@ func TestDecideAgentActionNativeChatPropagatesProviderErrorAndCancellation(t *te
 
 func TestDecideAgentActionUsesStructuredProviderWithoutChatCapability(t *testing.T) {
 	provider := structuredOnlyAgentActionLanguageModel{
-		response: model.StructuredResponse{Content: `{"action":"finish","message":"done"}`},
+		response: model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"done"}`},
 	}
 	action, errorValue := DecideAgentAction(context.Background(), &provider, agentTaskState{})
 	if errorValue != nil || action.Action != "finish" {
@@ -931,7 +931,7 @@ func nativeAgentActionMultipleCallsResponse() model.ChatCompletionResponse {
 			Role: "assistant",
 			ToolCalls: []model.ChatCompletionToolCall{
 				nativeAgentActionToolCall(toolcontract.ShellToolName, `{"command":"pwd"}`),
-				nativeAgentActionToolCall("finish", `{}`),
+				nativeAgentActionToolCall("reply", `{"final":true}`),
 			},
 		},
 	}
@@ -1014,7 +1014,7 @@ func (provider *nativeAgentActionLanguageModel) GenerateChatCompletion(_ context
 }
 
 func (provider *nativeAgentActionLanguageModel) chatResponseAsStructured() model.StructuredResponse {
-	return model.StructuredResponse{Content: `{"action":"finish","message":"done"}`}
+	return model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"done"}`}
 }
 
 func chatMessageContent(messages []model.ChatCompletionMessage) string {
@@ -1132,7 +1132,7 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 	if strings.Contains(request.StructuredOutputSchema.Document, `"requestTools"`) {
 		t.Fatalf("expected continue action to omit requestTools, got %s", request.StructuredOutputSchema.Document)
 	}
-	finishVariant := actionSchemaVariant(t, request.StructuredOutputSchema.Document, "finish")
+	finishVariant := actionSchemaVariant(t, request.StructuredOutputSchema.Document, "reply")
 	requiredFields := stringSliceFromAny(finishVariant["required"])
 	for _, fieldName := range []string{"message", "completionEvidenceIDs", "qualityReview"} {
 		if !containsString(requiredFields, fieldName) {
@@ -1303,7 +1303,7 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 }
 
 func TestParseAgentActionResponseDeliversTheFinishMessageOverAStatusLine(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Open https://intern.kim/handoff/handoff-1 and sign in.","replyParts":[{"type":"text","text":"Browser handed over, waiting for the user."}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"Open https://intern.kim/handoff/handoff-1 and sign in.","replyParts":[{"type":"text","text":"Browser handed over, waiting for the user."}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}
@@ -1313,7 +1313,7 @@ func TestParseAgentActionResponseDeliversTheFinishMessageOverAStatusLine(t *test
 }
 
 func TestParseAgentActionResponseCoercesStringCompletionEvidenceIDs(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Done.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":"obs-005, obs-008","qualityReview":[]}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"Done.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":"obs-005, obs-008","qualityReview":[]}`})
 	if errorValue != nil {
 		t.Fatalf("expected string completionEvidenceIDs to parse: %v", errorValue)
 	}
@@ -1323,7 +1323,7 @@ func TestParseAgentActionResponseCoercesStringCompletionEvidenceIDs(t *testing.T
 }
 
 func TestParseAgentActionResponseNormalizesNestedFinishBlock(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"executionStateUpdate":{"goal":"answer user"},"finish":{"message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[{"id":"complete","passed":true,"evidenceIDs":["obs-001"]}]}}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"executionStateUpdate":{"goal":"answer user"},"reply":{"message":"done","final":true,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[{"id":"complete","passed":true,"evidenceIDs":["obs-001"]}]}}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}
@@ -1342,7 +1342,7 @@ func TestParseAgentActionResponseNormalizesNestedFinishBlock(t *testing.T) {
 }
 
 func TestParseAgentActionResponseNormalizesStringGoalSatisfied(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"done","goalStatus":"satisfied","goalSatisfied":"true","completionEvidenceIDs":[],"qualityReview":[]}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"done","goalStatus":"satisfied","goalSatisfied":"true","completionEvidenceIDs":[],"qualityReview":[]}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}
@@ -1352,14 +1352,14 @@ func TestParseAgentActionResponseNormalizesStringGoalSatisfied(t *testing.T) {
 }
 
 func TestParseAgentActionResponseRejectsAmbiguousNestedActionBlocks(t *testing.T) {
-	_, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"finish":{"message":"done"},"continue":{"toolName":"browser_open","toolInput":{}}}`})
+	_, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"reply":{"message":"done"},"continue":{"toolName":"browser_open","toolInput":{}}}`})
 	if errorValue == nil {
 		t.Fatal("expected ambiguous action blocks to be rejected")
 	}
 }
 
 func TestParseAgentActionResponseExpandsShallowEvidenceIDs(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[{"id":"done","passed":true,"evidenceIDs":["obs-001"]}]}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[{"id":"done","passed":true,"evidenceIDs":["obs-001"]}]}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}
@@ -1995,7 +1995,7 @@ func TestNativeTextFinalCannotBypassRequiredToolEvidence(t *testing.T) {
 }
 
 func TestParseAgentActionResponseCitesEvidenceByIDAlone(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"finish","message":"Attached.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"],"completionEvidence":[{"observationID":"obs-009","toolName":"file_deliver","attachmentIndex":3}],"qualityReview":[{"id":"qr-1","passed":true,"evidenceIDs":["obs-002"],"evidence":[{"observationID":"obs-009"}]}]}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"Attached.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"],"completionEvidence":[{"observationID":"obs-009","toolName":"file_deliver","attachmentIndex":3}],"qualityReview":[{"id":"qr-1","passed":true,"evidenceIDs":["obs-002"],"evidence":[{"observationID":"obs-009"}]}]}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}

@@ -39,7 +39,7 @@ func (languageModel *scriptedLanguageModel) GenerateStructuredResponse(_ context
 	}
 	languageModel.actionPrompts = append(languageModel.actionPrompts, allMessageContent(request))
 	if languageModel.callCount >= len(languageModel.contents) {
-		return model.StructuredResponse{Content: `{"action":"finish","message":"done","goalSatisfied":true}`}, nil
+		return model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"done","goalSatisfied":true}`}, nil
 	}
 	content := languageModel.contents[languageModel.callCount]
 	languageModel.callCount++
@@ -211,7 +211,7 @@ func TestAHostDrivesTheLoopOverACPAndItsToolsComeFromTheCatalog(t *testing.T) {
 
 	_, promptResponse := driveOneTurn(t, catalogClientTransport, &scriptedLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"note_write","toolInput":{"text":"회의록"}}`,
-		`{"action":"finish","message":"노트를 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+		`{"action":"reply","final":true,"message":"노트를 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 	}})
 
 	if promptResponse.StopReason == "" {
@@ -242,7 +242,7 @@ func TestTheHostSeesTheLoopsLedgerWithoutBeingInsideIt(t *testing.T) {
 
 	host, _ := driveOneTurn(t, catalogClientTransport, &scriptedLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"note_write","toolInput":{"text":"회의록"}}`,
-		`{"action":"finish","message":"노트를 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+		`{"action":"reply","final":true,"message":"노트를 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 	}})
 
 	ledgerNames := host.ledgerEventNames()
@@ -289,7 +289,7 @@ func TestACancelledTurnStopsCallingTools(t *testing.T) {
 		`{"action":"continue","toolName":"note_write","toolInput":{"text":"one"}}`,
 		`{"action":"continue","toolName":"note_write","toolInput":{"text":"two"}}`,
 		`{"action":"continue","toolName":"note_write","toolInput":{"text":"three"}}`,
-		`{"action":"finish","message":"done","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+		`{"action":"reply","final":true,"message":"done","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 	}}
 
 	agentInputReader, agentInputWriter := io.Pipe()
@@ -339,13 +339,13 @@ func TestAHostHandsBackTheLedgerItKept(t *testing.T) {
 
 	firstHost, _ := driveOneTurn(t, publishedCatalogTransport(t, &hostCalls), &scriptedLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"note_write","toolInput":{"text":"회의록"}}`,
-		`{"action":"finish","message":"노트를 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+		`{"action":"reply","final":true,"message":"노트를 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 	}})
 	keptLedger := firstHost.keptLedger()
 	callsBeforeResume := len(hostCalls)
 
 	resumedLanguageModel := &scriptedLanguageModel{contents: []string{
-		`{"action":"finish","message":"이미 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+		`{"action":"reply","final":true,"message":"이미 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 	}}
 	driveOneTurnWithMeta(t, publishedCatalogTransport(t, &hostCalls), resumedLanguageModel, map[string]any{agentcontract.LedgerMetaKey: keptLedger})
 
@@ -377,7 +377,7 @@ func containsSubstring(values []string, wanted string) bool {
 func TestAHostSaysWhatItCarriedOutAndTheTurnSeesIt(t *testing.T) {
 	hostCalls := []hostToolCall{}
 	languageModel := &scriptedLanguageModel{contents: []string{
-		`{"action":"finish","message":"이미 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+		`{"action":"reply","final":true,"message":"이미 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 	}}
 
 	driveOneTurnWithMeta(t, publishedCatalogTransport(t, &hostCalls), languageModel, map[string]any{

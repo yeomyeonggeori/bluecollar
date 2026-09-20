@@ -91,7 +91,7 @@ func browserPublicFetchRecoveryGuidance(toolSet *toolcontract.ToolSet, observati
 
 func terminalWorkingDirectoryRecoveryGuidance(observation turnObservation) string {
 	if strings.TrimSpace(observation.FailureStage()) == "terminal_working_directory_access" {
-		return "Recovery route: retry shell with workingDirectoryPath set to ~/documents or another ~ path, use relative paths inside the command, then deliver accepted output with file_deliver."
+		return "Recovery route: retry shell with workingDirectoryPath set to ~/documents or another ~ path, use relative paths inside the command, then attach the accepted output to your reply."
 	}
 	return ""
 }
