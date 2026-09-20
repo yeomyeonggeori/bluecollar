@@ -7,7 +7,6 @@ import (
 	"os"
 	"sort"
 	"strconv"
-	"strings"
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -67,10 +66,7 @@ func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 }
 
 func legacyRootOneOfFinalizerSchema(hasFailureDebt bool) string {
-	return mustMarshalStructuredSchema(map[string]any{
-		"oneOf": []any{replyActionSchema(hasFailureDebt, nil), failActionSchema(hasFailureDebt)},
-		"$defs": actionSchemaSharedDefinitions(),
-	})
+	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{replyActionSchema(hasFailureDebt, nil), failActionSchema(hasFailureDebt)}})
 }
 
 func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing.T) {
@@ -378,23 +374,4 @@ func TestAFinishHasOnePlaceForTheReply(t *testing.T) {
 			}
 		}
 	}
-}
-
-func resolvedSchemaDefinition(t *testing.T, schemaDocument string, property any) map[string]any {
-	t.Helper()
-	propertySchema := mapFromAny(property)
-	reference, isReference := propertySchema["$ref"].(string)
-	if !isReference {
-		return propertySchema
-	}
-	var document map[string]any
-	if errorValue := json.Unmarshal([]byte(schemaDocument), &document); errorValue != nil {
-		t.Fatalf("expected schema json: %v", errorValue)
-	}
-	definitionName := strings.TrimPrefix(reference, "#/$defs/")
-	definition, isDefined := mapFromAny(document["$defs"])[definitionName]
-	if !isDefined {
-		t.Fatalf("expected %s to be defined in $defs, got %s", reference, schemaDocument)
-	}
-	return mapFromAny(definition)
 }

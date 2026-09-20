@@ -609,12 +609,63 @@ func ParseAgentActionResponse(response model.StructuredResponse) (agentAction, e
 	if errorValue != nil {
 		return turnActionDocument{}, errorValue
 	}
-	var actionDocument turnActionDocument
-	errorValue = json.Unmarshal(content, &actionDocument)
+	actionDocument, wrongTypedFieldNames, errorValue := decodeActionDocumentLeniently(content)
 	if errorValue != nil {
 		return turnActionDocument{}, errorValue
 	}
+	if len(wrongTypedFieldNames) > 0 {
+		return turnActionDocument{}, wrongTypedActionFieldError{fieldNames: wrongTypedFieldNames}
+	}
 	return normalizeParsedAction(actionDocument), nil
+}
+
+func decodeActionDocumentLeniently(content []byte) (turnActionDocument, []string, error) {
+	var actionDocument turnActionDocument
+	if json.Unmarshal(content, &actionDocument) == nil {
+		return actionDocument, nil, nil
+	}
+	var fields map[string]json.RawMessage
+	if errorValue := json.Unmarshal(content, &fields); errorValue != nil {
+		return turnActionDocument{}, nil, errorValue
+	}
+	readableFields := map[string]json.RawMessage{}
+	wrongTypedFieldNames := []string{}
+	for fieldName, fieldValue := range fields {
+		if fieldReadsIntoActionDocument(fieldName, fieldValue) {
+			readableFields[fieldName] = fieldValue
+			continue
+		}
+		wrongTypedFieldNames = append(wrongTypedFieldNames, fieldName)
+	}
+	sort.Strings(wrongTypedFieldNames)
+	readableContent, errorValue := json.Marshal(readableFields)
+	if errorValue != nil {
+		return turnActionDocument{}, nil, errorValue
+	}
+	if errorValue := json.Unmarshal(readableContent, &actionDocument); errorValue != nil {
+		return turnActionDocument{}, nil, errorValue
+	}
+	return actionDocument, wrongTypedFieldNames, nil
+}
+
+func fieldReadsIntoActionDocument(fieldName string, fieldValue json.RawMessage) bool {
+	document, errorValue := json.Marshal(map[string]json.RawMessage{fieldName: fieldValue})
+	if errorValue != nil {
+		return false
+	}
+	return json.Unmarshal(document, &turnActionDocument{}) == nil
+}
+
+type wrongTypedActionFieldError struct {
+	fieldNames []string
+}
+
+func (errorValue wrongTypedActionFieldError) Error() string {
+	return "action fields carry a type the schema does not declare: " + strings.Join(errorValue.fieldNames, ", ")
+}
+
+func (errorValue wrongTypedActionFieldError) Unwrap() error {
+	return unreadableModelActionError{reason: errorValue.Error()}
 }
 
 func normalizeAgentActionResponseContent(content []byte) ([]byte, error) {
@@ -936,9 +987,21 @@ func nativeActionParseCorrection(parseError error) model.StructuredOutputCorrect
 	return model.StructuredOutputCorrection{
 		Diagnostic: model.StructuredOutputDiagnostic{
 			Category:         model.StructuredOutputDiagnosticSchemaValidation,
-			ValidationIssues: []model.StructuredOutputValidationIssue{{FieldPath: parseError.Error()}},
+			ValidationIssues: actionParseValidationIssues(parseError),
 		},
 	}
+}
+
+func actionParseValidationIssues(parseError error) []model.StructuredOutputValidationIssue {
+	var wrongTypedFields wrongTypedActionFieldError
+	if !errors.As(parseError, &wrongTypedFields) {
+		return []model.StructuredOutputValidationIssue{{FieldPath: parseError.Error()}}
+	}
+	issues := make([]model.StructuredOutputValidationIssue, 0, len(wrongTypedFields.fieldNames))
+	for _, fieldName := range wrongTypedFields.fieldNames {
+		issues = append(issues, model.StructuredOutputValidationIssue{FieldPath: fieldName, Code: model.StructuredOutputValidationType})
+	}
+	return issues
 }
 
 func agentActionCorrectionMessage(correction model.StructuredOutputCorrection) string {

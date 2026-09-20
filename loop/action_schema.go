@@ -52,19 +52,25 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	if allowDelegate {
 		variants = append(variants, delegateActionSchema())
 	}
+	hasContinueVariant := false
 	for _, toolDefinition := range toolDefinitions {
 		if blockedToolNames[strings.TrimSpace(toolDefinition.Name)] {
 			continue
 		}
 		if variant, isValid := continueActionSchema(toolDefinition); isValid {
 			variants = append(variants, variant)
+			hasContinueVariant = true
 		}
 	}
 
 	if len(variants) == 0 {
 		variants = append(variants, failActionSchema(hasFailureDebt))
 	}
-	return mustMarshalStructuredSchema(map[string]any{"oneOf": variants, "$defs": actionSchemaSharedDefinitions()})
+	schema := map[string]any{"oneOf": variants}
+	if hasContinueVariant {
+		schema["$defs"] = actionSchemaSharedDefinitions()
+	}
+	return mustMarshalStructuredSchema(schema)
 }
 
 func actionSchemaSharedDefinitions() map[string]any {
@@ -84,7 +90,7 @@ func replyFailureResolutionValues(hasFailureDebt bool) []string {
 	return []string{"none", failureResolutionRecoveredWithSuccess, failureResolutionNoToolFallback}
 }
 
-func replyVariantProperties(hasFailureDebt bool, citableEvidenceIDs []string, executionStateUpdate map[string]any) map[string]any {
+func replyVariantProperties(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
 	return map[string]any{
 		"message":               stringSchema(),
 		"final":                 booleanSchema(),
@@ -93,12 +99,12 @@ func replyVariantProperties(hasFailureDebt bool, citableEvidenceIDs []string, ex
 		"hasRemainingWork":      booleanSchema(),
 		"completionEvidenceIDs": completionEvidenceIDArraySchema(citableEvidenceIDs),
 		"qualityReview":         qualityReviewSchema(),
-		"executionStateUpdate":  executionStateUpdate,
+		"executionStateUpdate":  executionStateSchema(),
 	}
 }
 
 func replyActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
-	properties := replyVariantProperties(hasFailureDebt, citableEvidenceIDs, executionStateUpdateRefSchema())
+	properties := replyVariantProperties(hasFailureDebt, citableEvidenceIDs)
 	properties["action"] = enumStringSchema("reply")
 	properties["attachments"] = replyAttachmentArraySchema()
 	properties["expectsAnswer"] = booleanSchema()
@@ -131,7 +137,7 @@ func setQualityCriteriaActionSchema() map[string]any {
 		"reason":               stringSchema(),
 		"goalStatus":           enumValuesStringSchema([]string{"in_progress"}),
 		"goalSatisfied":        booleanSchema(),
-		"executionStateUpdate": executionStateUpdateRefSchema(),
+		"executionStateUpdate": executionStateSchema(),
 	})
 }
 
@@ -141,7 +147,7 @@ func failActionSchema(hasFailureDebt bool) map[string]any {
 		"message":              stringSchema(),
 		"reason":               stringSchema(),
 		"goalStatus":           enumValuesStringSchema([]string{"blocked"}),
-		"executionStateUpdate": executionStateUpdateRefSchema(),
+		"executionStateUpdate": executionStateSchema(),
 	}
 	if hasFailureDebt {
 		properties["failureResolution"] = enumValuesStringSchema([]string{"failure_report"})
@@ -291,7 +297,7 @@ func failureReportFactsSchema() map[string]any {
 }
 
 func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
-	properties := replyVariantProperties(hasFailureDebt, nil, executionStateSchema())
+	properties := replyVariantProperties(hasFailureDebt, nil)
 	properties["action"] = enumValuesStringSchema([]string{"reply", "fail"})
 	properties["goalStatus"] = enumValuesStringSchema([]string{"satisfied", "blocked"})
 	properties["reason"] = stringSchema()

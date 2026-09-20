@@ -1143,7 +1143,7 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 		t.Fatalf("strict structured output rejects a schema whose required list omits a declared property, got %+v", requiredFields)
 	}
 	finishProperties := mapFromAny(finishVariant["properties"])
-	if !containsString(stringSliceFromAny(resolvedSchemaDefinition(t, request.StructuredOutputSchema.Document, finishProperties["executionStateUpdate"])["type"]), "null") {
+	if !containsString(stringSliceFromAny(mapFromAny(finishProperties["executionStateUpdate"])["type"]), "null") {
 		t.Fatal("a terminal action still need not carry an execution state update, which strict output expresses as nullable rather than absent")
 	}
 	qualityReviewItems := mapFromAny(mapFromAny(finishProperties["qualityReview"])["items"])
