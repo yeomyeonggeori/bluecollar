@@ -218,8 +218,9 @@ func TestACancelledTurnLeavesTheOutcomeToWhoeverCancelledIt(t *testing.T) {
 	}
 }
 
-func TestACancelledDelegatedTurnEndsItsOwnRun(t *testing.T) {
-	services := newTurnRunnerTestServices(&recoveringLanguageModel{}, TurnOptions{MaxElapsedSecond: 30})
+func TestACancelledDelegatedTurnEndsItsOwnRunWithoutGeneratingANotice(t *testing.T) {
+	languageModel := &recoveringLanguageModel{}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 30})
 	runContext, cancelRun := context.WithCancel(toolcontract.WithDelegatedTurn(context.Background()))
 	cancelRun()
 
@@ -236,6 +237,12 @@ func TestACancelledDelegatedTurnEndsItsOwnRun(t *testing.T) {
 	storedTaskRun, isFound := services.taskRunService.FindTaskRun(result.TaskRun.TaskRunID)
 	if !isFound || storedTaskRun.Status == agentcontract.TaskStatusRunning {
 		t.Fatalf("stored task run = %+v, found = %v: the parent's canceller never saw this run and will not close it", storedTaskRun, isFound)
+	}
+	if languageModel.recoveryCallCount != 0 {
+		t.Fatal("the parent reads the failure reason, so generating a notice only holds the conversation for the closing ceiling")
+	}
+	if strings.TrimSpace(storedTaskRun.FailureReason) == "" {
+		t.Fatal("the parent reads the reason off the run")
 	}
 }
 

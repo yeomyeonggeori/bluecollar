@@ -60,3 +60,24 @@ func TestARunReclaimedBecauseNobodyOwnedItIsNeverResumed(t *testing.T) {
 		t.Fatalf("selected task runs = %+v, want the restart-interrupted run still resumable", selection.SelectedTaskRuns)
 	}
 }
+
+func TestTheStatusesARequesterCanStillControlHaveOneOwner(t *testing.T) {
+	for _, status := range agentcontract.RequesterControllableTaskStatuses() {
+		if !agentcontract.IsTaskRunRequesterControllable(status) {
+			t.Fatalf("status %s is listed but not recognised", status)
+		}
+	}
+	for _, status := range cancelTaskRunFromStates() {
+		if !agentcontract.IsTaskRunRequesterControllable(status) {
+			t.Fatalf("a run may be cancelled from %s, so a host must treat it as controllable", status)
+		}
+	}
+	if len(cancelTaskRunFromStates()) != len(agentcontract.RequesterControllableTaskStatuses()) {
+		t.Fatal("the cancel from-states and the controllable statuses are one set, not two that happen to match")
+	}
+	for _, status := range []agentcontract.TaskStatus{agentcontract.TaskStatusCompleted, agentcontract.TaskStatusFailed, agentcontract.TaskStatusCancelled, agentcontract.TaskStatusInterrupted} {
+		if agentcontract.IsTaskRunRequesterControllable(status) {
+			t.Fatalf("status %s is closed and takes no further requester control", status)
+		}
+	}
+}

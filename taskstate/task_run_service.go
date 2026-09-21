@@ -474,13 +474,7 @@ func completeTaskRunFromStates() []agentcontract.TaskStatus {
 }
 
 func cancelTaskRunFromStates() []agentcontract.TaskStatus {
-	return []agentcontract.TaskStatus{
-		agentcontract.TaskStatusPlanned,
-		agentcontract.TaskStatusRunning,
-		agentcontract.TaskStatusWaitingUserInput,
-		agentcontract.TaskStatusWaitingApproval,
-		agentcontract.TaskStatusBlocked,
-	}
+	return agentcontract.RequesterControllableTaskStatuses()
 }
 
 func interruptInactiveTaskRunFromStates() []agentcontract.TaskStatus {
@@ -782,20 +776,26 @@ func (taskRunService *TaskRunService) canAutoResumeInterruptedTaskRun(taskRun ag
 	if taskRunService.autoResumeAttemptCount(taskRun.TaskRunID) > 0 && !taskRunWasInterruptedByPlannedShutdown(taskRun) {
 		return false
 	}
-	return taskRunService.taskRunHasInterruptedMarker(taskRun.TaskRunID)
+	hasInterruptedMarker, wasSuperseded := taskRunService.interruptedTaskRunResumeMarkers(taskRun.TaskRunID)
+	return hasInterruptedMarker && !wasSuperseded
 }
 
 func taskRunWasInterruptedByPlannedShutdown(taskRun agentcontract.TaskRun) bool {
 	return taskRun.Status == agentcontract.TaskStatusInterrupted && taskRun.FailureReason == agentcontract.TaskInterruptReasonPlannedShutdown
 }
 
-func (taskRunService *TaskRunService) taskRunHasInterruptedMarker(taskRunID string) bool {
+// A run the requester replaced must not be launched again, whatever interrupted it, and the two
+// facts are read in the one pass the eligibility check already spends on the ledger.
+func (taskRunService *TaskRunService) interruptedTaskRunResumeMarkers(taskRunID string) (hasInterruptedMarker bool, wasSuperseded bool) {
 	for _, taskEvent := range taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name == agentcontract.TaskEventTaskInterrupted {
-			return true
+		switch taskEvent.Name {
+		case agentcontract.TaskEventTaskInterrupted:
+			hasInterruptedMarker = true
+		case agentcontract.TaskEventTaskSupersededByMessage:
+			wasSuperseded = true
 		}
 	}
-	return false
+	return hasInterruptedMarker, wasSuperseded
 }
 
 func (taskRunService *TaskRunService) autoResumeAttemptCount(taskRunID string) int {

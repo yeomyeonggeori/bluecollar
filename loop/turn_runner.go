@@ -771,12 +771,7 @@ func (agentTurnRunner *AgentTurnRunner) failLaunchStep(ctx context.Context, task
 }
 
 func (agentTurnRunner *AgentTurnRunner) failTurnWithGeneratedNotice(ctx context.Context, taskRun agentcontract.TaskRun, request AgentTurnRequest, phase string, stepName string, reason string) AgentTurnResult {
-	failedTaskRun, failError := agentTurnRunner.taskRunService.FailTaskRun(taskRun.TaskRunID, reason)
-	if failError != nil {
-		taskRun.Status = agentcontract.TaskStatusFailed
-		taskRun.FailureReason = firstNonEmptyString(reason, failError.Error())
-		failedTaskRun = taskRun
-	}
+	failedTaskRun := agentTurnRunner.failTaskRunWithReason(taskRun, reason)
 	noticeContext, cancelNotice := closingNoticeContextWithParent(ctx, request)
 	defer cancelNotice()
 	failureNotice, noticeStatus := (FailureNoticeGenerator{LanguageModel: agentTurnRunner.recoveryLanguageModel}).Generate(noticeContext, FailureReport{
@@ -1004,7 +999,8 @@ func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context,
 	if isTaskRunFinished(taskRun.Status) {
 		return AgentTurnResult{TaskRun: taskRun, UserNotice: taskRun.Result, Attachments: attachments}
 	}
-	isOwnedByCanceller := errors.Is(cause, context.Canceled) && !toolcontract.IsDelegatedTurn(ctx)
+	isDelegatedTurn := toolcontract.IsDelegatedTurn(ctx)
+	isOwnedByCanceller := errors.Is(cause, context.Canceled) && !isDelegatedTurn
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentTurnAbandoned, marshalEventBody(map[string]string{
 		"reason":              reason,
 		"statusWhenAbandoned": string(taskRun.Status),
@@ -1013,9 +1009,31 @@ func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context,
 	if isOwnedByCanceller {
 		return AgentTurnResult{TaskRun: taskRun, ReplySuppressed: true, ReplySuppressionReason: reason, Attachments: attachments}
 	}
+	if isDelegatedTurn {
+		return AgentTurnResult{
+			TaskRun:                agentTurnRunner.failTaskRunWithReason(taskRun, reason),
+			ReplySuppressed:        true,
+			ReplySuppressionReason: reason,
+			Attachments:            attachments,
+		}
+	}
 	result := agentTurnRunner.failTurnWithGeneratedNotice(ctx, taskRun, request, "turn", "run_turn", reason)
 	result.Attachments = attachments
 	return result
+}
+
+// A delegated child has no requester of its own. Its parent reads the failure reason on the run,
+// which delegatedFailureText prefers over any notice, so generating one buys nothing and — with
+// the parent blocked inside runDelegatedTurn and the queue worker holding the conversation — costs
+// the whole closing ceiling.
+func (agentTurnRunner *AgentTurnRunner) failTaskRunWithReason(taskRun agentcontract.TaskRun, reason string) agentcontract.TaskRun {
+	failedTaskRun, failError := agentTurnRunner.taskRunService.FailTaskRun(taskRun.TaskRunID, reason)
+	if failError == nil {
+		return failedTaskRun
+	}
+	taskRun.Status = agentcontract.TaskStatusFailed
+	taskRun.FailureReason = firstNonEmptyString(reason, failError.Error())
+	return taskRun
 }
 
 // A finished turn owns its reply. When the completing transition will not stick, the run is closed
