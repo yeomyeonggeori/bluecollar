@@ -155,6 +155,7 @@ const (
 	IntakeQuestionRelatesToActiveTask     = "relatesToActiveTask"
 	IntakeQuestionRoute                   = "route"
 	IntakeQuestionNeedsTool               = "needsTool"
+	IntakeQuestionHasIndependentWork      = "hasIndependentWork"
 	IntakeQuestionIsExternalSendRequested = "isExternalSendRequested"
 	IntakeQuestionTaskShape               = "taskShape"
 	IntakeQuestionLevel                   = "level"

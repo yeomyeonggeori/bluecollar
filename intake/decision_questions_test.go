@@ -45,7 +45,6 @@ func TestClarificationQuestionDefersToolDiscoverableRequirementsToWork(t *testin
 		"only the sender can resolve it",
 		"operational details, approval roles",
 		"a tool can inspect or resolve",
-		"Start any unambiguous requested parts",
 	} {
 		if !strings.Contains(routeCriteria, expected) {
 			t.Fatalf("expected the route question to include %q, got %s", expected, routeCriteria)
@@ -56,11 +55,25 @@ func TestClarificationQuestionDefersToolDiscoverableRequirementsToWork(t *testin
 	if !strings.Contains(shapeCriteria, "tool-discoverable operational requirements belong to the work itself") {
 		t.Fatalf("expected approval-gated task shape to exclude tool-discoverable requirements, got %s", shapeCriteria)
 	}
-	if !strings.Contains(routeCriteria, independentWorkBeforeClarificationInstruction) {
-		t.Fatalf("expected clarification routing to preserve independent work, got %s", routeCriteria)
+	independentWorkQuestion := questions["m1."+agentcontract.IntakeQuestionHasIndependentWork]
+	independentWorkCriteria := criteriaText(t, independentWorkQuestion)
+	if independentWorkQuestion.Type != model.DecisionQuestionTypeNoul {
+		t.Fatalf("expected independent work to use a typed yes/no question, got %q", independentWorkQuestion.Type)
 	}
-	if !strings.Contains(shapeCriteria, independentWorkBeforeClarificationInstruction) {
-		t.Fatalf("expected approval-gated task shape to preserve independent work, got %s", shapeCriteria)
+	for _, expected := range []string{
+		"independently requested part",
+		"clear target and effect",
+		"does not depend on the unresolved answer",
+		"no actionable work was requested",
+		"only a prerequisite",
+		"action the requester did not authorize",
+	} {
+		if !strings.Contains(independentWorkCriteria, expected) {
+			t.Fatalf("expected independent-work question to include %q, got %s", expected, independentWorkCriteria)
+		}
+	}
+	if !strings.Contains(shapeCriteria, "classify the work that can proceed") {
+		t.Fatalf("expected task shape to describe executable work, got %s", shapeCriteria)
 	}
 }
 
