@@ -49,6 +49,8 @@ type TaskRunService struct {
 	taskRuns                 map[string]agentcontract.TaskRun
 	taskAttempts             map[string]agentcontract.TaskAttempt
 	activeAttempts           map[string]activeTaskAttempt
+	liveTurns                map[string]liveTurnLease
+	nextLiveTurnLeaseID      int
 	taskEventService         *TaskEventService
 	repository               TaskRunRepository
 	runnerID                 string
@@ -59,9 +61,16 @@ type TaskRunService struct {
 
 type activeTaskAttempt struct {
 	TaskRunID                string
-	CancelFunction           context.CancelFunc
 	CurrentToolName          string
 	CurrentToolObservationID string
+}
+
+// A task run is running because a turn is running it. The attempt row outlives the turn that
+// opened it, so only a lease taken for the turn's lifetime answers whether anything is still
+// working on the run.
+type liveTurnLease struct {
+	leaseID        int
+	cancelFunction context.CancelFunc
 }
 
 type InterruptedTaskResumeSelection struct {
@@ -74,6 +83,7 @@ func NewTaskRunService(taskEventService *TaskEventService) *TaskRunService {
 		taskRuns:            map[string]agentcontract.TaskRun{},
 		taskAttempts:        map[string]agentcontract.TaskAttempt{},
 		activeAttempts:      map[string]activeTaskAttempt{},
+		liveTurns:           map[string]liveTurnLease{},
 		taskEventService:    taskEventService,
 		runnerID:            defaultTaskRunnerID(),
 		transitionObservers: map[int]func(agentcontract.TaskRun){},
@@ -170,18 +180,14 @@ func (taskRunService *TaskRunService) RegisterTaskRunCancel(taskRunID string, ca
 		taskRunService.mutex.Unlock()
 		return func() {}
 	}
-	taskAttemptID := taskRun.CurrentAttemptID
-	activeAttempt := taskRunService.activeAttempts[taskAttemptID]
-	activeAttempt.TaskRunID = trimmedTaskRunID
-	activeAttempt.CancelFunction = cancelFunction
-	taskRunService.activeAttempts[taskAttemptID] = activeAttempt
+	taskRunService.nextLiveTurnLeaseID++
+	leaseID := taskRunService.nextLiveTurnLeaseID
+	taskRunService.liveTurns[trimmedTaskRunID] = liveTurnLease{leaseID: leaseID, cancelFunction: cancelFunction}
 	taskRunService.mutex.Unlock()
 	return func() {
 		taskRunService.mutex.Lock()
-		activeAttempt, isFound := taskRunService.activeAttempts[taskAttemptID]
-		if isFound && activeAttempt.TaskRunID == trimmedTaskRunID {
-			activeAttempt.CancelFunction = nil
-			taskRunService.activeAttempts[taskAttemptID] = activeAttempt
+		if lease, isFound := taskRunService.liveTurns[trimmedTaskRunID]; isFound && lease.leaseID == leaseID {
+			delete(taskRunService.liveTurns, trimmedTaskRunID)
 		}
 		taskRunService.mutex.Unlock()
 	}
@@ -642,7 +648,11 @@ func (taskRunService *TaskRunService) MarkInterruptedTaskRunAutoResumeSkipped(ta
 func (taskRunService *TaskRunService) IsTaskRunActuallyRunning(taskRun agentcontract.TaskRun) bool {
 	taskRunService.mutex.RLock()
 	defer taskRunService.mutex.RUnlock()
-	return taskRunService.taskRunHasActiveAttemptLocked(taskRun)
+	if !taskRunService.taskRunHasActiveAttemptLocked(taskRun) {
+		return false
+	}
+	_, hasLiveTurn := taskRunService.liveTurns[taskRun.TaskRunID]
+	return hasLiveTurn
 }
 
 func (taskRunService *TaskRunService) CloseOpenToolRequests(taskRunID string, reason string) {
@@ -973,11 +983,7 @@ func (taskRunService *TaskRunService) cancelTaskRun(taskRunID string, requesterP
 func (taskRunService *TaskRunService) cancelFunctionForTaskRun(taskRun agentcontract.TaskRun) context.CancelFunc {
 	taskRunService.mutex.RLock()
 	defer taskRunService.mutex.RUnlock()
-	if !taskRunService.taskRunHasActiveAttemptLocked(taskRun) {
-		return nil
-	}
-	activeAttempt := taskRunService.activeAttempts[taskRun.CurrentAttemptID]
-	return activeAttempt.CancelFunction
+	return taskRunService.liveTurns[taskRun.TaskRunID].cancelFunction
 }
 
 func (taskRunService *TaskRunService) startTaskRunAttempt(taskRun agentcontract.TaskRun, taskAttempt agentcontract.TaskAttempt) error {
@@ -985,30 +991,6 @@ func (taskRunService *TaskRunService) startTaskRunAttempt(taskRun agentcontract.
 		return nil
 	}
 	return taskRunService.repository.StartTaskRunAttempt(taskRun, taskAttempt)
-}
-
-func (taskRunService *TaskRunService) finishCurrentAttemptLocked(taskRun agentcontract.TaskRun, status agentcontract.TaskAttemptStatus, reason string) (context.CancelFunc, error) {
-	taskAttemptID := strings.TrimSpace(taskRun.CurrentAttemptID)
-	if taskAttemptID == "" {
-		if errorValue := taskRunService.saveTaskRun(taskRun); errorValue != nil {
-			return nil, errorValue
-		}
-		taskRunService.closeOpenToolRequests(taskRun.TaskRunID, "", "cancelled_by_attempt_end")
-		return nil, nil
-	}
-	taskAttempt := taskRunService.findTaskAttemptForMutation(taskAttemptID, taskRun.TaskRunID)
-	now := time.Now()
-	taskAttempt.Status = status
-	taskAttempt.FinishedAt = &now
-	taskAttempt.FailureReason = strings.TrimSpace(reason)
-	if errorValue := taskRunService.finishTaskRunAttempt(taskRun, taskAttempt); errorValue != nil {
-		return nil, errorValue
-	}
-	taskRunService.taskAttempts[taskAttemptID] = taskAttempt
-	activeAttempt := taskRunService.activeAttempts[taskAttemptID]
-	delete(taskRunService.activeAttempts, taskAttemptID)
-	taskRunService.closeOpenToolRequests(taskRun.TaskRunID, taskAttemptID, "cancelled_by_attempt_end")
-	return activeAttempt.CancelFunction, nil
 }
 
 func (taskRunService *TaskRunService) findTaskAttemptForMutation(taskAttemptID string, taskRunID string) agentcontract.TaskAttempt {

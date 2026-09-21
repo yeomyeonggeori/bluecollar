@@ -53,6 +53,7 @@ const (
 	TaskEventAgentInstructionsLoaded               = "agent.instructions_loaded"
 	TaskEventAgentIntake                           = "agent.intake"
 	TaskEventAgentLaunchStepError                  = "agent.launch_step.error"
+	TaskEventAgentTurnAbandoned                    = "agent.turn_abandoned"
 	TaskEventAgentLaunchStepResult                 = "agent.launch_step.result"
 	TaskEventAgentLimitCompletedFromEvidence       = "agent.limit_completed_from_evidence"
 	TaskEventAgentLimitPressure                    = "agent.limit_pressure"

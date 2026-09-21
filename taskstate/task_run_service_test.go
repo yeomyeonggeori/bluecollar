@@ -16,13 +16,13 @@ func TestTaskRunCancelCallsRegisteredCancelFunction(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !taskRunService.IsTaskRunActuallyRunning(runningTaskRun) {
-		t.Fatal("expected task run to be active after advance")
-	}
 	cancelCalled := false
 	taskRunService.RegisterTaskRunCancel(taskRun.TaskRunID, func() {
 		cancelCalled = true
 	})
+	if !taskRunService.IsTaskRunActuallyRunning(runningTaskRun) {
+		t.Fatal("expected task run to be active while a turn is running it")
+	}
 
 	cancelledTaskRun, errorValue := taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, "person-1", "user stop")
 
@@ -127,6 +127,7 @@ func TestAdvanceTaskRunCreatesCurrentAttempt(t *testing.T) {
 	if taskAttempt.TaskRunID != taskRun.TaskRunID || taskAttempt.Status != agentcontract.TaskAttemptStatusRunning {
 		t.Fatalf("unexpected attempt = %+v", taskAttempt)
 	}
+	taskRunService.RegisterTaskRunCancel(runningTaskRun.TaskRunID, func() {})
 	if !taskRunService.IsTaskRunActuallyRunning(runningTaskRun) {
 		t.Fatal("expected active attempt registry to own running task")
 	}
@@ -739,7 +740,7 @@ func TestInterruptInactiveTaskRunTransitionAllowsInactiveRuntimeTaskRuns(t *test
 			name: "running inactive",
 			prepareTaskRun: func(t *testing.T, taskRunService *TaskRunService) agentcontract.TaskRun {
 				taskRun := runningTaskRunForTest(t, taskRunService, "running")
-				delete(taskRunService.activeAttempts, taskRun.CurrentAttemptID)
+				delete(taskRunService.liveTurns, taskRun.TaskRunID)
 				return taskRun
 			},
 			hasTaskAttempt:   true,
@@ -960,6 +961,7 @@ func runningTaskRunForTest(t *testing.T, taskRunService *TaskRunService, prompt 
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
+	taskRunService.RegisterTaskRunCancel(runningTaskRun.TaskRunID, func() {})
 	return runningTaskRun
 }
 
@@ -1063,6 +1065,7 @@ func TestInterruptRuntimeTaskRunsForPlannedShutdownIncludesActivelyRunningTasks(
 	if _, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
 		t.Fatal(errorValue)
 	}
+	taskRunService.RegisterTaskRunCancel(taskRun.TaskRunID, func() {})
 	if !taskRunService.IsTaskRunActuallyRunning(mustFindTaskRun(t, taskRunService, taskRun.TaskRunID)) {
 		t.Fatal("expected an actively running task before shutdown")
 	}
