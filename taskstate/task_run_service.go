@@ -175,11 +175,6 @@ func (taskRunService *TaskRunService) RegisterTaskRunCancel(taskRunID string, ca
 		return func() {}
 	}
 	taskRunService.mutex.Lock()
-	taskRun, isFound := taskRunService.findTaskRunForMutation(trimmedTaskRunID)
-	if !isFound || !taskRunService.taskRunHasActiveAttemptLocked(taskRun) {
-		taskRunService.mutex.Unlock()
-		return func() {}
-	}
 	taskRunService.nextLiveTurnLeaseID++
 	leaseID := taskRunService.nextLiveTurnLeaseID
 	taskRunService.liveTurns[trimmedTaskRunID] = liveTurnLease{leaseID: leaseID, cancelFunction: cancelFunction}

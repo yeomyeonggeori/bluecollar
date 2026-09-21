@@ -36,16 +36,28 @@ func buildFailureReport(request AgentTurnRequest, taskRunID string, phase string
 	return report
 }
 
-func recoveryFinalizationContextWithParent(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {
-	recoveryContext := model.ContextWithRequestContext(parentContext, model.RequestContext{
+func requestContextForTurn(request AgentTurnRequest) model.RequestContext {
+	return model.RequestContext{
 		RequesterPersonID:       request.RequesterPersonID,
 		RequesterEmail:          request.RequesterEmail,
 		RequesterName:           request.RequesterName,
 		RequesterPlatformUserID: request.RequesterPlatformUserID,
 		ConversationID:          request.ConversationID,
 		Platform:                request.Platform,
-	})
-	return context.WithCancel(recoveryContext)
+	}
+}
+
+func recoveryFinalizationContextWithParent(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {
+	return context.WithCancel(model.ContextWithRequestContext(parentContext, requestContextForTurn(request)))
+}
+
+// The context that died is usually the wedged model path the notice has to be generated through,
+// so the closing notice keeps the caller's values and drops its cancellation, bounded by the same
+// ceiling the elapsed closing reply is given. Outliving that bound would hold the turn, and with
+// it the conversation, open forever.
+func closingNoticeContextWithParent(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {
+	noticeContext := model.ContextWithRequestContext(context.WithoutCancel(parentContext), requestContextForTurn(request))
+	return context.WithTimeout(noticeContext, maximumElapsedClosingDuration)
 }
 
 func latestFailedOperation(observations []turnObservation) string {

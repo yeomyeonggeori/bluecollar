@@ -426,15 +426,15 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	} else {
 		agentTurnRunner.recoveryLanguageModel = observeLanguageModel(agentTurnRunner.recoveryLanguageModel, observeRecord)
 	}
-	runningTaskRun, errorValue := agentTurnRunner.taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant")
-	if errorValue != nil {
-		return agentTurnRunner.failLaunchStep(context.Background(), taskRun, request, "start_attempt", errorValue), nil
-	}
-	taskRun = runningTaskRun
 	taskContext, taskCancel := context.WithCancel(turnContext)
+	defer taskCancel()
 	unregisterTaskCancel := agentTurnRunner.taskRunService.RegisterTaskRunCancel(taskRun.TaskRunID, taskCancel)
 	defer unregisterTaskCancel()
-	defer taskCancel()
+	runningTaskRun, errorValue := agentTurnRunner.taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant")
+	if errorValue != nil {
+		return agentTurnRunner.failLaunchStep(turnContext, taskRun, request, "start_attempt", errorValue), nil
+	}
+	taskRun = runningTaskRun
 	workContext, cancelWork := agentTurnRunner.currentEffortContext(taskContext, request.EffortStartedAt)
 	defer func() {
 		cancelWork()
@@ -447,7 +447,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 
 	state, errorValue := agentTaskStateForTurn(request, agentTurnRunner.options, taskRun, agentTurnRunner.taskRunService.ListTaskEvent(taskRun.TaskRunID), isPausedTaskResume)
 	if errorValue != nil {
-		return agentTurnRunner.failLaunchStep(context.Background(), taskRun, request, "restore_state", errorValue), nil
+		return agentTurnRunner.failLaunchStep(turnContext, taskRun, request, "restore_state", errorValue), nil
 	}
 	agentTurnRunner.bringBackImagesTheTurnAlreadyRead(workContext, taskRun.TaskRunID, state.Observations)
 	toolUseRequirements := state.Requirements
@@ -507,7 +507,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			return cancelledResult, nil
 		}
 		if ctx.Err() != nil {
-			return agentTurnRunner.abandonedTurnResult(taskRun.TaskRunID, request, "the turn's caller context ended before the agent could act: "+errorString(ctx.Err()), state.Attachments), nil
+			return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the turn's caller context ended before the agent could act: "+errorString(ctx.Err()), state.Attachments), nil
 		}
 		if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration-1); isElapsed {
 			return result, errorValue
@@ -550,7 +550,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			return transition.Result, nil
 		}
 		if workContext.Err() != nil {
-			return agentTurnRunner.abandonedTurnResult(taskRun.TaskRunID, request, "the turn's work context ended before the agent could act: "+errorString(workContext.Err()), state.Attachments), nil
+			return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the turn's work context ended before the agent could act: "+errorString(workContext.Err()), state.Attachments), nil
 		}
 		if transition.DidTransition {
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "completion_state "+string(transition.Action), "")
@@ -577,11 +577,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if actionError != nil {
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "agent turn iteration", actionError.Error())
 			if errors.Is(actionError, context.Canceled) {
-				return agentTurnRunner.abandonedTurnResult(taskRun.TaskRunID, request, "the model call was cancelled: "+actionError.Error(), state.Attachments), nil
+				return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the model call was cancelled: "+actionError.Error(), state.Attachments), nil
 			}
 			if errors.Is(actionError, context.DeadlineExceeded) {
 				if ctx.Err() != nil {
-					return agentTurnRunner.abandonedTurnResult(taskRun.TaskRunID, request, "the turn's caller context ended while the model was answering: "+actionError.Error(), state.Attachments), nil
+					return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the turn's caller context ended while the model was answering: "+actionError.Error(), state.Attachments), nil
 				}
 				if !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 					refreshWorkContext()
@@ -687,11 +687,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				return result, errorValue
 			}
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "finish", reply)
-			completedTaskRun, completeError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRun.TaskRunID, reply)
-			if completeError != nil {
-				return agentTurnRunner.abandonedTurnResult(taskRun.TaskRunID, request, "the finished reply could not be recorded: "+completeError.Error(), state.Attachments), nil
-			}
-			return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths), RecoveryActions: recoveryActionsFromObservations(state.Observations)}, nil
+			finishedTaskRun, isCompleted := agentTurnRunner.recordFinishedTurn(taskRun.TaskRunID, reply)
+			result := finishedTurnResult(finishedTaskRun, isCompleted, reply)
+			result.Attachments = attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths)
+			result.RecoveryActions = recoveryActionsFromObservations(state.Observations)
+			return result, nil
 		case "continue":
 			outcome := agentTurnRunner.handleToolCallAction(workContext, taskContext, taskRun.TaskRunID, stepID, iteration, iterationRequest, toolUseRequirements, &state, actionDocument, successfulToolCalls, stopForNoProgress)
 			if outcome.ShouldReturn {
@@ -779,7 +779,9 @@ func (agentTurnRunner *AgentTurnRunner) failTurnWithGeneratedNotice(ctx context.
 		taskRun.FailureReason = firstNonEmptyString(reason, failError.Error())
 		failedTaskRun = taskRun
 	}
-	failureNotice, noticeStatus := (FailureNoticeGenerator{LanguageModel: agentTurnRunner.recoveryLanguageModel}).Generate(ctx, FailureReport{
+	noticeContext, cancelNotice := closingNoticeContextWithParent(ctx, request)
+	defer cancelNotice()
+	failureNotice, noticeStatus := (FailureNoticeGenerator{LanguageModel: agentTurnRunner.recoveryLanguageModel}).Generate(noticeContext, FailureReport{
 		Phase:              phase,
 		StepName:           stepName,
 		StopReason:         reason,
@@ -791,7 +793,12 @@ func (agentTurnRunner *AgentTurnRunner) failTurnWithGeneratedNotice(ctx context.
 	})
 	agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReply, marshalEventBody(noticeStatus))
 	failedTaskRun = persistTaskRunResult(agentTurnRunner.taskRunService, failedTaskRun, failureNotice.SendableMessage())
-	return AgentTurnResult{TaskRun: failedTaskRun, UserNotice: failedTaskRun.Result, FailureNotice: failureNotice, ToolNames: toolNamesForEvent(request.ToolSet)}
+	result := AgentTurnResult{TaskRun: failedTaskRun, UserNotice: failedTaskRun.Result, FailureNotice: failureNotice, ToolNames: toolNamesForEvent(request.ToolSet)}
+	if strings.TrimSpace(result.UserNotice) == "" {
+		result.ReplySuppressed = true
+		result.ReplySuppressionReason = phase + " failure notice could not be written"
+	}
+	return result
 }
 
 func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context, taskContext context.Context, taskRunID string, stepID string, iteration int, request AgentTurnRequest, requirements []toolUseRequirement, state *agentTaskState, actionDocument turnActionDocument, successfulToolCalls map[string]turnObservation, stopForNoProgress func(string) (AgentTurnResult, bool)) toolCallActionOutcome {
@@ -988,7 +995,7 @@ func (agentTurnRunner *AgentTurnRunner) cancelledTaskResult(taskRunID string, at
 
 // A turn that loses its context still owns the task run: nothing else will move it, so it ends
 // here as a failure the requester is told about rather than as a row left running forever.
-func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(taskRunID string, request AgentTurnRequest, reason string, attachments []toolcontract.FileAttachment) AgentTurnResult {
+func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context, taskRunID string, request AgentTurnRequest, reason string, attachments []toolcontract.FileAttachment) AgentTurnResult {
 	if result, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, attachments); isCancelled {
 		return result
 	}
@@ -1000,9 +1007,32 @@ func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(taskRunID string, re
 		"reason":              reason,
 		"statusWhenAbandoned": string(taskRun.Status),
 	}))
-	result := agentTurnRunner.failTurnWithGeneratedNotice(context.Background(), taskRun, request, "turn", "run_turn", reason)
+	result := agentTurnRunner.failTurnWithGeneratedNotice(ctx, taskRun, request, "turn", "run_turn", reason)
 	result.Attachments = attachments
 	return result
+}
+
+// A finished turn owns its reply. When the completing transition will not stick, the run is closed
+// as blocked and the reply is carried as the notice, because work the agent did and a reply the
+// judge accepted are not the repository's to discard.
+func (agentTurnRunner *AgentTurnRunner) recordFinishedTurn(taskRunID string, reply string) (agentcontract.TaskRun, bool) {
+	completedTaskRun, completionError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, reply)
+	if completionError == nil {
+		return completedTaskRun, true
+	}
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionPersistFailed, marshalEventBody(map[string]string{"error": completionError.Error()}))
+	blockedTaskRun, pauseError := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusBlocked, completionError.Error())
+	if pauseError != nil {
+		return agentcontract.TaskRun{TaskRunID: taskRunID, Status: agentcontract.TaskStatusBlocked, FailureReason: completionError.Error(), Result: reply}, false
+	}
+	return persistTaskRunResult(agentTurnRunner.taskRunService, blockedTaskRun, reply), false
+}
+
+func finishedTurnResult(taskRun agentcontract.TaskRun, isCompleted bool, reply string) AgentTurnResult {
+	if isCompleted {
+		return AgentTurnResult{TaskRun: taskRun, FinishMessage: reply}
+	}
+	return AgentTurnResult{TaskRun: taskRun, UserNotice: reply}
 }
 
 func isTaskRunFinished(status agentcontract.TaskStatus) bool {
@@ -1779,7 +1809,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeIfSatisfiedOrFail(ctx context.Co
 		return finalization.Result, nil
 	}
 	if ctx.Err() != nil {
-		return agentTurnRunner.abandonedTurnResult(state.TaskRunID, request, "the turn's caller context ended before the agent could finish: "+errorString(ctx.Err()), finalization.Attachments), nil
+		return agentTurnRunner.abandonedTurnResult(ctx, state.TaskRunID, request, "the turn's caller context ended before the agent could finish: "+errorString(ctx.Err()), finalization.Attachments), nil
 	}
 	if errors.Is(effortError, context.DeadlineExceeded) || agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 		return agentTurnRunner.stopForElapsedLimit(ctx, state.TaskRunID, request, state.Requirements, finalization.Observations, finalization.Attachments, state.ExecutionState, usedIterationCount, state.ToolCallCount)
@@ -2170,11 +2200,11 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 		return AgentTurnResult{}, false
 	}
 	reply = agentTurnRunner.prepareFinishMessageForPlatform(finalizationContext, request, reply)
-	completedTaskRun, completionError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, reply)
-	if completionError != nil {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionPersistFailed, marshalEventBody(map[string]string{"error": completionError.Error()}))
-	}
-	return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: completionGateResult.Attachments, RecoveryActions: recoveryActionsFromObservations(observations)}, true
+	finishedTaskRun, isCompleted := agentTurnRunner.recordFinishedTurn(taskRunID, reply)
+	result := finishedTurnResult(finishedTaskRun, isCompleted, reply)
+	result.Attachments = completionGateResult.Attachments
+	result.RecoveryActions = recoveryActionsFromObservations(observations)
+	return result, true
 }
 
 const omittedEvidenceRejectionReason = "finalizer omitted successful evidence for the repeated tool"
@@ -2343,11 +2373,11 @@ func (agentTurnRunner *AgentTurnRunner) completeTerminalNoToolsFinish(ctx contex
 	}
 	reply = agentTurnRunner.prepareFinishMessageForPlatform(ctx, request, reply)
 	agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusCompleted, "terminal_no_tools_finish", reply)
-	completedTaskRun, errorValue := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, reply)
-	if errorValue != nil {
-		return agentTurnRunner.abandonedTurnResult(taskRunID, request, "the finished reply could not be recorded: "+errorValue.Error(), state.Attachments), true, ""
-	}
-	return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: completionGateResult.Attachments, RecoveryActions: recoveryActionsFromObservations(state.Observations)}, true, ""
+	finishedTaskRun, isCompleted := agentTurnRunner.recordFinishedTurn(taskRunID, reply)
+	result := finishedTurnResult(finishedTaskRun, isCompleted, reply)
+	result.Attachments = completionGateResult.Attachments
+	result.RecoveryActions = recoveryActionsFromObservations(state.Observations)
+	return result, true, ""
 }
 
 func (agentTurnRunner *AgentTurnRunner) failTerminalNoToolsFailure(taskRunID string, stepID string, request AgentTurnRequest, state *agentTaskState, actionDocument turnActionDocument) (AgentTurnResult, bool, string) {
