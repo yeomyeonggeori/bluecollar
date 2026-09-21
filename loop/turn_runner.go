@@ -507,7 +507,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			return cancelledResult, nil
 		}
 		if ctx.Err() != nil {
-			return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the turn's caller context ended before the agent could act: "+errorString(ctx.Err()), state.Attachments), nil
+			return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, ctx.Err(), "the turn's caller context ended before the agent could act: "+errorString(ctx.Err()), state.Attachments), nil
 		}
 		if result, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration-1); isElapsed {
 			return result, errorValue
@@ -550,7 +550,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			return transition.Result, nil
 		}
 		if workContext.Err() != nil {
-			return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the turn's work context ended before the agent could act: "+errorString(workContext.Err()), state.Attachments), nil
+			return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, workContext.Err(), "the turn's work context ended before the agent could act: "+errorString(workContext.Err()), state.Attachments), nil
 		}
 		if transition.DidTransition {
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "completion_state "+string(transition.Action), "")
@@ -577,11 +577,11 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if actionError != nil {
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "agent turn iteration", actionError.Error())
 			if errors.Is(actionError, context.Canceled) {
-				return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the model call was cancelled: "+actionError.Error(), state.Attachments), nil
+				return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, actionError, "the model call was cancelled: "+actionError.Error(), state.Attachments), nil
 			}
 			if errors.Is(actionError, context.DeadlineExceeded) {
 				if ctx.Err() != nil {
-					return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, "the turn's caller context ended while the model was answering: "+actionError.Error(), state.Attachments), nil
+					return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, ctx.Err(), "the turn's caller context ended while the model was answering: "+actionError.Error(), state.Attachments), nil
 				}
 				if !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 					refreshWorkContext()
@@ -993,9 +993,11 @@ func (agentTurnRunner *AgentTurnRunner) cancelledTaskResult(taskRunID string, at
 	return AgentTurnResult{TaskRun: taskRun, ReplySuppressed: true, Attachments: attachments}, true
 }
 
-// A turn that loses its context still owns the task run: nothing else will move it, so it ends
-// here as a failure the requester is told about rather than as a row left running forever.
-func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context, taskRunID string, request AgentTurnRequest, reason string, attachments []toolcontract.FileAttachment) AgentTurnResult {
+// A turn that loses its context ends the task run, because nothing else will move it. The one
+// exception is a deliberate cancellation: every canceller — stop, supersede, revision, shutdown,
+// admin — records the outcome itself, so claiming it here would race the hand that took the turn
+// away. A deadline has no such owner.
+func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context, taskRunID string, request AgentTurnRequest, cause error, reason string, attachments []toolcontract.FileAttachment) AgentTurnResult {
 	if result, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, attachments); isCancelled {
 		return result
 	}
@@ -1006,7 +1008,11 @@ func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context,
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentTurnAbandoned, marshalEventBody(map[string]string{
 		"reason":              reason,
 		"statusWhenAbandoned": string(taskRun.Status),
+		"endsTheTaskRun":      strconv.FormatBool(!errors.Is(cause, context.Canceled)),
 	}))
+	if errors.Is(cause, context.Canceled) {
+		return AgentTurnResult{TaskRun: taskRun, ReplySuppressed: true, ReplySuppressionReason: reason, Attachments: attachments}
+	}
 	result := agentTurnRunner.failTurnWithGeneratedNotice(ctx, taskRun, request, "turn", "run_turn", reason)
 	result.Attachments = attachments
 	return result
@@ -1809,7 +1815,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeIfSatisfiedOrFail(ctx context.Co
 		return finalization.Result, nil
 	}
 	if ctx.Err() != nil {
-		return agentTurnRunner.abandonedTurnResult(ctx, state.TaskRunID, request, "the turn's caller context ended before the agent could finish: "+errorString(ctx.Err()), finalization.Attachments), nil
+		return agentTurnRunner.abandonedTurnResult(ctx, state.TaskRunID, request, ctx.Err(), "the turn's caller context ended before the agent could finish: "+errorString(ctx.Err()), finalization.Attachments), nil
 	}
 	if errors.Is(effortError, context.DeadlineExceeded) || agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 		return agentTurnRunner.stopForElapsedLimit(ctx, state.TaskRunID, request, state.Requirements, finalization.Observations, finalization.Attachments, state.ExecutionState, usedIterationCount, state.ToolCallCount)

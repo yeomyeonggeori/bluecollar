@@ -60,8 +60,8 @@ func (languageModel *recoveringLanguageModel) recordRecoveryCall(responseContext
 func TestATurnThatEndsWithNoNoticeLeavesNoRunningTaskRun(t *testing.T) {
 	languageModel := &recoveringLanguageModel{}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 30})
-	runContext, cancelRun := context.WithCancel(context.Background())
-	cancelRun()
+	runContext, cancelRun := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelRun()
 
 	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
 		RequesterPersonID: "person-1",
@@ -91,8 +91,8 @@ func TestATurnThatEndsWithNoNoticeLeavesNoRunningTaskRun(t *testing.T) {
 func TestAnAbandonedTurnGeneratesItsNoticeOnABoundedContext(t *testing.T) {
 	languageModel := &recoveringLanguageModel{}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 30})
-	runContext, cancelRun := context.WithCancel(context.Background())
-	cancelRun()
+	runContext, cancelRun := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelRun()
 
 	if _, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
 		RequesterPersonID: "person-1",
@@ -173,8 +173,8 @@ func TestATurnHoldsItsLeaseFromTheMomentTheRunReadsAsRunning(t *testing.T) {
 		sawLiveTurnWhenRunningBegan = services.taskRunService.IsTaskRunActuallyRunning(taskRun)
 	})
 	defer unregisterObserver()
-	runContext, cancelRun := context.WithCancel(context.Background())
-	cancelRun()
+	runContext, cancelRun := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelRun()
 
 	if _, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
 		RequesterPersonID: "person-1",
@@ -187,5 +187,32 @@ func TestATurnHoldsItsLeaseFromTheMomentTheRunReadsAsRunning(t *testing.T) {
 
 	if !sawLiveTurnWhenRunningBegan {
 		t.Fatal("a run that reads as running before its turn takes the lease is interruptible under a live turn")
+	}
+}
+
+func TestACancelledTurnLeavesTheOutcomeToWhoeverCancelledIt(t *testing.T) {
+	services := newTurnRunnerTestServices(&recoveringLanguageModel{}, TurnOptions{MaxElapsedSecond: 30})
+	runContext, cancelRun := context.WithCancel(context.Background())
+	cancelRun()
+
+	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "더 좋은 지시로 대체할 작업",
+		ToolSet:           newTestToolSet(nil),
+	})
+
+	if errorValue != nil {
+		t.Fatalf("a cancelled turn reports through the result, not an error: %v", errorValue)
+	}
+	storedTaskRun, _ := services.taskRunService.FindTaskRun(result.TaskRun.TaskRunID)
+	if storedTaskRun.Status == agentcontract.TaskStatusFailed {
+		t.Fatal("claiming the outcome races the supersede, revision or stop that cancelled the turn")
+	}
+	if strings.TrimSpace(result.ReplySuppressionReason) == "" {
+		t.Fatal("a suppressed reply without a stated reason is reported as a missing notice")
+	}
+	if services.taskRunService.IsTaskRunActuallyRunning(storedTaskRun) {
+		t.Fatal("the lease has to be released so a canceller that never arrives cannot mute the conversation")
 	}
 }

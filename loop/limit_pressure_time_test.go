@@ -327,11 +327,11 @@ func TestAgentTurnRunnerPreservesCallerCancellationBeforeEffortDeadline(t *testi
 	if errorValue != nil {
 		t.Fatalf("expected cancellation result, got %v", errorValue)
 	}
-	if result.TaskRun.Status != agentcontract.TaskStatusFailed {
-		t.Fatalf("expected caller cancellation to end the task run, got %+v", result.TaskRun)
+	if result.TaskRun.Status == agentcontract.TaskStatusFailed {
+		t.Fatalf("expected caller cancellation to leave the outcome to whoever cancelled it, got %+v", result.TaskRun)
 	}
-	if strings.TrimSpace(result.UserNotice) == "" {
-		t.Fatal("expected caller cancellation to tell the requester something")
+	if strings.TrimSpace(result.ReplySuppressionReason) == "" {
+		t.Fatal("expected caller cancellation to say why nothing is being sent")
 	}
 	if result.TaskRun.FailureReason == "max_elapsed" {
 		t.Fatalf("expected caller cancellation to remain distinct from max_elapsed, got %+v", result.TaskRun)
