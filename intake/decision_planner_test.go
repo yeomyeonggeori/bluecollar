@@ -142,10 +142,9 @@ func TestDecisionPlannerPromotesOnlyClarifyWithToolAndIndependentWork(t *testing
 		wantRoute          agentcontract.TurnRoute
 	}{
 		{"mixed request", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask, true, agentcontract.IntakeClassificationBoundedTask, agentcontract.TurnRouteStartTask},
-		{"all requested work blocked", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation, false, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
-		{"new fact absent defaults false", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation, false, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
+		{"all requested work blocked despite needing a tool", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask, false, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
 		{"independent work needs no tool", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationQuickReply, true, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
-		{"unsupported request", agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationUnsupported, true, agentcontract.IntakeClassificationUnsupported, agentcontract.TurnRouteGiveUp},
+		{"unsupported request despite needing a tool", agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationBoundedTask, true, agentcontract.IntakeClassificationUnsupported, agentcontract.TurnRouteGiveUp},
 	}
 
 	for _, testCase := range testCases {
