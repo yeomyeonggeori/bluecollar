@@ -253,9 +253,7 @@ func (agentTurnRunner *AgentTurnRunner) completeTaskRunBestEffort(ctx context.Co
 	defer cancelDetached()
 	finalReply := agentTurnRunner.prepareFinishMessageForPlatform(detachedContext, request, reply)
 	agentTurnRunner.saveStep(taskRunID, taskStepID, agentcontract.TaskStatusCompleted, stepAction, finalReply)
-	finishedTaskRun, isCompleted := agentTurnRunner.recordFinishedTurn(taskRunID, finalReply)
-	result := finishedTurnResult(finishedTaskRun, isCompleted, finalReply)
-	result.Attachments = completionGateResult.Attachments
+	result := agentTurnRunner.finishedTurnResult(taskRunID, finalReply, completionGateResult.Attachments)
 	result.RecoveryActions = recoveryActionsFromObservations(observations)
 	return result
 }

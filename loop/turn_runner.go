@@ -687,9 +687,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				return result, errorValue
 			}
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "finish", reply)
-			finishedTaskRun, isCompleted := agentTurnRunner.recordFinishedTurn(taskRun.TaskRunID, reply)
-			result := finishedTurnResult(finishedTaskRun, isCompleted, reply)
-			result.Attachments = attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths)
+			result := agentTurnRunner.finishedTurnResult(taskRun.TaskRunID, reply, attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths))
 			result.RecoveryActions = recoveryActionsFromObservations(state.Observations)
 			return result, nil
 		case "continue":
@@ -994,9 +992,10 @@ func (agentTurnRunner *AgentTurnRunner) cancelledTaskResult(taskRunID string, at
 }
 
 // A turn that loses its context ends the task run, because nothing else will move it. The one
-// exception is a deliberate cancellation: every canceller — stop, supersede, revision, shutdown,
-// admin — records the outcome itself, so claiming it here would race the hand that took the turn
-// away. A deadline has no such owner.
+// exception is a deliberate cancellation of a turn someone else can name: every canceller — stop,
+// supersede, revision, shutdown, admin — records the outcome itself, so claiming it here would
+// race the hand that took the turn away. A deadline has no such owner, and neither does a
+// delegated child, whose task run the parent's canceller never saw.
 func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context, taskRunID string, request AgentTurnRequest, cause error, reason string, attachments []toolcontract.FileAttachment) AgentTurnResult {
 	if result, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, attachments); isCancelled {
 		return result
@@ -1005,12 +1004,13 @@ func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context,
 	if isTaskRunFinished(taskRun.Status) {
 		return AgentTurnResult{TaskRun: taskRun, UserNotice: taskRun.Result, Attachments: attachments}
 	}
+	isOwnedByCanceller := errors.Is(cause, context.Canceled) && !toolcontract.IsDelegatedTurn(ctx)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentTurnAbandoned, marshalEventBody(map[string]string{
 		"reason":              reason,
 		"statusWhenAbandoned": string(taskRun.Status),
-		"endsTheTaskRun":      strconv.FormatBool(!errors.Is(cause, context.Canceled)),
+		"endsTheTaskRun":      strconv.FormatBool(!isOwnedByCanceller),
 	}))
-	if errors.Is(cause, context.Canceled) {
+	if isOwnedByCanceller {
 		return AgentTurnResult{TaskRun: taskRun, ReplySuppressed: true, ReplySuppressionReason: reason, Attachments: attachments}
 	}
 	result := agentTurnRunner.failTurnWithGeneratedNotice(ctx, taskRun, request, "turn", "run_turn", reason)
@@ -1020,25 +1020,26 @@ func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context,
 
 // A finished turn owns its reply. When the completing transition will not stick, the run is closed
 // as blocked and the reply is carried as the notice, because work the agent did and a reply the
-// judge accepted are not the repository's to discard.
-func (agentTurnRunner *AgentTurnRunner) recordFinishedTurn(taskRunID string, reply string) (agentcontract.TaskRun, bool) {
+// judge accepted are not the repository's to discard. A run cancelled between the gate and the
+// commit is the exception: the requester asked for it to stop.
+func (agentTurnRunner *AgentTurnRunner) finishedTurnResult(taskRunID string, reply string, attachments []toolcontract.FileAttachment) AgentTurnResult {
 	completedTaskRun, completionError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, reply)
 	if completionError == nil {
-		return completedTaskRun, true
+		return AgentTurnResult{TaskRun: completedTaskRun, FinishMessage: reply, Attachments: attachments}
 	}
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionPersistFailed, marshalEventBody(map[string]string{"error": completionError.Error()}))
+	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, attachments); isCancelled {
+		return cancelledResult
+	}
 	blockedTaskRun, pauseError := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusBlocked, completionError.Error())
 	if pauseError != nil {
-		return agentcontract.TaskRun{TaskRunID: taskRunID, Status: agentcontract.TaskStatusBlocked, FailureReason: completionError.Error(), Result: reply}, false
+		return AgentTurnResult{
+			TaskRun:     agentcontract.TaskRun{TaskRunID: taskRunID, Status: agentcontract.TaskStatusBlocked, FailureReason: completionError.Error(), Result: reply},
+			UserNotice:  reply,
+			Attachments: attachments,
+		}
 	}
-	return persistTaskRunResult(agentTurnRunner.taskRunService, blockedTaskRun, reply), false
-}
-
-func finishedTurnResult(taskRun agentcontract.TaskRun, isCompleted bool, reply string) AgentTurnResult {
-	if isCompleted {
-		return AgentTurnResult{TaskRun: taskRun, FinishMessage: reply}
-	}
-	return AgentTurnResult{TaskRun: taskRun, UserNotice: reply}
+	return AgentTurnResult{TaskRun: persistTaskRunResult(agentTurnRunner.taskRunService, blockedTaskRun, reply), UserNotice: reply, Attachments: attachments}
 }
 
 func isTaskRunFinished(status agentcontract.TaskStatus) bool {
@@ -2206,9 +2207,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 		return AgentTurnResult{}, false
 	}
 	reply = agentTurnRunner.prepareFinishMessageForPlatform(finalizationContext, request, reply)
-	finishedTaskRun, isCompleted := agentTurnRunner.recordFinishedTurn(taskRunID, reply)
-	result := finishedTurnResult(finishedTaskRun, isCompleted, reply)
-	result.Attachments = completionGateResult.Attachments
+	result := agentTurnRunner.finishedTurnResult(taskRunID, reply, completionGateResult.Attachments)
 	result.RecoveryActions = recoveryActionsFromObservations(observations)
 	return result, true
 }
@@ -2379,9 +2378,7 @@ func (agentTurnRunner *AgentTurnRunner) completeTerminalNoToolsFinish(ctx contex
 	}
 	reply = agentTurnRunner.prepareFinishMessageForPlatform(ctx, request, reply)
 	agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusCompleted, "terminal_no_tools_finish", reply)
-	finishedTaskRun, isCompleted := agentTurnRunner.recordFinishedTurn(taskRunID, reply)
-	result := finishedTurnResult(finishedTaskRun, isCompleted, reply)
-	result.Attachments = completionGateResult.Attachments
+	result := agentTurnRunner.finishedTurnResult(taskRunID, reply, completionGateResult.Attachments)
 	result.RecoveryActions = recoveryActionsFromObservations(state.Observations)
 	return result, true, ""
 }

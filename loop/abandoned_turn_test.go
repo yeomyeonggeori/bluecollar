@@ -9,6 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 // The production provider answers recovery chat completions, so a stand-in that does not would
@@ -214,5 +215,59 @@ func TestACancelledTurnLeavesTheOutcomeToWhoeverCancelledIt(t *testing.T) {
 	}
 	if services.taskRunService.IsTaskRunActuallyRunning(storedTaskRun) {
 		t.Fatal("the lease has to be released so a canceller that never arrives cannot mute the conversation")
+	}
+}
+
+func TestACancelledDelegatedTurnEndsItsOwnRun(t *testing.T) {
+	services := newTurnRunnerTestServices(&recoveringLanguageModel{}, TurnOptions{MaxElapsedSecond: 30})
+	runContext, cancelRun := context.WithCancel(toolcontract.WithDelegatedTurn(context.Background()))
+	cancelRun()
+
+	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "부모가 시킨 하위 작업",
+		ToolSet:           newTestToolSet(nil),
+	})
+
+	if errorValue != nil {
+		t.Fatalf("a delegated turn reports through the result, not an error: %v", errorValue)
+	}
+	storedTaskRun, isFound := services.taskRunService.FindTaskRun(result.TaskRun.TaskRunID)
+	if !isFound || storedTaskRun.Status == agentcontract.TaskStatusRunning {
+		t.Fatalf("stored task run = %+v, found = %v: the parent's canceller never saw this run and will not close it", storedTaskRun, isFound)
+	}
+}
+
+func TestAStopBetweenTheGateAndTheCommitSuppressesTheReply(t *testing.T) {
+	services := newTurnRunnerTestServices(&recoveringLanguageModel{}, TurnOptions{})
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "중간에 멈춘 작업")
+	if _, errorValue := services.taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, errorValue := services.taskRunService.CancelTaskRunWithReason(taskRun.TaskRunID, "person-1", "user stop"); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	result := services.runner.finishedTurnResult(taskRun.TaskRunID, "끝난 결과입니다.", nil)
+
+	if !result.ReplySuppressed {
+		t.Fatal("a cancelled run's final answer must not be delivered, including through the ACP path that reads only this flag")
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusCancelled {
+		t.Fatalf("task run = %+v, want the cancelled run rather than a synthesised blocked one", result.TaskRun)
+	}
+}
+
+func TestTheClosingNoticeKeepsAStopTheCallerCanStillSend(t *testing.T) {
+	liveContext, cancelLive := context.WithCancel(context.Background())
+	defer cancelLive()
+
+	noticeContext, cancelNotice := closingNoticeContextWithParent(liveContext, AgentTurnRequest{RequesterPersonID: "person-1"})
+	defer cancelNotice()
+
+	cancelLive()
+	if noticeContext.Err() == nil {
+		t.Fatal("a stop arriving mid-notice should end it rather than wait out the bound while the conversation lock is held")
 	}
 }

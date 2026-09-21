@@ -776,6 +776,9 @@ func (taskRunService *TaskRunService) canAutoResumeInterruptedTaskRun(taskRun ag
 	if now.Sub(taskRun.UpdatedAt) > 24*time.Hour {
 		return false
 	}
+	if taskRun.FailureReason == agentcontract.TaskInterruptReasonUnownedExecution {
+		return false
+	}
 	if taskRunService.autoResumeAttemptCount(taskRun.TaskRunID) > 0 && !taskRunWasInterruptedByPlannedShutdown(taskRun) {
 		return false
 	}

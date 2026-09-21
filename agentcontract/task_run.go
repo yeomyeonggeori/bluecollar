@@ -19,6 +19,11 @@ const (
 const TaskInterruptReasonPlannedShutdown = "planned_shutdown"
 const TaskInterruptReasonRuntimeRestart = "runtime restarted before task completed"
 
+// A run reclaimed because nothing was working on it was not interrupted mid-flight: whatever
+// stopped it either never owned it or never said so. Resuming it would re-run a request the
+// requester may already have replaced.
+const TaskInterruptReasonUnownedExecution = "runtime no longer owns this execution"
+
 func TaskRunWasInterruptedByRuntimeRestart(taskRun TaskRun) bool {
 	if taskRun.Status != TaskStatusInterrupted {
 		return false
