@@ -46,11 +46,11 @@ func CompanyZoneFallbackReason(timeZone string) string {
 func companyLocationWithFallbackReason(timeZone string) (*time.Location, string) {
 	named := strings.TrimSpace(timeZone)
 	if named == "" {
-		return time.Local, CompanyZoneFallbackUnset
+		return time.UTC, CompanyZoneFallbackUnset
 	}
 	location, errorValue := time.LoadLocation(named)
 	if errorValue != nil {
-		return time.Local, CompanyZoneFallbackUnloadable
+		return time.UTC, CompanyZoneFallbackUnloadable
 	}
 	return location, ""
 }

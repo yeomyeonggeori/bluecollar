@@ -20,12 +20,12 @@ func TestTheCompanyNamesTheZoneTheAgentReadsTheClockIn(t *testing.T) {
 	}
 }
 
-func TestACompanyThatNamesNoZoneLeavesTheMachineItRunsOn(t *testing.T) {
-	if CompanyLocation("") != time.Local {
-		t.Fatal("a company that has not said where it is leaves the machine's own zone")
+func TestACompanyThatNamesNoZoneReadsTheClockInUTC(t *testing.T) {
+	if CompanyLocation("") != time.UTC {
+		t.Fatal("a company that has not said where it is reads one chosen zone, not the machine's")
 	}
-	if CompanyLocation("Not/AZone") != time.Local {
-		t.Fatal("a zone nothing can load leaves the machine's own zone")
+	if CompanyLocation("Not/AZone") != time.UTC {
+		t.Fatal("a zone nothing can load reads one chosen zone, not the machine's")
 	}
 }
 
