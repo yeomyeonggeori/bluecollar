@@ -2,6 +2,8 @@ package loop
 
 import (
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type progressEvent struct {
@@ -38,7 +40,7 @@ func progressEvents(observations []turnObservation) []progressEvent {
 				recordSuccess(progressEvent{Kind: "attachment", Key: attachment.DevicePath})
 			}
 		}
-		if observation.Action == "continue" && (observation.Tool == "file_write" || observation.Tool == "file_edit") && !observation.Failed() {
+		if observation.Action == "continue" && (observation.Tool == toolcontract.WriteToolName || observation.Tool == toolcontract.EditToolName) && !observation.Failed() {
 			recordSuccess(progressEvent{Kind: "file_rewrite", Key: observation.ToolInputKey + ":" + observation.Output.Content})
 		}
 	}

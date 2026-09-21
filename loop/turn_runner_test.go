@@ -595,8 +595,8 @@ func TestAgentTurnRunnerAuditsSelectedSkillDecisions(t *testing.T) {
 		finishMessageDocument("done"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-	toolRegistry := toolcontract.NewToolSet([]string{"shell"})
-	for _, toolName := range []string{"shell", "site_serve"} {
+	toolRegistry := toolcontract.NewToolSet([]string{"bash"})
+	for _, toolName := range []string{"bash", "site_serve"} {
 		currentToolName := toolName
 		registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: currentToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return testToolSuccess("ok"), nil
@@ -609,7 +609,7 @@ func TestAgentTurnRunnerAuditsSelectedSkillDecisions(t *testing.T) {
 		Prompt:             "피피티 만들어줘",
 		ToolSet:            toolRegistry,
 		PinnedToolNames:    toolRegistry.ListToolNames(),
-		AvailableSkills:    []SkillInstruction{{Name: "presentation", ToolReferences: []string{"shell", "site_serve"}}},
+		AvailableSkills:    []SkillInstruction{{Name: "presentation", ToolReferences: []string{"bash", "site_serve"}}},
 		InstructionPrompt:  "Available skill index.\n\nSelected skill instructions:\nGenerate PPTX with Marp.",
 		InstructionSources: []InstructionSource{{Path: "skills/presentation/SKILL.md", SkillName: "presentation", SHA256: "abc"}},
 		SkillDecisions: []SkillSelectionDecision{{
@@ -717,7 +717,7 @@ func TestContinueActionSchemaRequiresCompletionIntent(t *testing.T) {
 }
 
 func TestActionSchemaOffersFailureReportAndRecoveryWhileBudgetRemains(t *testing.T) {
-	toolRegistry := newTestToolSet([]string{"site_serve", "file_write"})
+	toolRegistry := newTestToolSet([]string{"site_serve", "write"})
 	request := BuildAgentActionRequest(agentTaskState{
 		Request: AgentTurnRequest{ToolSet: toolRegistry, RequiredEvidenceTools: []string{"site_serve"}},
 		Options: TurnOptions{RecoveryBudget: defaultRecoveryBudget()},
@@ -1183,8 +1183,8 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 	toolRegistry := newTestToolSet([]string{
 		"site_list",
 		"site_serve",
-		"file_write",
-		"shell",
+		"write",
+		"bash",
 		"site_build",
 		"artifact_review",
 		"site_serve",
@@ -1195,15 +1195,15 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 		ConversationID:        "conversation-1",
 		Prompt:                "김인턴 너의 개인 홈페이지 하나 만들어서 배포해봐.",
 		ToolSet:               toolRegistry,
-		PinnedToolNames:       []string{"site_list", "site_serve", "file_write", "site_build", "artifact_review", "site_serve"},
+		PinnedToolNames:       []string{"site_list", "site_serve", "write", "site_build", "artifact_review", "site_serve"},
 		RequiredEvidenceTools: []string{"site_list", "site_build", "site_serve", "file_deliver"},
 		AvailableSkills: []SkillInstruction{{
 			Name: "site-prototype",
 			ToolReferences: []string{
 				"site_list",
 				"site_serve",
-				"file_write",
-				"shell",
+				"write",
+				"bash",
 				"site_build",
 				"artifact_review",
 				"site_serve",
@@ -1222,7 +1222,7 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 	}
 
 	stepRequest := services.runner.requestForStep(context.Background(), request, &agentTaskState{Request: request})
-	for _, toolName := range []string{"site_list", "site_serve", "file_write", "site_build", "artifact_review", "site_serve"} {
+	for _, toolName := range []string{"site_list", "site_serve", "write", "site_build", "artifact_review", "site_serve"} {
 		if !stepRequest.ToolSet.CanExpose(toolName) {
 			t.Fatalf("expected initial site working set to expose %s, got %+v", toolName, stepRequest.ToolExposure.ExposedToolIDs)
 		}
@@ -1288,22 +1288,22 @@ func TestAgentTurnRunnerRejectsFailAfterSiteSourceWriteBeforeBuildPublish(t *tes
 	// recovery gate.
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
-			`{"action":"continue","toolName":"file_write","toolInput":{"path":"/workspace/sites/site-1/draft/app/src/App.tsx","content":"export default function App(){return <main>Pretty</main>}"}}`,
+			`{"action":"continue","toolName":"write","toolInput":{"path":"/workspace/sites/site-1/draft/app/src/App.tsx","content":"export default function App(){return <main>Pretty</main>}"}}`,
 			`{"action":"fail","reason":"cannot continue","goalStatus":"blocked","goalSatisfied":false,"remainingWork":"build and publish still needed"}`,
-			`{"action":"continue","toolName":"shell","toolInput":{"command":"npm run build","workingDirectoryPath":"/workspace/sites/site-1/draft/app"}}`,
+			`{"action":"continue","toolName":"bash","toolInput":{"command":"npm run build","workingDirectoryPath":"/workspace/sites/site-1/draft/app"}}`,
 			directToolAction("continue", "", "site_serve", `{"siteID":"site-1"}`),
 			finishMessageCiting("배포했습니다: https://pretty.example", "obs-004"),
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 8, MaxToolCallCount: 8})
-	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_write", "shell"}, []string{"site_serve"})
+	toolRegistry := newHybridKernelCapabilityToolSet([]string{"write", "bash"}, []string{"site_serve"})
 	toolCalls := []string{}
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "file_write")
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		toolCalls = append(toolCalls, "write")
 		return testToolSuccess(`{"path":"/workspace/sites/site-1/draft/app/src/App.tsx"}`), nil
 	})
 	registerTestTool(toolRegistry, shellTestToolDefinition(), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "shell")
+		toolCalls = append(toolCalls, "bash")
 		data := json.RawMessage(`{"mode":"command","completed":true,"exitCode":0,"stdout":"built","stderr":"","timedOut":false,"outputTrimmed":false}`)
 		return toolcontract.ToolSuccessData(string(data), data), nil
 	})
@@ -1341,7 +1341,7 @@ func TestAgentTurnRunnerRejectsFailAfterSiteSourceWriteBeforeBuildPublish(t *tes
 	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
 	}
-	if strings.Join(toolCalls, ",") != "file_write,shell,site_serve" {
+	if strings.Join(toolCalls, ",") != "write,bash,site_serve" {
 		t.Fatalf("expected write then build/publish, got %+v", toolCalls)
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.recoverable_fail_rejected", "site_serve") {
@@ -1812,7 +1812,7 @@ func TestAgentTurnRunnerDoesNotEscalateIterationLimitForInspectionOnlyProgress(t
 
 func shellTestToolDefinition() toolcontract.ToolDefinition {
 	return toolcontract.ToolDefinition{
-		Name: "shell",
+		Name: "bash",
 		ResultContract: &toolcontract.ToolResultContract{
 			Schema: json.RawMessage(`{
 				"type":"object",
@@ -2434,12 +2434,12 @@ func TestTerminalStructuredRequestsLeaveTheOutputBudgetUnset(t *testing.T) {
 
 func TestTheRuntimeSuppliesTheObservationIDItAlreadyKnows(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Tool: toolcontract.ShellToolName},
-		{ObservationID: "obs-002", Tool: toolcontract.ShellToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
-		{ObservationID: "obs-003", Tool: toolcontract.ShellToolName},
+		{ObservationID: "obs-001", Tool: toolcontract.BashToolName},
+		{ObservationID: "obs-002", Tool: toolcontract.BashToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
+		{ObservationID: "obs-003", Tool: toolcontract.BashToolName},
 	}
 
-	cited, canCite := latestSuccessfulObservationForTool(observations, toolcontract.ShellToolName)
+	cited, canCite := latestSuccessfulObservationForTool(observations, toolcontract.BashToolName)
 
 	if !canCite || cited.ObservationID != "obs-003" {
 		t.Fatalf("the runtime rejected eighteen finish attempts over an observation ID it could read off its own ledger, got %q", cited.ObservationID)
@@ -2448,10 +2448,10 @@ func TestTheRuntimeSuppliesTheObservationIDItAlreadyKnows(t *testing.T) {
 
 func TestNoObservationIsInventedWhenTheToolNeverSucceeded(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Tool: toolcontract.ShellToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
+		{ObservationID: "obs-001", Tool: toolcontract.BashToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
 	}
 
-	if _, canCite := latestSuccessfulObservationForTool(observations, toolcontract.ShellToolName); canCite {
+	if _, canCite := latestSuccessfulObservationForTool(observations, toolcontract.BashToolName); canCite {
 		t.Fatal("supplying evidence for work that never succeeded would let the runtime sign off on a claim the ledger contradicts")
 	}
 }

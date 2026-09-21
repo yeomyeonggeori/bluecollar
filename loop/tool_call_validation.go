@@ -241,7 +241,7 @@ func tildeInsensitivePath(path string) string {
 
 func isFileMutationTool(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
-	case toolcontract.FileWriteToolName, toolcontract.FileEditToolName:
+	case toolcontract.WriteToolName, toolcontract.EditToolName:
 		return true
 	default:
 		return false
@@ -278,7 +278,7 @@ func stalledReadRecoveryDirective(observations []turnObservation) string {
 	if failedTool == "" {
 		return ""
 	}
-	return " You already have the file content and an unresolved " + failedTool + " failure. Stop re-reading: edit the file with file_edit to fix the cause, then re-run " + failedTool + "."
+	return " You already have the file content and an unresolved " + failedTool + " failure. Stop re-reading: edit the file with edit to fix the cause, then re-run " + failedTool + "."
 }
 
 func cachedFileReadObservation(observationID string, previousObservation turnObservation, message string) turnObservation {
@@ -542,7 +542,7 @@ func canonicalToolInput(toolInput json.RawMessage) string {
 // from duplicate rejection once the workspace changed after the previous run —
 // a revise-then-rebuild loop legitimately repeats the same build command.
 func terminalRerunAfterWorkspaceMutation(actionDocument turnActionDocument, observations []turnObservation, duplicateObservation turnObservation) bool {
-	if strings.TrimSpace(actionDocument.ToolName) != "shell" {
+	if strings.TrimSpace(actionDocument.ToolName) != toolcontract.BashToolName {
 		return false
 	}
 	seenDuplicateObservation := false
@@ -562,7 +562,7 @@ func terminalRerunAfterWorkspaceMutation(actionDocument turnActionDocument, obse
 }
 
 func handlesDuplicateSuccessfulToolCall(toolSet *toolcontract.ToolSet, toolName string, toolInput json.RawMessage) bool {
-	if strings.TrimSpace(toolName) == "shell" {
+	if strings.TrimSpace(toolName) == toolcontract.BashToolName {
 		return true
 	}
 	return isOneShotCompletionEvidenceTool(toolSet, toolName)
@@ -674,7 +674,7 @@ func requestRequiresExternalSendTool(request AgentTurnRequest, toolName string) 
 
 func isTerminalExecutionTool(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
-	case "shell":
+	case toolcontract.BashToolName:
 		return true
 	default:
 		return false

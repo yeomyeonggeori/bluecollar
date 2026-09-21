@@ -274,7 +274,7 @@ func durableDeliveryObservations(events []agentcontract.TaskEvent) []turnObserva
 
 // producedSourcePaths recovers the workspace paths the model was writing or
 // editing before the restart, taken from the small result of each successful
-// file_write/file_edit (path only, never the file body, so no stale content is
+// write/edit (path only, never the file body, so no stale content is
 // carried forward). Surfacing them structurally lets the restart continue the
 // exact same source in place instead of guessing what it was building.
 func producedSourcePaths(events []agentcontract.TaskEvent) []string {
@@ -294,14 +294,14 @@ func producedSourcePaths(events []agentcontract.TaskEvent) []string {
 			continue
 		}
 		switch strings.TrimSpace(observation.Tool) {
-		case "file_write":
+		case toolcontract.WriteToolName:
 			var result struct {
 				Path string `json:"path"`
 			}
 			if json.Unmarshal(observation.StructuredOutput(), &result) == nil {
 				addPath(result.Path)
 			}
-		case "file_edit":
+		case toolcontract.EditToolName:
 			var result struct {
 				EditedFiles []string `json:"editedFiles"`
 			}
@@ -1417,11 +1417,23 @@ func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservat
 			continue
 		}
 		delete(unanswered, observation.ObservationID)
+		observation.Tool = toolcontract.CanonicalToolName(observation.Tool)
+		observation.ToolInputKey = canonicalizePersistedToolCallKey(observation.ToolInputKey)
+		observation.AttemptFingerprint = canonicalizePersistedToolCallKey(observation.AttemptFingerprint)
+		observation.RecoveryAttemptKey = canonicalizePersistedToolCallKey(observation.RecoveryAttemptKey)
 		if !isApprovalRequiredObservation(observation) {
 			observations = append(observations, observation)
 		}
 	}
 	return append(observations, interruptedCallObservations(unanswered)...)
+}
+
+func canonicalizePersistedToolCallKey(toolCallKey string) string {
+	toolName, toolInput, hasDelimiter := strings.Cut(toolCallKey, "\x00")
+	if !hasDelimiter {
+		return toolCallKey
+	}
+	return toolcontract.CanonicalToolName(toolName) + "\x00" + toolInput
 }
 
 type requestedToolCall struct {
@@ -1454,7 +1466,7 @@ func interruptedCallObservations(unanswered map[string]requestedToolCall) []turn
 	observations := make([]turnObservation, 0, len(observationIDs))
 	for _, observationID := range observationIDs {
 		requestedCall := unanswered[observationID]
-		observation := newFailureObservation(observationID, "continue", requestedCall.ToolName,
+		observation := newFailureObservation(observationID, "continue", toolcontract.CanonicalToolName(requestedCall.ToolName),
 			"This call was started and the runtime stopped before its result was recorded, so whether it took effect is unknown. Check the current state before running it again.",
 			toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "interrupted")
 		observation.ToolInput = append(json.RawMessage{}, requestedCall.Input...)

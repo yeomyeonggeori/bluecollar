@@ -64,12 +64,12 @@ func TestRecoveryPacketKeepsTypedHintTools(t *testing.T) {
 		Tool:          "site_serve",
 		ToolInputKey:  "site_serve\x00{\"siteID\":\"site-1\"}",
 		Failure: &toolcontract.ToolFailure{
-			RecoveryHints: []toolcontract.RecoveryHint{{ToolNames: []string{"file_edit"}}},
+			RecoveryHints: []toolcontract.RecoveryHint{{ToolNames: []string{"edit"}}},
 		},
 	}
 
 	packet := buildRecoveryPacket(failedObservation)
-	if len(packet.AllowedTools) != 1 || packet.AllowedTools[0] != "file_edit" {
+	if len(packet.AllowedTools) != 1 || packet.AllowedTools[0] != "edit" {
 		t.Fatalf("expected typed recovery hint tools to remain available, got %+v", packet.AllowedTools)
 	}
 }
@@ -78,11 +78,11 @@ func TestRecoveryIsToldWhatTheCommandPrinted(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-009",
 		Action:        "continue",
-		Tool:          "shell",
+		Tool:          "bash",
 		Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureUnknown,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
-			Stage:           "shell",
+			Stage:           "bash",
 			UserSafeSummary: "the command exited 1",
 		},
 	}
@@ -121,11 +121,11 @@ func TestRecoveryShowsTheInputItAsksToChange(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-011",
 		Action:        "continue",
-		Tool:          "shell",
+		Tool:          "bash",
 		ToolInput:     json.RawMessage(`{"command":"python3 -c \"print(card['card_id'])\""}`),
 		Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
-			Stage: "shell", UserSafeSummary: "the command exited 1",
+			Stage: "bash", UserSafeSummary: "the command exited 1",
 		},
 	}
 	observation.Output.Content = "KeyError: 'card_id'"

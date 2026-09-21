@@ -12,7 +12,7 @@ func shellObservation(resultData string) turnObservation {
 	return turnObservation{
 		ObservationID: "obs-001",
 		Action:        "continue",
-		Tool:          "shell",
+		Tool:          "bash",
 		ToolInput:     []byte(`{"command":"cli phone --help"}`),
 		Output: toolcontract.ToolOutput{
 			Content: "Commands: login search_contacts send_text_message",
@@ -44,14 +44,14 @@ func TestATerminalSummaryKeepsTheOutputItCanRead(t *testing.T) {
 func TestTheModelSeesWhatATerminalCommandPrinted(t *testing.T) {
 	printed := "Usage: cli phone [OPTIONS]\nCommands:\n  login\n  search_contacts\n  send_text_message\n"
 	observation := turnObservation{
-		Tool: "shell",
+		Tool: "bash",
 		Output: toolcontract.ToolOutput{
 			Content: printed,
 			Data:    []byte(`{"exitCode":0,"output":"Usage: cli phone [OPTIONS]","truncated":false,"completed":true}`),
 		},
 	}
 
-	summary := modelVisibleToolResultSummary(context.Background(), nil, "shell", observation)
+	summary := modelVisibleToolResultSummary(context.Background(), nil, "bash", observation)
 
 	if !strings.Contains(summary, "search_contacts") {
 		t.Fatalf("the agent runs commands to read their output; it was handed %q instead", summary)

@@ -46,9 +46,9 @@ func normalizePersistedToolName(toolName string) string {
 	case "site.promote", "site.publish", "site.preview":
 		return "site_serve"
 	case "terminal.session":
-		return toolcontract.ShellToolName
+		return toolcontract.BashToolName
 	default:
-		return strings.TrimSpace(toolName)
+		return toolcontract.CanonicalToolName(toolName)
 	}
 }
 

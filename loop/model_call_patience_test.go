@@ -28,7 +28,7 @@ func (languageModel *stallingThenAnsweringLanguageModel) GenerateChatCompletion(
 		<-ctx.Done()
 		return model.ChatCompletionResponse{}, ctx.Err()
 	}
-	return nativeAgentActionChatResponse(toolcontract.ShellToolName, `{"command":"ls"}`), nil
+	return nativeAgentActionChatResponse(toolcontract.BashToolName, `{"command":"ls"}`), nil
 }
 
 func TestAStalledModelCallIsCutAtTheMeasuredPatienceAndAskedAgain(t *testing.T) {
@@ -38,7 +38,7 @@ func TestAStalledModelCallIsCutAtTheMeasuredPatienceAndAskedAgain(t *testing.T) 
 
 	action, errorValue := services.runner.decideActionPatiently(context.Background(), "run-1", nativeAgentActionTestState())
 
-	if errorValue != nil || action.ToolName != toolcontract.ShellToolName {
+	if errorValue != nil || action.ToolName != toolcontract.BashToolName {
 		t.Fatalf("the second ask should have answered: %v %+v", errorValue, action)
 	}
 	if len(languageModel.requests) != 2 {

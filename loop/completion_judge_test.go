@@ -308,7 +308,7 @@ func TestAFinishThatAddedNothingGetsTheVerdictItAlreadyGot(t *testing.T) {
 		NamesMissingWork: true,
 	}, nil, nil)
 	observations := []turnObservation{
-		newContentObservation("obs-001", "continue", toolcontract.ShellToolName, "sent to everyone"),
+		newContentObservation("obs-001", "continue", toolcontract.BashToolName, "sent to everyone"),
 		rejection,
 	}
 
@@ -329,7 +329,7 @@ func TestAFinishThatDidMoreWorkIsJudgedAgain(t *testing.T) {
 	}, nil, nil)
 	observations := []turnObservation{
 		rejection,
-		newContentObservation("obs-004", "continue", toolcontract.ShellToolName, "re-sent to the filtered list"),
+		newContentObservation("obs-004", "continue", toolcontract.BashToolName, "re-sent to the filtered list"),
 	}
 
 	if _, isStanding := standingJudgeRejection(observations); isStanding {
@@ -404,11 +404,11 @@ func TestTheJudgeSeesWhatDidNotWork(t *testing.T) {
 	failed := turnObservation{
 		ObservationID: "obs-004",
 		Action:        "continue",
-		Tool:          "shell",
+		Tool:          "bash",
 		ToolInput:     json.RawMessage(`{"command":"cli venmo send_money 91"}`),
 		Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
-			Stage: "shell", UserSafeSummary: "the command exited 1",
+			Stage: "bash", UserSafeSummary: "the command exited 1",
 		},
 	}
 	failed.Output.Content = "insufficient balance"
@@ -426,7 +426,7 @@ func TestTheJudgeSeesWhatDidNotWork(t *testing.T) {
 func TestTheJudgeSeesBothEndsOfATruncatedResult(t *testing.T) {
 	echoedCall := "Calling:\nprint(apis.example.search_users(**{'access_token': '" + strings.Repeat("x", 220) + "', 'query': 'Sam Example'}))"
 	dataRows := `[{"first_name": "Sam", "last_name": "Example", "email": "sam@example.com", "registered_at": "2022-07-03"}]`
-	observation := newContentObservation("obs-003", "continue", toolcontract.ShellToolName, echoedCall+"\n"+dataRows)
+	observation := newContentObservation("obs-003", "continue", toolcontract.BashToolName, echoedCall+"\n"+dataRows)
 
 	ledger := completionJudgeLedger(nil, []turnObservation{observation}, map[string]bool{})
 
@@ -441,7 +441,7 @@ func TestTheJudgeSeesBothEndsOfATruncatedResult(t *testing.T) {
 func TestDroppedOperationsAreNotEvidence(t *testing.T) {
 	ledger := []completionLedgerEntry{}
 	for index := 0; index < 40; index++ {
-		ledger = append(ledger, completionLedgerEntry{Tool: "shell", Input: strings.Repeat("a", 900), Result: strings.Repeat("b", 900)})
+		ledger = append(ledger, completionLedgerEntry{Tool: "bash", Input: strings.Repeat("a", 900), Result: strings.Repeat("b", 900)})
 	}
 
 	bounded := newestLedgerEntriesWithinBudget(ledger, 24000)
@@ -453,7 +453,7 @@ func TestDroppedOperationsAreNotEvidence(t *testing.T) {
 	if !strings.Contains(marker.Result, "unknown in both directions") {
 		t.Fatalf("a judge told only that operations were recorded certifies them as done, which is how a run that never sent the money was passed: %q", marker.Result)
 	}
-	if !strings.Contains(marker.Result, "shell x") {
+	if !strings.Contains(marker.Result, "bash x") {
 		t.Fatalf("the tool tally is the one deterministic fact the dropped prefix can still state: %q", marker.Result)
 	}
 }
@@ -479,7 +479,7 @@ func TestTheJudgeAsksForWhatItCannotSeeAndDecidesFromTheFullEntry(t *testing.T) 
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	echoedCall := "Calling: search_users(access_token=" + strings.Repeat("x", 260) + ")"
-	observation := newContentObservation("obs-002", "continue", toolcontract.ShellToolName, echoedCall+`[{"name":"Sam Example","registered_at":"2022-07-03"}]`)
+	observation := newContentObservation("obs-002", "continue", toolcontract.BashToolName, echoedCall+`[{"name":"Sam Example","registered_at":"2022-07-03"}]`)
 	request := AgentTurnRequest{Prompt: "message only the relatives without an account", OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"task_add"}}}
 
 	result := services.runner.evaluateCompletionJudge(context.Background(), "task-judge-ask", request, []turnObservation{observation}, nil, completionJudgeFinishActionDocument())

@@ -381,7 +381,7 @@ func TestAgentTurnRunnerUsesLocalRecoveryWhenRemoteAndRecoveryModelsFail(t *test
 func TestAgentTurnRunnerDoesNotUseDeterministicCapabilityFallbackWhenActionModelFails(t *testing.T) {
 	languageModel := failingRecoveryLanguageModel{errorValue: errors.New("structured action unavailable")}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	toolRegistry := newTestToolSet([]string{"schedule_list", "file_write", "schedule_create"})
+	toolRegistry := newTestToolSet([]string{"schedule_list", "write", "schedule_create"})
 	for _, toolName := range toolRegistry.ListToolNames() {
 		currentToolName := toolName
 		registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: currentToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -579,13 +579,13 @@ func TestAgentTurnRunnerAcceptsGeneratedStructuredFailureReplyWithStageAndCode(t
 
 func TestLimitFailureNoticePreservesTypedFailureFacts(t *testing.T) {
 	observations := []turnObservation{
-		newFailureObservation("obs-001", "continue", "shell", `{"exitCode":1,"stderr":"mkdir: cannot create directory 'artifacts': Permission denied"}`, toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "shell"),
+		newFailureObservation("obs-001", "continue", "bash", `{"exitCode":1,"stderr":"mkdir: cannot create directory 'artifacts': Permission denied"}`, toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "bash"),
 	}
 	report := buildFailureReport(AgentTurnRequest{Prompt: "pptx 만들어줘"}, "task-1", "limit", "max_iterations", observations, nil, ExecutionState{}, recoveryDecision{})
 	prompt := buildFailureNoticePrompt(report)
 
 	for _, expectedText := range []string{
-		"shell",
+		"bash",
 		"Permission denied",
 	} {
 		if !strings.Contains(prompt, expectedText) {

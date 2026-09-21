@@ -81,7 +81,7 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 			NoToolFallback: 0,
 		},
 	})
-	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_read", "file_edit"}, []string{"site_build"})
+	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_read", "edit"}, []string{"site_build"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "source failed"},
@@ -93,7 +93,7 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 				Retryable:       true,
 				FailureClass:    failureClassQuality,
 				RetryPolicy:     retryPolicyAfterPrecondition,
-				RecoveryHints:   []toolcontract.RecoveryHint{{Action: "edit_resource", ToolNames: []string{"file_read", "file_edit"}}},
+				RecoveryHints:   []toolcontract.RecoveryHint{{Action: "edit_resource", ToolNames: []string{"file_read", "edit"}}},
 			},
 		}, nil
 	})
@@ -102,7 +102,7 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 		fileReadCount++
 		return testToolSuccess(`{"path":"home/sites/site-1/draft/app/src/App.tsx","content":"broken"}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_edit"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "edit"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"path":"home/sites/site-1/draft/app/src/App.tsx","matchCount":1}`), nil
 	})
 
@@ -111,7 +111,7 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 		ConversationID:    "conversation-1",
 		Prompt:            "look into the site build problem",
 		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"site_build", "file_read", "file_edit"},
+		PinnedToolNames:   []string{"site_build", "file_read", "edit"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected inspection recovery to continue: %v", errorValue)
@@ -269,11 +269,11 @@ func TestRecoveryGuidanceDoesNotCopyTheRequestBackIn(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-004",
 		Action:        "continue",
-		Tool:          "shell",
+		Tool:          "bash",
 		Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureUnknown,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
-			Stage:           "shell",
+			Stage:           "bash",
 			UserSafeSummary: "the command exited 1",
 		},
 	}

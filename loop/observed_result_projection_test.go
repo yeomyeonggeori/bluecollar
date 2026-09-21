@@ -120,9 +120,9 @@ func TestObservedResultProjectionRequiresCurrentSiteModificationEffects(t *testi
 	goalSatisfied := true
 	projection := buildObservedResultProjection(
 		AgentTurnRequest{
-			ToolSet: newTestToolSet([]string{"site_list", "file_edit", "site_serve"}),
+			ToolSet: newTestToolSet([]string{"site_list", "edit", "site_serve"}),
 			OutcomeContract: OutcomeContract{RequiredEffects: []OutcomeEffect{
-				{ObjectType: "workspace", Effect: "modified", SuggestedNextTools: []string{"file_edit"}},
+				{ObjectType: "workspace", Effect: "modified", SuggestedNextTools: []string{"edit"}},
 				{ObjectType: "website", Effect: "published", SuggestedNextTools: []string{"site_serve"}},
 			}},
 		},
@@ -143,7 +143,7 @@ func TestObservedResultProjectionRequiresCurrentSiteModificationEffects(t *testi
 func TestObservedResultProjectionAcceptsCurrentSiteModificationEffects(t *testing.T) {
 	goalSatisfied := true
 	fileDescriptor, fileObservation := canonicalEffectObservation(
-		"file_edit",
+		"edit",
 		`{"paths":["/workspace/circles/staff/sites/pretty-gyul/draft/app/src/App.tsx"]}`,
 		[]toolcontract.ResourceEffect{
 			{ObjectType: "file", Effect: "updated", Path: "/workspace/circles/staff/sites/pretty-gyul/draft/app/src/App.tsx"},
@@ -164,7 +164,7 @@ func TestObservedResultProjectionAcceptsCurrentSiteModificationEffects(t *testin
 		AgentTurnRequest{
 			ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{fileDescriptor, publishDescriptor}),
 			OutcomeContract: OutcomeContract{RequiredEffects: []OutcomeEffect{
-				{ObjectType: "workspace", Effect: "modified", SuggestedNextTools: []string{"file_edit"}},
+				{ObjectType: "workspace", Effect: "modified", SuggestedNextTools: []string{"edit"}},
 				{ObjectType: "website", Effect: "published", SuggestedNextTools: []string{"site_serve"}},
 			}},
 		},

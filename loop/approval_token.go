@@ -4,8 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const approvalUnmatchedObservationNote = "This is not the call that was held for approval. The held call is still waiting, and what ran here was recorded as its own effect."
@@ -39,6 +41,7 @@ func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID stri
 		case agentcontract.TaskEventApprovalHeldCall:
 			heldCall := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &heldCall) == nil && heldCall.ApprovalToken != "" {
+				heldCall.ToolName = toolcontract.CanonicalToolName(heldCall.ToolName)
 				heldCalls = append(heldCalls, heldCall)
 			}
 		case agentcontract.TaskEventApprovalExecuted:

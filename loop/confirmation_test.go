@@ -134,7 +134,7 @@ func TestConfirmationPlanMessagesIncludeTemporalContextAndScheduleGuard(t *testi
 }
 
 func TestSitePrototypePublishDoesNotBuildConfirmationPlan(t *testing.T) {
-	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "shell"})
+	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "bash"})
 	request := AgentRequest{
 		Prompt:  "김인턴 구조 소개 웹사이트 만들어서 배포해줘",
 		ToolSet: toolSet,
@@ -150,12 +150,12 @@ func TestSitePrototypePublishDoesNotBuildConfirmationPlan(t *testing.T) {
 }
 
 func TestSitePrototypeContinuationDoesNotBuildConfirmationPlan(t *testing.T) {
-	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "shell"})
+	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "bash"})
 	request := AgentRequest{
 		Prompt:  "다시 해봐 그럼 될 거야",
 		ToolSet: toolSet,
 		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
-			SelectedEvidenceHints: []string{"site_serve", "shell", "site_serve"},
+			SelectedEvidenceHints: []string{"site_serve", "bash", "site_serve"},
 		}},
 	}
 	decision := IntakeDecision{
@@ -169,7 +169,7 @@ func TestSitePrototypeContinuationDoesNotBuildConfirmationPlan(t *testing.T) {
 }
 
 func TestDestructiveSiteManagementStillBuildsConfirmationPlan(t *testing.T) {
-	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "shell"})
+	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "bash"})
 	request := AgentRequest{
 		Prompt:  "이 사이트 내려줘",
 		ToolSet: toolSet,

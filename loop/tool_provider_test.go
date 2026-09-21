@@ -394,8 +394,8 @@ func TestRegisterProviderValidatesEvidenceConditionAgainstResultSchema(t *testin
 }
 
 func TestRegisterProviderAcceptsStringArrayResultEffectIdentity(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{"file_edit"})
-	providerTool := validProviderTool("kernel/file_edit", "file", "file_edit")
+	toolSet := toolcontract.NewToolSet([]string{"edit"})
+	providerTool := validProviderTool("kernel/edit", "file", "edit")
 	providerTool.Definition.ResultContract = &toolcontract.ToolResultContract{
 		Schema: json.RawMessage(`{
 			"type":"object",
@@ -427,8 +427,8 @@ func TestRegisterProviderRejectsNoncanonicalStringArrayResultEffectIdentity(t *t
 		json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"string"},"minItems":1}},"required":["paths"],"additionalProperties":false}`),
 		json.RawMessage(`{"type":"object","properties":{"paths":{"type":"array","items":{"type":"number"},"minItems":1,"uniqueItems":true}},"required":["paths"],"additionalProperties":false}`),
 	} {
-		toolSet := toolcontract.NewToolSet([]string{"file_edit"})
-		providerTool := validProviderTool("kernel/file_edit", "file", "file_edit")
+		toolSet := toolcontract.NewToolSet([]string{"edit"})
+		providerTool := validProviderTool("kernel/edit", "file", "edit")
 		providerTool.Definition.ResultContract = &toolcontract.ToolResultContract{
 			Schema: schema,
 			Effects: []toolcontract.ResourceEffectContract{{
@@ -547,8 +547,8 @@ func TestToolSetValidatesEveryArrayEffectIdentity(t *testing.T) {
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			toolSet := toolcontract.NewToolSet([]string{"file_edit"})
-			boundTool := validProviderTool("kernel/file_edit", "file", "file_edit")
+			toolSet := toolcontract.NewToolSet([]string{"edit"})
+			boundTool := validProviderTool("kernel/edit", "file", "edit")
 			boundTool.Definition.ResultContract = &toolcontract.ToolResultContract{
 				Schema: json.RawMessage(`{
 					"type":"object",
@@ -573,7 +573,7 @@ func TestToolSetValidatesEveryArrayEffectIdentity(t *testing.T) {
 				t.Fatal(errorValue)
 			}
 
-			result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "file_edit", Input: json.RawMessage(`{}`)})
+			result, errorValue := toolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "edit", Input: json.RawMessage(`{}`)})
 
 			if errorValue != nil {
 				t.Fatal(errorValue)

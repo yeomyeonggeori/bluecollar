@@ -70,11 +70,11 @@ func TestAgentKernelSelectsArtifactSkillOnceAfterRouting(t *testing.T) {
 			Name:           "presentation",
 			Description:    "Create presentation decks, 피피티, 파워포인트, 발표자료, and PPTX files.",
 			Prompt:         "Create and attach PPTX files.",
-			ToolReferences: []string{"shell", "file_write", "file_deliver"},
+			ToolReferences: []string{"bash", "write", "file_deliver"},
 			Source:         InstructionSource{Path: "skills/presentation/SKILL.md", SkillName: "presentation"},
 		}}}
 	})
-	toolRegistry := newTestToolSet([]string{"shell", "file_write", "file.promote", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"bash", "write", "file.promote", "file_deliver"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "file attached"},
@@ -173,7 +173,7 @@ func TestAgentKernelPreservesUnsupportedArtifactWithoutSelectedSkill(t *testing.
 		finishMessageCiting("deck.pptx 파일을 첨부했습니다.", "obs-001"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
-	toolRegistry := newTestToolSet([]string{"shell", "file_write", "file.promote", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"bash", "write", "file.promote", "file_deliver"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "file attached"},
@@ -281,7 +281,7 @@ func TestAgentKernelRecoversLegacyPriorAttachmentContractFromIntakeOutput(t *tes
 		finishMessageCiting("company-guide.docx 파일을 첨부했습니다.", "obs-002"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
-	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "file_write", "shell", "file.promote", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "write", "bash", "file.promote", "file_deliver"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "file attached"},
@@ -694,12 +694,12 @@ func TestAgentKernelPreservesQuickReplyAfterSkillSelection(t *testing.T) {
 				Name:           "presentation",
 				Description:    "Create presentation slides, 피피티, and PPTX files.",
 				Prompt:         "Create and attach PPTX files.",
-				ToolReferences: []string{"shell", "file_write", "file_deliver"},
+				ToolReferences: []string{"bash", "write", "file_deliver"},
 				Source:         InstructionSource{Path: "skills/presentation/SKILL.md", SkillName: "presentation"},
 			}},
 		}
 	})
-	toolRegistry := newTestToolSet([]string{"shell", "file_write", "file_deliver"})
+	toolRegistry := newTestToolSet([]string{"bash", "write", "file_deliver"})
 	for _, toolName := range toolRegistry.ListToolNames() {
 		currentToolName := toolName
 		registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: currentToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {

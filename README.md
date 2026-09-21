@@ -46,9 +46,9 @@ watch, a coding agent is the better tool, and it will not pretend otherwise.
 
 ## The model's kernel
 
-The model's kernel is `read`, `file_write`, `file_edit`, `shell`, `plan` and `find_tools`. The
+The model's kernel is `read`, `write`, `edit`, `bash`, `plan` and `equip`. The
 first four are the work. `plan` records the goal, its steps and the task's `level`, which is what
-sizes the run. `find_tools` takes a sentence describing a need and answers with the tools that serve
+sizes the run. `equip` takes a sentence describing a need and answers with the tools that serve
 it. The names are constants in [`toolcontract`](./toolcontract/kernel_tools.go) and the descriptors
 behind them belong to the host, so a host with a CRM or a calendar publishes those as ordinary tools
 and the kernel stays this size.
@@ -71,7 +71,7 @@ byte-identical system instruction, tool catalog and unchanging context
 system instruction is frozen at the start of the run. Elapsed-time narrowing still happens per
 iteration, by design.
 
-**`find_tools` is how the model reaches past the kernel.** It answers a described need through the
+**`equip` is how the model reaches past the kernel.** It answers a described need through the
 same selector intake uses to pick a turn's likely tools, `agentcontract.ToolSelector` as implemented
 by [`intake.DecisionPlanner`](./intake/tool_selection_call.go), and the tools it names are pinned
 for the next turn. A catalog too large for one decision request is split into byte-balanced batches
@@ -253,7 +253,7 @@ that need routing, tiering or usage accounting bring their own; the reference is
 
 `cmd/bluecollar` runs against a local model and prints the ledger as it happens, which is the
 shortest way to see the loop work before embedding it. It registers a kernel scoped to
-`--workspace`: a shell, the file tools, `image_read` and `plan`, which is also what an external
+`--workspace`: `bash`, the file tools, `image_read` and `plan`, which is also what an external
 benchmark drives. `--without-tools` takes them away again when you only want to watch the loop
 reason. With a prompt as its argument it runs one turn and exits; with no arguments the terminal
 becomes the conversation.

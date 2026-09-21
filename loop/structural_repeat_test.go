@@ -10,18 +10,18 @@ func failedShellObservation(observationID string, command string) turnObservatio
 	return turnObservation{
 		ObservationID: observationID,
 		Action:        "continue",
-		Tool:          "shell",
-		ToolInputKey:  "shell\x00" + command,
+		Tool:          "bash",
+		ToolInputKey:  "bash\x00" + command,
 		Failure: &toolcontract.ToolFailure{
 			Kind:  toolcontract.FailureUnknown,
 			Code:  toolcontract.FailureCodes.OperationFailed.String(),
-			Stage: "shell",
+			Stage: "bash",
 		},
 	}
 }
 
 func succeededShellObservation(observationID string) turnObservation {
-	return turnObservation{ObservationID: observationID, Action: "continue", Tool: "shell"}
+	return turnObservation{ObservationID: observationID, Action: "continue", Tool: "bash"}
 }
 
 func TestARouteThatKeepsFailingTheSameWayStopsBeingRetried(t *testing.T) {
@@ -69,10 +69,10 @@ func failedCorrectedRetry(observationID string, command string, attemptKey strin
 func TestCorrectingTheSameBrokenCallTwiceSpendsTheBudget(t *testing.T) {
 	observations := []turnObservation{
 		failedShellObservation("obs-001", "cli venmo login --email a"),
-		failedCorrectedRetry("obs-002", "cli venmo login --email b", "shell|login"),
+		failedCorrectedRetry("obs-002", "cli venmo login --email b", "bash|login"),
 	}
 
-	if recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "shell|login") {
+	if recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "bash|login") {
 		t.Fatal("correcting the same call again is the retry loop this budget exists to stop")
 	}
 }
@@ -80,10 +80,10 @@ func TestCorrectingTheSameBrokenCallTwiceSpendsTheBudget(t *testing.T) {
 func TestCorrectingADifferentBrokenCallHasItsOwnBudget(t *testing.T) {
 	observations := []turnObservation{
 		failedShellObservation("obs-001", "cli venmo login --email a"),
-		failedCorrectedRetry("obs-002", "cli venmo login --email b", "shell|login"),
+		failedCorrectedRetry("obs-002", "cli venmo login --email b", "bash|login"),
 	}
 
-	if !recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "shell|import") {
+	if !recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "bash|import") {
 		t.Fatal("a different broken command is a different problem, and the last correction did not spend its budget")
 	}
 	if recoveryBudgetAllowsStep(observations, defaultRecoveryBudget(), recoveryStepCorrectedRetry, "") {

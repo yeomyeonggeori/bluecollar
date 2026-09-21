@@ -230,7 +230,7 @@ func modelVisibleToolResultSummary(ctx context.Context, languageModel model.Lang
 	if content == "" {
 		return summarizeObservationContent(observation)
 	}
-	if strings.TrimSpace(toolName) == "shell" {
+	if strings.TrimSpace(toolName) == toolcontract.BashToolName {
 		if summary := summarizeTerminalRun(observation); summary != "" {
 			return summary
 		}

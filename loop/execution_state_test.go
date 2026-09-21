@@ -12,7 +12,7 @@ import (
 
 func TestBuildAgentActionRequestIncludesExecutionStateAndTerminalTail(t *testing.T) {
 	state := agentTaskState{
-		Request: AgentTurnRequest{Prompt: "make a pptx", ToolSet: newTestToolSet([]string{"shell"})},
+		Request: AgentTurnRequest{Prompt: "make a pptx", ToolSet: newTestToolSet([]string{"bash"})},
 		Options: TurnOptions{RecoveryBudget: defaultRecoveryBudget()},
 		ExecutionState: ExecutionState{
 			Goal:           "create and attach pptx",
@@ -87,7 +87,7 @@ func TestTerminalObservationTailPreservesToolInteractionInputAndResult(t *testin
 	if !ok {
 		t.Fatal("expected terminal tail")
 	}
-	if tail.ObservationID != "obs-002" || tail.ToolName != "shell" {
+	if tail.ObservationID != "obs-002" || tail.ToolName != "bash" {
 		t.Fatalf("expected observation identity preserved, got %+v", tail)
 	}
 	if tail.WorkingDirectory != "tmp/site/app" || tail.Command != "bun run build" {
@@ -153,11 +153,11 @@ func terminalFailureObservation(observationID string, workingDirectoryPath strin
 	return turnObservation{
 		ObservationID:      observationID,
 		Action:             "continue",
-		Tool:               "shell",
+		Tool:               "bash",
 		Output:             toolcontract.ToolOutput{Content: "terminal command failed", Data: json.RawMessage(content)},
-		Failure:            &toolcontract.ToolFailure{Kind: toolcontract.FailureExternalService, Code: toolcontract.FailureCodes.OperationFailed.String(), Stage: "shell", UserSafeSummary: content},
-		ToolInputKey:       canonicalToolCallKey("shell", input),
-		AttemptFingerprint: attemptFingerprint(canonicalToolCallKey("shell", input), toolcontract.FailureCodes.OperationFailed.String()),
+		Failure:            &toolcontract.ToolFailure{Kind: toolcontract.FailureExternalService, Code: toolcontract.FailureCodes.OperationFailed.String(), Stage: "bash", UserSafeSummary: content},
+		ToolInputKey:       canonicalToolCallKey("bash", input),
+		AttemptFingerprint: attemptFingerprint(canonicalToolCallKey("bash", input), toolcontract.FailureCodes.OperationFailed.String()),
 	}
 }
 
@@ -175,9 +175,9 @@ func terminalSuccessObservation(observationID string, workingDirectoryPath strin
 	return turnObservation{
 		ObservationID: observationID,
 		Action:        "continue",
-		Tool:          "shell",
+		Tool:          "bash",
 		Output:        toolcontract.ToolOutput{Content: "terminal command completed", Data: json.RawMessage(content)},
-		ToolInputKey:  canonicalToolCallKey("shell", input),
+		ToolInputKey:  canonicalToolCallKey("bash", input),
 	}
 }
 
@@ -199,7 +199,7 @@ func messagesText(messages []model.Message) string {
 }
 
 func TestExecutionStateSchemaIsPresentOnToolCalls(t *testing.T) {
-	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{Name: "shell"}}, nil, false, nil, false)
+	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{Name: "bash"}}, nil, false, nil, false)
 	var schema struct {
 		OneOf []map[string]any `json:"oneOf"`
 	}
