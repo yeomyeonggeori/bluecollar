@@ -51,6 +51,73 @@ func TestConfirmationPolicyConfirmsBoundedExternalSend(t *testing.T) {
 	}
 }
 
+func TestIndependentWorkDefersOnlyMissingInformationWithoutPolicyGates(t *testing.T) {
+	for _, testCase := range []struct {
+		name               string
+		plan               ExecutionPlan
+		hasIndependentWork bool
+		wantReason         string
+		wantClarification  bool
+	}{
+		{
+			name:               "missing information with an independent part",
+			plan:               ExecutionPlan{MissingInformation: []string{"deployment domain"}},
+			hasIndependentWork: true,
+		},
+		{
+			name:              "missing information without an independent part",
+			plan:              ExecutionPlan{MissingInformation: []string{"deployment domain"}},
+			wantReason:        "missing_information",
+			wantClarification: true,
+		},
+		{
+			name:               "missing schedule bound",
+			plan:               ExecutionPlan{MissingInformation: []string{"deployment domain"}, ExternalSend: true, ThirdPartyExternalSend: true, Repeated: true},
+			hasIndependentWork: true,
+			wantReason:         "missing_information",
+			wantClarification:  true,
+		},
+		{
+			name:               "public deployment confirmation",
+			plan:               ExecutionPlan{MissingInformation: []string{"deployment domain"}, PublicDeploy: true},
+			hasIndependentWork: true,
+			wantReason:         "missing_information",
+			wantClarification:  true,
+		},
+		{
+			name:               "permission change confirmation",
+			plan:               ExecutionPlan{MissingInformation: []string{"target"}, PermissionChange: true},
+			hasIndependentWork: true,
+			wantReason:         "missing_information",
+			wantClarification:  true,
+		},
+		{
+			name:               "paid action confirmation",
+			plan:               ExecutionPlan{MissingInformation: []string{"item"}, PaidAction: true},
+			hasIndependentWork: true,
+			wantReason:         "missing_information",
+			wantClarification:  true,
+		},
+		{
+			name:               "destructive action confirmation",
+			plan:               ExecutionPlan{MissingInformation: []string{"target"}, Destructive: true},
+			hasIndependentWork: true,
+			wantReason:         "missing_information",
+			wantClarification:  true,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			decision := confirmationDecisionForIndependentWork(testCase.plan, IntakeDecision{HasIndependentWork: testCase.hasIndependentWork})
+			if decision.Reason != testCase.wantReason || decision.RequiresClarification != testCase.wantClarification {
+				t.Fatalf("expected policy decision reason=%q clarification=%t, got %+v", testCase.wantReason, testCase.wantClarification, decision)
+			}
+			if testCase.wantClarification && decision.RequiresConfirmation {
+				t.Fatalf("expected the missing-information pause to retain control, got %+v", decision)
+			}
+		})
+	}
+}
+
 func TestConfirmationPlanMessagesIncludeTemporalContextAndScheduleGuard(t *testing.T) {
 	messages := confirmationPlanMessages(AgentRequest{
 		Prompt:        "김인턴 구조 소개 웹사이트 만들어서 배포해줘",
