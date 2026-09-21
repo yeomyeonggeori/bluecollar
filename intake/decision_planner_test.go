@@ -132,6 +132,50 @@ func TestDecisionPlannerReadsExternalSendIntentAsNoul(t *testing.T) {
 	}
 }
 
+func TestDecisionPlannerPromotesOnlyClarifyWithToolAndIndependentWork(t *testing.T) {
+	testCases := []struct {
+		name               string
+		route              agentcontract.TurnRoute
+		classification     agentcontract.IntakeClassification
+		hasIndependentWork bool
+		wantClassification agentcontract.IntakeClassification
+		wantRoute          agentcontract.TurnRoute
+	}{
+		{"mixed request", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask, true, agentcontract.IntakeClassificationBoundedTask, agentcontract.TurnRouteStartTask},
+		{"all requested work blocked despite needing a tool", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask, false, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
+		{"independent work needs no tool", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationQuickReply, true, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
+		{"unsupported request despite needing a tool", agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationBoundedTask, true, agentcontract.IntakeClassificationUnsupported, agentcontract.TurnRouteGiveUp},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			outcome := startTaskOutcome()
+			outcome.TurnDecision.Route = testCase.route
+			outcome.TurnDecision.Classification = testCase.classification
+			outcome.TurnDecision.HasIndependentWork = testCase.hasIndependentWork
+			decisionModel := intaketest.NewDecisionModel(outcome)
+			decision := decideOnce(t, NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }), addressedDecisionRequest("finish the clear part and ask me about the unresolved part"))
+
+			if decision.TurnFields.Classification != testCase.wantClassification {
+				t.Fatalf("expected classification %q, got %q", testCase.wantClassification, decision.TurnFields.Classification)
+			}
+			if decision.TurnFields.HasIndependentWork != testCase.hasIndependentWork {
+				t.Fatalf("expected independent work %t, got %t", testCase.hasIndependentWork, decision.TurnFields.HasIndependentWork)
+			}
+			if decision.TurnFields.RawDecisionRoute != testCase.route {
+				t.Fatalf("expected raw route %q, got %q", testCase.route, decision.TurnFields.RawDecisionRoute)
+			}
+			normalizedDecision, errorValue := normalizeTurnDecision(decision.TurnFields, agentcontract.AgentRequest{})
+			if errorValue != nil {
+				t.Fatalf("expected the turn decision to normalize: %v", errorValue)
+			}
+			if normalizedDecision.Route != testCase.wantRoute {
+				t.Fatalf("expected normalized route %q, got %q", testCase.wantRoute, normalizedDecision.Route)
+			}
+		})
+	}
+}
+
 func TestDecisionPlannerLeavesAFollowUpUnaskedWithoutATask(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })

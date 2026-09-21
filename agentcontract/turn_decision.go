@@ -74,6 +74,8 @@ type IntakeDecision struct {
 	PriorTaskReference      PriorTaskReference    `json:"priorTaskReference,omitempty"`
 	ClarificationQuestion   string                `json:"clarificationQuestion,omitempty"`
 	ClarificationOptions    []ClarificationOption `json:"clarificationOptions,omitempty"`
+	HasIndependentWork      bool                  `json:"hasIndependentWork"`
+	RawDecisionRoute        TurnRoute             `json:"rawDecisionRoute,omitempty"`
 }
 
 func (intakeDecision IntakeDecision) Validate() error {
@@ -104,6 +106,8 @@ type TurnDecision struct {
 	Choices                 []string              `json:"choices,omitempty"`
 	ClarificationQuestion   string                `json:"clarificationQuestion,omitempty"`
 	ClarificationOptions    []ClarificationOption `json:"clarificationOptions,omitempty"`
+	HasIndependentWork      bool                  `json:"hasIndependentWork"`
+	RawDecisionRoute        TurnRoute             `json:"rawDecisionRoute,omitempty"`
 	ReactionEmojiName       string                `json:"reactionEmojiName,omitempty"`
 	BusyRoute               BusyRoute             `json:"busyRoute,omitempty"`
 	BusyInstruction         string                `json:"busyInstruction,omitempty"`
@@ -140,6 +144,8 @@ func (turnDecision TurnDecision) IntakeDecision() IntakeDecision {
 		Reason:                  turnDecision.Reason,
 		UserFacingReply:         turnDecision.UserFacingReply,
 		IsExternalSendRequested: turnDecision.IsExternalSendRequested,
+		HasIndependentWork:      turnDecision.HasIndependentWork,
+		RawDecisionRoute:        turnDecision.RawDecisionRoute,
 		InitialToolNames:        append([]string{}, turnDecision.InitialToolNames...),
 		PriorTaskReference:      NormalizePriorTaskReference(turnDecision.PriorTaskReference),
 		ClarificationQuestion:   turnDecision.ClarificationQuestion,
@@ -157,6 +163,8 @@ func (turnDecision TurnDecision) WithRestoredIntakeState(intakeDecision IntakeDe
 	turnDecision.RequestedOutputFormats = append([]string{}, intakeDecision.RequestedOutputFormats...)
 	turnDecision.ExpectedResults = NormalizeExpectedResults(intakeDecision.ExpectedResults)
 	turnDecision.IsExternalSendRequested = intakeDecision.IsExternalSendRequested
+	turnDecision.HasIndependentWork = intakeDecision.HasIndependentWork
+	turnDecision.RawDecisionRoute = intakeDecision.RawDecisionRoute
 	turnDecision.InitialToolNames = append([]string{}, intakeDecision.InitialToolNames...)
 	return turnDecision
 }

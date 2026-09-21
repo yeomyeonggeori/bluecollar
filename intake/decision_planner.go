@@ -330,14 +330,24 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
+	hasIndependentWork, errorValue := reader.noul(agentcontract.IntakeQuestionHasIndependentWork)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, errorValue
+	}
 	isExternalSendRequested, errorValue := reader.noul(agentcontract.IntakeQuestionIsExternalSendRequested)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
 	route := agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute])
+	classification := classificationOf(route, needsTool)
+	if route == agentcontract.TurnRouteClarify && needsTool && hasIndependentWork {
+		classification = agentcontract.IntakeClassificationBoundedTask
+	}
 	turnFields := agentcontract.TurnDecision{
 		Route:                   route,
-		Classification:          classificationOf(route, needsTool),
+		RawDecisionRoute:        route,
+		Classification:          classification,
+		HasIndependentWork:      hasIndependentWork,
 		TaskShape:               agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
 		TaskLevel:               agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
 		DeliverableKind:         agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),

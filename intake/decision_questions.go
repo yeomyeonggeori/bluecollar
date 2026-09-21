@@ -39,8 +39,6 @@ type questionBuilder struct {
 	choiceKeys []string
 }
 
-const independentWorkBeforeClarificationInstruction = "Hold the whole request only when no independently requested work can proceed without the answer. If a requested part has a clear target and authorized effect, start that work and let execution ask about the remaining choice before acting on dependent work. Do not invent missing values or treat a prerequisite as independent work."
-
 func newQuestionBuilder(request agentcontract.IntakeDecisionRequest) questionBuilder {
 	return questionBuilder{
 		request:    request,
@@ -185,6 +183,7 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	questions := map[string]model.DecisionQuestion{
 		agentcontract.IntakeQuestionRoute:                   builder.routeQuestion(messageKey),
 		agentcontract.IntakeQuestionNeedsTool:               builder.needsToolQuestion(messageKey),
+		agentcontract.IntakeQuestionHasIndependentWork:      builder.hasIndependentWorkQuestion(messageKey),
 		agentcontract.IntakeQuestionIsExternalSendRequested: builder.isExternalSendRequestedQuestion(messageKey),
 		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
 		agentcontract.IntakeQuestionLevel:                   builder.levelQuestion(messageKey),
@@ -235,12 +234,20 @@ func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQu
 			string(agentcontract.TurnRouteConsume):        "nothing to say: an addressed message that needs no text reply, acknowledged with an emoji. Never consume a message that asks " + agentName + " to do, check, read, verify, or report anything",
 			string(agentcontract.TurnRouteAnswerQuestion): "answer in words right now, from common knowledge, judgment, or what is visible",
 			string(agentcontract.TurnRouteAnswerMeta):     "answer a question about " + agentName + " itself: what it can do, how it works, what it is",
-			string(agentcontract.TurnRouteClarify):        "ask one clarifying question first only when the requested goal, target, or outcome is still ambiguous after using visible context and only the sender can resolve it. Do not block on operational details, approval roles, or requirements a tool can inspect or resolve; start work and let the execution loop discover those. Start any unambiguous requested parts. Never to ask for approval. " + independentWorkBeforeClarificationInstruction,
+			string(agentcontract.TurnRouteClarify):        "ask one clarifying question first only when the requested goal, target, or outcome is still ambiguous after using visible context and only the sender can resolve it. Do not block on operational details, approval roles, or requirements a tool can inspect or resolve; start work and let the execution loop discover those. Never to ask for approval.",
 			string(agentcontract.TurnRouteStartTask):      "start work that takes tools and time",
 			string(agentcontract.TurnRouteContinueTask):   "add to, or approve, work already running",
 			string(agentcontract.TurnRouteReviseTask):     "redirect work already running toward a changed target or scope",
 			string(agentcontract.TurnRouteGiveUp):         "say it cannot be done: physically impossible, nonsensical, or plainly improper on its face. Never for a permission concern, which the operating system decides at execution",
 		}),
+	}.Question()
+}
+
+func (builder questionBuilder) hasIndependentWorkQuestion(messageKey string) model.DecisionQuestion {
+	return model.NoulQuestion{
+		Instructions:     builder.about(messageKey) + "Can any independently requested part proceed now, even if another part needs clarification?",
+		TrueDescription:  "at least one separable part is explicitly requested, has a clear target and effect, and does not depend on the unresolved answer",
+		FalseDescription: "no actionable work was requested, all requested work depends on the unresolved answer, or the apparent first step is only a prerequisite, operational detail, or action the requester did not authorize",
 	}.Question()
 }
 
@@ -262,14 +269,14 @@ func (builder questionBuilder) isExternalSendRequestedQuestion(messageKey string
 
 func (builder questionBuilder) taskShapeQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "What shape does the work take?",
+		Instructions: builder.about(messageKey) + "What shape does the executable work take? If some work can proceed while another part awaits clarification, classify the work that can proceed.",
 		OptionDescriptions: optionDescriptions(agentcontract.TaskShapeNames, map[string]string{
 			string(agentcontract.TaskShapeImmediateReply):     "a tool-free answer; only for a quick reply or an unsupported request",
 			string(agentcontract.TaskShapeResearchTask):       "information acquisition from an external or private source, or synthesis across source material",
 			string(agentcontract.TaskShapeMaintenanceTask):    "work that changes state: adding, updating, or deleting records, files, or settings",
 			string(agentcontract.TaskShapeScheduledTask):      "work the message asks to run later, repeatedly, or on a schedule",
 			string(agentcontract.TaskShapeBrowserHandoffTask): "work that needs a person at a browser, such as a sign-in or a captcha",
-			string(agentcontract.TaskShapeApprovalGatedTask):  "work held for a missing essential choice about the requested goal, target, or outcome that only the requester can resolve; tool-discoverable operational requirements belong to the work itself. " + independentWorkBeforeClarificationInstruction,
+			string(agentcontract.TaskShapeApprovalGatedTask):  "work held for a missing essential choice about the requested goal, target, or outcome that only the requester can resolve; tool-discoverable operational requirements belong to the work itself",
 		}),
 	}.Question()
 }
