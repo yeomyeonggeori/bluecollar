@@ -287,7 +287,7 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 			name:               "independent work proceeds",
 			hasIndependentWork: true,
 			plan:               ExecutionPlan{MissingInformation: []string{"deployment domain"}},
-			wantStatus:         agentcontract.TaskStatusCompleted,
+			wantStatus:         agentcontract.TaskStatusWaitingUserInput,
 			wantToolCalls:      1,
 		},
 		{
@@ -315,13 +315,23 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
-			agentKernel, _ := newKernelTestServices()
+			agentKernel, taskRunService := newKernelTestServices()
 			agentKernel.UseIntakeOptions(IntakeOptions{IsEnabled: true})
 			toolCallCount := 0
-			toolSet := newTestToolSet([]string{"web_search"})
+			toolSet := newTestToolSet([]string{"web_search", toolcontract.AskInputToolName})
 			registerTestTool(toolSet, testToolDescriptor("web_search"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 				toolCallCount++
 				return testToolSuccess("Sample source"), nil
+			})
+			askInputDefinition := testToolDescriptor(toolcontract.AskInputToolName)
+			askInputDefinition.Visibility = toolcontract.ToolVisibilityInternal
+			registerTestTool(toolSet, askInputDefinition, func(toolContext context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+				taskRunID := TaskRunIDFromContext(toolContext)
+				if _, errorValue := taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingUserInput, "Which domain should I use for publishing?"); errorValue != nil {
+					return toolcontract.ToolResult{}, errorValue
+				}
+				taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, string(invocation.Input))
+				return testToolSuccess(`{"kind":"ask_input"}`), nil
 			})
 
 			plan := testCase.plan
@@ -333,10 +343,10 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 				t.Fatalf("expected the execution plan to serialize: %v", errorValue)
 			}
 			languageModelContents := []string{string(planDocument)}
-			if testCase.wantStatus == agentcontract.TaskStatusCompleted {
+			if testCase.wantToolCalls > 0 {
 				languageModelContents = append(languageModelContents,
 					directToolAction("continue", "", "web_search", `{}`),
-					finishMessageCiting("I found a source for the company profile.", "obs-001"),
+					`{"action":"reply","expectsAnswer":true,"message":"Which domain should I use for publishing?"}`,
 				)
 			} else {
 				languageModelContents = append(languageModelContents, `{"reply":"Which domain should I use for publishing?"}`)
@@ -369,7 +379,7 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 			if toolCallCount != testCase.wantToolCalls {
 				t.Fatalf("expected %d tool calls, got %d", testCase.wantToolCalls, toolCallCount)
 			}
-			if testCase.wantStatus == agentcontract.TaskStatusCompleted {
+			if testCase.wantToolCalls > 0 {
 				requestContent := ""
 				for _, prompt := range languageModel.textPrompts {
 					requestContent += prompt
