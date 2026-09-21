@@ -327,8 +327,11 @@ func TestAgentTurnRunnerPreservesCallerCancellationBeforeEffortDeadline(t *testi
 	if errorValue != nil {
 		t.Fatalf("expected cancellation result, got %v", errorValue)
 	}
-	if !result.ReplySuppressed {
-		t.Fatal("expected caller cancellation to suppress the reply")
+	if result.TaskRun.Status == agentcontract.TaskStatusFailed {
+		t.Fatalf("expected caller cancellation to leave the outcome to whoever cancelled it, got %+v", result.TaskRun)
+	}
+	if strings.TrimSpace(result.ReplySuppressionReason) == "" {
+		t.Fatal("expected caller cancellation to say why nothing is being sent")
 	}
 	if result.TaskRun.FailureReason == "max_elapsed" {
 		t.Fatalf("expected caller cancellation to remain distinct from max_elapsed, got %+v", result.TaskRun)
@@ -353,8 +356,11 @@ func TestAgentTurnRunnerPreservesCallerDeadlineBeforeEffortDeadline(t *testing.T
 	if errorValue != nil {
 		t.Fatalf("expected caller deadline result, got %v", errorValue)
 	}
-	if !result.ReplySuppressed {
-		t.Fatal("expected caller deadline to suppress the reply")
+	if result.TaskRun.Status != agentcontract.TaskStatusFailed {
+		t.Fatalf("expected caller deadline to end the task run, got %+v", result.TaskRun)
+	}
+	if strings.TrimSpace(result.UserNotice) == "" {
+		t.Fatal("expected caller deadline to tell the requester something")
 	}
 	if result.TaskRun.FailureReason == "max_elapsed" {
 		t.Fatalf("expected caller deadline to remain distinct from max_elapsed, got %+v", result.TaskRun)

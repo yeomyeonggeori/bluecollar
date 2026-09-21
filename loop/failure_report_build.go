@@ -36,16 +36,33 @@ func buildFailureReport(request AgentTurnRequest, taskRunID string, phase string
 	return report
 }
 
-func recoveryFinalizationContextWithParent(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {
-	recoveryContext := model.ContextWithRequestContext(parentContext, model.RequestContext{
+func requestContextForTurn(request AgentTurnRequest) model.RequestContext {
+	return model.RequestContext{
 		RequesterPersonID:       request.RequesterPersonID,
 		RequesterEmail:          request.RequesterEmail,
 		RequesterName:           request.RequesterName,
 		RequesterPlatformUserID: request.RequesterPlatformUserID,
 		ConversationID:          request.ConversationID,
 		Platform:                request.Platform,
-	})
-	return context.WithCancel(recoveryContext)
+	}
+}
+
+func recoveryFinalizationContextWithParent(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {
+	return context.WithCancel(model.ContextWithRequestContext(parentContext, requestContextForTurn(request)))
+}
+
+// A notice generated on a context that is already dead cannot be written at all, so a dead caller
+// is detached from, keeping its values. A caller still alive keeps its cancellation, because a
+// stop arriving mid-notice should end it rather than wait out the bound. Either way the bound is
+// the ceiling the elapsed closing reply is given: outliving it would hold the turn, and with it
+// the conversation, open forever.
+func closingNoticeContextWithParent(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {
+	noticeParent := parentContext
+	if parentContext.Err() != nil {
+		noticeParent = context.WithoutCancel(parentContext)
+	}
+	noticeContext := model.ContextWithRequestContext(noticeParent, requestContextForTurn(request))
+	return context.WithTimeout(noticeContext, maximumElapsedClosingDuration)
 }
 
 func latestFailedOperation(observations []turnObservation) string {

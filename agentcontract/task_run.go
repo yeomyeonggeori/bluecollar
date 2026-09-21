@@ -19,6 +19,33 @@ const (
 const TaskInterruptReasonPlannedShutdown = "planned_shutdown"
 const TaskInterruptReasonRuntimeRestart = "runtime restarted before task completed"
 
+// A run reclaimed because nothing was working on it was not interrupted mid-flight: whatever
+// stopped it either never owned it or never said so. Resuming it would re-run a request the
+// requester may already have replaced.
+const TaskInterruptReasonUnownedExecution = "runtime no longer owns this execution"
+
+// The statuses a requester's stop, cancel or supersede still reaches. The host decides what to do
+// with a run in one of them; the store decides what it may transition to. Both were spelling this
+// set out separately.
+func RequesterControllableTaskStatuses() []TaskStatus {
+	return []TaskStatus{
+		TaskStatusPlanned,
+		TaskStatusRunning,
+		TaskStatusWaitingUserInput,
+		TaskStatusWaitingApproval,
+		TaskStatusBlocked,
+	}
+}
+
+func IsTaskRunRequesterControllable(status TaskStatus) bool {
+	for _, controllableStatus := range RequesterControllableTaskStatuses() {
+		if status == controllableStatus {
+			return true
+		}
+	}
+	return false
+}
+
 func TaskRunWasInterruptedByRuntimeRestart(taskRun TaskRun) bool {
 	if taskRun.Status != TaskStatusInterrupted {
 		return false

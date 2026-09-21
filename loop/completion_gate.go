@@ -253,16 +253,9 @@ func (agentTurnRunner *AgentTurnRunner) completeTaskRunBestEffort(ctx context.Co
 	defer cancelDetached()
 	finalReply := agentTurnRunner.prepareFinishMessageForPlatform(detachedContext, request, reply)
 	agentTurnRunner.saveStep(taskRunID, taskStepID, agentcontract.TaskStatusCompleted, stepAction, finalReply)
-	completedTaskRun, completionError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, finalReply)
-	if completionError != nil {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionPersistFailed, marshalEventBody(map[string]string{"error": completionError.Error()}))
-	}
-	return AgentTurnResult{
-		TaskRun:         completedTaskRun,
-		FinishMessage:   finalReply,
-		Attachments:     completionGateResult.Attachments,
-		RecoveryActions: recoveryActionsFromObservations(observations),
-	}
+	result := agentTurnRunner.finishedTurnResult(taskRunID, finalReply, completionGateResult.Attachments)
+	result.RecoveryActions = recoveryActionsFromObservations(observations)
+	return result
 }
 
 func generateCompletionReply(ctx context.Context, chatCompleter model.ChatCompleter, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation) (string, error) {

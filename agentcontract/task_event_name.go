@@ -90,6 +90,7 @@ const (
 	TaskEventAgentToolInputMalformed               = "agent.tool_input_malformed"
 	TaskEventAgentToolResultImagesRestored         = "agent.tool_result_images_restored"
 	TaskEventAgentToolResultsPruned                = "agent.tool_results_pruned"
+	TaskEventAgentTurnAbandoned                    = "agent.turn_abandoned"
 	TaskEventAgentTurnAnchorClamped                = "agent.turn_anchor_clamped"
 	TaskEventAgentUnchangedResult                  = "agent.unchanged_result"
 	TaskEventAgentUnreadableAction                 = "agent.unreadable_action"
