@@ -598,8 +598,22 @@ func (agentKernel *AgentKernel) planConfirmationGate(responseContext context.Con
 		return confirmationGatePlan{DegradedError: errorValue}, nil
 	}
 	executionPlan.OriginalInstruction = strings.TrimSpace(request.Prompt)
-	decision := EvaluateConfirmationPolicy(executionPlan)
+	decision := confirmationDecisionForIndependentWork(executionPlan, intakeDecision)
 	return confirmationGatePlan{ExecutionPlan: executionPlan, Decision: decision, HasExecutionPlan: true}, nil
+}
+
+func confirmationDecisionForIndependentWork(executionPlan ExecutionPlan, intakeDecision IntakeDecision) ConfirmationPolicyDecision {
+	decision := EvaluateConfirmationPolicy(executionPlan)
+	if !intakeDecision.HasIndependentWork || !decision.RequiresClarification || decision.Reason != "missing_information" {
+		return decision
+	}
+	policyPlan := executionPlan
+	policyPlan.MissingInformation = nil
+	policyDecision := EvaluateConfirmationPolicy(policyPlan)
+	if policyDecision.RequiresClarification || policyDecision.RequiresConfirmation {
+		return decision
+	}
+	return policyDecision
 }
 
 func (agentKernel *AgentKernel) pauseForClarification(responseContext context.Context, request AgentRequest, intakeDecision IntakeDecision, plan confirmationGatePlan, outcomeContract OutcomeContract, evidenceHints []string, selectedSkills []string) (AgentTurnResult, error) {

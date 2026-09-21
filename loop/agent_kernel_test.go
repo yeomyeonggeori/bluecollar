@@ -275,6 +275,128 @@ func TestAgentKernelPausesNeedsConfirmationDisambiguation(t *testing.T) {
 	}
 }
 
+func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) {
+	for _, testCase := range []struct {
+		name               string
+		hasIndependentWork bool
+		plan               ExecutionPlan
+		wantStatus         agentcontract.TaskStatus
+		wantToolCalls      int
+	}{
+		{
+			name:               "independent work proceeds",
+			hasIndependentWork: true,
+			plan:               ExecutionPlan{MissingInformation: []string{"deployment domain"}},
+			wantStatus:         agentcontract.TaskStatusWaitingUserInput,
+			wantToolCalls:      1,
+		},
+		{
+			name:       "all work remains paused",
+			plan:       ExecutionPlan{MissingInformation: []string{"deployment domain"}},
+			wantStatus: agentcontract.TaskStatusWaitingUserInput,
+		},
+		{
+			name:               "external send remains gated",
+			hasIndependentWork: true,
+			plan:               ExecutionPlan{MissingInformation: []string{"deployment domain"}, ExternalSend: true, ThirdPartyExternalSend: true},
+			wantStatus:         agentcontract.TaskStatusWaitingUserInput,
+		},
+		{
+			name:               "destructive action remains gated",
+			hasIndependentWork: true,
+			plan:               ExecutionPlan{MissingInformation: []string{"target"}, Destructive: true},
+			wantStatus:         agentcontract.TaskStatusWaitingUserInput,
+		},
+		{
+			name:               "permission change remains gated",
+			hasIndependentWork: true,
+			plan:               ExecutionPlan{MissingInformation: []string{"target"}, PermissionChange: true},
+			wantStatus:         agentcontract.TaskStatusWaitingUserInput,
+		},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			agentKernel, taskRunService := newKernelTestServices()
+			agentKernel.UseIntakeOptions(IntakeOptions{IsEnabled: true})
+			toolCallCount := 0
+			toolSet := newTestToolSet([]string{"web_search", toolcontract.AskInputToolName})
+			registerTestTool(toolSet, testToolDescriptor("web_search"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+				toolCallCount++
+				return testToolSuccess("Sample source"), nil
+			})
+			askInputDefinition := testToolDescriptor(toolcontract.AskInputToolName)
+			askInputDefinition.Visibility = toolcontract.ToolVisibilityInternal
+			registerTestTool(toolSet, askInputDefinition, func(toolContext context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+				taskRunID := TaskRunIDFromContext(toolContext)
+				if _, errorValue := taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingUserInput, "Which domain should I use for publishing?"); errorValue != nil {
+					return toolcontract.ToolResult{}, errorValue
+				}
+				taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventAskRequested, string(invocation.Input))
+				return testToolSuccess(`{"kind":"ask_input"}`), nil
+			})
+
+			plan := testCase.plan
+			plan.OriginalInstruction = "Research a short company profile and ask me which domain to use before publishing"
+			plan.Summary = "Research the company profile before publishing the site"
+			plan.ContinuationInstruction = "Research the profile and leave deployment until the domain is supplied."
+			planDocument, errorValue := json.Marshal(plan)
+			if errorValue != nil {
+				t.Fatalf("expected the execution plan to serialize: %v", errorValue)
+			}
+			languageModelContents := []string{string(planDocument)}
+			if testCase.wantToolCalls > 0 {
+				languageModelContents = append(languageModelContents,
+					directToolAction("continue", "", "web_search", `{}`),
+					`{"action":"reply","expectsAnswer":true,"message":"Which domain should I use for publishing?"}`,
+				)
+			} else {
+				languageModelContents = append(languageModelContents, `{"reply":"Which domain should I use for publishing?"}`)
+			}
+			languageModel := &sequenceLanguageModel{contents: languageModelContents}
+			agentKernel.UseLanguageModelProvider(languageModel)
+			decision := TurnDecision{
+				Route:              TurnRouteClarify,
+				Classification:     IntakeClassificationBoundedTask,
+				TaskShape:          TaskShapeApprovalGatedTask,
+				TaskLevel:          TaskLevelLow,
+				ResponseLanguage:   "en",
+				HasIndependentWork: testCase.hasIndependentWork,
+				RawDecisionRoute:   TurnRouteClarify,
+				InitialToolNames:   []string{"web_search"},
+			}
+			request := kernelTestRequest("Research a short company profile and ask me which domain to use before publishing.")
+			request.ToolSet = toolSet
+			request.SkipSkillSelection = true
+			request.PrecomputedTurnDecision = &decision
+			request.IsPrecomputedDecisionExact = true
+
+			result, errorValue := agentKernel.RunAgentRequest(context.Background(), request)
+			if errorValue != nil {
+				t.Fatalf("expected the confirmation path to complete: %v", errorValue)
+			}
+			if result.TaskRun.Status != testCase.wantStatus {
+				t.Fatalf("expected task status %q, got %q", testCase.wantStatus, result.TaskRun.Status)
+			}
+			if toolCallCount != testCase.wantToolCalls {
+				t.Fatalf("expected %d tool calls, got %d", testCase.wantToolCalls, toolCallCount)
+			}
+			if testCase.wantToolCalls > 0 {
+				requestContent := ""
+				for _, prompt := range languageModel.textPrompts {
+					requestContent += prompt
+				}
+				for _, structuredRequest := range languageModel.requests {
+					for _, message := range structuredRequest.Messages {
+						requestContent += message.Content
+					}
+				}
+				if !strings.Contains(requestContent, `"missingInformation":["deployment domain"]`) {
+					t.Fatalf("expected missing plan information to reach the execution context, got %s", requestContent)
+				}
+			}
+		})
+	}
+}
+
 func TestAgentKernelBlocksUnsupportedIntake(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
 	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
