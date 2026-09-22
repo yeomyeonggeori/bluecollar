@@ -60,7 +60,6 @@ func skillsInstructionBody(request AgentTurnRequest) string {
 		return ""
 	}
 	body := "Skills: Treat retrieved skills as available capability references, not mandatory workflows. The current user message, ActiveGoal, and OutcomeContract decide the output type. Do not turn a document, plan, or text request into a different workflow just because a related skill or tool is listed."
-	body += " Selected skills contribute their direct tools to the action schema while the compact kernel remains available within the provider tool budget."
 	if capabilityPhrase := capabilityDomainPhrase(request.AvailableSkills); capabilityPhrase != "" {
 		body += " Your available capabilities span " + capabilityPhrase + "; reach them through selected direct tools, skills, and bundled scripts."
 	}
