@@ -29,3 +29,24 @@ func TestCanonicalToolName(t *testing.T) {
 		})
 	}
 }
+
+func TestEveryKernelToolNameSaysWhetherTheModelMayCallIt(t *testing.T) {
+	listNameByToolName := map[string]string{}
+	for _, toolName := range ModelFacingKernelToolNames() {
+		listNameByToolName[toolName] = "ModelFacingKernelToolNames"
+	}
+	for _, toolName := range RuntimeOnlyKernelToolNames() {
+		if listName, isListed := listNameByToolName[toolName]; isListed {
+			t.Fatalf("%s is in %s and in RuntimeOnlyKernelToolNames, so nothing says whether the model may call it", toolName, listName)
+		}
+		listNameByToolName[toolName] = "RuntimeOnlyKernelToolNames"
+	}
+	for _, toolName := range KernelToolNames() {
+		if _, isListed := listNameByToolName[toolName]; !isListed {
+			t.Fatalf("%s is a kernel tool and neither list claims it; add it to ModelFacingKernelToolNames or to RuntimeOnlyKernelToolNames", toolName)
+		}
+	}
+	if len(listNameByToolName) != len(KernelToolNames()) {
+		t.Fatalf("the two lists name %d tools while the kernel has %d", len(listNameByToolName), len(KernelToolNames()))
+	}
+}

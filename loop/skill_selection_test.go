@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -1068,8 +1069,8 @@ func assertContractArbitrationSchemaEnums(t *testing.T, schemaDocument string, e
 		if schema.Properties[propertyName].UniqueItems {
 			t.Fatalf("expected provider-portable %s array schema", propertyName)
 		}
-		if !reflect.DeepEqual(schema.Properties[propertyName].Items.Enum, values) {
-			t.Fatalf("expected %s enum %v, got %v", propertyName, values, schema.Properties[propertyName].Items.Enum)
+		if !sameToolNameSet(schema.Properties[propertyName].Items.Enum, values) {
+			t.Fatalf("expected %s enum to permit exactly %v, got %v", propertyName, values, schema.Properties[propertyName].Items.Enum)
 		}
 	}
 }
@@ -1678,4 +1679,17 @@ func TestContractSkillArbitrationHearsNothingAboutAFiringWithoutOne(t *testing.T
 	if len(firingMessages) != 0 {
 		t.Fatalf("expected no system message about a firing, got %d", len(firingMessages))
 	}
+}
+
+// An enum permits a set of values, so the order it serializes in carries no
+// meaning and pinning it makes every reordering of a source list a failure.
+func sameToolNameSet(actualValues []string, expectedValues []string) bool {
+	if len(actualValues) != len(expectedValues) {
+		return false
+	}
+	sortedActual := append([]string{}, actualValues...)
+	sortedExpected := append([]string{}, expectedValues...)
+	sort.Strings(sortedActual)
+	sort.Strings(sortedExpected)
+	return reflect.DeepEqual(sortedActual, sortedExpected)
 }

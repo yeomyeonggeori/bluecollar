@@ -31,22 +31,36 @@ const ToolNamesOnePlanStepIsExpectedToNeed = 5
 
 const MaxLikelyToolCountForOnePlanStep = min(ToolNamesOnePlanStepIsExpectedToNeed, MaxLikelyToolCount)
 
-func KernelToolNames() []string {
+// A kernel tool is one the runtime always has, so intake never asks whether it
+// is available. Which of them the model may name is a separate question, and the
+// action schema answers it by enum-locking toolName to the exposed palette: a
+// tool outside ModelFacingKernelToolNames cannot be called directly at all, and
+// the model reaches one by describing the need to equip instead.
+func ModelFacingKernelToolNames() []string {
 	return []string{
 		BashToolName,
 		ReadToolName,
-		FileDeliverToolName,
-		SkillSearchToolName,
-		FileReadToolName,
 		WriteToolName,
-		FileDeleteToolName,
 		EditToolName,
-		FilePreviewToolName,
-		ImageReadToolName,
-		ConversationHistoryToolName,
 		PlanToolName,
 		EquipToolName,
 	}
+}
+
+func RuntimeOnlyKernelToolNames() []string {
+	return []string{
+		FileDeliverToolName,
+		SkillSearchToolName,
+		FileReadToolName,
+		FileDeleteToolName,
+		FilePreviewToolName,
+		ImageReadToolName,
+		ConversationHistoryToolName,
+	}
+}
+
+func KernelToolNames() []string {
+	return append(ModelFacingKernelToolNames(), RuntimeOnlyKernelToolNames()...)
 }
 
 var currentNameByFormerKernelToolName = map[string]string{
