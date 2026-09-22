@@ -34,10 +34,10 @@ func toolSetForAgentTurnWithExposure(toolSet *toolcontract.ToolSet, instructionB
 	if hasAuthoritativeWorkingSet {
 		groups = []toolExposureGroup{recoveryGroup, pendingGroup, requiredEvidenceGroup, pinnedGroup, requiredNextGroup, selectedSkillGroup, evidenceAlternativesGroup}
 	}
-	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(groups), toolcontract.MaxExtensionCallableToolCount)
+	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(toolSet, groups), toolcontract.MaxExtensionCallableToolCount)
 	kernelToolIDs := []string{}
 	if requestNeedsToolAccess(request, groups) {
-		kernelToolIDs = filterGroupTools(toolSet, toolExposureGroup{ToolIDs: toolcontract.KernelToolNames()}).ToolIDs
+		kernelToolIDs = filterGroupTools(toolSet, toolExposureGroup{ToolIDs: toolSet.BuiltInToolNames()}).ToolIDs
 	}
 	exposedToolIDs := appendUniqueStrings(kernelToolIDs, extensionToolIDs...)
 	selectionEvent.SelectionSource = firstNonEmptyString(selectionEvent.SelectionSource, toolSelectionSource(selectedSkillGroup, hasAuthoritativeWorkingSet))
@@ -154,12 +154,12 @@ func toolSelectionReason(selectedSkillGroup toolExposureGroup, hasAuthoritativeW
 	return "the runtime exposes the compact kernel tools"
 }
 
-func extensionToolGroups(groups []toolExposureGroup) []toolExposureGroup {
+func extensionToolGroups(toolSet *toolcontract.ToolSet, groups []toolExposureGroup) []toolExposureGroup {
 	extensionGroups := make([]toolExposureGroup, 0, len(groups))
 	for _, group := range groups {
 		toolIDs := []string{}
 		for _, toolID := range group.ToolIDs {
-			if !toolcontract.IsKernelToolName(toolID) {
+			if !toolSet.IsBuiltInTool(toolID) {
 				toolIDs = appendUniqueStrings(toolIDs, toolID)
 			}
 		}

@@ -169,8 +169,8 @@ func TestToolSetForAgentTurnExposesSelectedSkillToolsAlongsideKernel(t *testing.
 }
 
 func TestSelectedFlowSkillExposesRegisteredDirectToolsFromKernelPalette(t *testing.T) {
-	toolSet := toolcontract.NewToolSet(toolcontract.KernelToolNames())
-	for _, toolName := range append(toolcontract.KernelToolNames(), "task_add", "task_list", "task_update", "task_delete") {
+	toolSet := toolcontract.NewToolSet(testBuiltInToolNames())
+	for _, toolName := range append(testBuiltInToolNames(), "task_add", "task_list", "task_update", "task_delete") {
 		registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return testToolSuccess("ok"), nil
 		})
@@ -406,7 +406,7 @@ func TestSelectInstructionBundleKeepsSkillWhenDirectToolsAreAvailable(t *testing
 
 func TestSelectInstructionBundleSkipsSkillWhenDirectToolIsUnavailable(t *testing.T) {
 	toolSet := toolcontract.NewToolSet([]string{"bash"})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolSet, testToolDescriptor("bash"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("ok"), nil
 	})
 	for _, toolName := range []string{"site_serve", "site_serve"} {
@@ -1629,7 +1629,7 @@ func structuredRequestSchemaNames(requests []model.StructuredResponseRequest) []
 func testToolSet(toolNames []string) *toolcontract.ToolSet {
 	toolRegistry := newTestToolSet(toolNames)
 	for _, toolName := range toolNames {
-		registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		registerTestTool(toolRegistry, testToolDescriptor(toolName), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return toolcontract.ToolResult{}, nil
 		})
 	}

@@ -168,18 +168,6 @@ func stringSet(values []string) map[string]bool {
 	return result
 }
 
-func universalAgentToolNames() []string {
-	return toolcontract.KernelToolNames()
-}
-
-func coreAgentToolNames() []string {
-	return toolcontract.KernelToolNames()
-}
-
-func genericBuiltInToolNames() []string {
-	return toolcontract.KernelToolNames()
-}
-
 func selectedEvidenceHintTools(instructionBundle InstructionBundle) []string {
 	return appendUniqueStrings(instructionBundle.RequiredEvidenceTools)
 }

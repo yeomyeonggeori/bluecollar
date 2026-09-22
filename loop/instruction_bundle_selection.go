@@ -125,7 +125,7 @@ func validatedContractEvidenceTools(arbitration contractSkillArbitration, select
 
 func selectedSkillNextToolNameSet(selectedSkills []SkillInstruction, request AgentRequest) map[string]bool {
 	toolNames := selectedSkillToolNameSet(selectedSkills)
-	for _, toolName := range toolcontract.KernelToolNames() {
+	for _, toolName := range request.ToolSet.BuiltInToolNames() {
 		if requestHasToolName(request, toolName) {
 			toolNames[toolName] = true
 		}
