@@ -103,5 +103,5 @@ func RequiredEvidenceToolCanBeSatisfied(toolSet *toolcontract.ToolSet, toolName 
 	if toolSet.IsAllowed(trimmedToolName) {
 		return true
 	}
-	return !toolcontract.IsKernelToolName(trimmedToolName) && toolSet.CanExpose(trimmedToolName)
+	return !toolSet.IsBuiltInTool(trimmedToolName) && toolSet.CanExpose(trimmedToolName)
 }

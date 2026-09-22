@@ -36,9 +36,13 @@ func allToolReferencesMissing(skillInstruction SkillInstruction, request AgentRe
 	}
 	consideredNames := []string{}
 	for _, referenceName := range referenceNames {
-		if !toolcontract.IsKernelToolName(referenceName) {
-			consideredNames = append(consideredNames, referenceName)
+		if request.ToolSet == nil || request.ToolSet.IsBuiltInTool(referenceName) {
+			continue
 		}
+		if !request.ToolSet.IsRegistered(referenceName) {
+			continue
+		}
+		consideredNames = append(consideredNames, referenceName)
 	}
 	if len(consideredNames) == 0 {
 		consideredNames = referenceNames

@@ -31,24 +31,6 @@ const ToolNamesOnePlanStepIsExpectedToNeed = 5
 
 const MaxLikelyToolCountForOnePlanStep = min(ToolNamesOnePlanStepIsExpectedToNeed, MaxLikelyToolCount)
 
-func KernelToolNames() []string {
-	return []string{
-		BashToolName,
-		ReadToolName,
-		FileDeliverToolName,
-		SkillSearchToolName,
-		FileReadToolName,
-		WriteToolName,
-		FileDeleteToolName,
-		EditToolName,
-		FilePreviewToolName,
-		ImageReadToolName,
-		ConversationHistoryToolName,
-		PlanToolName,
-		EquipToolName,
-	}
-}
-
 var currentNameByFormerKernelToolName = map[string]string{
 	"shell":      BashToolName,
 	"file_write": WriteToolName,
@@ -62,15 +44,6 @@ func CanonicalToolName(recordedToolName string) string {
 		return currentToolName
 	}
 	return trimmedToolName
-}
-
-func IsKernelToolName(toolName string) bool {
-	for _, kernelToolName := range KernelToolNames() {
-		if strings.TrimSpace(toolName) == kernelToolName {
-			return true
-		}
-	}
-	return false
 }
 
 func ToolNamesMatch(leftToolName string, rightToolName string) bool {

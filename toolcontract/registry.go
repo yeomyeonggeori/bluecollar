@@ -587,7 +587,7 @@ func (toolSet *ToolSet) IsAllowed(toolName string) bool {
 	if len(toolSet.allowedToolNameByName) > 0 && !toolSet.allowedToolNameByName[trimmedToolName] {
 		return false
 	}
-	if IsKernelToolName(trimmedToolName) {
+	if toolSet.IsBuiltInTool(trimmedToolName) {
 		return true
 	}
 	return isExposedToolAvailability(boundTool.Availability)
@@ -599,6 +599,26 @@ func (toolSet *ToolSet) IsRegistered(toolName string) bool {
 	}
 	_, isRegistered := toolSet.boundToolByName[strings.TrimSpace(toolName)]
 	return isRegistered
+}
+
+const BuiltInToolProviderID = "kernel"
+
+func (toolSet *ToolSet) IsBuiltInTool(toolName string) bool {
+	if toolSet == nil {
+		return false
+	}
+	boundTool, isRegistered := toolSet.boundToolByName[strings.TrimSpace(toolName)]
+	return isRegistered && strings.TrimSpace(boundTool.Definition.ProviderID) == BuiltInToolProviderID
+}
+
+func (toolSet *ToolSet) BuiltInToolNames() []string {
+	toolNames := []string{}
+	for _, toolName := range toolSet.ListRegisteredToolNames() {
+		if toolSet.IsBuiltInTool(toolName) {
+			toolNames = append(toolNames, toolName)
+		}
+	}
+	return toolNames
 }
 
 func (toolSet *ToolSet) CanExpose(toolName string) bool {
@@ -714,7 +734,7 @@ func (toolSet *ToolSet) CanInvoke(toolName string) bool {
 	if len(toolSet.allowedToolNameByName) > 0 && !toolSet.allowedToolNameByName[trimmedToolName] {
 		return false
 	}
-	return IsKernelToolName(trimmedToolName) || isExposedToolAvailability(boundTool.Availability)
+	return toolSet.IsBuiltInTool(trimmedToolName) || isExposedToolAvailability(boundTool.Availability)
 }
 
 func (toolSet *ToolSet) AllowingInternalTool(toolName string) *ToolSet {

@@ -31,6 +31,7 @@ func testToolDescriptor(toolName string) toolcontract.ToolDefinition {
 	return toolcontract.ToolDefinition{
 		ID:                "test:" + toolName,
 		Name:              toolName,
+		ProviderID:        testToolProviderID(toolName),
 		Visibility:        toolcontract.ToolVisibilityModel,
 		InputSchema:       json.RawMessage(`{"type":"object","properties":{}}`),
 		InputIntentSchema: json.RawMessage(`{"type":"object","properties":{}}`),
@@ -67,4 +68,31 @@ func testToolSideEffectClass(toolName string) string {
 		}
 	}
 	return toolcontract.ToolSideEffectStateChange
+}
+
+func testBuiltInToolNames() []string {
+	return []string{
+		toolcontract.BashToolName,
+		toolcontract.ReadToolName,
+		toolcontract.FileDeliverToolName,
+		toolcontract.SkillSearchToolName,
+		toolcontract.FileReadToolName,
+		toolcontract.WriteToolName,
+		toolcontract.FileDeleteToolName,
+		toolcontract.EditToolName,
+		toolcontract.FilePreviewToolName,
+		toolcontract.ImageReadToolName,
+		toolcontract.ConversationHistoryToolName,
+		toolcontract.PlanToolName,
+		toolcontract.EquipToolName,
+	}
+}
+
+func testToolProviderID(toolName string) string {
+	for _, builtInToolName := range testBuiltInToolNames() {
+		if strings.TrimSpace(toolName) == builtInToolName {
+			return toolcontract.BuiltInToolProviderID
+		}
+	}
+	return "test"
 }

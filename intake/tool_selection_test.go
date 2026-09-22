@@ -96,13 +96,13 @@ func TestATurnThatNeedsNoToolSelectsNone(t *testing.T) {
 
 func TestTheAlwaysExposedKernelToolsAreNeverAskedAbout(t *testing.T) {
 	request := addressedDecisionRequest("워크스페이스 파일 정리해서 결과 알려줘")
-	request.ToolSet = newTestToolSet(append(toolcontract.KernelToolNames(), "task_add", "message_send"))
+	request.ToolSet = newTestToolSet(append(testBuiltInToolNames(), "task_add", "message_send"))
 	candidateToolNames := resolveCallableToolNames(request)
 
 	state := buildDecisionState(request, decisionToolDescriptions(request.ToolSet, candidateToolNames).tools)
 	questions := toolQuestionsFor(request, candidateToolNames)
 
-	for _, kernelToolName := range toolcontract.KernelToolNames() {
+	for _, kernelToolName := range testBuiltInToolNames() {
 		if containsString(candidateToolNames, kernelToolName) {
 			t.Fatalf("expected %s to be exposed without being asked about, got %v", kernelToolName, candidateToolNames)
 		}

@@ -54,7 +54,7 @@ func requiredEvidenceRegisteredToolName(toolSet *toolcontract.ToolSet, toolName 
 }
 
 func requiredEvidenceToolIsCapabilityOperation(toolSet *toolcontract.ToolSet, toolName string) bool {
-	return !toolcontract.IsKernelToolName(toolName) && toolSet.CanExpose(toolName)
+	return !toolSet.IsBuiltInTool(toolName) && toolSet.CanExpose(toolName)
 }
 
 func requiredEvidenceIncludesNamespace(toolSet *toolcontract.ToolSet, toolNames []string, namespace string) bool {

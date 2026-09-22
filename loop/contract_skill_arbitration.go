@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -143,7 +142,7 @@ func buildContractSkillArbitrationVocabulary(request AgentRequest, candidates []
 			}
 		}
 	}
-	for _, toolName := range toolcontract.KernelToolNames() {
+	for _, toolName := range request.ToolSet.BuiltInToolNames() {
 		if requestHasToolName(request, toolName) {
 			vocabulary.ToolNames = appendUniqueStrings(vocabulary.ToolNames, toolName)
 		}

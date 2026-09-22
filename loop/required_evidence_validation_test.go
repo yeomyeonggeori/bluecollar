@@ -49,7 +49,7 @@ func TestRequiredEvidenceToolCanBeSatisfiedRejectsUnavailableTool(t *testing.T) 
 func TestRequiredEvidenceToolCanBeSatisfiedRejectsDisallowedKernelTool(t *testing.T) {
 	toolSet := toolcontract.NewToolSet([]string{"write"})
 	for _, toolName := range []string{"write", toolcontract.FileDeliverToolName} {
-		registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		registerTestTool(toolSet, testToolDescriptor(toolName), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return testToolSuccess("ok"), nil
 		})
 	}

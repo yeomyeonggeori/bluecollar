@@ -19,9 +19,20 @@ func TestThePromptNeverNamesARetiredAction(t *testing.T) {
 	}
 }
 
+func TestThePromptNeverNamesTheMachineryThatAssemblesIt(t *testing.T) {
+	runtimeWords := []string{"kernel", "tool budget", "exposure", "provider tool"}
+	for name, promptText := range modelFacingPromptStrings() {
+		for _, runtimeWord := range runtimeWords {
+			if strings.Contains(strings.ToLower(promptText), runtimeWord) {
+				t.Errorf("%s tells the model about %q, which is how the runtime builds what it sees rather than something it can act on", name, runtimeWord)
+			}
+		}
+	}
+}
+
 func modelFacingPromptStrings() map[string]string {
 	promptStrings := map[string]string{}
-	for stateName, state := range kernelPromptStates() {
+	for stateName, state := range promptStatesReachingTheModel() {
 		request := buildAgentActionRequest(state, true, false)
 		promptStrings[stateName+" action schema"] = string(request.StructuredOutputSchema.Document)
 		for index, message := range request.Messages {
@@ -84,4 +95,15 @@ func TestAskingGuidanceKeepsIndependentWorkSeparateFromTheMissingChoice(t *testi
 			t.Fatalf("asking guidance is missing %q", requirement)
 		}
 	}
+}
+
+func promptStatesReachingTheModel() map[string]agentTaskState {
+	states := map[string]agentTaskState{}
+	for stateName, state := range kernelPromptStates() {
+		states[stateName] = state
+	}
+	for stateName, state := range promptBudgetFixtures() {
+		states[stateName] = state
+	}
+	return states
 }

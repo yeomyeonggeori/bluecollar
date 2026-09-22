@@ -28,7 +28,7 @@ func TestConsecutiveIterationsOfOneStepSendTheSameInstructionAndToolCatalog(t *t
 	request := AgentTurnRequest{
 		Prompt:          "move the deal forward",
 		TaskLevel:       TaskLevelMedium,
-		ToolSet:         testToolSet(append(toolcontract.KernelToolNames(), "deal_update", "deal_list")),
+		ToolSet:         testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list")),
 		PinnedToolNames: []string{"deal_update"},
 	}
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-1")
@@ -59,7 +59,7 @@ func TestAPlanStepChangeReselectsTheShortlist(t *testing.T) {
 	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
-	request := AgentTurnRequest{ToolSet: testToolSet(append(toolcontract.KernelToolNames(), "deal_update", "deal_list"))}
+	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-2")
 
 	services.runner.applyPlanObservation(context.Background(), "task-step-2", &state, planUpdateSuccessObservation("obs-001",
@@ -90,7 +90,7 @@ func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
 	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
-	toolSet := testToolSet(append(toolcontract.KernelToolNames(), "deal_list", "deal_update"))
+	toolSet := testToolSet(append(testBuiltInToolNames(), "deal_list", "deal_update"))
 	request := AgentTurnRequest{
 		ToolSet:         toolSet,
 		PinnedToolNames: []string{"deal_list", "deal_update"},
@@ -277,7 +277,7 @@ func TestAClosingPlanKeepsTheCurrentShortlist(t *testing.T) {
 	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
-	request := AgentTurnRequest{ToolSet: testToolSet(append(toolcontract.KernelToolNames(), "deal_update", "deal_list"))}
+	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-3")
 
 	services.runner.applyPlanObservation(context.Background(), "task-step-3", &state, planUpdateSuccessObservation("obs-001",
@@ -306,7 +306,7 @@ func TestAFailedSelectionNeverLeavesTheLastStepsToolsOnTheNewStep(t *testing.T) 
 	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_list"}}}
 	services.runner.UseToolSelector(selector)
-	request := AgentTurnRequest{ToolSet: testToolSet(append(toolcontract.KernelToolNames(), "deal_update", "deal_list"))}
+	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-4")
 
 	services.runner.applyPlanObservation(context.Background(), "task-step-4", &state, planUpdateSuccessObservation("obs-001",
@@ -331,7 +331,7 @@ func TestAFailedSelectionNeverLeavesTheLastStepsToolsOnTheNewStep(t *testing.T) 
 
 func TestAStepShortlistReplacesTheLikelyToolsAndKeepsTheHostsPins(t *testing.T) {
 	request := AgentTurnRequest{
-		ToolSet:         testToolSet(append(toolcontract.KernelToolNames(), "deal_update", "deal_list", "memory_search")),
+		ToolSet:         testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list", "memory_search")),
 		PinnedToolNames: []string{"memory_search", "deal_list"},
 		LikelyToolNames: []string{"deal_list"},
 	}

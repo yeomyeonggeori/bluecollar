@@ -1,13 +1,11 @@
 package loop
 
-import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-)
+import ()
 
 import "testing"
 
 func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
-	toolSet := testToolSet(append(toolcontract.KernelToolNames(),
+	toolSet := testToolSet(append(testBuiltInToolNames(),
 		"site_serve",
 		"site_serve",
 		"message_send",
@@ -23,7 +21,7 @@ func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 		ToolExposureEvent{},
 	)
 
-	if got := filteredToolSet.ListToolNames(); !sameStringSet(got, toolcontract.KernelToolNames()) {
+	if got := filteredToolSet.ListToolNames(); !sameStringSet(got, testBuiltInToolNames()) {
 		t.Fatalf("expected fixed kernel tools, got %+v", got)
 	}
 	for _, hiddenToolName := range []string{"site_serve", "site_serve", "message_send"} {
@@ -42,7 +40,7 @@ func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 }
 
 func TestToolExposureRequiresExplicitPinForImmediateReply(t *testing.T) {
-	toolSet := testToolSet(append(toolcontract.KernelToolNames(), "task_add"))
+	toolSet := testToolSet(append(testBuiltInToolNames(), "task_add"))
 	request := AgentRequest{TaskShape: TaskShapeImmediateReply}
 
 	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
@@ -94,7 +92,7 @@ func TestInstructionBundleFromTurnRequestPreservesContractWorkingSet(t *testing.
 
 func TestReconstructedEvidenceOnlyArbitrationPreservesEvidenceWorkingSet(t *testing.T) {
 	flowToolNames := []string{"task_add", "task_list", "task_update", "task_delete"}
-	toolSet := testToolSet(append(toolcontract.KernelToolNames(), flowToolNames...))
+	toolSet := testToolSet(append(testBuiltInToolNames(), flowToolNames...))
 	request := AgentTurnRequest{
 		ToolSet: toolSet,
 		AvailableSkills: []SkillInstruction{{
@@ -118,7 +116,7 @@ func TestReconstructedEvidenceOnlyArbitrationPreservesEvidenceWorkingSet(t *test
 		ToolExposureEvent{},
 	)
 
-	expectedToolNames := append(toolcontract.KernelToolNames(), flowToolNames...)
+	expectedToolNames := append(testBuiltInToolNames(), flowToolNames...)
 	if !sameStringSet(filteredToolSet.ListToolNames(), expectedToolNames) {
 		t.Fatalf("expected reconstructed evidence working set with skill tools, got %+v", filteredToolSet.ListToolNames())
 	}
