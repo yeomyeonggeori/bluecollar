@@ -2,6 +2,7 @@ package intake
 
 import (
 	"context"
+	"sort"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -21,15 +22,93 @@ func (planner DecisionPlanner) withLikelyTools(ctx context.Context, request agen
 	if len(messageKeys) == 0 || len(candidateToolNames) == 0 {
 		return decisions
 	}
-	plan := planToolSelection(request, messageKeys, candidateToolNames)
+	singleToolKeys, severalToolKeys := messageKeysBySelectionShape(decisions, messageKeys)
+	plan := planToolSelectionForShapes(request, singleToolKeys, severalToolKeys, candidateToolNames)
 	calls := planner.decideEveryRequest(ctx, plan.requests)
 	answers := mergedDecisionAnswers(calls)
-	selectedToolNames, selectionError := likelyToolNamesByMessageKey(messageKeys, candidateToolNames, answers, firstCallError(calls), likelyToolCountLimit)
+	selectedToolNames, selectionError := likelyToolNamesByShape(singleToolKeys, severalToolKeys, candidateToolNames, answers, firstCallError(calls), likelyToolCountLimit)
 	recordDecisionCalls(callLedger, calls, decisionCallContext{
 		errorValue:    selectionError,
 		toolSelection: toolSelectionRecord(messageKeys, plan, answers, selectionError, likelyToolCountLimit),
 	})
 	return withLikelyToolNames(decisions, selectedToolNames)
+}
+
+func messageKeysBySelectionShape(decisions agentcontract.IntakeDecisions, messageKeys []string) (singleToolKeys []string, severalToolKeys []string) {
+	for _, messageKey := range messageKeys {
+		if expectedToolCountOfMessage(decisions, messageKey) == agentcontract.ExpectedToolCountOne {
+			singleToolKeys = append(singleToolKeys, messageKey)
+			continue
+		}
+		severalToolKeys = append(severalToolKeys, messageKey)
+	}
+	return singleToolKeys, severalToolKeys
+}
+
+func expectedToolCountOfMessage(decisions agentcontract.IntakeDecisions, messageKey string) agentcontract.ExpectedToolCount {
+	for index, decision := range decisions.Messages {
+		if decisionMessageKey(index) == messageKey {
+			return decision.TurnFields.ExpectedToolCount
+		}
+	}
+	return ""
+}
+
+func planToolSelectionForShapes(request agentcontract.IntakeDecisionRequest, singleToolKeys []string, severalToolKeys []string, candidateToolNames []string) toolSelectionPlan {
+	plan := toolSelectionPlan{candidateToolNames: candidateToolNames}
+	if len(severalToolKeys) > 0 {
+		plan = planToolSelection(request, severalToolKeys, candidateToolNames)
+	}
+	plan.requests = append(plan.requests, singleToolChoiceRequests(request, singleToolKeys, candidateToolNames)...)
+	return plan
+}
+
+func singleToolChoiceRequests(request agentcontract.IntakeDecisionRequest, messageKeys []string, candidateToolNames []string) []model.DecisionRequest {
+	if len(messageKeys) == 0 {
+		return nil
+	}
+	described := decisionToolDescriptions(request.ToolSet, candidateToolNames)
+	builder := newQuestionBuilder(request)
+	questions := map[string]model.DecisionQuestion{}
+	for _, messageKey := range messageKeys {
+		questions[singleToolChoiceQuestionName(messageKey)] = builder.singleToolChoiceQuestion(messageKey, described.tools)
+	}
+	return []model.DecisionRequest{{State: buildDecisionState(request, described.tools), Questions: questions}}
+}
+
+func likelyToolNamesByShape(singleToolKeys []string, severalToolKeys []string, candidateToolNames []string, answers map[string]model.DecisionAnswer, callError error, countLimit int) (map[string][]string, error) {
+	selectedToolNames, errorValue := likelyToolNamesByMessageKey(severalToolKeys, candidateToolNames, answers, callError, countLimit)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	for _, messageKey := range singleToolKeys {
+		selectedToolNames[messageKey] = toolNamesCoveringBelief(answers[singleToolChoiceQuestionName(messageKey)].Probabilities, countLimit)
+	}
+	return selectedToolNames, nil
+}
+
+func toolNamesCoveringBelief(probabilityByToolName map[string]float64, countLimit int) []string {
+	toolNames := make([]string, 0, len(probabilityByToolName))
+	for toolName := range probabilityByToolName {
+		if toolName != agentcontract.IntakeChoiceOptionNone {
+			toolNames = append(toolNames, toolName)
+		}
+	}
+	sort.Slice(toolNames, func(first, second int) bool {
+		return probabilityByToolName[toolNames[first]] > probabilityByToolName[toolNames[second]]
+	})
+	covered, selected := 0.0, []string{}
+	for _, toolName := range toolNames {
+		if len(selected) >= countLimit || (covered >= singleToolBeliefMass && len(selected) > 0) {
+			break
+		}
+		if probabilityByToolName[toolName] < recordedToolProbabilityFloor {
+			break
+		}
+		selected = append(selected, toolName)
+		covered += probabilityByToolName[toolName]
+	}
+	return selected
 }
 
 func messageKeysThatStartWork(decisions agentcontract.IntakeDecisions) []string {

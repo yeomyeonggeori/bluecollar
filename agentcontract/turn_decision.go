@@ -9,6 +9,7 @@ type ApprovalSignal string
 type BusyRoute string
 type PriorTaskReference string
 type DeliverableKind string
+type ExpectedToolCount string
 
 const (
 	IntakeClassificationQuickReply        IntakeClassification = "quick_reply"
@@ -38,6 +39,10 @@ const (
 	BusyRouteCancel    BusyRoute = "cancel"
 	BusyRouteNewTask   BusyRoute = "new_task"
 	BusyRouteUnrelated BusyRoute = "unrelated"
+
+	ExpectedToolCountNone    ExpectedToolCount = "none"
+	ExpectedToolCountOne     ExpectedToolCount = "one"
+	ExpectedToolCountSeveral ExpectedToolCount = "several"
 
 	PriorTaskReferenceNone            PriorTaskReference = "none"
 	PriorTaskReferenceOutcomeRecovery PriorTaskReference = "outcome_recovery"
@@ -75,6 +80,7 @@ type IntakeDecision struct {
 	ClarificationQuestion   string                `json:"clarificationQuestion,omitempty"`
 	ClarificationOptions    []ClarificationOption `json:"clarificationOptions,omitempty"`
 	HasIndependentWork      bool                  `json:"hasIndependentWork"`
+	ExpectedToolCount       ExpectedToolCount     `json:"expectedToolCount,omitempty"`
 	RawDecisionRoute        TurnRoute             `json:"rawDecisionRoute,omitempty"`
 }
 
@@ -107,6 +113,7 @@ type TurnDecision struct {
 	ClarificationQuestion   string                `json:"clarificationQuestion,omitempty"`
 	ClarificationOptions    []ClarificationOption `json:"clarificationOptions,omitempty"`
 	HasIndependentWork      bool                  `json:"hasIndependentWork"`
+	ExpectedToolCount       ExpectedToolCount     `json:"expectedToolCount,omitempty"`
 	RawDecisionRoute        TurnRoute             `json:"rawDecisionRoute,omitempty"`
 	ReactionEmojiName       string                `json:"reactionEmojiName,omitempty"`
 	BusyRoute               BusyRoute             `json:"busyRoute,omitempty"`
@@ -145,6 +152,7 @@ func (turnDecision TurnDecision) IntakeDecision() IntakeDecision {
 		UserFacingReply:         turnDecision.UserFacingReply,
 		IsExternalSendRequested: turnDecision.IsExternalSendRequested,
 		HasIndependentWork:      turnDecision.HasIndependentWork,
+		ExpectedToolCount:       turnDecision.ExpectedToolCount,
 		RawDecisionRoute:        turnDecision.RawDecisionRoute,
 		InitialToolNames:        append([]string{}, turnDecision.InitialToolNames...),
 		PriorTaskReference:      NormalizePriorTaskReference(turnDecision.PriorTaskReference),
@@ -164,6 +172,7 @@ func (turnDecision TurnDecision) WithRestoredIntakeState(intakeDecision IntakeDe
 	turnDecision.ExpectedResults = NormalizeExpectedResults(intakeDecision.ExpectedResults)
 	turnDecision.IsExternalSendRequested = intakeDecision.IsExternalSendRequested
 	turnDecision.HasIndependentWork = intakeDecision.HasIndependentWork
+	turnDecision.ExpectedToolCount = intakeDecision.ExpectedToolCount
 	turnDecision.RawDecisionRoute = intakeDecision.RawDecisionRoute
 	turnDecision.InitialToolNames = append([]string{}, intakeDecision.InitialToolNames...)
 	return turnDecision

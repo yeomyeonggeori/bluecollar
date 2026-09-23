@@ -68,6 +68,23 @@ func (builder questionBuilder) toolQuestions(messageKeys []string, toolNames []s
 	return questions
 }
 
+func (builder questionBuilder) singleToolChoiceQuestion(messageKey string, tools []decisionTool) model.DecisionQuestion {
+	optionDescriptions := map[string]string{
+		agentcontract.IntakeChoiceOptionNone: "no tool in the catalog does what the work needs",
+	}
+	for _, tool := range tools {
+		optionDescriptions[tool.Name] = tool.Description
+	}
+	return model.ChoiceQuestion{
+		Instructions:       builder.about(messageKey) + "Which one tool will the work call?",
+		OptionDescriptions: optionDescriptions,
+	}.Question()
+}
+
+func singleToolChoiceQuestionName(messageKey string) string {
+	return messageKey + "." + agentcontract.IntakeQuestionSingleToolChoice
+}
+
 func toolQuestionName(messageKey string, toolName string) string {
 	return messageKey + "." + agentcontract.IntakeQuestionPrefixTool + toolName
 }
@@ -182,7 +199,7 @@ func (builder questionBuilder) relatesToActiveTaskQuestion(messageKey string) mo
 func (builder questionBuilder) routerQuestions(messageKey string) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{
 		agentcontract.IntakeQuestionRoute:                   builder.routeQuestion(messageKey),
-		agentcontract.IntakeQuestionNeedsTool:               builder.needsToolQuestion(messageKey),
+		agentcontract.IntakeQuestionExpectedToolCount:       builder.expectedToolCountQuestion(messageKey),
 		agentcontract.IntakeQuestionHasIndependentWork:      builder.hasIndependentWorkQuestion(messageKey),
 		agentcontract.IntakeQuestionIsExternalSendRequested: builder.isExternalSendRequestedQuestion(messageKey),
 		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
@@ -251,11 +268,14 @@ func (builder questionBuilder) hasIndependentWorkQuestion(messageKey string) mod
 	}.Question()
 }
 
-func (builder questionBuilder) needsToolQuestion(messageKey string) model.DecisionQuestion {
-	return model.NoulQuestion{
-		Instructions:     builder.about(messageKey) + "Does doing what it asks require calling any tool at all?",
-		TrueDescription:  "it cannot be done without reading or changing company records, tasks, files, messages, calendars or the web, without arranging something to happen later, or without running something",
-		FalseDescription: "words from common knowledge, judgment, or the visible conversation are enough. A message that merely mentions work is not a reason to call a tool",
+func (builder questionBuilder) expectedToolCountQuestion(messageKey string) model.DecisionQuestion {
+	return model.ChoiceQuestion{
+		Instructions: builder.about(messageKey) + "How many tools will doing what it asks call before the work is done?",
+		OptionDescriptions: map[string]string{
+			string(agentcontract.ExpectedToolCountNone):    "none: words from common knowledge, judgment, or the visible conversation are enough. A message that merely mentions work is not a reason to call a tool",
+			string(agentcontract.ExpectedToolCountOne):     "one: a single lookup, a single record, or a single change answers it",
+			string(agentcontract.ExpectedToolCountSeveral): "several: the work reads or records one thing and then sends, records or changes another, so more than one tool is called",
+		},
 	}.Question()
 }
 

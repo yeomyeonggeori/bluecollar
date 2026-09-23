@@ -312,7 +312,7 @@ func readAddressingDecision(reader answerReader, isReacting bool) (agentcontract
 }
 
 func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) (agentcontract.TurnDecision, error) {
-	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage}
+	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionExpectedToolCount, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage}
 	if hasPriorTask(request) {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionPriorTaskReference)
 	}
@@ -326,10 +326,8 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
-	needsTool, errorValue := reader.noul(agentcontract.IntakeQuestionNeedsTool)
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
+	expectedToolCount := agentcontract.ExpectedToolCount(choices[agentcontract.IntakeQuestionExpectedToolCount])
+	needsTool := expectedToolCount != agentcontract.ExpectedToolCountNone
 	hasIndependentWork, errorValue := reader.noul(agentcontract.IntakeQuestionHasIndependentWork)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
@@ -348,6 +346,7 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 		RawDecisionRoute:        route,
 		Classification:          classification,
 		HasIndependentWork:      hasIndependentWork,
+		ExpectedToolCount:       expectedToolCount,
 		TaskShape:               agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
 		TaskLevel:               agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
 		DeliverableKind:         agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
