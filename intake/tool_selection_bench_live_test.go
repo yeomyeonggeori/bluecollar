@@ -51,7 +51,7 @@ var benchmarkCases = []benchmarkCase{
 	{"매주 월요일 아침에 주간보고 리마인더 돌려줘", []string{"schedule_create"}},
 	{"그 반복 알림 그만해줘", []string{"schedule_cancel"}},
 	{"받은 메일 중에 계약 관련된 것만 찾아줘", []string{"mail_message_search"}},
-	{"안 읽은 메일 목록 보여줘", []string{"mail_message_list"}},
+	{"받은편지함 메일 목록 보여줘", []string{"mail_message_list"}},
 	{"이 메일 읽음 처리해줘", []string{"mail_message_mark"}},
 	{"이번 주 할 일 목록 보여줘", []string{"task_list"}},
 	{"이 업무 완료로 바꿔줘", []string{"task_update"}},
