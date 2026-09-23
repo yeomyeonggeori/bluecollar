@@ -62,10 +62,11 @@ func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context
 	}
 	callLedger := &intakeCallLedger{}
 	selectedTools, errorValue := agentTurnRunner.toolSelector.SelectToolNames(ctx, agentcontract.ToolSelectionNeed{
-		Need:       stepTitle,
-		ToolSet:    state.Request.ToolSet,
-		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
-		CallLedger: callLedger,
+		Need:              stepTitle,
+		ToolSet:           state.Request.ToolSet,
+		CallableToolNames: planStepCandidateToolNames(state),
+		CountLimit:        toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CallLedger:        callLedger,
 	})
 	agentTurnRunner.appendCallRecords(taskRunID, callLedger.Records)
 	if errorValue != nil {
@@ -165,4 +166,9 @@ func (agentTurnRunner *AgentTurnRunner) widenPaceForPlannedLevel(taskRunID strin
 		"maxIterationCount": agentTurnRunner.options.MaxIterationCount,
 		"maxElapsedSecond":  agentTurnRunner.options.MaxElapsedSecond,
 	}))
+}
+
+func planStepCandidateToolNames(state *agentTaskState) []string {
+	candidates := appendUniqueStrings(nil, state.Request.LikelyToolNames...)
+	return appendUniqueStrings(candidates, foundToolNamesFromObservations(state.Observations)...)
 }
