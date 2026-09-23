@@ -11,6 +11,8 @@ const likelyToolCountLimit = toolcontract.MaxLikelyToolCount
 
 const recordedToolProbabilityFloor = 0.05
 
+const singleToolBeliefMass = 0.90
+
 const toolLikelihoodGuidanceReference = "Judge it by toolLikelihoodGuidance in the state."
 
 const toolLikelihoodGuidance = "Every question of the form \"Will the work call <tool>?\" names one tool from availableTools, whose description says what that tool does. " +

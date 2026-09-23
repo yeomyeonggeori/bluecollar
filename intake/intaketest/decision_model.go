@@ -106,8 +106,10 @@ func namedAnswer(shortName string, question model.DecisionQuestion, outcome Outc
 		return noulAnswer(outcome.RelatesToActiveTask)
 	case agentcontract.IntakeQuestionRoute:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
-	case agentcontract.IntakeQuestionNeedsTool:
-		return noulAnswer(outcome.TurnDecision.Classification == agentcontract.IntakeClassificationBoundedTask)
+	case agentcontract.IntakeQuestionExpectedToolCount:
+		return choiceAnswer(string(scriptedExpectedToolCount(outcome.TurnDecision)))
+	case agentcontract.IntakeQuestionSingleToolChoice:
+		return choiceAnswer(firstScriptedToolName(outcome.TurnDecision))
 	case agentcontract.IntakeQuestionHasIndependentWork:
 		return noulAnswer(outcome.TurnDecision.HasIndependentWork)
 	case agentcontract.IntakeQuestionIsExternalSendRequested:
@@ -250,4 +252,21 @@ func PendingChoiceKeys(state any) []string {
 		choiceKeys = append(choiceKeys, option.Key)
 	}
 	return choiceKeys
+}
+
+func firstScriptedToolName(decision agentcontract.TurnDecision) string {
+	if len(decision.InitialToolNames) == 0 {
+		return agentcontract.IntakeChoiceOptionNone
+	}
+	return decision.InitialToolNames[0]
+}
+
+func scriptedExpectedToolCount(decision agentcontract.TurnDecision) agentcontract.ExpectedToolCount {
+	if decision.ExpectedToolCount != "" {
+		return decision.ExpectedToolCount
+	}
+	if decision.Classification == agentcontract.IntakeClassificationBoundedTask {
+		return agentcontract.ExpectedToolCountSeveral
+	}
+	return agentcontract.ExpectedToolCountNone
 }
