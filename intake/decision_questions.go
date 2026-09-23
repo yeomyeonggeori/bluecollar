@@ -361,7 +361,11 @@ func (builder questionBuilder) outputFormatQuestion(messageKey string, formatNam
 }
 
 func (builder questionBuilder) likelyToolQuestion(messageKey string, toolName string) model.DecisionQuestion {
-	return model.NoulQuestion{Instructions: builder.about(messageKey) + "Will the work call " + toolName + "? " + toolLikelihoodGuidanceReference}.Question()
+	return model.NoulQuestion{
+		Instructions:     builder.about(messageKey) + "Will the work call " + toolName + "? " + toolLikelihoodGuidanceReference,
+		TrueDescription:  "the work plainly needs what that tool does",
+		FalseDescription: "its name merely shares a word with the message, or it might conceivably help",
+	}.Question()
 }
 
 func (builder questionBuilder) choiceSelectionQuestion(messageKey string, optionIndex int) model.DecisionQuestion {
