@@ -12,14 +12,16 @@ import (
 )
 
 type recordingToolSelector struct {
-	needs         []string
-	countLimits   []int
-	selectedTools []agentcontract.SelectedTool
+	needs          []string
+	countLimits    []int
+	candidateNames [][]string
+	selectedTools  []agentcontract.SelectedTool
 }
 
 func (selector *recordingToolSelector) SelectToolNames(_ context.Context, need agentcontract.ToolSelectionNeed) ([]agentcontract.SelectedTool, error) {
 	selector.needs = append(selector.needs, need.Need)
 	selector.countLimits = append(selector.countLimits, need.CountLimit)
+	selector.candidateNames = append(selector.candidateNames, need.CallableToolNames)
 	return selector.selectedTools, nil
 }
 
@@ -348,5 +350,72 @@ func TestAStepShortlistReplacesTheLikelyToolsAndKeepsTheHostsPins(t *testing.T) 
 	}
 	if !stringSliceContains(stepToolNames, "deal_update") {
 		t.Fatalf("expected the step shortlist to be exposed, got %+v", stepToolNames)
+	}
+}
+
+func TestAPlanStepRanksOnlyWithinTheTaskShortlist(t *testing.T) {
+	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
+	services.runner.UseToolSelector(selector)
+	request := AgentTurnRequest{
+		ToolSet:         testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list", "invoice_send")),
+		LikelyToolNames: []string{"deal_update", "deal_list"},
+	}
+	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-narrow")
+
+	services.runner.applyPlanObservation(context.Background(), "task-step-narrow", &state, planUpdateSuccessObservation("obs-001",
+		`{"steps":[{"title":"move the deal","status":"in_progress"}]}`))
+
+	if len(selector.candidateNames) != 1 {
+		t.Fatalf("expected one selection for the active step, got %+v", selector.candidateNames)
+	}
+	candidates := selector.candidateNames[0]
+	if !sameStringSet(candidates, []string{"deal_update", "deal_list"}) {
+		t.Fatalf("expected the step to rank only what the task already shortlisted, got %+v", candidates)
+	}
+}
+
+func TestAPlanStepWithoutAShortlistRanksTheWholeToolSet(t *testing.T) {
+	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
+	services.runner.UseToolSelector(selector)
+	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
+	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-wide")
+
+	services.runner.applyPlanObservation(context.Background(), "task-step-wide", &state, planUpdateSuccessObservation("obs-001",
+		`{"steps":[{"title":"move the deal","status":"in_progress"}]}`))
+
+	if len(selector.candidateNames) != 1 || len(selector.candidateNames[0]) != 0 {
+		t.Fatalf("expected an empty candidate list so the selector falls back to the whole tool set, got %+v", selector.candidateNames)
+	}
+}
+
+func TestAPlanStepRanksWhatEquipFoundEvenWhenTheTaskMissedIt(t *testing.T) {
+	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "invoice_send"}}}
+	services.runner.UseToolSelector(selector)
+	request := AgentTurnRequest{
+		ToolSet:         testToolSet(append(testBuiltInToolNames(), "deal_update", "invoice_send")),
+		LikelyToolNames: []string{"deal_update"},
+	}
+	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-equip")
+	state.Observations = []turnObservation{{
+		ObservationID: "obs-equip",
+		Action:        "continue",
+		Tool:          toolcontract.EquipToolName,
+		Output: toolcontract.ToolOutput{
+			Content: "found",
+			Data:    json.RawMessage(`{"selectedTools":[{"name":"invoice_send","description":"send an invoice"}]}`),
+		},
+	}}
+
+	services.runner.applyPlanObservation(context.Background(), "task-step-equip", &state, planUpdateSuccessObservation("obs-001",
+		`{"steps":[{"title":"send the invoice","status":"in_progress"}]}`))
+
+	if len(selector.candidateNames) != 1 {
+		t.Fatalf("expected one selection for the active step, got %+v", selector.candidateNames)
+	}
+	if !sameStringSet(selector.candidateNames[0], []string{"deal_update", "invoice_send"}) {
+		t.Fatalf("expected a tool the agent equipped itself to stay a candidate, got %+v", selector.candidateNames[0])
 	}
 }
