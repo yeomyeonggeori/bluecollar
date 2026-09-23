@@ -296,7 +296,7 @@ func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
 	if record.Kind != agentcontract.LLMCallKindDecision {
 		t.Fatalf("expected a decision record, got %q", record.Kind)
 	}
-	if record.DecidedMessageCount != 1 || record.QuestionCount == 0 {
+	if len(record.DecidedMessageIDs) != 1 || record.QuestionCount == 0 {
 		t.Fatalf("expected the decided message and question counts, got %+v", record)
 	}
 	if record.AttachmentsDescribed {
@@ -304,6 +304,9 @@ func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
 	}
 	if _, isRecorded := record.DecisionAnswers["m1."+agentcontract.IntakeQuestionRoute]; !isRecorded {
 		t.Fatalf("expected the route distribution in the record, got %+v", record.DecisionAnswers)
+	}
+	if !strings.Contains(string(record.Input), "보고서 정리해줘") {
+		t.Fatalf("expected the record to keep the request the planner was given, got %s", record.Input)
 	}
 }
 

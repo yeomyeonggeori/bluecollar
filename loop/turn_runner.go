@@ -274,7 +274,7 @@ func (agentTurnRunner *AgentTurnRunner) UseToolResultImageSource(toolResultImage
 
 func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID string) llmCallObserver {
 	return func(record llmCallRecord) {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventLLMCall, marshalEventBody(record))
+		agentTurnRunner.taskRunService.AppendLLMCall(taskRunID, record)
 		agentTurnRunner.noteModelInUse(record.Model)
 		agentTurnRunner.noteContextInUse(record.PromptTokens)
 	}
@@ -282,7 +282,7 @@ func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID stri
 
 func (agentTurnRunner *AgentTurnRunner) appendCallRecords(taskRunID string, records []llmCallRecord) {
 	for _, record := range records {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventLLMCall, marshalEventBody(record))
+		agentTurnRunner.taskRunService.AppendLLMCall(taskRunID, record)
 	}
 }
 
@@ -426,6 +426,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	} else {
 		agentTurnRunner.recoveryLanguageModel = observeLanguageModel(agentTurnRunner.recoveryLanguageModel, observeRecord)
 	}
+	turnContext = agentcontract.WithLLMCallObserver(turnContext, observeRecord)
 	taskContext, taskCancel := context.WithCancel(turnContext)
 	defer taskCancel()
 	unregisterTaskCancel := agentTurnRunner.taskRunService.RegisterTaskRunCancel(taskRun.TaskRunID, taskCancel)

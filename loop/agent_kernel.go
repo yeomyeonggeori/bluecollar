@@ -696,7 +696,7 @@ func (agentKernel *AgentKernel) taskRunForRequest(request AgentRequest) agentcon
 
 func (agentKernel *AgentKernel) appendTurnRouterCallRecords(taskRunID string, records []llmCallRecord) {
 	for _, record := range records {
-		agentKernel.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, marshalEventBody(record))
+		agentKernel.taskRunService.AppendLLMCall(taskRunID, record)
 	}
 }
 

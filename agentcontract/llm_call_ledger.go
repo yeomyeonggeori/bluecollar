@@ -51,10 +51,14 @@ type LLMCallRecord struct {
 	DecisionAnswers        map[string]model.DecisionAnswer          `json:"decisionAnswers,omitempty"`
 	DecisionDraws          map[string]float64                       `json:"decisionDraws,omitempty"`
 	ToolSelection          *ToolSelectionRecord                     `json:"toolSelection,omitempty"`
-	DecidedMessageCount    int                                      `json:"decidedMessageCount,omitempty"`
+	DecidedMessageIDs      []string                                 `json:"decidedMessageIDs,omitempty"`
 	QuestionCount          int                                      `json:"questionCount,omitempty"`
 	AttachmentsDescribed   bool                                     `json:"attachmentsDescribed"`
 	AttachmentDescriptions []string                                 `json:"attachmentDescriptions,omitempty"`
+	Seed                   *int64                                   `json:"seed,omitempty"`
+	Endpoint               string                                   `json:"endpoint,omitempty"`
+	Exchange               *model.WireExchange                      `json:"-"`
+	Input                  json.RawMessage                          `json:"-"`
 }
 
 type ToolSelectionRecord struct {
@@ -131,6 +135,32 @@ func ObserveLanguageModel(provider model.LanguageModelProvider, observe LLMCallO
 	return base
 }
 
+type llmCallObserverContextKey struct{}
+
+func WithLLMCallObserver(ctx context.Context, observe LLMCallObserver) context.Context {
+	if observe == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, llmCallObserverContextKey{}, observe)
+}
+
+func (record LLMCallRecord) WithWireExchange(exchange *model.WireExchange) LLMCallRecord {
+	record.Exchange = exchange
+	if exchange != nil {
+		record.Endpoint = exchange.Endpoint
+	}
+	return record
+}
+
+func (observedModel observedLanguageModel) record(ctx context.Context, wireCapture *model.WireCapture, record LLMCallRecord) {
+	record = record.WithWireExchange(wireCapture.Exchange())
+	if observe, isInContext := ctx.Value(llmCallObserverContextKey{}).(LLMCallObserver); isInContext {
+		observe(record)
+		return
+	}
+	observedModel.observe(record)
+}
+
 func (observedModel observedLanguageModel) observedInnerProvider() model.LanguageModelProvider {
 	return observedModel.provider
 }
@@ -165,23 +195,28 @@ type observedChatCompleter struct {
 }
 
 func (completer observedChatCompleter) GenerateChatCompletion(ctx context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	request.GenerationOptions = seededGenerationOptions(request.GenerationOptions)
 	startedAt := time.Now()
+	ctx, wireCapture := model.WithWireCapture(ctx)
 	response, errorValue := completer.delegate.GenerateChatCompletion(ctx, request)
-	completer.observedModel.observe(chatCallRecord("chat", request, response, startedAt, errorValue))
+	completer.observedModel.record(ctx, wireCapture, chatCallRecord("chat", request, response, startedAt, errorValue))
 	return response, errorValue
 }
 
 func (observedModel observedLanguageModel) GenerateResponse(ctx context.Context, prompt string) (string, error) {
 	startedAt := time.Now()
+	ctx, wireCapture := model.WithWireCapture(ctx)
 	reply, errorValue := observedModel.provider.GenerateResponse(ctx, prompt)
-	observedModel.observe(textCallRecord("text", prompt, reply, startedAt, errorValue))
+	observedModel.record(ctx, wireCapture, textCallRecord("text", prompt, reply, startedAt, errorValue))
 	return reply, errorValue
 }
 
 func (observedModel observedLanguageModel) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	request.GenerationOptions = seededGenerationOptions(request.GenerationOptions)
 	startedAt := time.Now()
+	ctx, wireCapture := model.WithWireCapture(ctx)
 	response, errorValue := observedModel.provider.GenerateStructuredResponse(ctx, request)
-	observedModel.observe(structuredCallRecord(request, response, startedAt, errorValue))
+	observedModel.record(ctx, wireCapture, structuredCallRecord(request, response, startedAt, errorValue))
 	return response, errorValue
 }
 
@@ -212,15 +247,19 @@ func (capability observedLocalRecoveryCapability) GenerateLocalRecoveryResponse(
 
 func (capability observedRecoveryChatCapability) GenerateRecoveryChatCompletion(ctx context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
 	startedAt := time.Now()
+	request.GenerationOptions = seededGenerationOptions(request.GenerationOptions)
+	ctx, wireCapture := model.WithWireCapture(ctx)
 	response, errorValue := capability.delegate.GenerateRecoveryChatCompletion(ctx, request)
-	capability.observedModel.observe(chatCallRecord("recovery_chat", request, response, startedAt, errorValue))
+	capability.observedModel.record(ctx, wireCapture, chatCallRecord("recovery_chat", request, response, startedAt, errorValue))
 	return response, errorValue
 }
 
 func (capability observedLocalRecoveryChatCapability) GenerateLocalRecoveryChatCompletion(ctx context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
 	startedAt := time.Now()
+	request.GenerationOptions = seededGenerationOptions(request.GenerationOptions)
+	ctx, wireCapture := model.WithWireCapture(ctx)
 	response, errorValue := capability.delegate.GenerateLocalRecoveryChatCompletion(ctx, request)
-	capability.observedModel.observe(chatCallRecord("local_recovery_chat", request, response, startedAt, errorValue))
+	capability.observedModel.record(ctx, wireCapture, chatCallRecord("local_recovery_chat", request, response, startedAt, errorValue))
 	return response, errorValue
 }
 
@@ -230,8 +269,9 @@ func (observedModel observedLanguageModel) recoveryResponse(ctx context.Context,
 		return observedModel.GenerateResponse(ctx, prompt)
 	}
 	startedAt := time.Now()
+	ctx, wireCapture := model.WithWireCapture(ctx)
 	reply, errorValue := recoveryProvider.GenerateRecoveryResponse(ctx, prompt)
-	observedModel.observe(textCallRecord("recovery_text", prompt, reply, startedAt, errorValue))
+	observedModel.record(ctx, wireCapture, textCallRecord("recovery_text", prompt, reply, startedAt, errorValue))
 	return reply, errorValue
 }
 
@@ -241,8 +281,9 @@ func (observedModel observedLanguageModel) localRecoveryResponse(ctx context.Con
 		return observedModel.GenerateResponse(ctx, prompt)
 	}
 	startedAt := time.Now()
+	ctx, wireCapture := model.WithWireCapture(ctx)
 	reply, errorValue := localRecoveryProvider.GenerateLocalRecoveryResponse(ctx, prompt)
-	observedModel.observe(textCallRecord("local_recovery_text", prompt, reply, startedAt, errorValue))
+	observedModel.record(ctx, wireCapture, textCallRecord("local_recovery_text", prompt, reply, startedAt, errorValue))
 	return reply, errorValue
 }
 
@@ -280,6 +321,7 @@ func chatCallRecord(kind string, request model.ChatCompletionRequest, response m
 	record.ToolCount = len(request.Tools)
 	record.ToolBytes = chatRequestToolByteCount(request)
 	record.ContentBytes = len(response.Message.Content)
+	record.Seed = request.GenerationOptions.Seed
 	return record
 }
 
@@ -289,6 +331,7 @@ func structuredCallRecord(request model.StructuredResponseRequest, response mode
 	record.PromptBytes = structuredRequestByteCount(request)
 	record.SchemaBytes = len(request.StructuredOutputSchema.Document)
 	record.ContentBytes = len(response.Content)
+	record.Seed = request.GenerationOptions.Seed
 	return record
 }
 

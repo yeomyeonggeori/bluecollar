@@ -179,7 +179,7 @@ type AgentTurnRequest struct {
 	TurnAnchorClamped            bool
 	OriginalTurnStartedAt        time.Time
 	CarriedOutCalls              []CarriedOutCall
-	CheckpointSender             AgentCheckpointSender
+	CheckpointSender             AgentCheckpointSender `json:"-"`
 	StepBudgetContext            string
 	ArtifactManifest             []ArtifactManifestEntry
 	RestrictActionToTerminalOnly bool

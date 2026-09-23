@@ -133,6 +133,14 @@ func (taskRunService *TaskRunService) AppendTaskEvent(taskRunID string, name str
 	taskRunService.taskEventService.AppendTaskEvent(taskRunID, name, body)
 }
 
+func (taskRunService *TaskRunService) AppendLLMCall(taskRunID string, record agentcontract.LLMCallRecord) {
+	taskRunService.taskEventService.AppendLLMCall(taskRunID, record)
+}
+
+func (taskRunService *TaskRunService) AppendPartedTaskEvent(taskRunID string, name string, document json.RawMessage) {
+	taskRunService.taskEventService.AppendPartedTaskEvent(taskRunID, name, document)
+}
+
 func (taskRunService *TaskRunService) AppendTaskEventWithError(taskRunID string, name string, body string) (agentcontract.TaskEvent, error) {
 	return taskRunService.taskEventService.AppendTaskEventWithError(taskRunID, name, body)
 }
