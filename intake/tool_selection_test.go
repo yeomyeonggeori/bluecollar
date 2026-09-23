@@ -170,13 +170,31 @@ func TestThePerToolQuestionStaysSmallEnoughToRepeatPerMessage(t *testing.T) {
 	questionBytes := decisionQuestionsByteCount(toolQuestionsFor(request, candidateToolNames))
 
 	if averageBytes := questionBytes / len(candidateToolNames); averageBytes > perToolQuestionByteBudget {
-		t.Fatalf("expected a tool question to stay within %d bytes, got %d; shared guidance belongs in the state", perToolQuestionByteBudget, averageBytes)
+		t.Fatalf("expected a tool question to stay within %d bytes, got %d; the long-form rules belong in the state", perToolQuestionByteBudget, averageBytes)
 	}
 }
 
-const perToolQuestionByteBudget = 220
+const perToolQuestionByteBudget = 340
 
-func TestTheToolGuidanceIsCarriedOnceByTheStateRatherThanByEachQuestion(t *testing.T) {
+func TestEachToolQuestionSaysWhatTrueAndFalseMean(t *testing.T) {
+	request := addressedDecisionRequest("지난 분기 매출 정리해서 덱 만들어줘")
+	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
+
+	for questionName, question := range toolQuestionsFor(request, resolveCallableToolNames(request)) {
+		criteria, isPair := question.Criteria.(map[string]string)
+		if !isPair {
+			t.Fatalf("expected %s to carry criteria, got %#v", questionName, question.Criteria)
+		}
+		if strings.TrimSpace(criteria["true"]) == "" || strings.TrimSpace(criteria["false"]) == "" {
+			t.Fatalf("expected %s to say what true and false mean, got %#v", questionName, criteria)
+		}
+		if !strings.Contains(criteria["false"], "shares a word with the message") {
+			t.Fatalf("expected %s to name the lookalike it must refuse, got %q", questionName, criteria["false"])
+		}
+	}
+}
+
+func TestTheLongFormRulesAreCarriedOnceByTheStateRatherThanByEachQuestion(t *testing.T) {
 	request := addressedDecisionRequest("지난 분기 매출 정리해서 덱 만들어줘")
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
 	candidateToolNames := resolveCallableToolNames(request)
@@ -190,7 +208,7 @@ func TestTheToolGuidanceIsCarriedOnceByTheStateRatherThanByEachQuestion(t *testi
 	}
 	for questionName, question := range toolQuestionsFor(request, candidateToolNames) {
 		if strings.Contains(question.Instructions, "at any point before the work is done") {
-			t.Fatalf("expected %s to carry no copy of the shared guidance, got %q", questionName, question.Instructions)
+			t.Fatalf("expected %s to carry no copy of the long-form rules, got %q", questionName, question.Instructions)
 		}
 	}
 }
