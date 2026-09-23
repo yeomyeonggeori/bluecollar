@@ -14,10 +14,10 @@ body:
       label: The decision
       description: >
         Which choice you are asking about, and where it is written down — a
-        README section, a file, a test name. The guarantees are test names, so
+        DOCS.md section, a file, a test name. The guarantees are test names, so
         a test name is the most precise thing you can point at.
       placeholder: |
-        The port is one method — README, The shape.
+        The port is one method — DOCS.md, Architecture.
     validations:
       required: true
 
