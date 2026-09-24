@@ -10,6 +10,9 @@
     "namespace": {
       "type": "string"
     },
+    "namespaceSummary": {
+      "type": "string"
+    },
     "name": {
       "type": "string"
     },

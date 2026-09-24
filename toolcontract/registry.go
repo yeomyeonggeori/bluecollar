@@ -21,6 +21,7 @@ type ToolDescriptor struct {
 	ID                      string              `json:"id,omitempty"`
 	ProviderID              string              `json:"providerID,omitempty"`
 	Namespace               string              `json:"namespace,omitempty"`
+	NamespaceSummary        string              `json:"namespaceSummary,omitempty"`
 	Name                    string              `json:"name"`
 	Description             string              `json:"description"`
 	WhenToUse               string              `json:"whenToUse,omitempty"`

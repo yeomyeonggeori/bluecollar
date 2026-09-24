@@ -41,6 +41,7 @@ func buildAgentSystemInstruction(request AgentTurnRequest, options TurnOptions) 
 			" When an image is in front of you, write what it shows into executionStateUpdate.knownFacts on that same call, in enough detail to work from later. The image is shown once; the note is what you will still have."+
 			" Never repeat an add or create operation for a record a successful observation in this task already created: one user request creates at most one record, and anything wrong or missing on it is fixed with the matching update operation, using the record's exact current title or ID as the hint.")
 	systemInstruction = systemInstruction.Append("delegation", delegationInstructionBody(options))
+	systemInstruction = systemInstruction.Append("capabilities", capabilitiesInstructionBody(request))
 	systemInstruction = systemInstruction.Append("skills", skillsInstructionBody(request))
 	systemInstruction = systemInstruction.Append("required_artifacts", requiredArtifactsInstructionBody(request))
 	return systemInstruction.Append("host", request.HostInstruction)
@@ -60,10 +61,50 @@ func skillsInstructionBody(request AgentTurnRequest) string {
 		return ""
 	}
 	body := "Skills: Treat retrieved skills as available capability references, not mandatory workflows. The current user message, ActiveGoal, and OutcomeContract decide the output type. Do not turn a document, plan, or text request into a different workflow just because a related skill or tool is listed."
-	if capabilityPhrase := capabilityDomainPhrase(request.AvailableSkills); capabilityPhrase != "" {
-		body += " Your available capabilities span " + capabilityPhrase + "; reach them through selected direct tools, skills, and bundled scripts."
-	}
 	return body + missingCapabilityClaimInstruction()
+}
+
+func capabilitiesInstructionBody(request AgentTurnRequest) string {
+	lines := namespaceSummaryLines(request.ToolSet)
+	if skillNames := sortedSkillNames(request.AvailableSkills); len(skillNames) > 0 {
+		lines = append(lines, "- skills: "+strings.Join(skillNames, ", "))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return "Capabilities: what this workspace can do, beyond the tools in hand. equip reaches the tools behind any of these.\n" + strings.Join(lines, "\n")
+}
+
+func namespaceSummaryLines(toolSet *toolcontract.ToolSet) []string {
+	summaryByNamespace := map[string]string{}
+	for _, definition := range toolSet.ListRegisteredToolDefinitions() {
+		summary := strings.TrimSpace(definition.NamespaceSummary)
+		if summary == "" || !toolSet.CanExpose(definition.Name) {
+			continue
+		}
+		summaryByNamespace[strings.TrimSpace(definition.Namespace)] = summary
+	}
+	namespaces := make([]string, 0, len(summaryByNamespace))
+	for namespace := range summaryByNamespace {
+		namespaces = append(namespaces, namespace)
+	}
+	sort.Strings(namespaces)
+	lines := make([]string, 0, len(namespaces))
+	for _, namespace := range namespaces {
+		lines = append(lines, "- "+namespace+": "+summaryByNamespace[namespace])
+	}
+	return lines
+}
+
+func sortedSkillNames(skills []SkillInstruction) []string {
+	skillNames := make([]string, 0, len(skills))
+	for _, skill := range skills {
+		if skillName := strings.TrimSpace(skill.Name); skillName != "" {
+			skillNames = append(skillNames, skillName)
+		}
+	}
+	sort.Strings(skillNames)
+	return skillNames
 }
 
 func missingCapabilityClaimInstruction() string {
@@ -95,29 +136,6 @@ func requestCanAskTheUser(request AgentTurnRequest) bool {
 
 func requestSpeaksToPeople(request AgentTurnRequest) bool {
 	return strings.TrimSpace(request.Platform) != "" || strings.TrimSpace(request.ConversationID) != ""
-}
-
-func capabilityDomainPhrase(skills []SkillInstruction) string {
-	seenLabels := map[string]bool{}
-	labels := []string{}
-	for _, skill := range skills {
-		for _, toolName := range skill.ToolReferences {
-			domain := strings.ToLower(strings.TrimSpace(toolName))
-			if separatorIndex := strings.Index(domain, "_"); separatorIndex > 0 {
-				domain = domain[:separatorIndex]
-			}
-			if domain == "" {
-				continue
-			}
-			if seenLabels[domain] {
-				continue
-			}
-			seenLabels[domain] = true
-			labels = append(labels, domain)
-		}
-	}
-	sort.Strings(labels)
-	return strings.Join(labels, ", ")
 }
 
 func (agentTurnRunner *AgentTurnRunner) buildToolDescription(toolRegistry *toolcontract.ToolSet) string {
