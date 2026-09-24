@@ -31,11 +31,19 @@ go test ./...
 
 The module needs Go 1.26 and depends on `github.com/google/jsonschema-go` and `github.com/ergochat/readline`. The ACP agent in `cmd/bluecollar-acp` is a second module, so its protocol dependencies stay out of anything that embeds the loop.
 
+### Serve a model locally
+
+```bash
+OLLAMA_CONTEXT_LENGTH=32768 ollama serve &
+ollama pull qwen3.5:4b
+```
+
+Ollama loads a model with a 4096-token window unless told otherwise. The loop's instructions and a reasoning model's thinking do not fit in that, and the turn fails with finish reason `length`.
+
 ### Run the command-line runner
 
 ```bash
-ollama serve &
-go run ./cmd/bluecollar --model qwen3:4b "In one sentence, what is a POSIX user?"
+go run ./cmd/bluecollar --model qwen3.5:4b "In one sentence, what is a POSIX user?"
 ```
 
 `cmd/bluecollar` talks to any OpenAI-compatible endpoint (`--endpoint`, default `http://127.0.0.1:11434/v1`) and prints the ledger to stderr as the turn runs. It registers `bash`, `file_read`, `write`, `edit`, `image_read` and `plan` scoped to `--workspace`, plus `equip` when a decision model is configured. With a prompt it runs one turn and exits; with no arguments and a terminal it becomes a conversation.
@@ -57,43 +65,89 @@ Intake needs a decision model, read from `BLUECOLLAR_DECISION_ENDPOINT`, `BLUECO
 
 ### Embed the loop
 
-```go
-languageModel := openaicompatible.NewProvider("http://127.0.0.1:11434/v1", "", "qwen3:4b")
+`examples/clock` gives the model one tool and asks it the time in Paris.
 
-taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
-kernel := loop.NewAgentKernel(taskRuns, taskstate.NewTaskStepService())
-kernel.UseLanguageModelProvider(languageModel)
-
-tools := toolcontract.NewToolSet(nil)
-toolcontract.RegisterToolFunction(tools, toolcontract.ToolFunction[greetingInput, string]{
-	Definition: toolcontract.ToolDefinition{
-		Name:            "greeting_compose",
-		Description:     "Compose a greeting for one person.",
-		Visibility:      toolcontract.ToolVisibilityModel,
-		SideEffectClass: toolcontract.ToolSideEffectComputation,
-		InputSchema:     greetingSchema,
-		ResultContract:  &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"string"}`)},
-	},
-	Handler: func(_ context.Context, input greetingInput) (string, error) {
-		return "안녕하세요, " + input.Name + "님", nil
-	},
-})
+```bash
+go run ./examples/clock
+# The current time in Paris is Thursday, September 24, 2026 at 2:42 AM.
 ```
 
-A tool reaches the model only when its descriptor is `visible` and carries a `ResultContract`. The `taskstate` services keep everything in memory until a host that needs durability gives each one a repository through `UseRepository`.
+```go
+type clockInput struct {
+	TimeZone string `json:"timeZone"`
+}
+
+type clockOutput struct {
+	Time string `json:"time"`
+}
+
+func main() {
+	ctx := context.Background()
+
+	kernel := loop.NewAgentKernel(taskstate.NewTaskRunService(taskstate.NewTaskEventService()), taskstate.NewTaskStepService())
+	kernel.UseLanguageModelProvider(openaicompatible.NewProvider("http://127.0.0.1:11434/v1", "", "qwen3.5:4b"))
+
+	tools := toolcontract.NewToolSet(nil)
+	toolcontract.RegisterToolFunction(tools, toolcontract.ToolFunction[clockInput, clockOutput]{
+		Definition: toolcontract.ToolDefinition{
+			Name:            "time_get",
+			Description:     "Get the current date and time in one time zone.",
+			Visibility:      toolcontract.ToolVisibilityModel,
+			SideEffectClass: toolcontract.ToolSideEffectRead,
+			InputSchema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["timeZone"],
+				"properties":{"timeZone":{"type":"string","description":"an IANA time zone, such as Europe/Paris"}}}`),
+			ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object","additionalProperties":false,"required":["time"],
+				"properties":{"time":{"type":"string"}}}`)},
+		},
+		Handler: func(_ context.Context, input clockInput) (clockOutput, error) {
+			location, errorValue := time.LoadLocation(input.TimeZone)
+			if errorValue != nil {
+				return clockOutput{}, errorValue
+			}
+			return clockOutput{Time: time.Now().In(location).Format("Monday 2 January 2006, 15:04")}, nil
+		},
+	})
+
+	startTask := agentcontract.TurnDecision{
+		Route:             agentcontract.TurnRouteStartTask,
+		Classification:    agentcontract.IntakeClassificationBoundedTask,
+		TaskShape:         agentcontract.TaskShapeMaintenanceTask,
+		TaskLevel:         agentcontract.TaskLevelLow,
+		ResponseLanguage:  toolcontract.ResponseLanguageEnglish,
+		InitialToolNames:  []string{"time_get"},
+		ExpectedToolCount: agentcontract.ExpectedToolCountOne,
+	}
+	result, errorValue := kernel.RunTurn(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID:       "person-1",
+		RequesterName:           "Alex",
+		ConversationID:          "conversation-1",
+		Prompt:                  "What time is it in Paris right now?",
+		ToolSet:                 tools,
+		PrecomputedTurnDecision: &startTask,
+	})
+	if errorValue != nil {
+		log.Fatal(errorValue)
+	}
+	fmt.Println(result.FinishMessage)
+}
+```
+
+- A tool reaches the model only when its descriptor is `visible` and carries a `ResultContract`, and the result is a JSON object.
+- `RunTurn` refuses a turn without `PrecomputedTurnDecision`. The example fills one in by hand, naming the tool the work needs and the language of the reply; the next section has intake decide it.
+- The `taskstate` services keep everything in memory until a host that needs durability gives each one a repository through `UseRepository`.
 
 ### Route, then run
 
 ```go
 request := agentcontract.AgentTurnRequest{
 	RequesterPersonID: "person-1",
-	RequesterName:     "이샘플",
+	RequesterName:     "Alex",
 	ConversationID:    "conversation-1",
-	Prompt:            "박예시에게 보낼 인사말을 만들어 줘",
+	Prompt:            "What time is it in Paris right now?",
 	ToolSet:           tools,
 }
 planner := intake.NewDecisionPlanner(decisions.ConfiguredDecisionModel(os.Stderr), nil, nil)
-router := intake.NewTurnRouter(languageModel, planner, agentcontract.IntakeOptions{IsEnabled: true})
+router := intake.NewTurnRouter(openaicompatible.NewProvider("http://127.0.0.1:11434/v1", "", "qwen3.5:4b"), planner, agentcontract.IntakeOptions{IsEnabled: true})
 decision, errorValue := router.Plan(ctx, agentcontract.AgentRequest{
 	RequesterPersonID: request.RequesterPersonID,
 	RequesterName:     request.RequesterName,
@@ -103,10 +157,12 @@ decision, errorValue := router.Plan(ctx, agentcontract.AgentRequest{
 })
 if errorValue != nil {
 	decision = agentcontract.TurnDecision{
-		Route:          agentcontract.TurnRouteStartTask,
-		Classification: agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:      agentcontract.TaskShapeMaintenanceTask,
-		TaskLevel:      agentcontract.TaskLevelLow,
+		Route:            agentcontract.TurnRouteStartTask,
+		Classification:   agentcontract.IntakeClassificationBoundedTask,
+		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
+		TaskLevel:        agentcontract.TaskLevelLow,
+		ResponseLanguage: toolcontract.ResponseLanguageEnglish,
+		InitialToolNames: []string{"time_get"},
 	}
 }
 request.PrecomputedTurnDecision = &decision
