@@ -6,6 +6,7 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 var reactionEmojiDescriptions = map[string]string{
@@ -205,7 +206,9 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
 		agentcontract.IntakeQuestionLevel:                   builder.levelQuestion(messageKey),
 		agentcontract.IntakeQuestionDeliverableKind:         builder.deliverableKindQuestion(messageKey),
-		agentcontract.IntakeQuestionResponseLanguage:        builder.responseLanguageQuestion(messageKey),
+	}
+	if needsResponseLanguage(builder.request) {
+		questions[agentcontract.IntakeQuestionResponseLanguage] = builder.responseLanguageQuestion(messageKey)
 	}
 	if hasPriorTask(builder.request) {
 		questions[agentcontract.IntakeQuestionPriorTaskReference] = builder.priorTaskReferenceQuestion(messageKey)
@@ -324,17 +327,6 @@ func (builder questionBuilder) deliverableKindQuestion(messageKey string) model.
 	}.Question()
 }
 
-func (builder questionBuilder) responseLanguageQuestion(messageKey string) model.DecisionQuestion {
-	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "Which language should the reply be written in? Answer with the language the message itself is written in unless runtimeResponseLanguage in the state names another.",
-		OptionDescriptions: map[string]string{
-			"ko":                   "Korean",
-			"en":                   "English",
-			"same_as_conversation": "only when runtimeResponseLanguage already defines it",
-		},
-	}.Question()
-}
-
 func (builder questionBuilder) priorTaskReferenceQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: builder.about(messageKey) + "How does it relate to priorTask in the state, which is a candidate previous task rather than a running one?",
@@ -422,4 +414,19 @@ func decisionChoiceKeys(pendingChoice agentcontract.PendingChoiceContext) []stri
 		keys = append(keys, key)
 	}
 	return keys
+}
+
+func needsResponseLanguage(request agentcontract.IntakeDecisionRequest) bool {
+	return toolcontract.ResolveResponseLanguage(request.ResponseLanguage) == ""
+}
+
+func (builder questionBuilder) responseLanguageQuestion(messageKey string) model.DecisionQuestion {
+	descriptions := map[string]string{toolcontract.ResponseLanguageOther: "a language not listed here, or no language the message is mainly written in"}
+	for _, language := range toolcontract.ResponseLanguages {
+		descriptions[language.Code] = language.Name
+	}
+	return model.ChoiceQuestion{
+		Instructions:       builder.about(messageKey) + "Which language is it mainly written in? The reply will be written in that language.",
+		OptionDescriptions: descriptions,
+	}.Question()
 }

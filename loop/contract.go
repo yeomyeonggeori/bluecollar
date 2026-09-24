@@ -122,9 +122,8 @@ const (
 
 	DefaultReactionEmojiName = agentcontract.DefaultReactionEmojiName
 
-	ResponseLanguageEnglish            = toolcontract.ResponseLanguageEnglish
-	ResponseLanguageKorean             = toolcontract.ResponseLanguageKorean
-	ResponseLanguageSameAsConversation = toolcontract.ResponseLanguageSameAsConversation
+	ResponseLanguageEnglish = toolcontract.ResponseLanguageEnglish
+	ResponseLanguageKorean  = toolcontract.ResponseLanguageKorean
 
 	TaskControlIntentNone    = agentcontract.TaskControlIntentNone
 	TaskControlIntentStop    = agentcontract.TaskControlIntentStop
@@ -174,7 +173,6 @@ var (
 	buildFailureNoticePrompt             = agentcontract.BuildFailureNoticePrompt
 	failureReportAttachmentFilenames     = agentcontract.FailureReportAttachmentFilenames
 	redactRawFailureNotice               = agentcontract.RedactRawFailureNotice
-	DefaultResponseLanguage              = toolcontract.DefaultResponseLanguage
 	IsApprovingSignal                    = agentcontract.IsApprovingSignal
 	LargerTaskLevel                      = agentcontract.LargerTaskLevel
 	NormalizeResponseLanguage            = toolcontract.NormalizeResponseLanguage

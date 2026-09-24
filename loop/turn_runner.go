@@ -2550,10 +2550,10 @@ func elapsedClosingRawReply(request AgentTurnRequest, isCompleted bool) string {
 	if !isCompleted {
 		return buildElapsedLimitRawErrorFailureNotice(request).SendableMessage()
 	}
-	if strings.HasPrefix(strings.ToLower(ResolveResponseLanguage(request.ResponseLanguage)), "en") {
-		return "The requested result was recorded, but the final response could not be generated."
+	if ResolveResponseLanguage(request.ResponseLanguage) == ResponseLanguageKorean {
+		return "요청한 결과는 기록됐지만 최종 답변을 생성하지 못했습니다."
 	}
-	return "요청한 결과는 기록됐지만 최종 답변을 생성하지 못했습니다."
+	return "The requested result was recorded, but the final response could not be generated."
 }
 
 func (agentTurnRunner *AgentTurnRunner) replyFinalizationContext(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {

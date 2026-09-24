@@ -54,7 +54,6 @@ func main() {
 		Classification:    agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:         agentcontract.TaskShapeMaintenanceTask,
 		TaskLevel:         agentcontract.TaskLevelLow,
-		ResponseLanguage:  toolcontract.ResponseLanguageEnglish,
 		InitialToolNames:  []string{"time_get"},
 		ExpectedToolCount: agentcontract.ExpectedToolCountOne,
 	}
