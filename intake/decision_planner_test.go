@@ -522,3 +522,27 @@ func TestDecisionPlannerReadsAMultipleChoiceReplyWithoutAYesAsNoSelection(t *tes
 		t.Fatalf("expected no selection when every option is answered no, got %+v", decision.TurnFields.Choices)
 	}
 }
+
+func TestDecisionPlannerAsksTheLanguageOnlyWhenTheHostNamesNone(t *testing.T) {
+	outcome := startTaskOutcome()
+	outcome.TurnDecision.ResponseLanguage = "ja"
+	for _, hostLanguage := range []string{"", "en"} {
+		decisionModel := intaketest.NewDecisionModel(outcome)
+		request := addressedDecisionRequest("今パリは何時ですか")
+		request.ResponseLanguage = hostLanguage
+		planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
+
+		decision := decideOnce(t, planner, request)
+
+		wasAsked := false
+		for _, decisionRequest := range decisionModel.Requests() {
+			for questionKey := range decisionRequest.Questions {
+				wasAsked = wasAsked || strings.HasSuffix(questionKey, agentcontract.IntakeQuestionResponseLanguage)
+			}
+		}
+		expectedLanguage := map[string]string{"": "ja", "en": ""}[hostLanguage]
+		if wasAsked != (hostLanguage == "") || decision.TurnFields.ResponseLanguage != expectedLanguage {
+			t.Fatalf("host language %q: asked %v, reply language %q, want asked %v and %q", hostLanguage, wasAsked, decision.TurnFields.ResponseLanguage, hostLanguage == "", expectedLanguage)
+		}
+	}
+}

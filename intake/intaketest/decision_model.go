@@ -8,7 +8,6 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type Outcome struct {
@@ -121,7 +120,7 @@ func namedAnswer(shortName string, question model.DecisionQuestion, outcome Outc
 	case agentcontract.IntakeQuestionDeliverableKind:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.DeliverableKind), string(agentcontract.DeliverableKindNone)))
 	case agentcontract.IntakeQuestionResponseLanguage:
-		return choiceAnswer(orDefault(outcome.TurnDecision.ResponseLanguage, toolcontract.ResponseLanguageSameAsConversation))
+		return choiceAnswer(orDefault(outcome.TurnDecision.ResponseLanguage, "other"))
 	case agentcontract.IntakeQuestionPriorTaskReference:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone)))
 	case agentcontract.IntakeQuestionApproval:

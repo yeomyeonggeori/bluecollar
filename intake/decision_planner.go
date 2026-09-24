@@ -315,7 +315,10 @@ func readAddressingDecision(reader answerReader, isReacting bool) (agentcontract
 }
 
 func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) (agentcontract.TurnDecision, error) {
-	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionExpectedToolCount, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind, agentcontract.IntakeQuestionResponseLanguage}
+	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionExpectedToolCount, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind}
+	if needsResponseLanguage(request) {
+		choiceNames = append(choiceNames, agentcontract.IntakeQuestionResponseLanguage)
+	}
 	if hasPriorTask(request) {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionPriorTaskReference)
 	}

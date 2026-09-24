@@ -112,7 +112,7 @@ func normalizeDecidedExecution(decision agentcontract.TurnDecision, request agen
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid task level")
 	}
 	decision.InitialToolNames = agentcontract.RegisteredToolNamesOnly(request.ToolSet, toolcontract.AppendUniqueStrings(decision.InitialToolNames))
-	decision.ResponseLanguage = resolveDecisionResponseLanguage(decision.ResponseLanguage, request.ResponseLanguage)
+	decision.ResponseLanguage = toolcontract.ResolveResponseLanguage(request.ResponseLanguage, decision.ResponseLanguage)
 	decision.PriorTaskReference = agentcontract.NormalizePriorTaskReference(decision.PriorTaskReference)
 	return decision, nil
 }
@@ -224,14 +224,6 @@ func removeFileExpectedResultsWithoutArtifactFormat(decision agentcontract.TurnD
 
 func hasArtifactOutputFormat(formats []string) bool {
 	return len(agentcontract.NormalizeRequestedOutputFormats(formats)) > 0
-}
-
-func resolveDecisionResponseLanguage(decisionLanguage string, requestLanguage string) string {
-	normalizedDecisionLanguage := toolcontract.NormalizeResponseLanguage(decisionLanguage)
-	if normalizedDecisionLanguage == toolcontract.ResponseLanguageSameAsConversation {
-		return toolcontract.ResolveResponseLanguage(requestLanguage)
-	}
-	return toolcontract.ResolveResponseLanguage(normalizedDecisionLanguage, requestLanguage)
 }
 
 func normalizeTaskShape(taskShape agentcontract.TaskShape) agentcontract.TaskShape {

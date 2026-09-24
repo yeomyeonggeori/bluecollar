@@ -163,7 +163,7 @@ func (builder LLMContextBuilder) runtimeContext(input LLMContextInput) string {
 	}
 	lines := []string{
 		"Runtime:",
-		"Response language: " + ResolveResponseLanguage(input.ResponseLanguage),
+		"Response language: " + responseLanguageDescription(input.ResponseLanguage),
 	}
 	if temporalContext := buildTemporalContextDescription(input.EnvironmentNow, input.Company.TimeZone); temporalContext != "" {
 		lines = append(lines, temporalContext)
@@ -181,7 +181,6 @@ func (builder LLMContextBuilder) workspaceContext(workspaceContext WorkspaceCont
 		WorkspaceRootPath:     workspaceContext.RootPath,
 		WorkspaceDefaultPath:  workspaceContext.DefaultPath,
 		ToolSet:               nil,
-		ResponseLanguage:      DefaultResponseLanguage(),
 		RequiredEvidenceTools: nil,
 	}
 	if description := buildWorkspaceContextDescription(request); description != "" {
@@ -374,4 +373,11 @@ func agentTurnRequestForContext(input LLMContextInput) AgentTurnRequest {
 		RequiredEvidenceTools: append([]string{}, input.RequiredEvidenceTools...),
 		OutcomeContract:       input.OutcomeContract,
 	}
+}
+
+func responseLanguageDescription(responseLanguage string) string {
+	if languageName := toolcontract.ResponseLanguageName(responseLanguage); languageName != "" {
+		return languageName
+	}
+	return "the language the requester wrote in"
 }

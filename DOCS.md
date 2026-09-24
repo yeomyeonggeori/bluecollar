@@ -113,7 +113,6 @@ func main() {
 		Classification:    agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:         agentcontract.TaskShapeMaintenanceTask,
 		TaskLevel:         agentcontract.TaskLevelLow,
-		ResponseLanguage:  toolcontract.ResponseLanguageEnglish,
 		InitialToolNames:  []string{"time_get"},
 		ExpectedToolCount: agentcontract.ExpectedToolCountOne,
 	}
@@ -133,7 +132,7 @@ func main() {
 ```
 
 - A tool reaches the model only when its descriptor is `visible` and carries a `ResultContract`, and the result is a JSON object.
-- `RunTurn` refuses a turn without `PrecomputedTurnDecision`. The example fills one in by hand, naming the tool the work needs and the language of the reply; the next section has intake decide it.
+- `RunTurn` refuses a turn without `PrecomputedTurnDecision`. The example fills one in by hand, naming the tool the work needs; the next section has intake decide it.
 - The `taskstate` services keep everything in memory until a host that needs durability gives each one a repository through `UseRepository`.
 
 ### Route, then run
@@ -161,7 +160,6 @@ if errorValue != nil {
 		Classification:   agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
 		TaskLevel:        agentcontract.TaskLevelLow,
-		ResponseLanguage: toolcontract.ResponseLanguageEnglish,
 		InitialToolNames: []string{"time_get"},
 	}
 }
@@ -236,7 +234,7 @@ These pages follow one request through the loop. The names match the code, so ea
 
 Decides what an inbound message means before a turn runs.
 
-`intake.DecisionPlanner` asks every closed question about a message in one call to a decision model. Each question is a `choice` among named options or a `noul`, a probability that a statement is true. The questions cover the route, the difficulty level, the expected number of tools, whether independent work is present, whether an external send is requested, the task shape, the deliverable kind, the response language, requested output formats and, when relevant, addressing, the reply to a pending choice or confirmation, and whether the message continues a running task. The chat model is asked only for words.
+`intake.DecisionPlanner` asks every closed question about a message in one call to a decision model. Each question is a `choice` among named options or a `noul`, a probability that a statement is true. The questions cover the route, the difficulty level, the expected number of tools, whether independent work is present, whether an external send is requested, the task shape, the deliverable kind, the language the message is mainly written in (asked only when the host names none), requested output formats and, when relevant, addressing, the reply to a pending choice or confirmation, and whether the message continues a running task. The chat model is asked only for words.
 
 `intake.TurnRouter` turns those answers into a `TurnDecision`. The route is one of:
 
@@ -394,7 +392,8 @@ Everything the harness refuses to assume about a turn.
 | --- | --- |
 | `RequesterPersonID`, `RequesterName`, `RequesterCallingName`, `RequesterHandle`, `RequesterCircles` | who is asking |
 | `AgentIdentity` | the name and handle the agent answers to |
-| `Prompt`, `InputParts`, `ResponseLanguage` | the message and its attachments |
+| `Prompt`, `InputParts` | the message and its attachments |
+| `ResponseLanguage` | the language of every reply, as a code or an English name from `toolcontract.ResponseLanguages`; empty lets intake read it from the message |
 | `ConversationID`, `ConversationType`, `VisibleContext` | where it was said and what surrounds it |
 | `MemoryFacts` | what the host recalled for this requester |
 | `ToolSet`, `PinnedToolNames`, `LikelyToolNames`, `AvailableSkills` | what the agent may call and read |
