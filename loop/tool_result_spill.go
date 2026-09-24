@@ -34,6 +34,13 @@ func (spillRef ToolResultSpillRef) isUsable() bool {
 	return strings.TrimSpace(spillRef.Locator) != ""
 }
 
+func elidedOutputAdvice(spillRef ToolResultSpillRef) string {
+	if spillRef.isUsable() {
+		return spilledOutputAdvice(spillRef)
+	}
+	return narrowTheOutputAdvice
+}
+
 func spilledOutputAdvice(spillRef ToolResultSpillRef) string {
 	advice := "The middle was elided here, but the whole output was saved at " + strings.TrimSpace(spillRef.Locator)
 	if spillRef.Bytes > 0 {

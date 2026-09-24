@@ -112,13 +112,11 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	content := toolResult.ContentText()
 	originalContent := content
 	isError := toolResult.Failed()
-	artifactID := ""
-	spillRef := ToolResultSpillRef{}
+	elisionAdvice := ""
 	if resultLimit := agentTurnRunner.toolResultLimit(); len(content) > resultLimit {
-		taskArtifact := agentTurnRunner.taskArtifactService.AddTaskArtifactBody(taskRunID, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventResultSuffix), content)
-		artifactID = taskArtifact.TaskArtifactID
-		spillRef = agentTurnRunner.spillToolResult(ctx, taskRunID, observationID, toolName, workspaceRootPath, content)
-		content = withMiddleElided(content, resultLimit)
+		agentTurnRunner.taskArtifactService.AddTaskArtifactBody(taskRunID, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventResultSuffix), content)
+		elisionAdvice = elidedOutputAdvice(agentTurnRunner.spillToolResult(ctx, taskRunID, observationID, toolName, workspaceRootPath, content))
+		content = withMiddleElided(content, resultLimit) + "\n" + elisionAdvice
 	}
 	attachments := []toolcontract.FileAttachment{}
 	if !isError {
@@ -153,7 +151,7 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	observation.ModelReasoning = modelReasoning
 	observation.ModelReasoningField = modelReasoningField
 	observation.ImageRefs = toolResultImageRefs(observationID, attachments)
-	observation.Summary = agentTurnRunner.buildToolResultSummary(ctx, taskRunID, toolName, originalContent, isError, attachments, artifactID, spillRef, toolResult)
+	observation.Summary = agentTurnRunner.buildToolResultSummary(ctx, taskRunID, toolName, originalContent, isError, attachments, elisionAdvice, toolResult)
 	observation.ToolInputKey = toolInputKey
 	observation.DurationMS = durationMS
 	if observation.Failed() {
@@ -203,7 +201,7 @@ func recoveryActionsFromObservations(observations []turnObservation) []toolcontr
 	return recoveryActions
 }
 
-func (agentTurnRunner *AgentTurnRunner) buildToolResultSummary(ctx context.Context, taskRunID string, toolName string, content string, isError bool, attachments []toolcontract.FileAttachment, artifactID string, spillRef ToolResultSpillRef, toolResult toolcontract.ToolResult) string {
+func (agentTurnRunner *AgentTurnRunner) buildToolResultSummary(ctx context.Context, taskRunID string, toolName string, content string, isError bool, attachments []toolcontract.FileAttachment, elisionAdvice string, toolResult toolcontract.ToolResult) string {
 	observation := turnObservation{
 		Tool:        toolName,
 		Output:      toolcontract.ToolOutput{Content: content, Data: append(json.RawMessage{}, toolResult.Output.Data...)},
@@ -213,12 +211,7 @@ func (agentTurnRunner *AgentTurnRunner) buildToolResultSummary(ctx context.Conte
 		observation.Failure = toolResult.Failure
 	}
 	summary := modelVisibleToolResultSummary(ctx, agentTurnRunner.languageModel, toolName, observation)
-	if spillRef.isUsable() {
-		summary = strings.TrimSpace(summary) + " " + spilledOutputAdvice(spillRef)
-	} else if strings.TrimSpace(artifactID) != "" {
-		summary = strings.TrimSpace(summary) + " " + narrowTheOutputAdvice
-	}
-	return strings.TrimSpace(summary)
+	return strings.TrimSpace(strings.TrimSpace(summary) + " " + elisionAdvice)
 }
 
 const rawToolResultInlineLimit = 2000

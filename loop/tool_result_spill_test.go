@@ -110,3 +110,19 @@ func TestTheSavedObservationKeepsTheReasoningThatChoseIt(t *testing.T) {
 		t.Fatalf("the next turn rebuilds its observations from the ledger, so reasoning set after the save is gone by the time the transcript is built: %q", observation.AssistantText)
 	}
 }
+
+func TestTheToolMessageTheModelReadsNamesWhereTheWholeOutputWent(t *testing.T) {
+	services := newTurnRunnerTestServices(&sequenceLanguageModel{textResponses: []string{"the build failed"}}, TurnOptions{})
+	store := &recordingSpillStore{locator: "/workspace/private/people/p1/tmp/tasks/run-1/bash.result.txt", bytes: 4096, hint: "Use grep or sed on that path."}
+	services.runner.UseToolResultSpillStore(store)
+
+	observation := services.runner.saveToolObservation(context.Background(), "run-1", "obs-1", "", "", "", "bash", "tool-1",
+		nil, "bash", "bash\x00{}", toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: oversizedToolResult(services.runner)}},
+		true, "/workspace", time.Time{}, 12)
+
+	transcript := toolCallTranscript([]turnObservation{observation})
+	toolMessage := transcript[len(transcript)-1]
+	if !strings.Contains(toolMessage.Content, store.locator) {
+		t.Fatalf("a model given tool results natively reads the tool message, not the ledger summary, so the locator has to be in it: %q", toolMessage.Content[len(toolMessage.Content)-300:])
+	}
+}
