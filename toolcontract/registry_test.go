@@ -277,10 +277,6 @@ func TestToolFunctionValidatesInputAndMarshalsOutput(t *testing.T) {
 		Handler: func(_ context.Context, input echoToolInput) (echoToolOutput, error) {
 			return echoToolOutput{Message: input.Message}, nil
 		},
-		Result: func(output echoToolOutput) ToolResult {
-			data := json.RawMessage(marshalTypedToolOutput(output))
-			return ToolSuccessData(string(data), data)
-		},
 	})
 
 	malformedResult, errorValue := toolSet.Invoke(context.Background(), ToolInvocation{ToolName: "echo_tool", Input: []byte(`{`)})
