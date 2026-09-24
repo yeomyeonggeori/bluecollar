@@ -48,6 +48,7 @@ func newConversationSession(ctx context.Context, options runOptions) (*conversat
 	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: contextWindowTokens(ctx, options, endpointModel)})
 
 	runningShell := turnShellWithInterpreter(ctx, options)
+	kernel.UseToolResultSpillStore(shellSpillStore{runningShell: runningShell})
 	return &conversationSession{
 		options:        options,
 		toolSelector:   toolSelector,
