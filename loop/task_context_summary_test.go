@@ -192,3 +192,23 @@ func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) 
 		t.Fatalf("summarizing the same observations again buys the same nothing and is paid for again: %d summary calls", summaryRequestCount)
 	}
 }
+
+func TestCompactedStepsAreSavedWhereTheAgentCanReadThemBack(t *testing.T) {
+	observations := numberedContextSummaryObservations(12, 2000, "OLD_MARKER")
+	summaryResponse := `{"goal":"ship","completedSteps":["rolled summary"],"artifacts":[],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":["finish"]}`
+	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	store := &recordingSpillStore{locator: "/workspace/private/people/p1/tmp/tasks/task-1/spill/compacted-steps.jsonl", bytes: 24000, hint: "Use grep or sed on that path."}
+	services.runner.UseToolResultSpillStore(store)
+
+	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship", WorkspaceRootPath: "/workspace"}, nil, agentTaskState{Observations: observations}, true); errorValue != nil {
+		t.Fatalf("expected action to succeed: %v", errorValue)
+	}
+
+	if len(store.saved) != 1 || !strings.Contains(store.saved[0].Content, "OLD_MARKER-001") {
+		t.Fatalf("a summary keeps what the summarizer chose; the steps it replaced have to be kept whole somewhere, got %d saves", len(store.saved))
+	}
+	if !strings.Contains(structuredRequestText(languageModel.requests[1]), store.locator) {
+		t.Fatal("the agent cannot go back to a compacted step it was never told was saved")
+	}
+}

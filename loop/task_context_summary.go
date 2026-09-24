@@ -26,6 +26,7 @@ type TaskContextSummary struct {
 	ExhaustedRecoveryRoutes       []string `json:"exhaustedRecoveryRoutes,omitempty"`
 	ActiveFailureDebt             []string `json:"activeFailureDebt,omitempty"`
 	NextPlan                      []string `json:"nextPlan,omitempty"`
+	SavedTranscript               string   `json:"savedTranscript,omitempty"`
 
 	AccountedTaskEventIDs     []string          `json:"accountedTaskEventIDs,omitempty"`
 	RetainedObservations      []turnObservation `json:"retainedObservations,omitempty"`
@@ -84,11 +85,56 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 		}))
 		return promptObservations
 	}
+	summary.SavedTranscript = firstNonEmptyString(agentTurnRunner.saveCompactedTranscript(ctx, taskRunID, state.Request.WorkspaceRootPath, plan), currentSummary.SavedTranscript)
 	compactedObservations := promptVisibleObservations(state.Observations, summary, pinnedObservationIDs)
 	summary = summaryAccountingForCompactedObservations(summary, currentSummary, compactedObservations, plan, taskEvents)
 	summary = normalizeTaskContextSummary(summary)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentContextSummary, marshalEventBody(summary))
 	return compactedObservations
+}
+
+func (agentTurnRunner *AgentTurnRunner) saveCompactedTranscript(ctx context.Context, taskRunID string, workspaceRootPath string, plan taskContextCompactionPlan) string {
+	spillRef := agentTurnRunner.spillToolResult(ctx, taskRunID, "context-summary-"+plan.CompactedThroughObservationID, compactedTranscriptName, workspaceRootPath, compactedTranscript(plan.CompactableObservations))
+	if !spillRef.isUsable() {
+		return ""
+	}
+	return compactedTranscriptAdvice(spillRef)
+}
+
+const compactedTranscriptName = "compacted_steps"
+
+type compactedStep struct {
+	ObservationID string          `json:"observationID"`
+	Action        string          `json:"action"`
+	Tool          string          `json:"tool,omitempty"`
+	ToolInput     json.RawMessage `json:"toolInput,omitempty"`
+	AssistantText string          `json:"assistantText,omitempty"`
+	Content       string          `json:"content,omitempty"`
+	FailureCode   string          `json:"failureCode,omitempty"`
+}
+
+func compactedTranscript(observations []turnObservation) string {
+	lines := make([]string, 0, len(observations))
+	for _, observation := range observations {
+		lines = append(lines, marshalEventBody(compactedStep{
+			ObservationID: observation.ObservationID,
+			Action:        observation.Action,
+			Tool:          observation.Tool,
+			ToolInput:     observation.ToolInput,
+			AssistantText: observation.AssistantText,
+			Content:       observation.ContentText(),
+			FailureCode:   observation.FailureCode(),
+		}))
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func compactedTranscriptAdvice(spillRef ToolResultSpillRef) string {
+	advice := "Every step this summary replaced was saved whole, one JSON line per step, at " + strings.TrimSpace(spillRef.Locator)
+	if hint := strings.TrimSpace(spillRef.RetrievalHint); hint != "" {
+		advice += ". " + hint
+	}
+	return advice + " Look there when a detail the summary dropped matters, rather than redoing the step."
 }
 
 // Once a summary of the same observations came back no smaller than what it replaced,
@@ -430,6 +476,7 @@ func normalizeTaskContextSummary(summary TaskContextSummary) TaskContextSummary 
 		ExhaustedRecoveryRoutes:       normalizeTaskContextSummaryList(summary.ExhaustedRecoveryRoutes, 16),
 		ActiveFailureDebt:             normalizeTaskContextSummaryList(summary.ActiveFailureDebt, 16),
 		NextPlan:                      normalizeTaskContextSummaryList(summary.NextPlan, 16),
+		SavedTranscript:               strings.TrimSpace(summary.SavedTranscript),
 	}
 }
 
