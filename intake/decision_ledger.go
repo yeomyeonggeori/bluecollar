@@ -10,7 +10,8 @@ import (
 type decisionCallContext struct {
 	errorValue           error
 	decisions            agentcontract.IntakeDecisions
-	messageCount         int
+	messageIDs           []string
+	input                json.RawMessage
 	attachmentsDescribed bool
 	toolSelection        *agentcontract.ToolSelectionRecord
 }
@@ -28,7 +29,7 @@ func decidedCallContext(callContext decisionCallContext, index int) decisionCall
 	if index == 0 {
 		return callContext
 	}
-	return decisionCallContext{errorValue: callContext.errorValue}
+	return decisionCallContext{errorValue: callContext.errorValue, messageIDs: callContext.messageIDs}
 }
 
 func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) agentcontract.LLMCallRecord {
@@ -49,10 +50,11 @@ func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) a
 		DecisionAnswers:        call.response.Answers,
 		DecisionDraws:          reactionDrawsOf(callContext.decisions),
 		ToolSelection:          callContext.toolSelection,
-		DecidedMessageCount:    callContext.messageCount,
+		DecidedMessageIDs:      callContext.messageIDs,
 		AttachmentsDescribed:   callContext.attachmentsDescribed,
 		AttachmentDescriptions: attachmentDescriptionsOf(callContext.decisions),
-	}
+		Input:                  callContext.input,
+	}.WithWireExchange(call.wireExchange)
 	if call.wasCut {
 		record.UsedFallback = true
 		record.FallbackReason = "the first ask was cut at the measured patience and asked again"
@@ -128,4 +130,20 @@ func decisionQuestionsByteCount(questions map[string]model.DecisionQuestion) int
 		return 0
 	}
 	return len(document)
+}
+
+func decidedMessageIDs(messages []agentcontract.IntakeDecisionMessage) []string {
+	messageIDs := make([]string, 0, len(messages))
+	for _, message := range messages {
+		messageIDs = append(messageIDs, message.MessageID)
+	}
+	return messageIDs
+}
+
+func decisionInput(request agentcontract.IntakeDecisionRequest) json.RawMessage {
+	document, errorValue := json.Marshal(request)
+	if errorValue != nil {
+		return nil
+	}
+	return document
 }

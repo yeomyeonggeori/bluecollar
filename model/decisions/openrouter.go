@@ -137,6 +137,7 @@ func (decisionModel decisionModel) post(ctx context.Context, requestDocument []b
 	if httpResponse.StatusCode != http.StatusOK {
 		return decisionResponseDocument{}, errors.New("decisions endpoint answered " + httpResponse.Status + ": " + strings.TrimSpace(string(body)))
 	}
+	model.RecordWireExchange(ctx, model.WireExchange{Endpoint: httpRequest.URL.String(), Request: string(requestDocument), Response: string(body)})
 	var responseDocument decisionResponseDocument
 	if errorValue := json.Unmarshal(body, &responseDocument); errorValue != nil {
 		return decisionResponseDocument{}, errorValue

@@ -50,8 +50,9 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 	recordDecisionCalls(callLedger, calls, decisionCallContext{
 		errorValue:           firstError(callError, readError),
 		decisions:            decisions,
-		messageCount:         len(describedRequest.Messages),
+		messageIDs:           decidedMessageIDs(describedRequest.Messages),
 		attachmentsDescribed: hasDescribedAttachments,
+		input:                decisionInput(request),
 	})
 	if callError != nil {
 		return agentcontract.IntakeDecisions{}, callError
@@ -63,11 +64,12 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 }
 
 type decisionCall struct {
-	request    model.DecisionRequest
-	response   model.DecisionResponse
-	latency    time.Duration
-	wasCut     bool
-	errorValue error
+	request      model.DecisionRequest
+	response     model.DecisionResponse
+	wireExchange *model.WireExchange
+	latency      time.Duration
+	wasCut       bool
+	errorValue   error
 }
 
 const maxConcurrentDecisionRequestCount = 4
@@ -89,8 +91,9 @@ func (planner DecisionPlanner) decideEveryRequest(ctx context.Context, requests 
 				return
 			}
 			startedAt := time.Now()
-			response, wasCut, errorValue := planner.decidePatiently(callContext, request)
-			calls[index] = decisionCall{request: request, response: response, latency: time.Since(startedAt), wasCut: wasCut, errorValue: errorValue}
+			wireContext, wireCapture := model.WithWireCapture(callContext)
+			response, wasCut, errorValue := planner.decidePatiently(wireContext, request)
+			calls[index] = decisionCall{request: request, response: response, wireExchange: wireCapture.Exchange(), latency: time.Since(startedAt), wasCut: wasCut, errorValue: errorValue}
 			if errorValue != nil {
 				cancelRemainingCalls()
 			}

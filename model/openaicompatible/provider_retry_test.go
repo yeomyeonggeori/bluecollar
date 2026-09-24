@@ -147,3 +147,28 @@ func TestAnEmptyFinishReasonWithToolCallsIsAToolCall(t *testing.T) {
 		t.Fatalf("an endpoint that omits finish_reason still delivered the calls, and refusing them wastes the whole response: %q", response.FinishReason)
 	}
 }
+
+func TestTheAnsweringAttemptIsWhatTheWireCaptureKeeps(t *testing.T) {
+	requestCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requestCount++
+		if requestCount == 1 {
+			writer.WriteHeader(http.StatusBadGateway)
+			writer.Write([]byte(`{"error":"pool busy"}`))
+			return
+		}
+		writer.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"}}]}`))
+	}))
+	defer server.Close()
+	captureContext, capture := model.WithWireCapture(context.Background())
+
+	retryTestProvider(server.URL).post(captureContext, []byte(`{"seed":7}`))
+
+	exchange := capture.Exchange()
+	if exchange == nil || exchange.Endpoint != server.URL+"/chat/completions" {
+		t.Fatalf("expected the exchange sent to the chat endpoint, got %+v", exchange)
+	}
+	if exchange.Request != `{"seed":7}` || !strings.Contains(exchange.Response, `"content":"ok"`) {
+		t.Fatalf("expected the bytes of the attempt that answered, got %s -> %s", exchange.Request, exchange.Response)
+	}
+}

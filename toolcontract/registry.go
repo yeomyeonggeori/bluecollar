@@ -1157,6 +1157,12 @@ func (toolSet *ToolSet) ListToolNames() []string {
 	return toolNames
 }
 
+func (toolSet *ToolSet) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		ToolNames []string `json:"toolNames"`
+	}{toolSet.ListToolNames()})
+}
+
 func (toolSet *ToolSet) Descriptions() string {
 	if toolSet == nil {
 		return ""

@@ -378,7 +378,7 @@ func TestAFailedSelectionStartsTheTaskWithNoLikelyToolsAndSaysSoOnTheLedger(t *t
 
 func hasFailedSelectionRecord(callLedger *agentcontract.IntakeCallLedger) bool {
 	for _, record := range callLedger.Records {
-		if record.IsError && record.DecidedMessageCount == 0 {
+		if record.IsError && len(record.DecidedMessageIDs) == 0 {
 			return true
 		}
 	}

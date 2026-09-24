@@ -15,14 +15,24 @@ type TaskEventRepository interface {
 	ListTaskEventByNameForTaskRuns([]string, string) ([]agentcontract.TaskEvent, error)
 }
 
+type LLMCallRepository interface {
+	InsertLLMCall(agentcontract.TaskEvent, agentcontract.LLMCallRecord) error
+}
+
+type PartedTaskEventRepository interface {
+	InsertPartedTaskEvent(agentcontract.TaskEvent, json.RawMessage) error
+}
+
 type TaskEventService struct {
-	mutex                sync.RWMutex
-	taskEvents           map[string][]agentcontract.TaskEvent
-	repository           TaskEventRepository
-	observerMutex        sync.RWMutex
-	observers            map[string]func(RawTurnEvent)
-	globalObservers      map[int]func(RawTurnEvent)
-	nextGlobalObserverID int
+	mutex                 sync.RWMutex
+	taskEvents            map[string][]agentcontract.TaskEvent
+	repository            TaskEventRepository
+	llmCallRepository     LLMCallRepository
+	partedEventRepository PartedTaskEventRepository
+	observerMutex         sync.RWMutex
+	observers             map[string]func(RawTurnEvent)
+	globalObservers       map[int]func(RawTurnEvent)
+	nextGlobalObserverID  int
 }
 
 func NewTaskEventService() *TaskEventService {
@@ -106,6 +116,41 @@ func (taskEventService *TaskEventService) UseRepository(repository TaskEventRepo
 	taskEventService.repository = repository
 }
 
+func (taskEventService *TaskEventService) UseLLMCallRepository(llmCallRepository LLMCallRepository) {
+	taskEventService.llmCallRepository = llmCallRepository
+}
+
+func (taskEventService *TaskEventService) AppendLLMCall(taskRunID string, record agentcontract.LLMCallRecord) agentcontract.TaskEvent {
+	body, errorValue := json.Marshal(record)
+	if errorValue != nil {
+		return agentcontract.TaskEvent{}
+	}
+	if taskEventService.llmCallRepository == nil || (record.Exchange == nil && record.Input == nil) {
+		return taskEventService.AppendTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, string(body))
+	}
+	taskEvent := taskEventService.rememberTaskEvent(taskRunID, agentcontract.TaskEventLLMCall, string(body))
+	if taskEventService.llmCallRepository.InsertLLMCall(taskEvent, record) != nil {
+		taskEventService.saveTaskEvent(taskEvent)
+	}
+	taskEventService.notifyTaskRunObserver(RawTurnEvent{TaskRunID: taskRunID, Name: taskEvent.Name, Body: taskEvent.Body})
+	return taskEvent
+}
+
+func (taskEventService *TaskEventService) UsePartedTaskEventRepository(partedEventRepository PartedTaskEventRepository) {
+	taskEventService.partedEventRepository = partedEventRepository
+}
+
+func (taskEventService *TaskEventService) AppendPartedTaskEvent(taskRunID string, name string, document json.RawMessage) {
+	if taskEventService.partedEventRepository == nil {
+		taskEventService.AppendTaskEvent(taskRunID, name, string(document))
+		return
+	}
+	taskEvent := taskEventService.rememberTaskEvent(taskRunID, name, string(document))
+	if taskEventService.partedEventRepository.InsertPartedTaskEvent(taskEvent, document) != nil {
+		taskEventService.saveTaskEvent(taskEvent)
+	}
+}
+
 func (taskEventService *TaskEventService) AppendTaskEvent(taskRunID string, name string, body string) agentcontract.TaskEvent {
 	taskEvent, _ := taskEventService.AppendTaskEventWithError(taskRunID, name, body)
 	return taskEvent
@@ -118,6 +163,11 @@ func (taskEventService *TaskEventService) AppendTaskEventWithError(taskRunID str
 }
 
 func (taskEventService *TaskEventService) storeTaskEvent(taskRunID string, name string, body string) (agentcontract.TaskEvent, error) {
+	taskEvent := taskEventService.rememberTaskEvent(taskRunID, name, body)
+	return taskEvent, taskEventService.saveTaskEvent(taskEvent)
+}
+
+func (taskEventService *TaskEventService) rememberTaskEvent(taskRunID string, name string, body string) agentcontract.TaskEvent {
 	taskEvent := agentcontract.TaskEvent{
 		TaskEventID: NewIdentifier(),
 		TaskRunID:   taskRunID,
@@ -128,7 +178,7 @@ func (taskEventService *TaskEventService) storeTaskEvent(taskRunID string, name 
 	taskEventService.mutex.Lock()
 	defer taskEventService.mutex.Unlock()
 	taskEventService.taskEvents[taskRunID] = append(taskEventService.taskEvents[taskRunID], taskEvent)
-	return taskEvent, taskEventService.saveTaskEvent(taskEvent)
+	return taskEvent
 }
 
 func (taskEventService *TaskEventService) RecordTaskEvent(taskEvent agentcontract.TaskEvent) {

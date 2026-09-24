@@ -2,6 +2,7 @@ package taskstate
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -10,6 +11,8 @@ import (
 
 type TaskRunStore interface {
 	AdvanceTaskRun(taskRunID string, currentAgentProfileName string) (agentcontract.TaskRun, error)
+	AppendLLMCall(taskRunID string, record agentcontract.LLMCallRecord)
+	AppendPartedTaskEvent(taskRunID string, name string, document json.RawMessage)
 	AppendTaskEvent(taskRunID string, name string, body string)
 	CancelActiveTaskRuns(request TaskRunCancelRequest) []agentcontract.TaskRun
 	CancelTaskRunWithReason(taskRunID string, requesterPersonID string, reason string) (agentcontract.TaskRun, error)

@@ -302,6 +302,7 @@ func (provider *Provider) postOnce(ctx context.Context, body []byte) ([]byte, po
 			retryAfter:  retryAfterHeaderDelay(httpResponse.Header.Get("Retry-After")),
 		}, fmt.Errorf("model endpoint returned %d: %s", httpResponse.StatusCode, truncated(string(responseBody)))
 	}
+	model.RecordWireExchange(ctx, model.WireExchange{Endpoint: httpRequest.URL.String(), Request: string(body), Response: string(responseBody)})
 	return responseBody, postAttemptOutcome{}, nil
 }
 

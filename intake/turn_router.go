@@ -74,6 +74,7 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 	observedRouter := turnRouter
 	if callLedger != nil {
 		observedRouter = TurnRouter{languageModel: callLedger.LanguageModel(turnRouter.languageModel), decisionPlanner: turnRouter.decisionPlanner, options: turnRouter.options, callCost: turnRouter.callCost}
+		ctx = agentcontract.WithLLMCallObserver(ctx, callLedger.Observe)
 	}
 	turnWords, errorValue := observedRouter.writeTurnWords(ctx, request, decidedFields, wordsShape)
 	if errorValue != nil {
