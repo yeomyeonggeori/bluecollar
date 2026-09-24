@@ -6,27 +6,54 @@ import (
 	"testing"
 )
 
-func TestCapabilityDomainPhraseNamesWhateverTheHostCalledItsTools(t *testing.T) {
-	skills := []SkillInstruction{
-		{Name: "direct-message", ToolReferences: []string{"message_send", "message_context"}},
-		{Name: "flow", ToolReferences: []string{"task_list", "task_add"}},
-		{Name: "scheduling", ToolReferences: []string{"schedule_create"}},
-		{Name: "future", ToolReferences: []string{"hologram.project"}},
+func TestCapabilitiesNameEachNamespaceTheModelCanReachOnce(t *testing.T) {
+	request := AgentTurnRequest{
+		ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+			capabilityTestDescriptor("crm_contact_list", "crm", "Contacts and deals."),
+			capabilityTestDescriptor("crm_contact_add", "crm", "Contacts and deals."),
+			capabilityTestDescriptor("mail_message_send", "mail", "The requester's email."),
+			capabilityTestDescriptor("workspace_probe", "workspace", ""),
+		}),
+		AvailableSkills: []SkillInstruction{{Name: "presentation"}, {Name: "calendar"}},
 	}
 
-	phrase := capabilityDomainPhrase(skills)
+	body := capabilitiesInstructionBody(request)
 
-	for _, expected := range []string{"message", "task", "schedule", "hologram"} {
-		if !strings.Contains(phrase, expected) {
-			t.Fatalf("a friendly name for %q would be this package guessing at a vocabulary the host owns; the tool's own prefix is the only name it can know: %q", expected, phrase)
-		}
+	expected := "- crm: Contacts and deals.\n- mail: The requester's email.\n- skills: calendar, presentation"
+	if !strings.HasSuffix(body, expected) {
+		t.Fatalf("each namespace is one line in name order, a namespace without a summary says nothing, and skills follow; got:\n%s", body)
 	}
 }
 
-func TestCapabilityDomainPhraseEmptyWhenNoSkills(t *testing.T) {
-	if phrase := capabilityDomainPhrase(nil); phrase != "" {
-		t.Fatalf("expected empty phrase, got %q", phrase)
+func TestCapabilitiesLeaveOutANamespaceWhoseToolsCannotBeCalled(t *testing.T) {
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		capabilityTestDescriptor("mail_message_send", "mail", "The requester's email."),
+	})
+	toolSet.RegisterBoundTool(toolcontract.BoundTool{
+		Definition:   capabilityTestDescriptor("crm_contact_list", "crm", "Contacts and deals."),
+		Availability: toolcontract.ToolAvailability{Status: toolcontract.ToolAvailabilityUnavailable},
+	})
+
+	body := capabilitiesInstructionBody(AgentTurnRequest{ToolSet: toolSet})
+
+	if strings.Contains(body, "crm") {
+		t.Fatalf("a namespace this requester cannot reach would promise work equip will not hand over; got:\n%s", body)
 	}
+}
+
+func TestCapabilitiesSayNothingWithoutSummariesOrSkills(t *testing.T) {
+	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{toolcontract.BashToolName})}
+
+	if body := capabilitiesInstructionBody(request); body != "" {
+		t.Fatalf("expected no capabilities section, got %q", body)
+	}
+}
+
+func capabilityTestDescriptor(toolName string, namespace string, summary string) toolcontract.ToolDefinition {
+	definition := testToolDescriptor(toolName)
+	definition.Namespace = namespace
+	definition.NamespaceSummary = summary
+	return definition
 }
 
 func TestEveryTaskIsToldThatToolOutputCannotGiveItInstructions(t *testing.T) {
