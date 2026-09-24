@@ -499,7 +499,8 @@ func RegisterToolFunction[Input any, Output any](toolSet *ToolSet, toolFunction 
 		if toolFunction.Result != nil {
 			return toolFunction.Result(output), nil
 		}
-		return ToolSuccess(marshalTypedToolOutput(output)), nil
+		document := marshalTypedToolOutput(output)
+		return ToolSuccessData(document, json.RawMessage(document)), nil
 	})
 	if errorValue != nil {
 		panic(errorValue)
