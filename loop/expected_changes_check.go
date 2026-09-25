@@ -43,10 +43,11 @@ type changeLookup struct {
 
 func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []expectedChange, observations []turnObservation) (changeCheck, error) {
 	check := changeCheck{ExpectedChanges: expected}
-	recordedKinds := recordedChangeKinds(observations)
+	changedObjectTypes := changedObjectTypes(observations)
+	objectTypeByKind := objectTypeByChangeKind(request.ToolSet)
 	recordedIndexes := []int{}
 	for index, change := range expected {
-		if recordedKinds[change.Change] {
+		if changedObjectTypes[objectTypeByKind[change.Change]] {
 			recordedIndexes = append(recordedIndexes, index)
 			continue
 		}
@@ -98,7 +99,7 @@ func changeQuestionKey(index int) string {
 
 func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, observations []turnObservation) map[string]any {
 	state := map[string]any{
-		"request":         requestText(request),
+		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
 		"now":             environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST"),
 		"expectedChanges": expected,
 		"changedRecords":  changedRecords(observations, location),
@@ -112,14 +113,31 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 	return state
 }
 
-func recordedChangeKinds(observations []turnObservation) map[string]bool {
-	kinds := map[string]bool{}
-	for _, observation := range successfulToolObservations(observations) {
-		for _, effect := range observation.Effects {
-			kinds[changeKind(effect.ObjectType, effect.Effect)] = true
+func objectTypeByChangeKind(toolSet *toolcontract.ToolSet) map[string]string {
+	objectTypes := map[string]string{}
+	if toolSet == nil {
+		return objectTypes
+	}
+	for _, toolName := range toolSet.ListToolNames() {
+		definition, isFound := toolSet.ToolDefinition(toolName)
+		if !isFound || definition.ResultContract == nil {
+			continue
+		}
+		for _, effect := range definition.ResultContract.Effects {
+			objectTypes[changeKind(effect.ObjectType, effect.Effect)] = strings.TrimSpace(effect.ObjectType)
 		}
 	}
-	return kinds
+	return objectTypes
+}
+
+func changedObjectTypes(observations []turnObservation) map[string]bool {
+	objectTypes := map[string]bool{}
+	for _, observation := range successfulToolObservations(observations) {
+		for _, effect := range observation.Effects {
+			objectTypes[strings.TrimSpace(effect.ObjectType)] = true
+		}
+	}
+	return objectTypes
 }
 
 func changedRecords(observations []turnObservation, location *time.Location) []changedRecord {

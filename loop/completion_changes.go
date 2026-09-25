@@ -84,7 +84,7 @@ func unmetChangesMessage(check changeCheck) string {
 	for _, change := range check.Unmet {
 		reason := "the recorded changes do not carry it out"
 		if containsExpectedChange(check.Unrecorded, change) {
-			reason = "no recorded change of this kind"
+			reason = "nothing recorded changed this kind of record"
 		}
 		lines = append(lines, "\""+change.Asked+"\" ("+change.Change+"): "+reason)
 	}

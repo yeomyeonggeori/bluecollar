@@ -73,11 +73,11 @@ func (agentTurnRunner *AgentTurnRunner) defineExpectedChanges(ctx context.Contex
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "expected_changes", "error": errorValue.Error()}))
 		return nil, false
 	}
-	misquoted := misquotedChanges(changes, requestText(request))
+	misquoted := misquotedChanges(changes, requestWordings(request))
 	if len(misquoted) > 0 {
 		if requoted, errorValue := agentTurnRunner.askForExpectedChanges(ctx, request, vocabulary, misquoted); errorValue == nil {
 			changes = requoted
-			misquoted = misquotedChanges(changes, requestText(request))
+			misquoted = misquotedChanges(changes, requestWordings(request))
 		}
 	}
 	changes = withoutMisquotedChanges(changes, misquoted)
@@ -114,7 +114,7 @@ func expectedChangesInstruction(vocabulary changeVocabulary) string {
 		"Before any work starts, list the changes this request asks to be made. The finished task is checked against this list.",
 		"A request that asks only for words - an answer, an explanation, a summary, a briefing, or a question about whether something was done - asks for no change: return an empty list. Looking records up is not a change.",
 		"Write one entry per change the request asks for. change is one of the kinds below.",
-		"asked is the exact words of the request that ask for this change, copied character for character. Never paraphrase, translate, complete or add to them. The conversation before the request only helps you understand what the request refers to; what it asked for earlier is already handled and is not part of this request.",
+		"asked is the exact words of the request, or of the latest message about it, that ask for this change, copied character for character. Never paraphrase, translate, complete or add to them. A latest message may correct or narrow the request; what it says wins. The conversation before the request only helps you understand what the request refers to; what it asked for earlier is already handled and is not part of this request.",
 		"Do not add changes the request does not ask for.",
 		"Kinds of change:\n" + vocabulary.Text,
 	}, "\n")
@@ -146,15 +146,19 @@ func expectedChangesSchema(vocabulary changeVocabulary) string {
 }
 
 func expectedChangesRequestText(request AgentTurnRequest) string {
-	text := "Request:\n" + requestText(request)
+	wordings := requestWordings(request)
+	text := "Request:\n" + wordings[0]
+	if len(wordings) > 1 {
+		text += "\n\nLatest message about it:\n" + wordings[1]
+	}
 	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
 		text = "Conversation before the request:\n" + strings.Join(conversation, "\n") + "\n\n" + text
 	}
 	return text
 }
 
-func requestText(request AgentTurnRequest) string {
-	return firstNonEmptyString(request.ActiveGoal.OriginalInstruction, request.Prompt)
+func requestWordings(request AgentTurnRequest) []string {
+	return appendUniqueStrings(nil, nonEmptyStrings([]string{request.ActiveGoal.OriginalInstruction, request.Prompt})...)
 }
 
 func conversationBeforeRequest(request AgentTurnRequest) []string {
@@ -223,16 +227,27 @@ func knownChanges(changes []expectedChange, vocabulary changeVocabulary) []expec
 	return known
 }
 
-func misquotedChanges(changes []expectedChange, request string) []string {
-	source := collapsedWhitespace(request)
+func misquotedChanges(changes []expectedChange, wordings []string) []string {
 	misquoted := []string{}
 	for _, change := range changes {
-		quote := collapsedWhitespace(change.Asked)
-		if quote == "" || !strings.Contains(source, quote) {
+		if !isQuotedFrom(change.Asked, wordings) {
 			misquoted = appendUniqueStrings(misquoted, change.Asked)
 		}
 	}
 	return misquoted
+}
+
+func isQuotedFrom(asked string, wordings []string) bool {
+	quote := collapsedWhitespace(asked)
+	if quote == "" {
+		return false
+	}
+	for _, wording := range wordings {
+		if strings.Contains(collapsedWhitespace(wording), quote) {
+			return true
+		}
+	}
+	return false
 }
 
 func withoutMisquotedChanges(changes []expectedChange, misquoted []string) []expectedChange {

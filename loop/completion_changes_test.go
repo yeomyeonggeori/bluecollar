@@ -162,17 +162,63 @@ func TestExpectedChangesAreRequotedOnceAndStillMisquotedOnesDropped(t *testing.T
 	}
 }
 
-func TestExpectedChangeWithNoRecordedChangeOfItsKindIsUnmetWithoutAskingJev(t *testing.T) {
-	decisionModel := &scriptedDecisionModel{}
-	expected := []expectedChange{{Change: "task created", Asked: "새 작업도 만들어줘"}}
+func declaringToolDefinition(toolName string, objectType string, effect string) toolcontract.ToolDefinition {
+	definition := testToolDescriptor(toolName)
+	definition.ResultContract = &toolcontract.ToolResultContract{
+		Schema:  json.RawMessage(`{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}`),
+		Effects: []toolcontract.ResourceEffectContract{{ObjectType: objectType, Effect: effect, ResultField: "id", EffectIdentity: "id"}},
+	}
+	return definition
+}
 
-	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), expected, []turnObservation{deletedTaskObservation()})
+func taskAndCalendarToolSet() *toolcontract.ToolSet {
+	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		taskDeleteToolDefinition(),
+		declaringToolDefinition("task_add", "task", "created"),
+		declaringToolDefinition("event_add", "calendar", "created"),
+	})
+}
+
+func TestExpectedChangesQuoteTheLatestMessageAboutAnEarlierRequest(t *testing.T) {
+	correction := expectedChange{Change: "task deleted", Asked: "아니 지우라고"}
+	languageModel := &stubStructuredLanguageModel{contents: []string{expectedChangesDocument(correction)}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := deleteRequest(taskDeleteToolSet())
+	request.ActiveGoal = ActiveGoal{OriginalInstruction: "오래된 작업 정리했어"}
+	request.Prompt = "아니 지우라고"
+
+	changes, _ := services.runner.defineExpectedChanges(context.Background(), "task-run-1", request)
+
+	if !strings.Contains(languageModel.requests[0].Messages[1].Content, "Latest message about it:\n아니 지우라고") {
+		t.Fatalf("expected the latest message beside the request, got %s", languageModel.requests[0].Messages[1].Content)
+	}
+	if len(changes) != 1 || changes[0] != correction {
+		t.Fatalf("expected a quote from the latest message to stand, got %+v", changes)
+	}
+}
+
+func TestExpectedChangeIsUnmetWithoutAskingJevWhenNothingOfItsRecordTypeChanged(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{}
+	expected := []expectedChange{{Change: "calendar created", Asked: "회의도 잡아줘"}}
+
+	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
 
 	if errorValue != nil || len(check.Unmet) != 1 || len(check.Unrecorded) != 1 {
 		t.Fatalf("expected the unrecorded change to be unmet, got %+v error=%v", check, errorValue)
 	}
 	if len(decisionModel.requests) != 0 {
-		t.Fatalf("expected no Jev call when nothing of the kind was recorded, got %d", len(decisionModel.requests))
+		t.Fatalf("expected no Jev call when no record of that type changed, got %d", len(decisionModel.requests))
+	}
+}
+
+func TestJevJudgesAChangeRecordedUnderAnotherKindOfTheSameRecordType(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9}}
+	expected := []expectedChange{{Change: "task created", Asked: "오래된 작업을 삭제해줘"}}
+
+	check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
+
+	if len(decisionModel.requests) != 1 || len(check.Unmet) != 0 {
+		t.Fatalf("expected Jev to judge a task change the definition named as another kind, got %+v", check)
 	}
 }
 
@@ -206,7 +252,7 @@ func TestUnmetChangesMessageNamesWhatWasAskedAndWhy(t *testing.T) {
 	created := expectedChange{Change: "task created", Asked: "새 작업도 만들어줘"}
 	message := unmetChangesMessage(changeCheck{Unrecorded: []expectedChange{created}, Unmet: []expectedChange{created, deleteOldTask}})
 
-	for _, want := range []string{`"새 작업도 만들어줘" (task created): no recorded change of this kind`, `"오래된 작업을 삭제해줘" (task deleted): the recorded changes do not carry it out`} {
+	for _, want := range []string{`"새 작업도 만들어줘" (task created): nothing recorded changed this kind of record`, `"오래된 작업을 삭제해줘" (task deleted): the recorded changes do not carry it out`} {
 		if !strings.Contains(message, want) {
 			t.Fatalf("expected %q in %q", want, message)
 		}
