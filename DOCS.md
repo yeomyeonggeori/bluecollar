@@ -4,10 +4,10 @@ bluecollar is an embeddable agent harness written in Go. It is the loop that tak
 
 ## What it does
 
-- **It proves completion from a ledger.** Every model call, tool call, decision and rejection is appended to a task's event ledger as it happens. A reply that claims the work is finished passes a deterministic completion gate that reads that ledger, and then, when the task changed something or promised a result, a completion judge that reads it again.
-- **It sizes the work before doing it.** Intake decides what an inbound message means and how hard it is. The difficulty tier sets the model, the number of steps, the number of tool calls and the clock.
-- **It reports failure to the person who asked.** A failed call opens failure debt that the loop has to repair or report. The report is written by the model, in the requester's language, from the recorded attempts.
-- **It owns no tools, identity or storage.** A host hands it a tool set and a task store and calls `RunTurn`. Every tool call executes back in the host, as whoever asked for the work.
+- It proves completion from a ledger. Every model call, tool call, decision and rejection is appended to a task's event ledger as it happens. A reply that claims the work is finished passes a deterministic completion gate that reads that ledger, and then, when the task changed something or promised a result, a completion judge that reads it again.
+- It sizes the work before doing it. Intake decides what an inbound message means and how hard it is. The difficulty tier sets the model, the number of steps, the number of tool calls and the clock.
+- It reports failure to the person who asked. A failed call opens failure debt that the loop has to repair or report. The report is written by the model, in the requester's language, from the recorded attempts.
+- It owns no tools, identity or storage. A host hands it a tool set and a task store and calls `RunTurn`. Every tool call executes back in the host, as whoever asked for the work.
 
 ## What it is not
 
@@ -263,7 +263,7 @@ When the step marked `in_progress` changes, the loop asks the tool selector for 
 
 The fixed tool names every host is expected to provide, plus whatever else the host registers.
 
-The model's kernel is `read`, `write`, `edit`, `bash`, `plan` and `equip`. The first four are the work. `plan` sizes and steps the task. `equip` takes a sentence describing a need and answers with the tools that serve it, through the same `agentcontract.ToolSelector` intake uses, as implemented by `intake.DecisionPlanner`; the tools it names are pinned for the next turn.
+The model's kernel is `read`, `write`, `edit`, `bash`, `plan` and `equip`. The first four are the work. `plan` sizes and steps the task. `equip` takes a sentence describing a need and answers with the tools that serve it, through the same `agentcontract.ToolSelector` used by intake, which `intake.DecisionPlanner` implements; the tools it names are pinned for the next turn.
 
 The names are constants in `toolcontract/kernel_tools.go`. The descriptors behind them belong to the host, which marks a tool as kernel by setting its `ProviderID` to `kernel`. Kernel tools stay callable, and stay valid as required evidence, even when the host marks their availability denied; a command the actor may not run fails at execution. `toolcontract` also names tools the runtime calls on the model's behalf: `ask_input` and `file_deliver` run behind a reply, and `file_read`, `file_preview`, `file_delete`, `image_read`, `skill_search` and `conversation_history` are available to hosts that register them. Records written under the retired names `shell`, `file_write`, `file_edit` and `find_tools` are read as `bash`, `write`, `edit` and `equip`.
 

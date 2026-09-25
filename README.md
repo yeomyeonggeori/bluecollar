@@ -16,7 +16,9 @@ bluecollar is a headless, embeddable Go agent harness for unattended work. A hos
 ```bash
 go build ./...
 go test ./...
+(cd cmd/bluecollar-acp && go test ./...)
 OLLAMA_CONTEXT_LENGTH=32768 ollama serve &
+ollama pull qwen3.5:4b
 go run ./cmd/bluecollar --model qwen3.5:4b "In one sentence, what is a POSIX user?"
 ```
 

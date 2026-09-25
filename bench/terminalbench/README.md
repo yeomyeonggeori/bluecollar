@@ -61,16 +61,15 @@ definitions — `--global-agent-timeout-sec 3600` and `--global-test-timeout-sec
 600`, from `BENCH_AGENT_TIMEOUT` and `BENCH_TEST_TIMEOUT`. Tasks ship with 600
 and 60. The reason is that this row is asking whether the harness does the work,
 and a task killed at its own clock answers a different question; the earlier
-`test_timeout` rows came from a loaded machine rather than from anything either
-agent did. Both harnesses get the same numbers, so the comparison holds — but a
+`test_timeout` rows came from a loaded machine; neither agent caused them. Both
+harnesses get the same numbers, so the comparison holds — but a
 pass rate from here is not a terminal-bench-core score and must not be reported
 as one.
 
 Raising them does not make the underlying behaviour correct. A budget derived
 from measured iteration cost reached 979 seconds on `count-dataset-tokens`
-against the task's own 600, so the loop planned to work longer than it was
-allowed and was killed rather than finishing and reporting. The environment
-knows that limit and the loop is never told it.
+against the task limit of 600 seconds. The process ended before the loop could
+finish or report because the loop never receives the environment's deadline.
 
 The two agents reach the model from different sides, and getting this wrong
 silently measures a harness that never spoke to a model. bluecollar runs on the
@@ -96,7 +95,7 @@ trials over trials run.
 pi is ahead on those rows. One of them reads differently underneath: on
 quixbugs every functional test passed for all six of bluecollar's runs, which
 found and fixed each bug, and all six failed only `test_one_line_change`,
-because it rewrote the file instead of copying it and changing one line. pi
+because it rewrote the file; the task called for a copy with one line changed. pi
 solved four outright. On finding the bug bluecollar was 6/6 against pi's 4/6;
 on minimal diff discipline it was 0/6.
 
@@ -118,8 +117,8 @@ Two trials in 21 is inside the variance stated above, so this separates
 nothing either. It does retire the single-attempt terminal-bench-core row as a
 description of the current code: four of the seven tasks split, and they split
 in both directions. `grid-pattern-transform` is missing because its container
-failed to build for both harnesses, which is an infrastructure row and not a
-result.
+failed to build for both harnesses, so the comparison excludes that
+infrastructure failure.
 
 Widened to twenty tasks at two attempts, then run again after six fixes landed
 in the harness, on the same tasks and the same model:
@@ -142,8 +141,8 @@ the runs did produce is defects the row cannot show: a shell failure that
 replaced the shell's own message, a substring that refused ordinary commands,
 an elapsed budget larger than the deadline enforcing it, cited completion
 evidence nothing resolved, and two counting bugs in this directory that scored
-unmeasured things as losses. Each was found by reading a ledger, not by
-reading a total.
+unmeasured things as losses. Ledger inspection exposed each issue; aggregate
+totals did not reveal them.
 
 ## The benchmark that measured the harness
 
@@ -160,8 +159,8 @@ solved what pi did not.
 
 The first time this row was level, it was level on verdicts alone: the median
 bluecollar run took 355 seconds and 44 turns against pi's 19 seconds, and
-three of eight runs reached a proper end. Four defects were behind that, all
-of them found by reading a ledger rather than by reasoning about the loop:
+three of eight runs reached a proper end. Ledger inspection surfaced four
+defects:
 
 - The finalizer was rejected eighteen times on one task over an observation ID
   the runtime had written itself. It supplies the identifier now, after
@@ -174,12 +173,11 @@ of them found by reading a ledger rather than by reasoning about the loop:
 - Four copies of the outcome contract disagreed, and the gates read the one
   that was rebuilt after the reduction ran.
 
-The median run is now 18 turns. Two tasks still spend their whole tool budget:
-fix-git and chess-best-move reach a hundred calls, and on fix-git a quarter of
-them are finally git commands rather than pwd, which is progress and not a
-fix.
+The median run is 18 turns. Two tasks still spend their whole tool budget:
+fix-git and chess-best-move reach a hundred calls. In fix-git, a quarter of
+calls reach Git after starting with `pwd`. The task still fails.
 
-AppWorld is the one that measured the harness rather than the model. It gives
+AppWorld measures the harness. It gives
 the agent a supervisor's phone, contacts, venmo and file system apps and asks
 for something like "message the family members who have no venmo account" —
 long, stateful, across apps, verified against the apps' own databases. On the
@@ -248,8 +246,8 @@ tasks got through before the run was stopped:
 ## What the transcript fixes moved
 
 Both harnesses were swept again on the same eight tasks after #146 and #149,
-which put every tool result back on the call that produced it and then put the
-tool's own output on that result instead of the ledger's description of it.
+which put each tool result back on its originating call and replaced the
+ledger's generic description with the tool's output.
 
 | task | bluecollar before | bluecollar after | pi |
 |---|---|---|---|
@@ -278,14 +276,14 @@ pi got the same three attempts:
 
 pi solves both. Its two failures in the single sweep were the variance this file
 already documents, and reading them as losses produced a two-task lead that does
-not exist. The honest count on these eight is a tie at best, with bluecollar's
-six standing on one attempt for four of them.
+not exist. On these eight, the counts tie at best: bluecollar's six successes
+stand on one attempt for four of them.
 
 This is the bias #79 and #92 were filed about, arriving from the other side:
 extra attempts went to the harness whose changes were being measured, and the
 column that moved was the one that got them.
 
-What moved underneath is measured rather than inferred:
+The measurements show what moved underneath:
 
 | | before | after |
 |---|---|---|
@@ -303,8 +301,8 @@ sitting. This is the row the earlier ones were trying to be.
 
 **One column was handicapped and this row cannot settle anything.** bluecollar
 asks the endpoint for the model's context length before its first turn. The
-prompt-meter every row here was measured through implemented `do_POST` only, so
-that `GET /models` was answered `501`, `ContextWindowTokens` returned `0`, and
+the prompt meter handled only `do_POST` requests, so `GET /models` returned
+`501`, `ContextWindowTokens` returned `0`, and
 the run fell back to a default 96,000-token conversation budget. The model
 reports `context_length: 1048576`. pi asks nothing and kept the real window.
 Compaction, pruning and per-result truncation all derive from that number, so
@@ -402,28 +400,28 @@ obs-024  ok    cli supervisor complete_task     answer='0'
 
 Recovery did what it is built to do: the agent found a Python that has
 `requests`, and every one of its eighteen shell results is different from the
-others, so it was working rather than repeating. It ended holding 242
+others, showing the loop kept trying new routes. It ended holding 242
 transactions and the current date, and answered `0`. pi answered `11`.
 
 Two things in that list are worth separating. `obs-016` reports `Execution
-failed` and exits zero, so #157 does not see it: a tool that reports failure in
-its output rather than its exit status is still invisible, and reading it means
-judging what the command printed. And the last step had the data it needed.
+failed` and exits zero, so #157 misses the failure. An agent must read the tool
+output to recognize what the exit status does not report. The last step had
+the data it needed.
 Neither of those is a budget or a ledger or a missing fact. The direction an
 agent takes once it knows something broke is the model's, and the runtime's part
 is to hand it the facts, which it now does and did not before.
 
 ## The one bluecollar wins
 
-Across every recorded sweep, counting the runs the grader failed and how many
-the harness itself reported as a problem instead of reporting success:
+Across every recorded sweep, this compares grader failures with runs in which
+the harness reported that it could not complete the work:
 
 | harness | grader-failed runs | said it could not do it |
 |---|---|---|
 | bluecollar | 188 | 91 (48%) |
 | pi | 30 | 0 (0%) |
 
-pi ends thirty failed runs by stating an answer: "Done", "so **0** songs
+pi ends thirty failed runs by stating an answer: "Done", "so 0 songs
 qualify", "Written the best move to `/app/move.txt`". Not once does it say it
 could not do the thing, because there is nothing in its loop that could — the
 model stops calling tools and the run is over.
@@ -441,8 +439,8 @@ The pass rate is one axis and the only one this benchmark scores. bluecollar's o
 machinery is somewhere else: pi has no completion gate, no approval protocol and no recovery
 budget, so a comparison that only counts passes never touches them.
 
-Counting the other axis on the same runs — of the runs the grader failed, how
-many did the harness itself report as a problem instead of reporting success:
+For grader-failed runs, the other axis is how many times the harness itself
+reported a problem:
 
 | | before | after |
 |---|---|---|
@@ -451,16 +449,15 @@ many did the harness itself report as a problem instead of reporting success:
 | of those, reported as complete | 8 | 3 |
 | silently wrong | 67% | 43% |
 
-The pass rates are the same row and this file's own interval column says so. The
-silent-failure count is not a rate estimated from coin flips; it is counted from
-ledgers, and it halved.
+The pass rates are the same row and this file's own interval column says so.
+The ledgers show the silent-failure count halved. These are exact counts, not
+probability estimates.
 
 Six changes did that, and none of them removed anything the harness had. The
-runtime stopped asserting a date it cannot know, the completion judge started
-grading the work rather than the reply, it started running on turns that did
-nothing rather than skipping them, it started seeing the operations that failed,
-an agent that cannot finish gained a way to say so, and a budget that had been
-replaced by a caller's flag went back to being derived.
+runtime stopped asserting a date it cannot know. The completion judge began
+grading the work itself and running on turns with no tool calls. It now sees
+failed operations. Agents that cannot finish gained a way to report it, and the
+budget is derived again after a caller's flag had replaced it.
 
 The one that matters structurally is the judge seeing failures. pi has no
 ratification step at all: the model that did the work decides it is done with
@@ -488,7 +485,7 @@ Nearly the same fuel, half the distance. On the four tasks both harnesses fail,
 bluecollar spends 668,382 prompt tokens against pi's 434,557 to arrive at the
 same place.
 
-Where the extra weight goes is measured rather than guessed: bluecollar's own
+The ledger shows where the extra weight goes: bluecollar's own
 ledger puts the median prompt at 47,687 bytes, of which the action schema is
 13%. The rest is the observation history, and 79% of the tool output in that
 history is `--help` the agent had already read — 32 distinct documents, 110
@@ -504,7 +501,7 @@ An earlier version of this table read 5 of 17 and was not a sweep. After each
 fix I re-ran the tasks bluecollar had lost and recorded the ones that then
 passed, while pi's column stayed at its first measurement. That gives one
 column extra attempts on exactly its own failures, which is the bias #79 and
-#92 were filed about, committed here by hand rather than by the summariser.
+#92 were filed about this bias, and I committed the entries by hand.
 
 The sweep also found two tasks bluecollar resolves and pi does not, which the
 assembled table had recorded as failures for both.
@@ -560,8 +557,8 @@ tasks:
 | gemini-3.7-flash | 0/3 | 3/3 |
 | | 0/6 | 6/6 |
 
-Two independent models, six trials a harness, the same split. Whatever costs
-bluecollar these tasks travels with the harness rather than with the model.
+Two independent models, six trials a harness, the same split. The result
+followed bluecollar across both models.
 
 One fix moved the row, and it was the seventh. Six before it changed nothing
 here, because all six came from reading what the ledger recorded as failed. The
@@ -574,8 +571,8 @@ turn is wrapping up flipped `530b157_1` and `6171bbc_1` here, `37a8675_1` on
 the second model, and roughly doubled the work every remaining loss does before
 it stops.
 
-One of those causes was found by asking what bluecollar does not do rather than
-what it does wrong. On `0d8a4ee_1`, "message the family members who have no
+One cause emerged from auditing behavior bluecollar omitted. On `0d8a4ee_1`,
+"message the family members who have no
 venmo account", it called `cli venmo` zero times across three trials and
 messaged the family: three sends, then twelve, then fourteen. Fourteen is what
 no filter looks like, and the completion judge accepted every one.
@@ -596,7 +593,7 @@ Ten changes were measured against this row, and they sort cleanly by kind.
 
 The four that did nothing: a `lastOutcomeFailed` field the model set zero times;
 a judge rule the instruction already contained and the judge ignored anyway; a
-sentence saying the clock might belong to the machine rather than the world; an
+sentence questioning whether the clock represented machine load or world time; an
 index of commands already run, which raised the help share from 49% to 78%.
 
 The five that worked all removed or corrected something the runtime was doing:
@@ -605,21 +602,20 @@ three numbers, carrying a budget warning past the budget it described, accepting
 a set the instruction had filtered, and asserting the host's clock as the
 world's.
 
-The sixth runtime change missed its target rather than its category: it replaced
+The sixth runtime change targeted the wrong behavior: it replaced
 duplicate results with a pointer at a seam the prompt does not read, and a
 second attempt at the right seam reached a tenth of the waste, because
 byte-identical repeats are 3 to 8 of the roughly 49 help calls a run.
 
-The gap is open and its remaining cause is not visible in the ledger, which is
-a statement about what the ledger shows and not about where the cause lives:
+The gap is open, and the ledger leaves its cause unknown:
 the two-model control puts it here. Five losses read closely share one shape:
 the
 completion judge accepts, citing the pagination the agent completed, the
 transaction it recorded with the right amount and description, the exact text
 it sent — and AppWorld's database grades the task a failure. The gate agrees
 with the agent and the grader agrees with neither. That is where this harness
-stands against pi on long stateful work, and it is not a defect any of the six
-fixes could have reached.
+stands against pi on long stateful work. None of the six fixes could reach that
+defect.
 
 A `Failed to activate server: 500` from the verification step is not an
 infrastructure row, and reading it as one costs a whole run. The full dev set
@@ -638,8 +634,8 @@ byte-identical.
 
 The runtime did notice something was wrong and said the wrong thing about it.
 It raised limit pressure twice and ended on an exhausted budget, which tells an
-agent it is running out of room, not that it has already been told this answer
-eight times.
+agent state shows it is running out of room. It omits that the same answer had
+already been returned eight times.
 
 ## Where the budgets come from
 
@@ -775,9 +771,9 @@ rate.
   back to the model as `exitCode=0`, and a second path had the summariser
   reading `stdout` from a result this repo's tool reports under `output`.
   Both had to go. Three runs before and two after, same eight tasks: solved
-  went 4, 4, 3 to 6, 5, which is a gain the size of the run-to-run variance
-  and not yet separable from it. What is separable is the cost — median turns
-  13, 14, 14 to 7, 6, and median wall clock 99s, 83s, 75s to 46s, 31s. The
+  went 4, 4, 3 to 6, 5, a gain within run-to-run variance. Median turns fell
+  from 13, 14, 14 to 7, 6; median wall clock fell from 99s, 83s, 75s to 46s,
+  31s. The
   agent was never looping. It was searching for something it had already been
   handed and could not see, and it now stops searching.
 - The action schema was a root-level `oneOf`, which gemini answers with `{}`
@@ -920,10 +916,9 @@ the budgets, gates and judge are untouched.
 
 Ten repairs preceded this — escalation that could not fire, a judge
 certifying from invisible rows, a budget shrunk by its own fast failures
-— and each fixed something real that the ledgers verify, and none moved
-this number. The lesson the row order teaches: the mechanism fixes were
-necessary for the runs to be judged honestly, and the pass rate was
-waiting on the one thing the format forbade.
+— and each fixed a ledger-verified defect, though none moved this number. The
+run order shows that mechanism fixes made the experiments comparable; the pass
+rate moved only after the format allowed the model to think.
 
 ## A slower model, and the walls it found
 
