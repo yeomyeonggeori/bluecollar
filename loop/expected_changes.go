@@ -177,7 +177,7 @@ func changeVocabularyOf(toolSet *toolcontract.ToolSet) changeVocabulary {
 		return changeVocabulary{}
 	}
 	toolsByKind := map[string][]string{}
-	for _, toolName := range toolSet.ListToolNames() {
+	for _, toolName := range toolNamesThatCanChange(toolSet) {
 		definition, isFound := toolSet.ToolDefinition(toolName)
 		if !isFound || definition.ResultContract == nil {
 			continue
@@ -200,6 +200,14 @@ func changeVocabularyOf(toolSet *toolcontract.ToolSet) changeVocabulary {
 		}
 	}
 	return changeVocabulary{Kinds: kinds, Text: strings.Join(lines, "\n")}
+}
+
+func toolNamesThatCanChange(toolSet *toolcontract.ToolSet) []string {
+	toolNames := toolSet.ListToolNames()
+	if toolSet.IsRegistered(toolcontract.FileDeliverToolName) {
+		toolNames = appendUniqueStrings(toolNames, toolcontract.FileDeliverToolName)
+	}
+	return toolNames
 }
 
 func changeKind(objectType string, effect string) string {

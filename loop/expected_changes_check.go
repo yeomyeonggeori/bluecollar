@@ -118,7 +118,7 @@ func objectTypeByChangeKind(toolSet *toolcontract.ToolSet) map[string]string {
 	if toolSet == nil {
 		return objectTypes
 	}
-	for _, toolName := range toolSet.ListToolNames() {
+	for _, toolName := range toolNamesThatCanChange(toolSet) {
 		definition, isFound := toolSet.ToolDefinition(toolName)
 		if !isFound || definition.ResultContract == nil {
 			continue
@@ -185,7 +185,7 @@ func namespacesOfChanges(toolSet *toolcontract.ToolSet, expected []expectedChang
 		expectedKinds[change.Change] = true
 	}
 	namespaces := map[string]bool{}
-	for _, toolName := range toolSet.ListToolNames() {
+	for _, toolName := range toolNamesThatCanChange(toolSet) {
 		definition, isFound := toolSet.ToolDefinition(toolName)
 		if !isFound || definition.ResultContract == nil || strings.TrimSpace(definition.Namespace) == "" {
 			continue

@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -271,5 +272,17 @@ func TestExpectedChangesPassWhenNoDecisionModelIsConfigured(t *testing.T) {
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "completion.check_degraded", "decision model is not configured") {
 		t.Fatal("expected the missing decision model to be recorded")
+	}
+}
+
+func TestExpectedChangesCanAskForAFileTheReplyDelivers(t *testing.T) {
+	fileDeliver := declaringToolDefinition(toolcontract.FileDeliverToolName, "file", "attached")
+	fileDeliver.Visibility = toolcontract.ToolVisibilityInternal
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{fileDeliver, declaringToolDefinition("write", "file", "created")})
+
+	vocabulary := changeVocabularyOf(toolSet)
+
+	if !slices.Contains(vocabulary.Kinds, "file attached") || !slices.Contains(vocabulary.Kinds, "file created") {
+		t.Fatalf("expected the reply's file delivery beside the model's own tools, got %v", vocabulary.Kinds)
 	}
 }
