@@ -985,42 +985,6 @@ func TestAgentTurnRunnerCompletesBrowserOpenWithPostEvidenceReply(t *testing.T) 
 	}
 }
 
-func TestAgentTurnRunnerRejectsBrowserFollowUpReplyWithoutToolEvidence(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		finishMessageDocument("말로만 답변"),
-		directToolAction("continue", "", "browser_open", `{"url":"https://console.cloud.google.com/"}`),
-		finishMessageCiting("열었습니다", "obs-002"),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-	toolRegistry := newTestCapabilityToolSet([]string{"browser_open"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_open"}, func(_ context.Context, toolInvocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"url":"https://console.cloud.google.com/"}`), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "다시 열어봐",
-		TaskShape:         TaskShapeBrowserHandoffTask,
-		VisibleContext: VisibleContext{Messages: []VisibleContextMessage{
-			{Speaker: "사용자", Text: "구글 클라우드 콘솔에서 credential.json 받는 거 도와줘"},
-			{Speaker: "김인턴", Text: "Companion 브라우저 연결이 필요합니다."},
-		}},
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"browser_open"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected turn to succeed: %v", errorValue)
-	}
-	if result.FinishMessage != "열었습니다" {
-		t.Fatalf("expected browser-backed reply, got %q", result.FinishMessage)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "browser_") {
-		t.Fatal("expected browser follow-up completion gate to reject tool-free reply")
-	}
-}
-
 func TestBrowserActionSchemaUsesProviderCompatibleObjectInputs(t *testing.T) {
 	runner := NewAgentTurnRunner(nil, nil, nil, nil, TurnOptions{})
 	toolRegistry := newTestToolSet([]string{"browser_open", "browser_click", "browser_fill", "browser_select", "browser_wait"})
@@ -1222,126 +1186,6 @@ func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *
 		if !stepRequest.ToolSet.CanExpose(toolName) {
 			t.Fatalf("expected initial site working set to expose %s, got %+v", toolName, stepRequest.ToolExposure.ExposedToolIDs)
 		}
-	}
-}
-
-func TestAgentTurnRunnerReselectsToolsAfterRejectedSiteFinish(t *testing.T) {
-	languageModel := &sequenceLanguageModel{
-		contents: []string{
-			`{"action":"continue","toolName":"site_serve","toolInput":{"slug":"portfolio","title":"Portfolio"},"nextStepPlan":{"objective":"build the draft before finishing","expectedTools":["site_build"],"doneCriteria":["build evidence exists"],"risk":"draft creation alone is not completion","workingSetReason":"site_build is required evidence"}}`,
-			`{"action":"reply","final":true,"message":"초안이 만들어졌습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
-			`{"action":"continue","toolName":"site_build","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish after build evidence","expectedTools":[],"doneCriteria":["build observation exists"],"risk":"none","workingSetReason":"required evidence has been collected"}}`,
-			finishMessageCiting("빌드까지 완료했습니다.", "obs-003"),
-		},
-	}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 4})
-	toolRegistry := newTestCapabilityToolSet([]string{"site_serve", "site_build"})
-	toolCalls := []string{}
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_serve"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site_serve")
-		return testToolSuccess(`{"siteID":"site-1","status":"draft"}`), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site_build")
-		return testToolSuccess(`{"siteID":"site-1","distPath":"home/sites/site-1/app/dist"}`), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "개인 홈페이지 만들고 배포해줘",
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"site_build"},
-		AvailableSkills: []SkillInstruction{{
-			Name:           "site-prototype",
-			ToolReferences: []string{"site_serve", "site_build"},
-		}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected rejected finish to recover into build: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
-	}
-	if strings.Join(toolCalls, ",") != "site_serve,site_build" {
-		t.Fatalf("expected create then build, got %+v", toolCalls)
-	}
-	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.completion_required", "site_build") {
-		t.Fatal("expected early finish to be rejected by completion gate")
-	}
-	if !taskEventsContain(events, "agent.step_working_set", "selected_skills") {
-		t.Fatal("expected selected direct tools in the per-iteration working set")
-	}
-}
-
-func TestAgentTurnRunnerRejectsFailAfterSiteSourceWriteBeforeBuildPublish(t *testing.T) {
-	// site_build was removed as a native/capability tool (commit d4a0e36):
-	// Blueclaw no longer owns site build logic, the build step is an ordinary
-	// shell, and only the publish step is guarded by the workflow
-	// recovery gate.
-	languageModel := &sequenceLanguageModel{
-		contents: []string{
-			`{"action":"continue","toolName":"write","toolInput":{"path":"/workspace/sites/site-1/draft/app/src/App.tsx","content":"export default function App(){return <main>Pretty</main>}"}}`,
-			`{"action":"fail","reason":"cannot continue","goalStatus":"blocked","goalSatisfied":false,"remainingWork":"build and publish still needed"}`,
-			`{"action":"continue","toolName":"bash","toolInput":{"command":"npm run build","workingDirectoryPath":"/workspace/sites/site-1/draft/app"}}`,
-			directToolAction("continue", "", "site_serve", `{"siteID":"site-1"}`),
-			finishMessageCiting("배포했습니다: https://pretty.example", "obs-004"),
-		},
-	}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 8, MaxToolCallCount: 8})
-	toolRegistry := newHybridKernelCapabilityToolSet([]string{"write", "bash"}, []string{"site_serve"})
-	toolCalls := []string{}
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "write")
-		return testToolSuccess(`{"path":"/workspace/sites/site-1/draft/app/src/App.tsx"}`), nil
-	})
-	registerTestTool(toolRegistry, shellTestToolDefinition(), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "bash")
-		data := json.RawMessage(`{"mode":"command","completed":true,"exitCode":0,"stdout":"built","stderr":"","timedOut":false,"outputTrimmed":false}`)
-		return toolcontract.ToolSuccessData(string(data), data), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{
-		Name:            "site_serve",
-		Namespace:       "site",
-		SideEffectClass: toolcontract.ToolSideEffectExternalPublish,
-		Completion:      toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
-	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site_serve")
-		return testToolSuccess(`{"siteID":"site-1","publishedURL":"https://pretty.example"}`), nil
-	})
-
-	request := AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "사이트 더 예쁘게 수정하고 배포해줘",
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"site_serve"},
-		OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"site_serve"},
-		},
-	}
-	if !turnRequestLooksLikeSitePrototypeWork(request) {
-		t.Fatal("expected typed site descriptor to identify site work")
-	}
-	if !sitePublishIsRequired(request) {
-		t.Fatal("expected typed site contract to require publish")
-	}
-	result, errorValue := services.runner.RunTurn(context.Background(), request)
-	if errorValue != nil {
-		t.Fatalf("expected recoverable fail to continue: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
-	}
-	if strings.Join(toolCalls, ",") != "write,bash,site_serve" {
-		t.Fatalf("expected write then build/publish, got %+v", toolCalls)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.recoverable_fail_rejected", "site_serve") {
-		t.Fatal("expected recoverable fail rejection to suggest publish")
 	}
 }
 
@@ -1803,28 +1647,6 @@ func TestAgentTurnRunnerDoesNotEscalateIterationLimitForInspectionOnlyProgress(t
 	}
 	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.budget_escalated", "") {
 		t.Fatal("did not expect inspection-only progress to escalate")
-	}
-}
-
-func shellTestToolDefinition() toolcontract.ToolDefinition {
-	return toolcontract.ToolDefinition{
-		Name: "bash",
-		ResultContract: &toolcontract.ToolResultContract{
-			Schema: json.RawMessage(`{
-				"type":"object",
-				"properties":{
-					"mode":{"const":"command"},
-					"completed":{"const":true},
-					"exitCode":{"type":"integer"},
-					"stdout":{"type":"string"},
-					"stderr":{"type":"string"},
-					"timedOut":{"type":"boolean"},
-					"outputTrimmed":{"type":"boolean"}
-				},
-				"required":["mode","completed","exitCode","stdout","stderr","timedOut","outputTrimmed"],
-				"additionalProperties":false
-			}`),
-		},
 	}
 }
 

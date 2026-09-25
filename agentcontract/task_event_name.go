@@ -70,7 +70,6 @@ const (
 	TaskEventAgentPlanUpdated                      = "agent.plan.updated"
 	TaskEventAgentQualityCriteria                  = "agent.quality_criteria"
 	TaskEventAgentQualityReview                    = "agent.quality_review"
-	TaskEventAgentRecoverableFailRejected          = "agent.recoverable_fail_rejected"
 	TaskEventAgentRecoveryAttempt                  = "agent.recovery_attempt"
 	TaskEventAgentRecoveryBudgetExhausted          = "agent.recovery_budget_exhausted"
 	TaskEventAgentRecoveryGenerationFailed         = "agent.recovery_generation_failed"

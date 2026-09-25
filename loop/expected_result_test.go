@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-func TestCanonicalExpectedResultURLsIgnoreUncontractedOutput(t *testing.T) {
-	request := AgentTurnRequest{ToolSet: newTestToolSet([]string{"external.publish"})}
+func TestObservedURLInReplyIgnoresUncontractedOutput(t *testing.T) {
+	toolSet := newTestToolSet([]string{"external.publish"})
 	observations := []turnObservation{{
 		ObservationID: "obs-001",
 		Tool:          "external.publish",
@@ -18,95 +18,48 @@ func TestCanonicalExpectedResultURLsIgnoreUncontractedOutput(t *testing.T) {
 		},
 	}}
 
-	if urls := canonicalExpectedResultURLs(request, observations); len(urls) != 0 {
-		t.Fatalf("uncontracted URL must not count as delivered link: %+v", urls)
+	if message := missingObservedURLInReply(toolSet, observations, "Published it."); message != "" {
+		t.Fatalf("uncontracted URL must not be demanded in the reply: %q", message)
 	}
 }
 
-func TestCanonicalExpectedResultURLsUseValidatedEffects(t *testing.T) {
+func TestObservedURLInReplyUsesValidatedEffects(t *testing.T) {
 	toolSet, observation := canonicalLinkObservation("external.publish", "https://portfolio.example")
-	request := AgentTurnRequest{ToolSet: toolSet}
 
-	if urls := canonicalExpectedResultURLs(request, []turnObservation{observation}); strings.Join(urls, ",") != "https://portfolio.example" {
-		t.Fatalf("expected exact canonical URL, got %+v", urls)
+	if message := missingObservedURLInReply(toolSet, []turnObservation{observation}, "Published it."); !strings.Contains(message, "https://portfolio.example") {
+		t.Fatalf("expected exact canonical URL to be demanded, got %q", message)
 	}
 
 	observation.Effects[0].URL = "https://different.example"
-	if urls := canonicalExpectedResultURLs(request, []turnObservation{observation}); len(urls) != 0 {
-		t.Fatalf("mismatched effect identity must fail closed: %+v", urls)
+	if message := missingObservedURLInReply(toolSet, []turnObservation{observation}, "Published it."); message != "" {
+		t.Fatalf("mismatched effect identity must not be demanded: %q", message)
 	}
 }
 
-func TestCanonicalExpectedResultURLsPreferRequiredEffectIdentity(t *testing.T) {
-	searchDefinition := canonicalLinkToolDefinition("web_search")
-	searchDefinition.ResultContract.Effects[0].ObjectType = "reference"
-	searchDefinition.ResultContract.Effects[0].Effect = "found"
-	searchResult := canonicalLinkToolResult("https://reference.example")
-	searchResult.Effects[0].ObjectType = "reference"
-	searchResult.Effects[0].Effect = "found"
-	searchObservation := turnObservation{
-		ObservationID: "obs-001",
-		Tool:          "web_search",
-		Output:        searchResult.Output,
-		Effects:       searchResult.Effects,
-	}
-	publishToolSet, publishObservation := canonicalLinkObservation("site_serve", "https://portfolio.example")
-	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
-		searchDefinition,
-		mustToolDefinition(t, publishToolSet, "site_serve"),
-	})
-	request := AgentTurnRequest{
-		ToolSet: toolSet,
-		OutcomeContract: OutcomeContract{RequiredEffects: []OutcomeEffect{{
-			ObjectType: "website",
-			Effect:     "published",
-		}}},
-	}
+func TestObservedURLInReplyIgnoresWhatALookupFound(t *testing.T) {
+	descriptor := canonicalLinkToolDefinition("web_search")
+	descriptor.SideEffectClass = toolcontract.ToolSideEffectRead
+	result := canonicalLinkToolResult("https://reference.example")
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{descriptor})
+	observation := turnObservation{ObservationID: "obs-001", Tool: "web_search", Output: result.Output, Effects: result.Effects}
 
-	if urls := canonicalExpectedResultURLs(request, []turnObservation{searchObservation, publishObservation}); strings.Join(urls, ",") != "https://portfolio.example" {
-		t.Fatalf("expected required publish effect URL only, got %+v", urls)
+	if message := missingObservedURLInReply(toolSet, []turnObservation{observation}, "Here is what I found."); message != "" {
+		t.Fatalf("a URL a lookup found is not one the reply must carry: %q", message)
 	}
 }
 
-func TestExpectedResultDeliveryRequiresExactCanonicalURL(t *testing.T) {
+func TestCompletionFactsRequireExactObservedURLInReply(t *testing.T) {
 	toolSet, observation := canonicalLinkObservation("site_serve", "https://portfolio.example")
-	request := AgentTurnRequest{
-		ToolSet: toolSet,
-		OutcomeContract: OutcomeContract{
-			ExpectedResults: []ExpectedResult{{
-				ID:          "site-public-link",
-				Type:        ExpectedResultTypeLink,
-				Description: "published website URL",
-				Required:    true,
-			}},
-		},
-	}
+	request := AgentTurnRequest{ToolSet: toolSet}
 
-	wrongURL := validateExpectedResultDelivery(request, []turnObservation{observation}, nil, finishDocument("Deployed it: https://different.example"))
+	wrongURL := validateCompletionFacts(request, []turnObservation{observation}, satisfiedFinishDocument("Deployed it: https://different.example"))
 	if wrongURL.IsSatisfied || !strings.Contains(wrongURL.Message, "https://portfolio.example") {
 		t.Fatalf("expected exact observed URL requirement, got %+v", wrongURL)
 	}
 
-	exactURL := validateExpectedResultDelivery(request, []turnObservation{observation}, nil, finishDocument("Deployed it: https://portfolio.example/"))
+	exactURL := validateCompletionFacts(request, []turnObservation{observation}, satisfiedFinishDocument("Deployed it: https://portfolio.example/"))
 	if !exactURL.IsSatisfied {
 		t.Fatalf("expected normalized exact URL to pass, got %+v", exactURL)
-	}
-}
-
-func TestExpectedResultDeliveryRequiresTypedFileAndMessage(t *testing.T) {
-	request := AgentTurnRequest{OutcomeContract: OutcomeContract{ExpectedResults: []ExpectedResult{
-		{ID: "attached-file", Type: ExpectedResultTypeFile, Description: "attached report", Required: true},
-		{ID: "final-message", Type: ExpectedResultTypeMessage, Description: "final user reply", Required: true},
-	}}}
-
-	missingFile := validateExpectedResultDelivery(request, nil, nil, finishDocument("Prepared the file."))
-	if missingFile.IsSatisfied {
-		t.Fatal("expected missing typed attachment to block delivery")
-	}
-
-	ready := validateExpectedResultDelivery(request, nil, []toolcontract.FileAttachment{{Filename: "report.json"}}, finishDocument("Attached the file."))
-	if !ready.IsSatisfied {
-		t.Fatalf("expected typed attachment and message to pass, got %+v", ready)
 	}
 }
 
@@ -144,29 +97,6 @@ func canonicalLinkToolResult(publicURL string) toolcontract.ToolResult {
 	}
 }
 
-func mustToolDefinition(t *testing.T, toolSet *toolcontract.ToolSet, toolName string) toolcontract.ToolDefinition {
-	t.Helper()
-	definition, isFound := toolSet.ToolDefinition(toolName)
-	if !isFound {
-		t.Fatalf("expected tool definition %s", toolName)
-	}
-	return definition
-}
-
-func finishDocument(message string) turnActionDocument {
-	return turnActionDocument{Action: "finish", Message: message}
-}
-
-func TestLinkExpectationWithoutLinkCapableToolDoesNotHardBlock(t *testing.T) {
-	toolSet := newTestToolSet([]string{"task_list"})
-	expectation := ExpectedResult{Type: ExpectedResultTypeLink, Required: true}
-
-	if message := missingExpectedResultDelivery(expectation, toolSet, nil, nil, "Here are the results."); message != "" {
-		t.Fatalf("expected an unsatisfiable link expectation not to block, got %q", message)
-	}
-
-	linkToolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{canonicalLinkToolDefinition("site_serve")})
-	if message := missingExpectedResultDelivery(expectation, linkToolSet, nil, nil, "Created it."); message == "" {
-		t.Fatal("expected a link-capable working set to keep requiring the canonical link")
-	}
+func satisfiedFinishDocument(message string) turnActionDocument {
+	return turnActionDocument{Action: "finish", Message: message, GoalSatisfied: boolPointer(true)}
 }

@@ -8,74 +8,12 @@ import (
 
 var observedURLPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
-func validateExpectedResultDelivery(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) completionGateResult {
-	expectedResults := normalizeExpectedResults(request.OutcomeContract.ExpectedResults)
-	if len(expectedResults) == 0 {
-		return completionGateResult{IsSatisfied: true, Attachments: attachments}
+func missingObservedURLInReply(toolSet *toolcontract.ToolSet, observations []turnObservation, finishMessage string) string {
+	observedURLs := observedFactURLs(observedFactsFromObservations(toolSet, changingObservations(toolSet, observations)), nil)
+	if len(observedURLs) == 0 || finishMessageContainsObservedURL(finishMessage, observedURLs) {
+		return ""
 	}
-	observedURLs := canonicalExpectedResultURLs(request, observations)
-	finishMessage := finishActionMessage(actionDocument)
-	for _, expectedResult := range expectedResults {
-		if !expectedResult.Required {
-			continue
-		}
-		if message := missingExpectedResultDelivery(expectedResult, request.ToolSet, observedURLs, attachments, finishMessage); message != "" {
-			return completionGateResult{Message: message, EvidenceKind: evidenceKindExpectedResult}
-		}
-	}
-	return completionGateResult{IsSatisfied: true, Attachments: attachments}
-}
-
-func missingExpectedResultDelivery(expectedResult ExpectedResult, toolSet *toolcontract.ToolSet, observedURLs []string, attachments []toolcontract.FileAttachment, finishMessage string) string {
-	switch expectedResult.Type {
-	case ExpectedResultTypeFile:
-		if len(attachments) == 0 {
-			return "a final reply requires a delivered file result"
-		}
-	case ExpectedResultTypeLink:
-		if len(observedURLs) == 0 {
-			if toolSetProducesCanonicalLinks(toolSet) {
-				return "a final reply requires a canonical link result"
-			}
-			return ""
-		}
-		if !finishMessageContainsObservedURL(finishMessage, observedURLs) {
-			return "final message must include this exact observed URL: " + strings.Join(observedURLs, " ")
-		}
-	case ExpectedResultTypeMessage:
-		if strings.TrimSpace(finishMessage) == "" {
-			return "a final reply requires a non-empty final message"
-		}
-	}
-	return ""
-}
-
-func toolSetProducesCanonicalLinks(toolSet *toolcontract.ToolSet) bool {
-	if toolSet == nil {
-		return false
-	}
-	for _, toolName := range toolSet.ListToolNames() {
-		definition, isFound := toolSet.ToolDefinition(toolName)
-		if !isFound || definition.ResultContract == nil {
-			continue
-		}
-		for _, effectContract := range definition.ResultContract.Effects {
-			if strings.TrimSpace(effectContract.EffectIdentity) == "url" {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func canonicalExpectedResultURLs(request AgentTurnRequest, observations []turnObservation) []string {
-	facts := observedFactsFromObservations(request.ToolSet, observations)
-	requiredEffects := normalizeOutcomeEffects(request.OutcomeContract.RequiredEffects)
-	matchingURLs := observedFactURLs(facts, requiredEffects)
-	if len(matchingURLs) > 0 {
-		return matchingURLs
-	}
-	return observedFactURLs(facts, nil)
+	return "final message must include this exact observed URL: " + strings.Join(observedURLs, " ")
 }
 
 func observedFactURLs(facts []ObservedFact, requiredEffects []OutcomeEffect) []string {
@@ -121,4 +59,16 @@ func observedURLsFromText(value string) []string {
 func normalizeObservedURL(value string) string {
 	normalizedURL := strings.TrimRight(strings.TrimSpace(value), ".,);:!?")
 	return strings.TrimRight(normalizedURL, "/")
+}
+
+func changingObservations(toolSet *toolcontract.ToolSet, observations []turnObservation) []turnObservation {
+	changing := []turnObservation{}
+	for _, observation := range observations {
+		definition, isFound := toolSet.ToolDefinition(observation.Tool)
+		if isFound && toolcontract.ToolDefinitionSideEffectClass(definition) == toolcontract.ToolSideEffectRead {
+			continue
+		}
+		changing = append(changing, observation)
+	}
+	return changing
 }

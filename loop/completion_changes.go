@@ -12,7 +12,7 @@ import (
 )
 
 func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
-	completionGateResult := validateCompletionGateForRequestWithExpectedResults(request, requirements, observations, attachments, criteria, actionDocument, agentTurnRunner.options.RecoveryBudget)
+	completionGateResult := validateCompletionFacts(request, observations, actionDocument)
 	if !completionGateResult.IsSatisfied || ctx.Err() != nil {
 		return completionGateResult
 	}
@@ -84,7 +84,7 @@ func unmetChangesMessage(check changeCheck) string {
 	for _, change := range check.Unmet {
 		reason := "the recorded changes do not carry it out"
 		if containsExpectedChange(check.Unrecorded, change) {
-			reason = "no recorded change of this kind"
+			reason = "nothing recorded changed this kind of record"
 		}
 		lines = append(lines, "\""+change.Asked+"\" ("+change.Change+"): "+reason)
 	}

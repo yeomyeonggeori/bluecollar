@@ -6,19 +6,6 @@ import (
 	"strings"
 )
 
-func expectedResultsIncludeSiteRequirement(results []ExpectedResult) bool {
-	for _, result := range results {
-		if expectedResultIsSiteRequirement(result) {
-			return true
-		}
-	}
-	return false
-}
-
-func expectedResultIsSiteRequirement(result ExpectedResult) bool {
-	return strings.TrimSpace(result.ID) == "site-public-link"
-}
-
 func shouldBuildExecutionPlanForConfirmation(request AgentRequest, intakeDecision IntakeDecision, requiredEvidenceTools []string) bool {
 	if intakeDecision.Classification != IntakeClassificationBoundedTask {
 		return false
@@ -717,17 +704,6 @@ func isSendEvidenceTool(toolSet *toolcontract.ToolSet, toolName string) bool {
 func toolIsInNamespace(toolSet *toolcontract.ToolSet, toolName string, namespace string) bool {
 	toolDefinition, isFound := toolDefinitionForName(toolSet, toolName)
 	return isFound && toolDefinition.Namespace == strings.TrimSpace(namespace)
-}
-
-func requiredEvidenceIncludesAnySideEffectClass(toolSet *toolcontract.ToolSet, toolNames []string, sideEffectClasses ...string) bool {
-	expectedSideEffectClasses := stringSet(sideEffectClasses)
-	for _, toolName := range toolNames {
-		toolDefinition, isFound := toolDefinitionForName(toolSet, toolName)
-		if isFound && expectedSideEffectClasses[toolcontract.ToolDefinitionSideEffectClass(toolDefinition)] {
-			return true
-		}
-	}
-	return false
 }
 
 func toolDefinitionForName(toolSet *toolcontract.ToolSet, toolName string) (toolcontract.ToolDefinition, bool) {

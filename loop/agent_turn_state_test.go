@@ -338,26 +338,12 @@ func TestAgentActionFinishCorrectionUsesCompleteTypedState(t *testing.T) {
 			updateState: func(state *agentTaskState) { state.Observations = nil },
 		},
 		{
-			name:        "missing required effect",
-			updateState: func(state *agentTaskState) { state.Observations[0].Effects = nil },
-		},
-		{
 			name:          "message expected result ready for verification",
 			expectsFinish: true,
 			updateState: func(state *agentTaskState) {
 				state.Request.OutcomeContract.ExpectedResults = []ExpectedResult{{
 					Type:        ExpectedResultTypeMessage,
 					Description: "final reply",
-					Required:    true,
-				}}
-			},
-		},
-		{
-			name: "file expected result missing attachment",
-			updateState: func(state *agentTaskState) {
-				state.Request.OutcomeContract.ExpectedResults = []ExpectedResult{{
-					Type:        ExpectedResultTypeFile,
-					Description: "attached report",
 					Required:    true,
 				}}
 			},
@@ -1989,22 +1975,6 @@ func TestNativeTextFinalDoesNotForceAnotherModelCall(t *testing.T) {
 	}
 	if len(languageModel.chatRequests) != 1 {
 		t.Fatalf("final text triggered %d model calls", len(languageModel.chatRequests))
-	}
-}
-
-func TestNativeTextFinalCannotBypassRequiredToolEvidence(t *testing.T) {
-	state := nativeAgentActionCompletionReadyState()
-	state.Observations = nil
-	action, errorValue := parseNativeAgentActionResponse(model.ChatCompletionResponse{
-		FinishReason: "stop",
-		Message:      model.ChatCompletionMessage{Role: "assistant", Content: "The task was added."},
-	}, nil)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	result := validateAgentActionCompletionGate(state, deriveToolUseRequirements(state.Request), action)
-	if result.Message == "" {
-		t.Fatal("plain text falsely completed a mutation without tool evidence")
 	}
 }
 
