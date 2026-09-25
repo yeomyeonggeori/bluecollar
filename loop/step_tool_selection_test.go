@@ -26,7 +26,7 @@ func (selector *recordingToolSelector) SelectToolNames(_ context.Context, need a
 }
 
 func TestConsecutiveIterationsOfOneStepSendTheSameInstructionAndToolCatalog(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	request := AgentTurnRequest{
 		Prompt:          "move the deal forward",
 		TaskLevel:       TaskLevelMedium,
@@ -58,7 +58,7 @@ func TestConsecutiveIterationsOfOneStepSendTheSameInstructionAndToolCatalog(t *t
 }
 
 func TestAPlanStepChangeReselectsTheShortlist(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
 	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
@@ -89,7 +89,7 @@ func TestAPlanStepChangeReselectsTheShortlist(t *testing.T) {
 }
 
 func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
 	toolSet := testToolSet(append(testBuiltInToolNames(), "deal_list", "deal_update"))
@@ -126,7 +126,7 @@ func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
 }
 
 func TestQueuedExposureRetainsApprovalAndDelegationGuards(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	toolSet := newTestToolSet([]string{"calendar_delete"})
 	toolDefinition := testToolDescriptor("calendar_delete")
 	toolDefinition.RequiresApproval = true
@@ -154,7 +154,7 @@ func TestQueuedExposureRetainsApprovalAndDelegationGuards(t *testing.T) {
 }
 
 func TestQueuedExposureFailsClosedWhenEveryCapturedToolIsDenied(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	toolSet := toolcontract.NewToolSet([]string{"deal_list", "deal_update"})
 	registerTestTool(toolSet, testToolDescriptor("deal_list"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("read"), nil
@@ -243,8 +243,8 @@ func (languageModel *batchedPlanExposureLanguageModel) GenerateResponse(context.
 }
 
 func (languageModel *batchedPlanExposureLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	if request.StructuredOutputSchema.Name == completionJudgeSchemaName {
-		return model.StructuredResponse{Content: defaultCompletionJudgeTestDocument()}, nil
+	if request.StructuredOutputSchema.Name == expectedChangesSchemaName {
+		return model.StructuredResponse{Content: expectedChangesDocument()}, nil
 	}
 	return model.StructuredResponse{Content: finishMessageDocument("done")}, nil
 }
@@ -276,7 +276,7 @@ func chatRequestToolNames(request model.ChatCompletionRequest) []string {
 }
 
 func TestAClosingPlanKeepsTheCurrentShortlist(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
 	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
@@ -305,7 +305,7 @@ func (selector *failingToolSelector) SelectToolNames(_ context.Context, need age
 }
 
 func TestAFailedSelectionNeverLeavesTheLastStepsToolsOnTheNewStep(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_list"}}}
 	services.runner.UseToolSelector(selector)
 	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
@@ -354,7 +354,7 @@ func TestAStepShortlistReplacesTheLikelyToolsAndKeepsTheHostsPins(t *testing.T) 
 }
 
 func TestAPlanStepRanksOnlyWithinTheTaskShortlist(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
 	request := AgentTurnRequest{
@@ -376,7 +376,7 @@ func TestAPlanStepRanksOnlyWithinTheTaskShortlist(t *testing.T) {
 }
 
 func TestAPlanStepWithoutAShortlistRanksTheWholeToolSet(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "deal_update"}}}
 	services.runner.UseToolSelector(selector)
 	request := AgentTurnRequest{ToolSet: testToolSet(append(testBuiltInToolNames(), "deal_update", "deal_list"))}
@@ -391,7 +391,7 @@ func TestAPlanStepWithoutAShortlistRanksTheWholeToolSet(t *testing.T) {
 }
 
 func TestAPlanStepRanksWhatEquipFoundEvenWhenTheTaskMissedIt(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	selector := &recordingToolSelector{selectedTools: []agentcontract.SelectedTool{{Name: "invoice_send"}}}
 	services.runner.UseToolSelector(selector)
 	request := AgentTurnRequest{

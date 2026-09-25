@@ -4,7 +4,7 @@ bluecollar is an embeddable agent harness written in Go. It is the loop that tak
 
 ## What it does
 
-- It proves completion from a ledger. Every model call, tool call, decision and rejection is appended to a task's event ledger as it happens. A reply that claims the work is finished passes a deterministic completion gate that reads that ledger, and then, when the task changed something or promised a result, a completion judge that reads it again.
+- It proves completion from a ledger. Every model call, tool call, decision and rejection is appended to a task's event ledger as it happens. A reply that claims the work is finished passes a deterministic completion gate that reads that ledger, and then a check that every change the request asked for is among the changes the ledger recorded.
 - It sizes the work before doing it. Intake decides what an inbound message means and how hard it is. The difficulty tier sets the model, the number of steps, the number of tool calls and the clock.
 - It reports failure to the person who asked. A failed call opens failure debt that the loop has to repair or report. The report is written by the model, in the requester's language, from the recorded attempts.
 - It owns no tools, identity or storage. A host hands it a tool set and a task store and calls `RunTurn`. Every tool call executes back in the host, as whoever asked for the work.
@@ -199,7 +199,7 @@ The port used to be nine methods. Routing, addressing, follow-up classification 
 | --- | --- |
 | host | connectors and messengers, tool execution and its isolation boundary, the task store, approvals, the agent's identity, the workspace layout, company context |
 | `agentcontract`, `toolcontract`, `model`, `taskstate` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events |
-| `loop` | the turn: action schema, plan, tool exposure, completion gate and judge, recovery, budgets, context building and compaction |
+| `loop` | the turn: action schema, plan, tool exposure, completion gate and change check, recovery, budgets, context building and compaction |
 | `intake` | what a message means: route, addressing, follow-up, level, likely tools |
 
 A harness that executes its own tools defeats the host's isolation boundary and is not a valid implementation of this contract. With no identity supplied the agent calls itself "the assistant" and knows nothing about where it runs.
@@ -300,7 +300,9 @@ The deterministic check a final reply has to pass before the task completes.
 
 A final reply must claim `goalSatisfied`, report no remaining work, and cite the observations that did the work. The gate then checks the recorded facts: every required tool has a successful call, a required send has send evidence, a tool whose side-effect class changes something has a cited successful observation, and delivered attachments exist and validate. The gate decides by side-effect class, never by tool name.
 
-When the contract names a result to grade, when a side-effecting tool is required or was called, or when the request carried an image, the gate is followed by the completion judge: a second model call that reads the ledger, may ask to expand up to eight observations, and returns missing work with reasons. A rejection stands until the ledger changes, so sending the same final reply again cannot reroll the verdict. When the judge itself fails, the ledger records `completion_judge.degraded` and the reply is accepted.
+When the turn starts, and while the work runs, one model call lists the changes the request asks for. Each entry is a kind taken from the effects the offered tools declare (`task deleted`, `event created`) and the request's own words that ask for it, copied exactly. A quote the request does not contain is asked for once more and then dropped, so a change the model invented has nothing to be checked against. A request that asks only for words expects no change and skips the check. The list is recorded as `completion.expected_changes`.
+
+After the gate, an expected kind with no recorded effect of that kind is unmet without further judgment. For the rest, the decision model reads the changed records, each with its inputs and results in order, and the last two lookups in the same domain, and answers per change whether it was carried out; below 0.6 it is unmet. The verdict is `completion.change_check`, and an unmet change sends the loop back with the asked words and why. When the check cannot run, the ledger records `completion.check_degraded` and the gate's verdict stands.
 
 After two refusals with nothing done in between, the loop withdraws the final reply from the action schema; after three it offers both the reply and `fail`.
 
@@ -378,7 +380,7 @@ A request carries a state document and a map of named questions. Each answer car
 
 The append-only record every other mechanism reads.
 
-Each model call, tool call, decision, grant, rejection and failure is a `TaskEvent` with a name and its full body. Tool events follow `tool.<name>.requested` and `tool.<name>.result`; approvals use `approval.pending_call` and `approval.executed`. The completion gate and judge read the ledger, `bench` measures from it, `--trace` renders it, `turnstream` mirrors it, and a restart resumes from it. A task that waits days for an approval continues by re-driving a turn from what the ledger says.
+Each model call, tool call, decision, grant, rejection and failure is a `TaskEvent` with a name and its full body. Tool events follow `tool.<name>.requested` and `tool.<name>.result`; approvals use `approval.pending_call` and `approval.executed`. The completion gate and change check read the ledger, `bench` measures from it, `--trace` renders it, `turnstream` mirrors it, and a restart resumes from it. A task that waits days for an approval continues by re-driving a turn from what the ledger says.
 
 # Contract
 
@@ -522,7 +524,7 @@ CI runs `gofmt`, `go vet`, `go build` and `go test`, then the same inside the AC
 
 **Why does the host have to route?** Deciding what a message means depends on the messenger, the running tasks and who is asking, and those belong to the host. `intake` is there for a host that wants bluecollar's answer to that question.
 
-**Why a judge after a deterministic gate?** The gate can check that a required call succeeded. It cannot read whether the reply's claim matches what the call returned. The judge reads the reply against the ledger, and it runs only when there is something to grade.
+**Why a change check after a deterministic gate?** The gate can check that a required call succeeded. It cannot read whether the calls did what was asked. The check compares the request's own words against the recorded changes, and it never reads the reply, so a confident reply cannot pass it.
 
 **Why is the budget a ceiling on steps and not on tokens?** A step's cost is dominated by the round trip to the model, so steps and tool calls track the clock. Tokens price the cheaper half.
 

@@ -570,7 +570,7 @@ func TestAgentTurnRunnerDoesNotChargeMalformedInputToToolEffort(t *testing.T) {
 }
 
 func TestRepeatedSuccessfulCompletionCandidateUsesPersistedObservation(t *testing.T) {
-	toolSet := completionJudgeTestToolSet()
+	toolSet := taskToolsTestToolSet()
 	toolInput := json.RawMessage(`{"title":"settlement check"}`)
 	toolInputKey := canonicalToolCallKey("task_add", toolInput)
 	state := &agentTaskState{Request: AgentTurnRequest{ToolSet: toolSet}, Observations: []turnObservation{{
@@ -592,7 +592,7 @@ func TestRepeatedSuccessfulCompletionCandidateUsesPersistedObservation(t *testin
 }
 
 func TestRepeatedSuccessfulReadIsNotACompletionCandidateWhenContractExpectsMutation(t *testing.T) {
-	toolSet := completionJudgeTestToolSet()
+	toolSet := taskToolsTestToolSet()
 	toolInput := json.RawMessage(`{"query":"settlement"}`)
 	toolInputKey := canonicalToolCallKey("task_list", toolInput)
 	state := &agentTaskState{Request: AgentTurnRequest{

@@ -38,8 +38,7 @@ type completionGateResult struct {
 	Attachments        []toolcontract.FileAttachment
 	ValidityState      ValidityState
 	SuggestedNextTools []string
-	IsJudgeVerdict     bool
-	NamesMissingWork   bool
+	IsChangeCheckUnmet bool
 	PolicyCode         string
 }
 
@@ -201,12 +200,12 @@ func (agentTurnRunner *AgentTurnRunner) finalizeCompletionState(ctx context.Cont
 		}
 	}
 	actionDocument := completionStateFinishDocument(state, modelWording)
-	completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(ctx, taskRunID, request, requirements, observations, attachments, criteria, actionDocument)
+	completionGateResult := agentTurnRunner.validateCompletionGateWithChanges(ctx, taskRunID, request, requirements, observations, attachments, criteria, actionDocument)
 	agentTurnRunner.appendValidityReview(taskRunID, "completion_state", completionGateResult.ValidityState)
 	if !completionGateResult.IsSatisfied {
-		if canDeliverBestEffortOnJudgeRejection(ctx, completionGateResult, modelWording) {
+		if canDeliverBestEffortOnUnmetChanges(ctx, completionGateResult, modelWording) {
 			agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionStateBestEffort, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
-			return agentTurnRunner.finalizeCompletionTransition(ctx, taskRunID, taskStepID, request, observations, attachments, completionGateResult, appendCompletionGateCaveat(modelWording, completionGateResult.Message))
+			return agentTurnRunner.finalizeCompletionTransition(ctx, taskRunID, taskStepID, request, observations, attachments, completionGateResult, modelWording)
 		}
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionStateRejected, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
 		observation := newFailureObservation(nextObservationIDForObservations(observations), "policy", "", completionGateResult.Message, toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "completion_state")
@@ -236,16 +235,8 @@ func (agentTurnRunner *AgentTurnRunner) finalizeCompletionTransition(ctx context
 	}
 }
 
-func canDeliverBestEffortOnJudgeRejection(ctx context.Context, completionGateResult completionGateResult, reply string) bool {
-	return completionGateResult.IsJudgeVerdict && ctx.Err() != nil && strings.TrimSpace(reply) != ""
-}
-
-func appendCompletionGateCaveat(reply string, message string) string {
-	trimmedMessage := strings.TrimSpace(message)
-	if trimmedMessage == "" {
-		return strings.TrimSpace(reply)
-	}
-	return strings.TrimSpace(reply) + " Note: " + trimmedMessage
+func canDeliverBestEffortOnUnmetChanges(ctx context.Context, completionGateResult completionGateResult, reply string) bool {
+	return completionGateResult.IsChangeCheckUnmet && ctx.Err() != nil && strings.TrimSpace(reply) != ""
 }
 
 func (agentTurnRunner *AgentTurnRunner) completeTaskRunBestEffort(ctx context.Context, taskRunID string, taskStepID string, stepAction string, request AgentTurnRequest, observations []turnObservation, completionGateResult completionGateResult, reply string) AgentTurnResult {
@@ -825,7 +816,6 @@ func completionGateObservation(index int, result completionGateResult, toolSet *
 	observation = withObservationContent(observation, content)
 	observation.Summary = content
 	observation.PolicyCode = evidenceKind
-	observation.JudgeNamedMissingWork = result.NamesMissingWork
 	observation.RelatedPaths = invalidValidityPaths(result.ValidityState)
 	observation.Failure.Retryable = true
 	observation.Failure.SafeRetry = true

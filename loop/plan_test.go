@@ -43,7 +43,7 @@ func TestTaskLevelRequiresPlan(t *testing.T) {
 }
 
 func TestApplyPlanUpdateObservationMergesExecutionStateAndAppendsEvents(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	state := &agentTaskState{ExecutionState: ExecutionState{Goal: "previous goal"}}
 	observation := planUpdateSuccessObservation("obs-001", `{"goal":"ship the report","steps":[{"title":"gather data","status":"done"},{"title":"write summary","status":"in_progress"}]}`)
 
@@ -64,7 +64,7 @@ func TestApplyPlanUpdateObservationMergesExecutionStateAndAppendsEvents(t *testi
 }
 
 func TestApplyPlanUpdateObservationKeepsGoalWhenUpdateOmitsIt(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	state := &agentTaskState{ExecutionState: ExecutionState{Goal: "previous goal"}}
 	observation := planUpdateSuccessObservation("obs-001", `{"steps":[{"title":"only step","status":"pending"}]}`)
 
@@ -79,7 +79,7 @@ func TestApplyPlanUpdateObservationKeepsGoalWhenUpdateOmitsIt(t *testing.T) {
 }
 
 func TestApplyPlanUpdateObservationIgnoresFailedAndForeignObservations(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	state := &agentTaskState{}
 	failedObservation := planUpdateSuccessObservation("obs-001", `{"steps":[{"title":"x","status":"pending"}]}`)
 	failedObservation.Failure = &toolcontract.ToolFailure{Kind: toolcontract.FailureUnknown}
@@ -108,7 +108,7 @@ func nudgeTestRequest(taskLevel TaskLevel) AgentTurnRequest {
 }
 
 func TestNudgePlanFiresOnceForStateChangingToolWithoutPlan(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	request := nudgeTestRequest(TaskLevelMedium)
 	state := &agentTaskState{}
 	actionDocument := turnActionDocument{Action: "continue", ToolName: "task_add", ToolInput: json.RawMessage(`{}`)}
@@ -132,7 +132,7 @@ func TestNudgePlanFiresOnceForStateChangingToolWithoutPlan(t *testing.T) {
 }
 
 func TestNudgePlanDoesNotFireForReadTools(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	state := &agentTaskState{}
 	actionDocument := turnActionDocument{Action: "continue", ToolName: "task_list", ToolInput: json.RawMessage(`{}`)}
 
@@ -144,7 +144,7 @@ func TestNudgePlanDoesNotFireForReadTools(t *testing.T) {
 }
 
 func TestNudgePlanDoesNotFireBelowMediumLevel(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	actionDocument := turnActionDocument{Action: "continue", ToolName: "task_add", ToolInput: json.RawMessage(`{}`)}
 	for _, taskLevel := range []TaskLevel{TaskLevelXLow, TaskLevelLow, ""} {
 		state := &agentTaskState{}
@@ -156,7 +156,7 @@ func TestNudgePlanDoesNotFireBelowMediumLevel(t *testing.T) {
 }
 
 func TestNudgePlanDoesNotFireOnceStepsExist(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	state := &agentTaskState{ExecutionState: ExecutionState{Steps: []PlanStep{{Title: "step", Status: "pending"}}}}
 	actionDocument := turnActionDocument{Action: "continue", ToolName: "task_add", ToolInput: json.RawMessage(`{}`)}
 
@@ -242,26 +242,8 @@ func TestRunTurnExecutesTheStateChangingCallTheNudgeAnnotates(t *testing.T) {
 	}
 }
 
-func TestCompletionJudgeMessagesIncludePlanChecklistHint(t *testing.T) {
-	observations := []turnObservation{
-		planUpdateSuccessObservation("obs-001", `{"goal":"ship","steps":[{"title":"build the deck","status":"done"}]}`),
-	}
-
-	messages := completionJudgeMessages(AgentTurnRequest{Prompt: "make a deck"}, observations, nil, turnActionDocument{}, nil)
-	joined := joinedMessageContent(messages)
-
-	if !strings.Contains(joined, "checklist hint") || !strings.Contains(joined, "build the deck") {
-		t.Fatalf("expected plan checklist hint in judge prompt, got %s", joined)
-	}
-
-	messagesWithoutPlan := completionJudgeMessages(AgentTurnRequest{Prompt: "make a deck"}, nil, nil, turnActionDocument{}, nil)
-	if strings.Contains(joinedMessageContent(messagesWithoutPlan), "checklist hint") {
-		t.Fatal("expected no plan hint without a plan observation")
-	}
-}
-
 func TestNudgePlanSkipsWhenPlanToolIsUnavailable(t *testing.T) {
-	services := newTurnRunnerTestServices(&completionJudgeStubLanguageModel{}, TurnOptions{})
+	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{}, TurnOptions{})
 	request := AgentTurnRequest{
 		TaskLevel: TaskLevelMedium,
 		ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
