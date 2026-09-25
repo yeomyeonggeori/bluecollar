@@ -12,7 +12,7 @@ import (
 )
 
 func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
-	completionGateResult := validateCompletionGateForRequestWithExpectedResults(request, requirements, observations, attachments, criteria, actionDocument, agentTurnRunner.options.RecoveryBudget)
+	completionGateResult := validateCompletionFacts(request, observations, actionDocument)
 	if !completionGateResult.IsSatisfied || ctx.Err() != nil {
 		return completionGateResult
 	}

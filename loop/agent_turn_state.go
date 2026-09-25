@@ -500,9 +500,6 @@ func shouldExposeFailAction(state agentTaskState) bool {
 	if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt {
 		return true
 	}
-	if _, shouldContinue := recoverableWorkflowFailResult(state.Request, state.Observations); shouldContinue {
-		return false
-	}
 	return turnIsAlreadyWrappingUp(state)
 }
 
@@ -941,35 +938,7 @@ func agentActionCompletionIsReady(state agentTaskState) bool {
 		return false
 	}
 	action := completionStateFinishDocument(completionState, "completion wording pending")
-	gateResult := validateAgentActionCompletionGate(state, requirements, action)
-	if !gateResult.IsSatisfied {
-		return false
-	}
-	return validateOutcomeContractRequirements(
-		state.Request.OutcomeContract,
-		state.Observations,
-		gateResult.Attachments,
-	).IsSatisfied
-}
-
-func validateAgentActionCompletionGate(state agentTaskState, requirements []toolUseRequirement, action turnActionDocument) completionGateResult {
-	if len(state.Request.OutcomeContract.ExpectedResults) > 0 {
-		return validateExpectedResultCompletionGate(
-			state.Request,
-			state.Observations,
-			state.QualityCriteria,
-			action,
-			state.Options.RecoveryBudget,
-		)
-	}
-	return validateCompletionGateForRequestWithRecoveryBudget(
-		state.Request,
-		requirements,
-		state.Observations,
-		state.QualityCriteria,
-		action,
-		state.Options.RecoveryBudget,
-	)
+	return validateCompletionFacts(state.Request, state.Observations, action).IsSatisfied
 }
 
 func agentActionCompletionIsBlocked(state agentTaskState) bool {

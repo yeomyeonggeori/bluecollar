@@ -204,14 +204,13 @@ func TestAgentKernelPreservesUnsupportedArtifactWithoutSelectedSkill(t *testing.
 	}
 }
 
-func TestAgentKernelRecoversPriorTaskAttachmentContract(t *testing.T) {
+func TestAgentKernelRecoversPriorTaskOutcomeWithThePriorTaskInContext(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"latest message asks to deliver prior file outcome","userFacingReply":"","initialToolNames":[],"priorTaskReference":"outcome_recovery"}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
-		finishMessageDocument("기존 작업이 이미 완료되어 파일이 준비되었습니다."),
 		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/company-guide/company-guide.docx"}}`,
-		finishMessageCiting("company-guide.docx 파일을 첨부했습니다.", "obs-002"),
+		finishMessageCiting("company-guide.docx 파일을 첨부했습니다.", "obs-001"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestToolSet([]string{"file_deliver"})
@@ -260,67 +259,11 @@ func TestAgentKernelRecoversPriorTaskAttachmentContract(t *testing.T) {
 		t.Fatalf("expected current task docx attachment, got %+v", result.Attachments)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.completion_required", "required file expected result") {
-		t.Fatal("expected first text-only finish to be rejected by the restored file contract")
-	}
 	if !taskEventsContain(events, "agent.intake", `"priorTaskReference":"outcome_recovery"`) {
 		t.Fatal("expected intake event to record prior task outcome recovery")
 	}
 	if !strings.Contains(joinedMessageContent(replyLanguageModel.requests[0].Messages), "Prior task context") {
 		t.Fatal("expected task model context to include prior task context")
-	}
-}
-
-func TestAgentKernelRecoversLegacyPriorAttachmentContractFromIntakeOutput(t *testing.T) {
-	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":["docx"],"responseLanguage":"ko","reason":"latest message asks for the prior Word file as an attachment","userFacingReply":"","initialToolNames":["file_deliver"],"priorTaskReference":"outcome_recovery"}`,
-	}}
-	replyLanguageModel := &sequenceLanguageModel{contents: []string{
-		finishMessageDocument("기존 작업이 이미 완료되어 파일이 준비되었습니다."),
-		`{"action":"continue","toolName":"file_deliver","toolInput":{"path":"artifacts/company-guide/company-guide.docx"}}`,
-		finishMessageCiting("company-guide.docx 파일을 첨부했습니다.", "obs-002"),
-	}}
-	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
-	toolRegistry := newTestToolSet([]string{"conversation_history", "file_read", "write", "bash", "file.promote", "file_deliver"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: "file attached"},
-			Attachments: []toolcontract.FileAttachment{{
-				DevicePath: "/workspace/private/people/person-1/artifacts/company-guide/company-guide.docx",
-				Filename:   "company-guide.docx",
-			}},
-		}, nil
-	})
-
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "direct-1",
-		Prompt:            "링크로 전달된 적 없어. 첨부파일로 줘야지 그리고.",
-		ToolSet:           toolRegistry,
-		PriorTask: PriorTaskContext{
-			TaskRunID: "88894f",
-			Status:    string(agentcontract.TaskStatusCompleted),
-			Prompt:    "기업 문서 가이드를 워드 파일로 만들어줘",
-			Result:    "요청하신 작업이 이미 성공적으로 완료되었습니다.",
-		},
-	}))
-
-	if errorValue != nil {
-		t.Fatalf("expected fallback prior task attachment recovery to complete: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-		t.Fatalf("expected completed recovery task, got %s events=%+v", result.TaskRun.Status, events)
-	}
-	if len(result.Attachments) != 1 || result.Attachments[0].Filename != "company-guide.docx" {
-		t.Fatalf("expected current task docx attachment, got %+v", result.Attachments)
-	}
-	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.completion_required", "required file expected result") {
-		t.Fatal("expected text-only finish to be rejected by intake-restored file contract")
-	}
-	if !taskEventsContain(events, "agent.intake", `"requestedOutputFormats":["docx"]`) {
-		t.Fatal("expected intake event to record structured output format")
 	}
 }
 
@@ -634,7 +577,6 @@ func TestAgentKernelQuickReplyAsksWithExpectsAnswerForExplicitChoiceRequest(t *t
 	}
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{finishMessageDocument("아래 세 가지 중 하나를 선택해 주세요.")}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
-		finishMessageDocument("아래 세 가지 중 하나를 선택해 주세요.\n\n1. 선택지 1\n2. 선택지 2\n3. 선택지 3"),
 		`{"action":"reply","expectsAnswer":true,"message":"아래 세 가지 중 하나를 선택해 주세요.\n\n1. 선택지 1\n2. 선택지 2\n3. 선택지 3"}`,
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
@@ -666,14 +608,11 @@ func TestAgentKernelQuickReplyAsksWithExpectsAnswerForExplicitChoiceRequest(t *t
 		t.Fatalf("expected waiting user input, got %s", result.TaskRun.Status)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.completion_required", "reply with expectsAnswer") {
-		t.Fatalf("expected a text-only final reply to be rejected, got %+v", events)
-	}
 	if !taskEventsContain(events, "ask.requested", "선택지 1") {
 		t.Fatalf("expected the question to reach the ask request event, got %+v", events)
 	}
-	if len(replyLanguageModel.requests) != 2 {
-		t.Fatalf("expected a rejected final reply then the expectsAnswer reply, got %d requests", len(replyLanguageModel.requests))
+	if len(replyLanguageModel.requests) != 1 {
+		t.Fatalf("expected the expectsAnswer reply as the only request, got %d requests", len(replyLanguageModel.requests))
 	}
 }
 

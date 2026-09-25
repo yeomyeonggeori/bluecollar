@@ -288,21 +288,21 @@ A delegated child runs with the same identity and tool set, its own outcome cont
 
 ## Outcome contract
 
-What the task must produce, agreed before the work starts.
+What intake and the selected skills expect the task to involve.
 
-An `OutcomeContract` carries required evidence tools, groups of which any one will do, required attachment suffixes, required effects, expected results and an artifact requirement. It is built from intake's expected results, the selected skills and the tool descriptors, and it is reduced to the tools the turn can actually call.
+An `OutcomeContract` carries evidence tools, groups of which any one will do, attachment suffixes, expected results and an artifact requirement. It is built from intake's expected results, the selected skills and the tool descriptors. It decides which tools are exposed and pinned, which skills are arbitrated, and which sends the request never asked for are refused. It is a guess about the work, so it never decides whether the work is done.
 
-A contract from an earlier task is a hypothesis. When a requester retries, the host supplies the previous task's recorded calls, failures and effects separately from its assistant-written report, and the current intake's expected results replace the old interpretation when present.
+A follow-up turn does not inherit the previous task's contract. The host supplies the previous task's prompt, recorded calls, failures, effects and contract as context, the current intake reads the latest message against them, and the goal keeps the original instruction beside the latest message.
 
 ## Completion gate
 
-The deterministic check a final reply has to pass before the task completes.
+What a final reply has to pass before the task completes.
 
-A final reply must claim `goalSatisfied`, report no remaining work, and cite the observations that did the work. The gate then checks the recorded facts: every required tool has a successful call, a required send has send evidence, a tool whose side-effect class changes something has a cited successful observation, and delivered attachments exist and validate. The gate decides by side-effect class, never by tool name.
+The deterministic part checks facts only. A final reply must claim `goalSatisfied`, report no remaining work, and cite only successful observations of this task. A site the turn published must be linked in the reply by its exact URL, and delivered attachments must exist and validate. The reply carries the attachments it cites, or every file this turn delivered when it cites none.
 
-When the turn starts, and while the work runs, one model call lists the changes the request asks for. Each entry is a kind taken from the effects the offered tools declare (`task deleted`, `event created`) and the request's own words that ask for it, copied exactly. A quote the request does not contain is asked for once more and then dropped, so a change the model invented has nothing to be checked against. A request that asks only for words expects no change and skips the check. The list is recorded as `completion.expected_changes`.
+When the turn starts, and while the work runs, one model call lists the changes the request asks for. Each entry is a kind taken from the effects the offered tools declare, and the file a reply delivers (`task deleted`, `calendar created`, `file attached`), with the words that ask for it copied exactly from the request or from the latest message about it. A quote found in neither is asked for once more and then dropped, so a change the model invented has nothing to be checked against. A request that asks only for words expects no change and skips the check. The list is recorded as `completion.expected_changes`.
 
-After the gate, an expected kind with no recorded effect of that kind is unmet without further judgment. For the rest, the decision model reads the changed records, each with its inputs and results in order, and the last two lookups in the same domain, and answers per change whether it was carried out; below 0.6 it is unmet. The verdict is `completion.change_check`, and an unmet change sends the loop back with the asked words and why. When the check cannot run, the ledger records `completion.check_degraded` and the gate's verdict stands.
+After the facts, an expected change is unmet without further judgment when nothing of its record type changed. For the rest, the decision model reads the changed records, each with its inputs and results in order, and the last two lookups in the same domain, and answers per change whether it was carried out; below 0.6 it is unmet. A kind the definition named wrongly, such as created for a status change, is judged the same way. The verdict is `completion.change_check`, and an unmet change sends the loop back with the asked words and why. When the check cannot run, the ledger records `completion.check_degraded` and the facts stand.
 
 After two refusals with nothing done in between, the loop withdraws the final reply from the action schema; after three it offers both the reply and `fail`.
 

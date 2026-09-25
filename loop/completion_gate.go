@@ -344,61 +344,42 @@ func completionRequirementsHaveEvidence(toolSet *toolcontract.ToolSet, requireme
 	return true
 }
 
-func validateCompletionGate(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
-	_ = criteria
+func validateCompletionFacts(request AgentTurnRequest, observations []turnObservation, actionDocument turnActionDocument) completionGateResult {
+	if result := validateFinishClaim(actionDocument); !result.IsSatisfied {
+		return result
+	}
+	attachments, errorValue := validateCompletionEvidence(request.ToolSet, nil, observations, actionDocument.CompletionEvidence)
+	if errorValue != nil {
+		return completionGateResult{Message: errorValue.Error(), EvidenceKind: evidenceKindReference}
+	}
+	if len(attachments) == 0 {
+		attachments = deliveredAttachments(observations)
+	}
+	if message := missingObservedURLInReply(request.ToolSet, observations, finishActionMessage(actionDocument)); message != "" {
+		return completionGateResult{Message: message, EvidenceKind: evidenceKindExpectedResult}
+	}
+	result := completionGateResult{IsSatisfied: true, Attachments: attachments}
+	result.ValidityState = buildAttachmentValidityState(request.WorkspaceRootPath, attachments)
+	if !result.ValidityState.Passed {
+		result.IsSatisfied = false
+		result.Message = validityFailureMessage(result.ValidityState)
+		result.EvidenceKind = evidenceKindAttachmentValid
+		result.Attachments = nil
+	}
+	return result
+}
+
+func validateFinishClaim(actionDocument turnActionDocument) completionGateResult {
 	if actionDocument.GoalSatisfied == nil || !*actionDocument.GoalSatisfied {
 		return completionGateResult{Message: "a final reply requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
 	}
 	if strings.TrimSpace(actionDocument.GoalStatus) != "" && strings.TrimSpace(actionDocument.GoalStatus) != "satisfied" {
 		return completionGateResult{Message: "a final reply requires goalStatus=satisfied"}
 	}
-	if result := validateFinishDoesNotHideUnresolvedWork(observations, actionDocument); !result.IsSatisfied {
-		return result
-	}
-	if errorValue := validateObservedToolRequirements(toolSet, requirements, observations); errorValue != nil {
-		return completionGateResult{Message: errorValue.Error(), EvidenceKind: evidenceKindRequiredTool}
-	}
-	attachments, errorValue := validateCompletionEvidence(toolSet, requirements, observations, actionDocument.CompletionEvidence)
-	if errorValue != nil {
-		return completionGateResult{Message: errorValue.Error(), EvidenceKind: evidenceKindReference}
-	}
-	if sendCompletionEvidenceRequiredForTools(toolSet, requirements) && !hasSendCompletionEvidence(toolSet, observations, actionDocument.CompletionEvidence) {
-		requiredSendToolNames := requiredSendToolNamesForRequirements(toolSet, requirements)
-		return completionGateResult{
-			Message:            sendCompletionEvidenceRequiredMessage(requiredSendToolNames),
-			EvidenceKind:       evidenceKindRequiredTool,
-			SuggestedNextTools: requiredSendToolNames,
-		}
-	}
-	return completionGateResult{IsSatisfied: true, Attachments: attachments}
-}
-
-func validateFinishDoesNotHideUnresolvedWork(observations []turnObservation, actionDocument turnActionDocument) completionGateResult {
-	_ = observations
 	if actionDocument.HasRemainingWork {
 		return completionGateResult{Message: "a final reply requires hasRemainingWork=false; recover the work or use fail"}
 	}
 	return completionGateResult{IsSatisfied: true}
-}
-
-func validateCompletionGateForRequest(request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
-	return validateCompletionGateForRequestWithRecoveryBudget(request, requirements, observations, criteria, actionDocument, defaultRecoveryBudget())
-}
-
-func validateCompletionGateForRequestWithExpectedResults(request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, criteria []qualityCriterion, actionDocument turnActionDocument, recoveryBudget RecoveryBudget) completionGateResult {
-	var result completionGateResult
-	if len(request.OutcomeContract.ExpectedResults) == 0 {
-		result = validateCompletionGateForRequestWithRecoveryBudget(request, requirements, observations, criteria, actionDocument, recoveryBudget)
-	} else {
-		result = validateExpectedResultCompletionGate(request, observations, criteria, actionDocument, recoveryBudget)
-	}
-	if !result.IsSatisfied {
-		return result
-	}
-	if contractResult := validateOutcomeContractRequirements(request.OutcomeContract, observations, result.Attachments); !contractResult.IsSatisfied {
-		return contractResult
-	}
-	return validateExpectedResultDelivery(request, observations, result.Attachments, actionDocument)
 }
 
 func contractReducedToCallableTools(toolSet *toolcontract.ToolSet, contract OutcomeContract) OutcomeContract {
@@ -449,107 +430,6 @@ func isToolCallable(toolSet *toolcontract.ToolSet, toolName string) bool {
 	return toolSet.IsRegistered(strings.TrimSpace(toolName))
 }
 
-func validateOutcomeContractRequirements(contract OutcomeContract, observations []turnObservation, attachments []toolcontract.FileAttachment) completionGateResult {
-	contract = normalizeOutcomeContract(contract)
-	for _, toolName := range contract.RequiredEvidenceTools {
-		if !hasSuccessfulEvidenceToolObservation(observations, toolName) {
-			return missingContractToolResult([]string{toolName})
-		}
-	}
-	for _, toolNames := range contract.RequiredEvidenceAnyOf {
-		if !hasAnySuccessfulEvidenceToolObservation(observations, toolNames) {
-			return missingContractToolResult(toolNames)
-		}
-	}
-	if contractRequiresAttachment(contract) && len(attachments) == 0 {
-		return completionGateResult{Message: "a final reply requires a delivered file attachment", EvidenceKind: evidenceKindAttachment}
-	}
-	if missingSuffix := missingRequiredAttachmentSuffix(attachments, contract.RequiredAttachmentSuffixes); missingSuffix != "" {
-		return completionGateResult{Message: "required file attachment must include suffix " + missingSuffix, EvidenceKind: evidenceKindAttachmentValid}
-	}
-	return completionGateResult{IsSatisfied: true, Attachments: attachments}
-}
-
-func hasAnySuccessfulEvidenceToolObservation(observations []turnObservation, toolNames []string) bool {
-	for _, toolName := range toolNames {
-		if hasSuccessfulEvidenceToolObservation(observations, toolName) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasSuccessfulEvidenceToolObservation(observations []turnObservation, toolName string) bool {
-	return hasSuccessfulToolObservationForTurn(observations, toolName)
-}
-
-func missingContractToolResult(toolNames []string) completionGateResult {
-	return completionGateResult{
-		Message:            "a final reply requires successful evidence from one of these tools: " + strings.Join(toolNames, ", "),
-		EvidenceKind:       evidenceKindRequiredTool,
-		SuggestedNextTools: appendUniqueStrings(nil, toolNames...),
-	}
-}
-
-func contractRequiresAttachment(contract OutcomeContract) bool {
-	return strings.TrimSpace(contract.ArtifactRequirement) == ArtifactRequirementRequired || len(contract.RequiredAttachmentSuffixes) > 0
-}
-
-func validateExpectedResultCompletionGate(request AgentTurnRequest, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument, recoveryBudget RecoveryBudget) completionGateResult {
-	_ = criteria
-	if actionDocument.GoalSatisfied == nil || !*actionDocument.GoalSatisfied {
-		return completionGateResult{Message: "a final reply requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
-	}
-	if strings.TrimSpace(actionDocument.GoalStatus) != "" && strings.TrimSpace(actionDocument.GoalStatus) != "satisfied" {
-		return completionGateResult{Message: "a final reply requires goalStatus=satisfied"}
-	}
-	if result := validateFinishDoesNotHideUnresolvedWork(observations, actionDocument); !result.IsSatisfied {
-		return result
-	}
-	attachments, errorValue := validateCompletionEvidence(request.ToolSet, nil, observations, actionDocument.CompletionEvidence)
-	if errorValue != nil {
-		return completionGateResult{Message: errorValue.Error(), EvidenceKind: evidenceKindReference}
-	}
-	if externalSendCompletionEvidenceRequired(request) && !outcomeContractRequiresPublicLinkOnly(request.OutcomeContract) && !hasSendCompletionEvidence(request.ToolSet, observations, actionDocument.CompletionEvidence) {
-		requiredSendToolNames := requiredSendToolNamesForRequest(request)
-		return completionGateResult{
-			Message:            sendCompletionEvidenceRequiredMessage(requiredSendToolNames),
-			EvidenceKind:       evidenceKindRequiredTool,
-			SuggestedNextTools: requiredSendToolNames,
-		}
-	}
-	if expectedResultRequiresFileAttachment(request.OutcomeContract) && len(attachments) == 0 {
-		return completionGateResult{
-			Message:      "required file expected result must attach the file to the final reply",
-			EvidenceKind: evidenceKindAttachment,
-		}
-	}
-	if missingSuffix := missingRequiredAttachmentSuffix(attachments, request.OutcomeContract.RequiredAttachmentSuffixes); len(attachments) > 0 && missingSuffix != "" {
-		return completionGateResult{
-			Message:      "required file expected result must include attachment suffix " + missingSuffix,
-			EvidenceKind: evidenceKindAttachmentValid,
-		}
-	}
-	if expectedResultRequiresTool(request.OutcomeContract, toolcontract.AskInputToolName) && !hasSuccessfulToolObservationForTurn(observations, toolcontract.AskInputToolName) {
-		return completionGateResult{
-			Message:      "required interactive choice expected result must reply with expectsAnswer",
-			EvidenceKind: evidenceKindRequiredTool,
-		}
-	}
-	if projectionResult := validateObservedResultProjection(request, observations, attachments, actionDocument); !projectionResult.IsSatisfied {
-		return projectionResult
-	}
-	result := completionGateResult{IsSatisfied: true, Attachments: attachments}
-	result.ValidityState = buildAttachmentValidityState(request.WorkspaceRootPath, result.Attachments)
-	if !result.ValidityState.Passed {
-		result.IsSatisfied = false
-		result.Message = validityFailureMessage(result.ValidityState)
-		result.EvidenceKind = evidenceKindAttachmentValid
-		result.Attachments = nil
-	}
-	return result
-}
-
 func expectedResultRequiresFileAttachment(contract OutcomeContract) bool {
 	if strings.TrimSpace(contract.ArtifactRequirement) == ArtifactRequirementRequired {
 		return true
@@ -565,36 +445,9 @@ func expectedResultRequiresFileAttachment(contract OutcomeContract) bool {
 	return false
 }
 
-func expectedResultRequiresTool(contract OutcomeContract, toolName string) bool {
-	normalizedToolName := strings.TrimSpace(toolName)
-	if normalizedToolName == "" {
-		return false
-	}
-	for _, result := range normalizeExpectedResults(contract.ExpectedResults) {
-		if !result.Required {
-			continue
-		}
-		for _, hint := range result.AcceptanceHints {
-			if toolcontract.ToolNamesMatch(hint, normalizedToolName) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
 func externalSendCompletionEvidenceRequired(request AgentTurnRequest) bool {
 	return contractRequiresSendTool(request.ToolSet, request.OutcomeContract) ||
 		sendToolNamesContain(request.ToolSet, request.RequiredEvidenceTools)
-}
-
-func sendCompletionEvidenceRequiredForTools(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement) bool {
-	for _, requirement := range requirements {
-		if isSendEvidenceTool(toolSet, requirement.ToolName) {
-			return true
-		}
-	}
-	return false
 }
 
 func sendToolNamesContain(toolSet *toolcontract.ToolSet, toolNames []string) bool {
@@ -604,16 +457,6 @@ func sendToolNamesContain(toolSet *toolcontract.ToolSet, toolNames []string) boo
 		}
 	}
 	return false
-}
-
-func requiredSendToolNamesForRequirements(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement) []string {
-	toolNames := []string{}
-	for _, requirement := range requirements {
-		if isSendEvidenceTool(toolSet, requirement.ToolName) {
-			toolNames = appendUniqueStrings(toolNames, requirement.ToolName)
-		}
-	}
-	return toolNames
 }
 
 func requiredSendToolNamesForRequest(request AgentTurnRequest) []string {
@@ -634,173 +477,6 @@ func requiredSendToolNamesForRequest(request AgentTurnRequest) []string {
 		return toolNames
 	}
 	return []string{"message_send"}
-}
-
-func sendCompletionEvidenceRequiredMessage(toolNames []string) string {
-	if len(toolNames) == 0 {
-		return "a final reply requires completionEvidence from a successful send tool observation; call a send tool to perform the actual send, then cite that observation"
-	}
-	return "a final reply requires completionEvidence from a successful send tool observation; call one of these tools to perform the actual send, then cite that observation: " + strings.Join(toolNames, ", ")
-}
-
-func hasSendCompletionEvidence(toolSet *toolcontract.ToolSet, observations []turnObservation, references []completionEvidenceReference) bool {
-	for _, reference := range references {
-		observation, isFound := findSuccessfulObservation(observations, reference)
-		if isFound && isSendEvidenceTool(toolSet, observation.Tool) {
-			return true
-		}
-	}
-	return false
-}
-
-func hasSuccessfulToolObservationForTurn(observations []turnObservation, toolName string) bool {
-	normalizedToolName := strings.TrimSpace(toolName)
-	if normalizedToolName == "" {
-		return false
-	}
-	for _, observation := range observations {
-		if toolcontract.ToolNamesMatch(observation.Tool, normalizedToolName) && !observation.Failed() {
-			return true
-		}
-	}
-	return false
-}
-
-func validateCompletionGateForRequestWithRecoveryBudget(request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, criteria []qualityCriterion, actionDocument turnActionDocument, recoveryBudget RecoveryBudget) completionGateResult {
-	requirements = requirementsWithFailureDebtWaiver(requirements, observations, actionDocument)
-	result := validateCompletionGate(request.ToolSet, requirements, observations, criteria, actionDocument)
-	if !result.IsSatisfied {
-		return result
-	}
-	if externalSendCompletionEvidenceRequired(request) && !hasSendCompletionEvidence(request.ToolSet, observations, actionDocument.CompletionEvidence) {
-		result.IsSatisfied = false
-		result.SuggestedNextTools = requiredSendToolNamesForRequest(request)
-		result.Message = sendCompletionEvidenceRequiredMessage(result.SuggestedNextTools)
-		result.EvidenceKind = evidenceKindRequiredTool
-		result.Attachments = nil
-		return result
-	}
-	if demandedToolNames := stateChangeEvidenceDemand(request, actionDocument); len(demandedToolNames) > 0 && !hasStateChangeCompletionEvidence(observations, actionDocument.CompletionEvidence, demandedToolNames) {
-		result.IsSatisfied = false
-		result.SuggestedNextTools = demandedToolNames
-		result.Message = stateChangeCompletionEvidenceRequiredMessage(demandedToolNames)
-		result.EvidenceKind = evidenceKindRequiredTool
-		result.Attachments = nil
-		return result
-	}
-	if projectionResult := validateObservedResultProjection(request, observations, result.Attachments, actionDocument); !projectionResult.IsSatisfied {
-		return projectionResult
-	}
-	result.ValidityState = buildAttachmentValidityState(request.WorkspaceRootPath, result.Attachments)
-	if !result.ValidityState.Passed {
-		result.IsSatisfied = false
-		result.Message = validityFailureMessage(result.ValidityState)
-		result.EvidenceKind = evidenceKindAttachmentValid
-		result.Attachments = nil
-		return result
-	}
-	return result
-}
-
-func stateChangeEvidenceDemand(request AgentTurnRequest, actionDocument turnActionDocument) []string {
-	if strings.TrimSpace(actionDocument.FailureResolution) == failureResolutionNoToolFallback {
-		return nil
-	}
-	toolNames := stateChangeEvidenceToolsFromValues(request.ToolSet, request.RequiredEvidenceTools)
-	return appendUniqueStrings(toolNames, stateChangeEvidenceToolsFromValues(request.ToolSet, outcomeContractRequiredToolNames(request.OutcomeContract))...)
-}
-
-func stateChangeEvidenceToolsFromValues(toolSet *toolcontract.ToolSet, values []string) []string {
-	toolNames := []string{}
-	for _, value := range values {
-		if evidenceToolChangesSomething(toolSet, value) && isToolCallable(toolSet, value) {
-			toolNames = appendUniqueStrings(toolNames, value)
-		}
-	}
-	return toolNames
-}
-
-func hasStateChangeCompletionEvidence(observations []turnObservation, references []completionEvidenceReference, demandedToolNames []string) bool {
-	for _, reference := range references {
-		observation, isFound := findSuccessfulObservation(observations, reference)
-		if !isFound {
-			continue
-		}
-		if observation.Action == "delegate" || toolNameMatchesAny(observation.Tool, demandedToolNames) {
-			return true
-		}
-	}
-	return false
-}
-
-func toolNameMatchesAny(toolName string, candidateToolNames []string) bool {
-	for _, candidateToolName := range candidateToolNames {
-		if toolcontract.ToolNamesMatch(toolName, candidateToolName) {
-			return true
-		}
-	}
-	return false
-}
-
-func stateChangeCompletionEvidenceRequiredMessage(toolNames []string) string {
-	return "a final reply requires completionEvidence citing the successful observation that did the work; run one of these tools, then cite that observation: " + strings.Join(toolNames, ", ")
-}
-
-func validateObservedResultProjection(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, actionDocument turnActionDocument) completionGateResult {
-	projection := buildObservedResultProjection(request, observations, attachments, actionDocument)
-	if len(projection.MissingRequirements) == 0 {
-		return completionGateResult{IsSatisfied: true, Attachments: attachments}
-	}
-	return completionGateResult{
-		Message:            observedProjectionGateMessage(projection.MissingRequirements),
-		EvidenceKind:       evidenceKindExpectedResult,
-		SuggestedNextTools: observedProjectionSuggestedTools(projection.MissingRequirements),
-	}
-}
-
-func observedProjectionGateMessage(requirements []ProjectionMissingRequirement) string {
-	descriptions := []string{}
-	for _, requirement := range requirements {
-		descriptions = append(descriptions, strings.TrimSpace(requirement.Description))
-	}
-	return "a final reply is not backed by observed results: " + strings.Join(nonEmptyStrings(descriptions), "; ")
-}
-
-func observedProjectionSuggestedTools(requirements []ProjectionMissingRequirement) []string {
-	toolNames := []string{}
-	for _, requirement := range requirements {
-		toolNames = appendUniqueStrings(toolNames, requirement.SuggestedNextTools...)
-	}
-	return toolNames
-}
-
-func requirementsWithFailureDebtWaiver(requirements []toolUseRequirement, observations []turnObservation, actionDocument turnActionDocument) []toolUseRequirement {
-	if strings.TrimSpace(actionDocument.FailureResolution) != failureResolutionNoToolFallback {
-		return requirements
-	}
-	failureDebt, hasFailureDebt := activeFailureDebt(observations)
-	if !hasFailureDebt {
-		return requirements
-	}
-	failedToolName := strings.TrimSpace(failureDebt.LatestFailure.Tool)
-	if failedToolName == "" {
-		return requirements
-	}
-	filteredRequirements := []toolUseRequirement{}
-	for _, requirement := range requirements {
-		if canWaiveRequirementWithNoToolFallback(requirement, failedToolName) {
-			continue
-		}
-		filteredRequirements = append(filteredRequirements, requirement)
-	}
-	return filteredRequirements
-}
-
-func canWaiveRequirementWithNoToolFallback(requirement toolUseRequirement, failedToolName string) bool {
-	if requirement.RequiresAttachment || strings.TrimSpace(requirement.ToolName) != failedToolName {
-		return false
-	}
-	return !requirement.RequiresSideEffectEvidence
 }
 
 func completionGateObservation(index int, result completionGateResult, toolSet *toolcontract.ToolSet, priorObservations []turnObservation) turnObservation {
@@ -935,19 +611,6 @@ func completionEvidenceEligibleReferences(toolSet *toolcontract.ToolSet, observa
 		}
 	}
 	return eligibleReferences
-}
-
-func validateObservedToolRequirements(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement, observations []turnObservation) error {
-	for _, requirement := range requirements {
-		if requirement.RequiresAttachment {
-			continue
-		}
-		isSatisfied, _ := completionRequirementStatus(toolSet, requirement, observations)
-		if !isSatisfied {
-			return errors.New("a final reply requires successful observation for " + requirementLabel(requirement))
-		}
-	}
-	return nil
 }
 
 func missingRequiredAttachmentSuffix(attachments []toolcontract.FileAttachment, suffixes []string) string {
@@ -1089,6 +752,17 @@ func collectReferenceDeliveryAttachments(observations []turnObservation, referen
 			continue
 		}
 		attachments = appendUniqueAttachments(attachments, attachmentsForReference(observation, reference))
+	}
+	return attachments
+}
+
+func deliveredAttachments(observations []turnObservation) []toolcontract.FileAttachment {
+	attachments := []toolcontract.FileAttachment{}
+	for _, observation := range observations {
+		if observation.Failed() || !toolProducesDeliveryAttachments(observation.Tool) {
+			continue
+		}
+		attachments = appendUniqueAttachments(attachments, observation.Attachments)
 	}
 	return attachments
 }

@@ -1,10 +1,9 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
 
 func normalizePriorTaskContext(context PriorTaskContext) PriorTaskContext {
@@ -38,56 +37,13 @@ func applyPriorTaskOutcomeRecovery(request AgentRequest, decision IntakeDecision
 		decision.PriorTaskReference = PriorTaskReferenceNone
 		return request, decision
 	}
-	if len(normalizeExpectedResults(decision.ExpectedResults)) > 0 {
-		request.ActiveGoal = ActiveGoal{
-			OriginalInstruction: firstNonEmptyString(priorTask.Prompt, request.Prompt),
-			CurrentObjective:    request.Prompt,
-			KnownContext:        priorTaskKnownContext(priorTask),
-			Status:              ActiveGoalStatusActive,
-		}
-		return request, decision
-	}
-	priorTask.RequestedOutputFormats = normalizeRequestedOutputFormats(appendUniqueStrings(priorTask.RequestedOutputFormats, decision.RequestedOutputFormats...))
-	contract := outcomeContractFromPriorTask(priorTask)
-	if !OutcomeContractHasRequirements(contract) {
-		decision.PriorTaskReference = PriorTaskReferenceNone
-		return request, decision
-	}
 	request.ActiveGoal = ActiveGoal{
 		OriginalInstruction: firstNonEmptyString(priorTask.Prompt, request.Prompt),
 		CurrentObjective:    request.Prompt,
 		KnownContext:        priorTaskKnownContext(priorTask),
-		OutcomeContract:     contract,
 		Status:              ActiveGoalStatusActive,
 	}
-	decision.RequestedOutputFormats = normalizeRequestedOutputFormats(appendUniqueStrings(decision.RequestedOutputFormats, priorTask.RequestedOutputFormats...))
-	decision.InitialToolNames = appendUniqueStrings(decision.InitialToolNames, contract.SelectedEvidenceHints...)
-	decision.InitialToolNames = appendUniqueStrings(decision.InitialToolNames, outcomeContractRequiredToolNames(contract)...)
 	return request, decision
-}
-
-func outcomeContractFromPriorTask(priorTask PriorTaskContext) OutcomeContract {
-	contract := normalizeOutcomeContract(priorTask.OutcomeContract)
-	if OutcomeContractHasRequirements(contract) {
-		contract.Source = firstNonEmptyString(contract.Source, "prior_task")
-		return contract
-	}
-	requiredAttachmentSuffixes := attachmentSuffixesForRequestedOutputFormats(priorTask.RequestedOutputFormats)
-	if len(requiredAttachmentSuffixes) == 0 {
-		return contract
-	}
-	contract.RequiredAttachmentSuffixes = appendUniqueStrings(contract.RequiredAttachmentSuffixes, requiredAttachmentSuffixes...)
-	contract.RequiredEvidenceTools = appendUniqueStrings(contract.RequiredEvidenceTools, toolcontract.FileDeliverToolName)
-	contract.ExpectedResults = appendExpectedResults(contract.ExpectedResults, ExpectedResult{
-		ID:              "attached-file",
-		Type:            ExpectedResultTypeFile,
-		Description:     "At least one file in the requested format is attached for the user",
-		Required:        true,
-		AcceptanceHints: appendUniqueStrings(requiredAttachmentSuffixes),
-	})
-	contract.ArtifactRequirement = ArtifactRequirementRequired
-	contract.Source = "prior_task"
-	return normalizeOutcomeContract(contract)
 }
 
 func priorTaskKnownContext(priorTask PriorTaskContext) []string {

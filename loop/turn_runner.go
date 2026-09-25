@@ -715,21 +715,6 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				continue
 			}
 		case "fail":
-			if recoverableResult, shouldContinue := recoverableWorkflowFailResult(request, state.Observations); shouldContinue {
-				observation := completionGateObservation(len(state.Observations)+1, recoverableResult, state.Request.ToolSet, state.Observations)
-				observation = withCompletionGateRecoveryPacket(observation, recoverableResult)
-				state.Observations = append(state.Observations, observation)
-				agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentRecoverableFailRejected, marshalEventBody(observation))
-				agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentCompletionRequired, marshalEventBody(observation))
-				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "recoverable_fail_rejected", observation.ContentText())
-				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
-					if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
-						return elapsedResult, errorValue
-					}
-					return result, nil
-				}
-				continue
-			}
 			if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt {
 				facts := buildFailureReportFacts(state.Observations, agentTurnRunner.options.RecoveryBudget)
 				failureReportResult := validateFailureReportAction(actionDocument, facts)
@@ -2394,7 +2379,7 @@ func (agentTurnRunner *AgentTurnRunner) completeTerminalNoToolsFinish(ctx contex
 	if !isRecoveredFailureDebtResolution(actionDocument.FailureResolution) {
 		return AgentTurnResult{}, false, "a final reply requires failureResolution to be recovered_with_success or no_tool_fallback"
 	}
-	completionGateResult := validateCompletionGateForRequestWithExpectedResults(request, state.Requirements, state.Observations, state.Attachments, state.QualityCriteria, actionDocument, agentTurnRunner.options.RecoveryBudget)
+	completionGateResult := validateCompletionFacts(request, state.Observations, actionDocument)
 	agentTurnRunner.appendValidityReview(taskRunID, "terminal_no_tools_finish", completionGateResult.ValidityState)
 	if !completionGateResult.IsSatisfied {
 		return AgentTurnResult{}, false, completionGateResult.Message
@@ -2508,12 +2493,6 @@ func elapsedTurnCanComplete(request AgentTurnRequest, requirements []toolUseRequ
 	}
 	if _, hasFailureDebt := activeFailureDebt(observations); hasFailureDebt {
 		return false
-	}
-	if result := validateOutcomeContractRequirements(request.OutcomeContract, observations, attachments); !result.IsSatisfied {
-		return false
-	}
-	if !contractRequiresAttachment(request.OutcomeContract) {
-		return true
 	}
 	return buildAttachmentValidityState(request.WorkspaceRootPath, attachments).Passed
 }

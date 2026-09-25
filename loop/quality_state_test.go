@@ -14,7 +14,7 @@ func TestQualityReviewGuidanceDoesNotBlockCompletion(t *testing.T) {
 		CompletionEvidence: []completionEvidenceReference{},
 		QualityReview:      []qualityReviewItem{},
 	}
-	result := validateCompletionGateForRequest(AgentTurnRequest{}, nil, nil, nil, actionDocument)
+	result := validateCompletionFacts(AgentTurnRequest{}, nil, actionDocument)
 
 	if !result.IsSatisfied {
 		t.Fatalf("expected quality guidance to stay advisory, got %s", result.Message)
@@ -72,7 +72,6 @@ func TestQualityReviewRejectsMissingEvidence(t *testing.T) {
 }
 
 func TestCompletionGateTreatsFailedDeclaredQualityCriterionAsReviewHint(t *testing.T) {
-	criteria := normalizeQualityCriteria([]string{"Business plan sample is complete."})
 	actionDocument := turnActionDocument{
 		Action:             "finish",
 		GoalStatus:         "satisfied",
@@ -92,7 +91,7 @@ func TestCompletionGateTreatsFailedDeclaredQualityCriterionAsReviewHint(t *testi
 		Output:        toolcontract.ToolOutput{Content: `{"siteID":"site-1"}`},
 	}}
 
-	result := validateCompletionGateForRequest(AgentTurnRequest{}, nil, observations, criteria, actionDocument)
+	result := validateCompletionFacts(AgentTurnRequest{}, observations, actionDocument)
 
 	if !result.IsSatisfied {
 		t.Fatalf("expected failed declared quality criterion to stay a review hint, got %+v", result)
@@ -100,7 +99,6 @@ func TestCompletionGateTreatsFailedDeclaredQualityCriterionAsReviewHint(t *testi
 }
 
 func TestCompletionGateUsesTypedEvidenceInsteadOfParsingFinishMessage(t *testing.T) {
-	criteria := normalizeQualityCriteria([]string{"HTML artifact is attached."})
 	evidence := []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "file_deliver", AttachmentIndex: intPointer(0)}}
 	actionDocument := turnActionDocument{
 		Action:             "finish",
@@ -125,11 +123,7 @@ func TestCompletionGateUsesTypedEvidenceInsteadOfParsingFinishMessage(t *testing
 		}},
 	}}
 
-	result := validateCompletionGateForRequest(AgentTurnRequest{}, []toolUseRequirement{{
-		ToolName:           "file_deliver",
-		RequiresAttachment: true,
-		AttachmentSuffixes: []string{".html"},
-	}}, observations, criteria, actionDocument)
+	result := validateCompletionFacts(AgentTurnRequest{}, observations, actionDocument)
 
 	if !result.IsSatisfied || len(result.Attachments) != 1 {
 		t.Fatalf("expected typed completion evidence to satisfy the gate, got %+v", result)
@@ -155,11 +149,7 @@ func TestCompletionGateDoesNotInferAttachmentsFromFinishMessage(t *testing.T) {
 		}},
 	}}
 
-	result := validateCompletionGateForRequest(AgentTurnRequest{}, []toolUseRequirement{{
-		ToolName:           "file_deliver",
-		RequiresAttachment: true,
-		AttachmentSuffixes: []string{".html"},
-	}}, observations, nil, actionDocument)
+	result := validateCompletionFacts(AgentTurnRequest{}, observations, actionDocument)
 
 	if !result.IsSatisfied || len(result.Attachments) != 1 || result.Attachments[0].Filename != "hermes-analysis.html" {
 		t.Fatalf("expected cited attachment evidence to remain authoritative, got %+v", result)
