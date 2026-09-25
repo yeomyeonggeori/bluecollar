@@ -471,3 +471,23 @@ func TestSingletonEffectNamesTheResourceWithoutAnIdentityField(t *testing.T) {
 		}
 	}
 }
+
+func TestConditionalEffectMayNameANullableIdentity(t *testing.T) {
+	schema := json.RawMessage(`{"type":"object","properties":{"status":{"type":"string"},"eventID":{"anyOf":[{"type":"string"},{"type":"null"}]}},"required":["status","eventID"],"additionalProperties":false}`)
+	added := ResourceEffectContract{ObjectType: "attendance", Effect: "created", ResultField: "eventID", EffectIdentity: "id", When: &EvidenceCondition{ResultField: "status", Equals: json.RawMessage(`"added"`)}}
+	unconditional := added
+	unconditional.When = nil
+	if errorValue := validateToolResultContract(&ToolResultContract{Schema: schema, Effects: []ResourceEffectContract{added}}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if validateToolResultContract(&ToolResultContract{Schema: schema, Effects: []ResourceEffectContract{unconditional}}) == nil {
+		t.Fatal("expected an unconditional effect on a nullable identity to be refused")
+	}
+	contract := &ToolResultContract{Schema: schema, Effects: []ResourceEffectContract{added}}
+	if effects := ProjectResourceEffects(contract, json.RawMessage(`{"status":"asked","eventID":null}`)); len(effects) != 0 {
+		t.Fatalf("expected an asked write to report nothing, got %+v", effects)
+	}
+	if effects := ProjectResourceEffects(contract, json.RawMessage(`{"status":"added","eventID":null}`)); effects != nil {
+		t.Fatalf("expected an added write without its identity to fail closed, got %+v", effects)
+	}
+}
