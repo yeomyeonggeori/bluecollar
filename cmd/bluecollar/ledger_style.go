@@ -44,7 +44,7 @@ func eventNameStyle(eventName string) string {
 		return styleMagenta
 	case "tool":
 		return styleGreen
-	case "completion_judge", "confirmation", "approval":
+	case "completion", "confirmation", "approval":
 		return styleYellow
 	default:
 		return styleCyan

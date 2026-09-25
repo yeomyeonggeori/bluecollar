@@ -162,7 +162,7 @@ func TestLinkExpectationWithoutLinkCapableToolDoesNotHardBlock(t *testing.T) {
 	expectation := ExpectedResult{Type: ExpectedResultTypeLink, Required: true}
 
 	if message := missingExpectedResultDelivery(expectation, toolSet, nil, nil, "Here are the results."); message != "" {
-		t.Fatalf("expected an unsatisfiable link expectation to defer to the judge, got %q", message)
+		t.Fatalf("expected an unsatisfiable link expectation not to block, got %q", message)
 	}
 
 	linkToolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{canonicalLinkToolDefinition("site_serve")})

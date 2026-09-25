@@ -12,6 +12,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
@@ -41,6 +42,7 @@ func newConversationSession(ctx context.Context, options runOptions) (*conversat
 		return nil, tapeError
 	}
 	kernel.UseLanguageModelProvider(languageModel)
+	kernel.UseDecisionModel(decisions.ConfiguredDecisionModel(os.Stderr))
 	toolSelector := configuredToolSelector()
 	if toolSelector != nil {
 		kernel.UseToolSelector(toolSelector)

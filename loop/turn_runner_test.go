@@ -74,8 +74,8 @@ func TestAgentTurnRunnerCallsToolsUntilFinishMessage(t *testing.T) {
 			llmCallEventCount++
 		}
 	}
-	if llmCallEventCount != 4 {
-		t.Fatalf("expected four llm.call ledger events, got %d", llmCallEventCount)
+	if llmCallEventCount != 3 {
+		t.Fatalf("expected three llm.call ledger events, got %d", llmCallEventCount)
 	}
 	for _, taskEvent := range services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID) {
 		if taskEvent.Name != "llm.call" {
@@ -208,7 +208,6 @@ type contextCancelingTurnLanguageModel struct {
 	cancel         context.CancelFunc
 	actionContents []string
 	requestIndex   int
-	judgeError     error
 }
 
 func (languageModel *contextCancelingTurnLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -216,9 +215,8 @@ func (languageModel *contextCancelingTurnLanguageModel) GenerateResponse(context
 }
 
 func (languageModel *contextCancelingTurnLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	if request.StructuredOutputSchema.Name == completionJudgeSchemaName {
-		languageModel.cancel()
-		return model.StructuredResponse{}, languageModel.judgeError
+	if request.StructuredOutputSchema.Name == expectedChangesSchemaName {
+		return model.StructuredResponse{Content: expectedChangesDocument(deleteOldTask)}, nil
 	}
 	content := ""
 	if languageModel.requestIndex < len(languageModel.actionContents) {
@@ -251,19 +249,17 @@ func (languageModel *contextCancelingTurnLanguageModel) GenerateChatCompletion(_
 	}, nil
 }
 
-func TestAgentTurnRunnerCompletesWhenCallerContextExpiresDuringCompletionJudge(t *testing.T) {
+func TestAgentTurnRunnerCompletesWhenCallerContextExpiresDuringTheChangeCheck(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	languageModel := &contextCancelingTurnLanguageModel{
 		cancel: cancel,
 		actionContents: []string{
 			directToolAction("continue", "삭제할게요.", "task_delete", `{"taskID":"task-1"}`),
 		},
-		judgeError: context.DeadlineExceeded,
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	toolDefinition := testToolDescriptor("task_delete")
-	toolDefinition.Completion = toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation}
-	toolRegistry := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{toolDefinition})
+	services.runner.UseDecisionModel(&scriptedDecisionModel{cancel: cancel, errorValue: context.DeadlineExceeded})
+	toolRegistry := taskDeleteToolSet()
 
 	result, errorValue := services.runner.RunTurn(ctx, AgentTurnRequest{
 		RequesterPersonID:     "person-1",
@@ -276,7 +272,7 @@ func TestAgentTurnRunnerCompletesWhenCallerContextExpiresDuringCompletionJudge(t
 	})
 
 	if errorValue != nil {
-		t.Fatalf("expected the turn to succeed despite the caller context expiring mid-judge-call: %v", errorValue)
+		t.Fatalf("expected the turn to succeed despite the caller context expiring mid-check: %v", errorValue)
 	}
 	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the task to complete, got status %q (replySuppressed=%v) failureReason=%q", result.TaskRun.Status, result.ReplySuppressed, result.TaskRun.FailureReason)
@@ -287,8 +283,8 @@ func TestAgentTurnRunnerCompletesWhenCallerContextExpiresDuringCompletionJudge(t
 	if result.FinishMessage == "" {
 		t.Fatal("expected a non-empty finish message so the connector does not suppress it as missing_user_notice")
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "completion_judge.degraded", "") {
-		t.Fatal("expected a completion_judge.degraded event to be recorded")
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "completion.check_degraded", "change_check") {
+		t.Fatal("expected a completion.check_degraded event to be recorded")
 	}
 }
 
@@ -2026,8 +2022,8 @@ func (languageModel *sequenceLanguageModel) GenerateStructuredResponse(_ context
 	if request.StructuredOutputSchema.Name == "bluecollar_contract_skill_arbitration" {
 		return model.StructuredResponse{Content: contractSkillArbitrationTestDocument(request.StructuredOutputSchema.Document)}, nil
 	}
-	if request.StructuredOutputSchema.Name == completionJudgeSchemaName {
-		return model.StructuredResponse{Content: defaultCompletionJudgeTestDocument()}, nil
+	if request.StructuredOutputSchema.Name == expectedChangesSchemaName {
+		return model.StructuredResponse{Content: expectedChangesDocument()}, nil
 	}
 	languageModel.requests = append(languageModel.requests, request)
 	index := len(languageModel.requests) - 1
@@ -2058,15 +2054,6 @@ func contractSkillArbitrationTestDocument(schemaDocument string) string {
 		"expectedEvidence":      expectedEvidence,
 		"unmetPreconditions":    []string{},
 		"reason":                "test contract arbitration",
-	})
-	return string(document)
-}
-
-func defaultCompletionJudgeTestDocument() string {
-	document, _ := json.Marshal(map[string]any{
-		"satisfied":   true,
-		"missingWork": []string{},
-		"reason":      "scripted test default",
 	})
 	return string(document)
 }
@@ -2420,10 +2407,9 @@ func TestTerminalStructuredRequestsLeaveTheOutputBudgetUnset(t *testing.T) {
 	request := AgentTurnRequest{ToolSet: newTestToolSet(nil)}
 	services.runner.finalizerAction(context.Background(), request, nil, ExecutionState{})
 	services.runner.terminalNoToolsAction(context.Background(), request, nil, ExecutionState{}, "")
-	capturedRequests := append([]model.StructuredResponseRequest{}, languageModel.requests...)
-	capturedRequests = append(capturedRequests, completionJudgeRequest(request, nil, nil, turnActionDocument{}, nil))
-	if len(capturedRequests) != 3 {
-		t.Fatalf("expected finalizer, terminal, and judge requests, got %+v", structuredRequestNames(capturedRequests))
+	capturedRequests := languageModel.requests
+	if len(capturedRequests) != 2 {
+		t.Fatalf("expected finalizer and terminal requests, got %+v", structuredRequestNames(capturedRequests))
 	}
 	for _, structuredRequest := range capturedRequests {
 		if structuredRequest.GenerationOptions.MaxTokens != nil {

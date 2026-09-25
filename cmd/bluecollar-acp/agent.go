@@ -26,6 +26,7 @@ type session struct {
 
 type agent struct {
 	languageModel    model.LanguageModelProvider
+	decisionModel    model.DecisionModel
 	decisionPlanner  intake.DecisionPlanner
 	agentName        string
 	resolveTransport transportResolver
@@ -39,6 +40,7 @@ type agent struct {
 func newAgent(languageModel model.LanguageModelProvider, decisionModel model.DecisionModel, agentName string) *agent {
 	return &agent{
 		languageModel:    languageModel,
+		decisionModel:    decisionModel,
 		decisionPlanner:  intake.NewDecisionPlanner(decisionModel, nil, nil),
 		agentName:        agentName,
 		resolveTransport: transportForServer,
@@ -64,6 +66,7 @@ func (runningAgent *agent) NewSession(ctx context.Context, request acp.NewSessio
 	taskRuns := taskstate.NewTaskRunService(taskEvents)
 	kernel := loop.NewAgentKernel(taskRuns, taskstate.NewTaskStepService())
 	kernel.UseLanguageModelProvider(runningAgent.languageModel)
+	kernel.UseDecisionModel(runningAgent.decisionModel)
 
 	runningAgent.mutex.Lock()
 	defer runningAgent.mutex.Unlock()

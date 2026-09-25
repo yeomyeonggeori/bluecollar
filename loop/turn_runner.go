@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -31,6 +32,8 @@ type AgentTurnRunner struct {
 	recoveryLanguageModel  model.LanguageModelProvider
 	toolResultSpillStore   ToolResultSpillStore
 	toolResultImageSource  ToolResultImageSource
+	decisionModel          model.DecisionModel
+	expectedChanges        *sync.Map
 	options                TurnOptions
 }
 
@@ -112,34 +115,33 @@ func lastObservationFailed(observations []turnObservation) bool {
 }
 
 type turnObservation struct {
-	ObservationID         string                        `json:"observationID"`
-	Action                string                        `json:"action"`
-	Tool                  string                        `json:"tool,omitempty"`
-	ToolID                string                        `json:"toolID,omitempty"`
-	ToolInput             json.RawMessage               `json:"toolInput,omitempty"`
-	Output                toolcontract.ToolOutput       `json:"output,omitempty"`
-	Effects               []toolcontract.ResourceEffect `json:"effects,omitempty"`
-	Failure               *toolcontract.ToolFailure     `json:"failure,omitempty"`
-	Summary               string                        `json:"summary,omitempty"`
-	ImageRefs             []ToolResultImageRef          `json:"imageRefs,omitempty"`
-	RepeatsObservationID  string                        `json:"repeatsObservationID,omitempty"`
-	ToolInputKey          string                        `json:"toolInputKey,omitempty"`
-	AttemptFingerprint    string                        `json:"attemptFingerprint,omitempty"`
-	RecoveryAttemptKey    string                        `json:"recoveryAttemptKey,omitempty"`
-	AssistantText         string                        `json:"assistantText,omitempty"`
-	JudgeNamedMissingWork bool                          `json:"judgeNamedMissingWork,omitempty"`
-	ModelReasoning        string                        `json:"modelReasoning,omitempty"`
-	ModelReasoningField   string                        `json:"modelReasoningField,omitempty"`
-	RecoveryStep          string                        `json:"recoveryStep,omitempty"`
-	ToolIsReadOnly        bool                          `json:"toolIsReadOnly,omitempty"`
-	RecoveryAttemptSpent  bool                          `json:"recoveryAttemptSpent,omitempty"`
-	PolicyCode            string                        `json:"policyCode,omitempty"`
-	RelatedResultIDs      []string                      `json:"relatedResultIDs,omitempty"`
-	RelatedPaths          []string                      `json:"relatedPaths,omitempty"`
-	RecoveryPacket        *RecoveryPacket               `json:"recoveryPacket,omitempty"`
-	Attachments           []toolcontract.FileAttachment `json:"attachments,omitempty"`
-	RecoveryActions       []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
-	DurationMS            int64                         `json:"durationMs"`
+	ObservationID        string                        `json:"observationID"`
+	Action               string                        `json:"action"`
+	Tool                 string                        `json:"tool,omitempty"`
+	ToolID               string                        `json:"toolID,omitempty"`
+	ToolInput            json.RawMessage               `json:"toolInput,omitempty"`
+	Output               toolcontract.ToolOutput       `json:"output,omitempty"`
+	Effects              []toolcontract.ResourceEffect `json:"effects,omitempty"`
+	Failure              *toolcontract.ToolFailure     `json:"failure,omitempty"`
+	Summary              string                        `json:"summary,omitempty"`
+	ImageRefs            []ToolResultImageRef          `json:"imageRefs,omitempty"`
+	RepeatsObservationID string                        `json:"repeatsObservationID,omitempty"`
+	ToolInputKey         string                        `json:"toolInputKey,omitempty"`
+	AttemptFingerprint   string                        `json:"attemptFingerprint,omitempty"`
+	RecoveryAttemptKey   string                        `json:"recoveryAttemptKey,omitempty"`
+	AssistantText        string                        `json:"assistantText,omitempty"`
+	ModelReasoning       string                        `json:"modelReasoning,omitempty"`
+	ModelReasoningField  string                        `json:"modelReasoningField,omitempty"`
+	RecoveryStep         string                        `json:"recoveryStep,omitempty"`
+	ToolIsReadOnly       bool                          `json:"toolIsReadOnly,omitempty"`
+	RecoveryAttemptSpent bool                          `json:"recoveryAttemptSpent,omitempty"`
+	PolicyCode           string                        `json:"policyCode,omitempty"`
+	RelatedResultIDs     []string                      `json:"relatedResultIDs,omitempty"`
+	RelatedPaths         []string                      `json:"relatedPaths,omitempty"`
+	RecoveryPacket       *RecoveryPacket               `json:"recoveryPacket,omitempty"`
+	Attachments          []toolcontract.FileAttachment `json:"attachments,omitempty"`
+	RecoveryActions      []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
+	DurationMS           int64                         `json:"durationMs"`
 }
 
 type toolCallActionOutcome struct {
@@ -257,6 +259,7 @@ func NewAgentTurnRunnerWithRecoveryModel(taskRunService taskstate.TaskRunStore, 
 		languageModelTaskLevel: normalizedOptions.TaskLevel,
 		recoveryLanguageModel:  recoveryLanguageModel,
 		options:                normalizedOptions,
+		expectedChanges:        &sync.Map{},
 	}
 }
 
@@ -270,6 +273,10 @@ func (agentTurnRunner *AgentTurnRunner) UseToolResultSpillStore(toolResultSpillS
 
 func (agentTurnRunner *AgentTurnRunner) UseToolResultImageSource(toolResultImageSource ToolResultImageSource) {
 	agentTurnRunner.toolResultImageSource = toolResultImageSource
+}
+
+func (agentTurnRunner *AgentTurnRunner) UseDecisionModel(decisionModel model.DecisionModel) {
+	agentTurnRunner.decisionModel = decisionModel
 }
 
 func (agentTurnRunner *AgentTurnRunner) llmCallObserverForTaskRun(taskRunID string) llmCallObserver {
@@ -429,6 +436,8 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	turnContext = agentcontract.WithLLMCallObserver(turnContext, observeRecord)
 	taskContext, taskCancel := context.WithCancel(turnContext)
 	defer taskCancel()
+	agentTurnRunner.beginExpectedChanges(taskContext, taskRun.TaskRunID, request)
+	defer agentTurnRunner.forgetExpectedChanges(taskRun.TaskRunID)
 	unregisterTaskCancel := agentTurnRunner.taskRunService.RegisterTaskRunCancel(taskRun.TaskRunID, taskCancel)
 	defer unregisterTaskCancel()
 	runningTaskRun, errorValue := agentTurnRunner.taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant")
@@ -650,12 +659,12 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				continue
 			}
 			actionDocument = deliveredDocument
-			completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(workContext, taskRun.TaskRunID, request, toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, actionDocument)
+			completionGateResult := agentTurnRunner.validateCompletionGateWithChanges(workContext, taskRun.TaskRunID, request, toolUseRequirements, state.Observations, state.Attachments, state.QualityCriteria, actionDocument)
 			agentTurnRunner.appendValidityReview(taskRun.TaskRunID, "finish", completionGateResult.ValidityState)
 			if !completionGateResult.IsSatisfied {
-				if candidateReply := finishActionMessage(actionDocument); canDeliverBestEffortOnJudgeRejection(workContext, completionGateResult, candidateReply) {
+				if candidateReply := finishActionMessage(actionDocument); canDeliverBestEffortOnUnmetChanges(workContext, completionGateResult, candidateReply) {
 					agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentCompletionStateBestEffort, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
-					result := agentTurnRunner.completeTaskRunBestEffort(workContext, taskRun.TaskRunID, stepID, "finish", request, state.Observations, completionGateResult, appendCompletionGateCaveat(candidateReply, completionGateResult.Message))
+					result := agentTurnRunner.completeTaskRunBestEffort(workContext, taskRun.TaskRunID, stepID, "finish", request, state.Observations, completionGateResult, candidateReply)
 					return result, nil
 				}
 				observation := completionGateObservation(len(state.Observations)+1, completionGateResult, state.Request.ToolSet, state.Observations)
@@ -2213,7 +2222,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeSatisfiedTurn(ctx context.Contex
 		}
 		actionDocument.CompletionEvidence = append(actionDocument.CompletionEvidence, supplied)
 	}
-	completionGateResult := agentTurnRunner.validateCompletionGateWithJudge(finalizationContext, taskRunID, request, requirements, observations, nil, criteria, actionDocument)
+	completionGateResult := agentTurnRunner.validateCompletionGateWithChanges(finalizationContext, taskRunID, request, requirements, observations, nil, criteria, actionDocument)
 	if !completionGateResult.IsSatisfied {
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFinalizerRejected, marshalEventBody(map[string]string{"reason": completionGateResult.Message}))
 		return AgentTurnResult{}, false

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -50,10 +51,12 @@ func prettyLedgerLine(taskEvent agentcontract.TaskEvent) string {
 	case agentcontract.TaskEventAgentCompletionRequired:
 		output, _ := body["output"].(map[string]any)
 		return ledgerLine(inkFaint, "", "gate", inkFaint+clippedTo(collapsedWhitespace(stringField(output, "content")), 96)+styleReset)
-	case agentcontract.TaskEventCompletionJudgeVerdict:
-		return ledgerLine(inkGate, "●", "judge", judgeSummary(body))
-	case agentcontract.TaskEventCompletionJudgeDegraded:
-		return ledgerLine(inkFaint, "", "judge", inkFaint+"unavailable, accepting the deterministic gate"+styleReset)
+	case agentcontract.TaskEventCompletionExpectedChanges:
+		return ledgerLine(inkFaint, "", "expects", inkFaint+expectedChangesSummary(body)+styleReset)
+	case agentcontract.TaskEventCompletionChangeCheck:
+		return ledgerLine(inkGate, "●", "check", changeCheckSummary(body))
+	case agentcontract.TaskEventCompletionCheckDegraded:
+		return ledgerLine(inkFaint, "", "check", inkFaint+"unavailable, accepting the deterministic gate"+styleReset)
 	case agentcontract.TaskEventAgentBudgetExtendedOneLevel:
 		return ledgerLine(inkFaint, "", "budget", inkFaint+"extended one level → "+stringField(body, "grantedLevel")+styleReset)
 	case agentcontract.TaskEventTaskCompleted:
@@ -116,11 +119,26 @@ func actionSummary(body map[string]any) string {
 	return summary
 }
 
-func judgeSummary(body map[string]any) string {
-	if satisfied, _ := body["satisfied"].(bool); satisfied {
-		return inkTool + "satisfied" + styleReset
+func expectedChangesSummary(body map[string]any) string {
+	changes, _ := body["expectedChanges"].([]any)
+	if len(changes) == 0 {
+		return "no change asked for"
 	}
-	return inkFault + "not satisfied" + styleReset + "  " + inkFaint + clippedTo(stringField(body, "reason"), 72) + styleReset
+	kinds := []string{}
+	for _, change := range changes {
+		if document, isDocument := change.(map[string]any); isDocument {
+			kinds = append(kinds, stringField(document, "change"))
+		}
+	}
+	return clippedTo(strings.Join(kinds, ", "), 96)
+}
+
+func changeCheckSummary(body map[string]any) string {
+	unmet, _ := body["unmet"].([]any)
+	if len(unmet) == 0 {
+		return inkTool + "every asked change is done" + styleReset
+	}
+	return inkFault + strconv.Itoa(len(unmet)) + " asked change(s) not done" + styleReset
 }
 
 func toolRequestSummary(body map[string]any) string {

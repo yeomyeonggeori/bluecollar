@@ -141,15 +141,6 @@ func toolDefinitionIsStateChanging(toolDefinition toolcontract.ToolDefinition) b
 	}
 }
 
-func latestPlan(observations []turnObservation) (planDocument, bool) {
-	for index := len(observations) - 1; index >= 0; index-- {
-		if document, isPlan := planFromObservation(observations[index]); isPlan {
-			return document, true
-		}
-	}
-	return planDocument{}, false
-}
-
 func (agentTurnRunner *AgentTurnRunner) widenPaceForPlannedLevel(taskRunID string, state *agentTaskState, plannedLevel TaskLevel) {
 	normalizedLevel := NormalizeTaskLevel(string(plannedLevel))
 	if normalizedLevel == "" || taskLevelRank(normalizedLevel) <= taskLevelRank(state.Request.TaskLevel) {
