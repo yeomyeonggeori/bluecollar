@@ -965,6 +965,7 @@ func projectedResourceEffect(expectedEffect expectedResourceEffect) (ResourceEff
 		effect.Path = expectedEffect.identity
 	case "url":
 		effect.URL = expectedEffect.identity
+	case "singleton":
 	default:
 		return ResourceEffect{}, false
 	}
@@ -975,6 +976,10 @@ func expectedResourceEffects(effectContracts []ResourceEffectContract, document 
 	expectedEffects := []expectedResourceEffect{}
 	for _, effectContract := range effectContracts {
 		if !effectConditionMatches(effectContract.When, document) {
+			continue
+		}
+		if strings.TrimSpace(effectContract.EffectIdentity) == "singleton" {
+			expectedEffects = append(expectedEffects, expectedResourceEffect{contract: effectContract})
 			continue
 		}
 		identities, isValid := resourceEffectIdentities(document[effectContract.ResultField])
@@ -1060,6 +1065,8 @@ func resourceEffectIdentity(effect ResourceEffect, identityField string) (string
 		return strings.TrimSpace(effect.Path), strings.TrimSpace(effect.ID) == "" && strings.TrimSpace(effect.Path) != "" && strings.TrimSpace(effect.URL) == ""
 	case "url":
 		return strings.TrimSpace(effect.URL), strings.TrimSpace(effect.ID) == "" && strings.TrimSpace(effect.Path) == "" && strings.TrimSpace(effect.URL) != ""
+	case "singleton":
+		return "", strings.TrimSpace(effect.ID) == "" && strings.TrimSpace(effect.Path) == "" && strings.TrimSpace(effect.URL) == ""
 	default:
 		return "", false
 	}

@@ -419,3 +419,55 @@ func TestAnInternalToolOutsideTheAllowListIsRefusedToTheModelAndReachableByTheRu
 		t.Fatal("expected widening for one internal tool to leave the others refused")
 	}
 }
+
+func TestSingletonEffectNamesTheResourceWithoutAnIdentityField(t *testing.T) {
+	settingsContract := func(resultField string) *ToolResultContract {
+		return &ToolResultContract{
+			Schema: json.RawMessage(`{"type":"object","properties":{"changed":{"type":"boolean"}},"required":["changed"],"additionalProperties":false}`),
+			Effects: []ResourceEffectContract{{
+				ObjectType:     "company settings",
+				Effect:         "updated",
+				ResultField:    resultField,
+				EffectIdentity: "singleton",
+				When:           &EvidenceCondition{ResultField: "changed", Equals: json.RawMessage(`true`)},
+			}},
+		}
+	}
+	if validateToolResultContract(settingsContract("changed")) == nil {
+		t.Fatal("expected a singleton effect naming a resultField to be refused")
+	}
+	if errorValue := validateToolResultContract(settingsContract("")); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	toolSet := NewToolSet([]string{"settings_set"})
+	var answer json.RawMessage
+	var effects []ResourceEffect
+	if errorValue := registerTestTool(toolSet, ToolDefinition{Name: "settings_set", ResultContract: settingsContract("")}, func(context.Context, ToolInvocation) (ToolResult, error) {
+		return ToolResult{Output: ToolOutput{Content: "done", Data: answer}, Effects: effects}, nil
+	}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	updated := []ResourceEffect{{ObjectType: "company settings", Effect: "updated"}}
+	if projected := ProjectResourceEffects(settingsContract(""), json.RawMessage(`{"changed":true}`)); !reflect.DeepEqual(projected, updated) {
+		t.Fatalf("expected the singleton effect to be projected, got %+v", projected)
+	}
+	for _, testCase := range []struct {
+		answer   string
+		effects  []ResourceEffect
+		isFailed bool
+	}{
+		{answer: `{"changed":true}`, effects: updated},
+		{answer: `{"changed":false}`},
+		{answer: `{"changed":true}`, isFailed: true},
+		{answer: `{"changed":true}`, effects: []ResourceEffect{{ObjectType: "company settings", Effect: "updated", ID: "settings"}}, isFailed: true},
+	} {
+		answer, effects = json.RawMessage(testCase.answer), testCase.effects
+		result, errorValue := toolSet.Invoke(context.Background(), ToolInvocation{ToolName: "settings_set", Input: json.RawMessage(`{}`)})
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		if result.Failed() != testCase.isFailed {
+			t.Fatalf("answer %s with effects %+v: expected failed=%v, got %+v", testCase.answer, testCase.effects, testCase.isFailed, result)
+		}
+	}
+}
