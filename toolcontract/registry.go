@@ -853,8 +853,10 @@ func ValidateToolInput(schemaDocument json.RawMessage, inputDocument json.RawMes
 	if errorValue := json.Unmarshal(normalizedInput, &input); errorValue != nil {
 		return nil, errors.New("tool input is not valid JSON")
 	}
+	input = documentWithNullAsAbsent(input)
+	normalizedInput, _ = json.Marshal(input)
 	var schema jsonschema.Schema
-	if errorValue := json.Unmarshal(schemaDocument, &schema); errorValue != nil {
+	if errorValue := json.Unmarshal(schemaDocumentWithNullAsAbsent(schemaDocument), &schema); errorValue != nil {
 		return nil, errors.New("tool input schema is invalid")
 	}
 	resolvedSchema, errorValue := schema.Resolve(nil)
@@ -887,8 +889,9 @@ func ValidateSuccessfulToolResult(contract ToolResultContract, result ToolResult
 	if errorValue := json.Unmarshal(result.Output.Data, &resultDocument); errorValue != nil {
 		return errors.New("tool result is not valid JSON")
 	}
+	resultDocument = documentWithNullAsAbsent(resultDocument)
 	var schema jsonschema.Schema
-	if errorValue := json.Unmarshal(contract.Schema, &schema); errorValue != nil {
+	if errorValue := json.Unmarshal(schemaDocumentWithNullAsAbsent(contract.Schema), &schema); errorValue != nil {
 		return errors.New("tool result schema is invalid")
 	}
 	resolvedSchema, errorValue := schema.Resolve(nil)
@@ -933,8 +936,12 @@ func ProjectResourceEffects(contract *ToolResultContract, resultDocument json.Ra
 	if contract == nil || len(contract.Effects) == 0 {
 		return nil
 	}
-	var document map[string]any
-	if json.Unmarshal(resultDocument, &document) != nil {
+	var decoded any
+	if json.Unmarshal(resultDocument, &decoded) != nil {
+		return nil
+	}
+	document, isObject := documentWithNullAsAbsent(decoded).(map[string]any)
+	if !isObject {
 		return nil
 	}
 	expectedEffects, hasEffectIdentities := expectedResourceEffects(contract.Effects, document)
@@ -965,6 +972,7 @@ func projectedResourceEffect(expectedEffect expectedResourceEffect) (ResourceEff
 		effect.Path = expectedEffect.identity
 	case "url":
 		effect.URL = expectedEffect.identity
+	case "singleton":
 	default:
 		return ResourceEffect{}, false
 	}
@@ -975,6 +983,10 @@ func expectedResourceEffects(effectContracts []ResourceEffectContract, document 
 	expectedEffects := []expectedResourceEffect{}
 	for _, effectContract := range effectContracts {
 		if !effectConditionMatches(effectContract.When, document) {
+			continue
+		}
+		if strings.TrimSpace(effectContract.EffectIdentity) == "singleton" {
+			expectedEffects = append(expectedEffects, expectedResourceEffect{contract: effectContract})
 			continue
 		}
 		identities, isValid := resourceEffectIdentities(document[effectContract.ResultField])
@@ -1060,6 +1072,8 @@ func resourceEffectIdentity(effect ResourceEffect, identityField string) (string
 		return strings.TrimSpace(effect.Path), strings.TrimSpace(effect.ID) == "" && strings.TrimSpace(effect.Path) != "" && strings.TrimSpace(effect.URL) == ""
 	case "url":
 		return strings.TrimSpace(effect.URL), strings.TrimSpace(effect.ID) == "" && strings.TrimSpace(effect.Path) == "" && strings.TrimSpace(effect.URL) != ""
+	case "singleton":
+		return "", strings.TrimSpace(effect.ID) == "" && strings.TrimSpace(effect.Path) == "" && strings.TrimSpace(effect.URL) == ""
 	default:
 		return "", false
 	}

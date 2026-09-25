@@ -461,29 +461,25 @@ func validateToolResultContract(contract *ToolResultContract) error {
 	if errorValue := validateToolSchema("resultContract.schema", contract.Schema, true); errorValue != nil {
 		return errorValue
 	}
-	if errorValue := validateEvidenceCondition(contract.Schema, contract.EvidenceCondition); errorValue != nil {
+	schema := schemaDocumentWithNullAsAbsent(contract.Schema)
+	if errorValue := validateEvidenceCondition(schema, contract.EvidenceCondition); errorValue != nil {
 		return errorValue
 	}
 	seenEffects := map[string]bool{}
 	for _, effectContract := range contract.Effects {
 		objectType := strings.TrimSpace(effectContract.ObjectType)
 		effect := strings.TrimSpace(effectContract.Effect)
-		resultField := strings.TrimSpace(effectContract.ResultField)
-		if objectType == "" || effect == "" || resultField == "" {
-			return errors.New("resultContract effect must include objectType, effect, and resultField")
+		if objectType == "" || effect == "" {
+			return errors.New("resultContract effect must include objectType and effect")
 		}
-		if !isOneOf(strings.TrimSpace(effectContract.EffectIdentity), "id", "path", "url") {
+		if !isOneOf(strings.TrimSpace(effectContract.EffectIdentity), "id", "path", "url", "singleton") {
 			return errors.New("resultContract effectIdentity is invalid")
 		}
-		if effectContract.When == nil {
-			if !schemaRequiresEffectIdentityField(contract.Schema, resultField) {
-				return errors.New("resultContract resultField must name a required string or nonempty unique string array property")
-			}
-		} else {
-			if !schemaDefinesEffectIdentityField(contract.Schema, resultField) {
-				return errors.New("resultContract conditional effect resultField must name a string or nonempty unique string array property")
-			}
-			if errorValue := validateEvidenceCondition(contract.Schema, effectContract.When); errorValue != nil {
+		if errorValue := validateEffectIdentityField(schema, effectContract); errorValue != nil {
+			return errorValue
+		}
+		if effectContract.When != nil {
+			if errorValue := validateEvidenceCondition(schema, effectContract.When); errorValue != nil {
 				return errors.New("resultContract effect when condition is invalid: " + errorValue.Error())
 			}
 		}
@@ -492,6 +488,26 @@ func validateToolResultContract(contract *ToolResultContract) error {
 			return errors.New("resultContract effect is duplicated")
 		}
 		seenEffects[effectKey] = true
+	}
+	return nil
+}
+
+func validateEffectIdentityField(schema json.RawMessage, effectContract ResourceEffectContract) error {
+	resultField := strings.TrimSpace(effectContract.ResultField)
+	if strings.TrimSpace(effectContract.EffectIdentity) == "singleton" {
+		if resultField != "" {
+			return errors.New("resultContract singleton effect names no resultField")
+		}
+		return nil
+	}
+	if resultField == "" {
+		return errors.New("resultContract effect must include resultField")
+	}
+	if effectContract.When == nil && !schemaRequiresEffectIdentityField(schema, resultField) {
+		return errors.New("resultContract resultField must name a required string or nonempty unique string array property")
+	}
+	if effectContract.When != nil && !schemaDefinesEffectIdentityField(schema, resultField) {
+		return errors.New("resultContract conditional effect resultField must name a string or nonempty unique string array property")
 	}
 	return nil
 }

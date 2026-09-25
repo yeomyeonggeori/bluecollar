@@ -1,0 +1,26 @@
+{
+	"schemas": [
+		{
+			"schema": {"type": "object", "properties": {"eventID": {"anyOf": [{"type": "string"}, {"type": "null"}]}, "status": {"type": "string"}}, "required": ["status", "eventID"], "additionalProperties": false},
+			"absentWhenNull": {"type": "object", "properties": {"eventID": {"type": "string"}, "status": {"type": "string"}}, "required": ["status"], "additionalProperties": false}
+		},
+		{
+			"schema": {"type": "object", "properties": {"minutes": {"type": ["integer", "null"], "description": "Before it starts."}}, "required": ["minutes"]},
+			"absentWhenNull": {"type": "object", "properties": {"minutes": {"type": "integer", "description": "Before it starts."}}, "required": []}
+		},
+		{
+			"schema": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {"note": {"anyOf": [{"type": "string", "maxLength": 9}, {"type": "null"}], "description": "A note."}}, "required": ["note"]}}}, "required": ["items"]},
+			"absentWhenNull": {"type": "object", "properties": {"items": {"type": "array", "items": {"type": "object", "properties": {"note": {"type": "string", "maxLength": 9, "description": "A note."}}, "required": []}}}, "required": ["items"]}
+		},
+		{
+			"schema": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]},
+			"absentWhenNull": {"type": "object", "properties": {"title": {"type": "string"}}, "required": ["title"]}
+		}
+	],
+	"documents": [
+		{
+			"document": {"eventID": null, "status": "asked", "event": {"location": null, "kind": "clock_in"}, "attendance": [null, {"note": null}]},
+			"absentWhenNull": {"status": "asked", "event": {"kind": "clock_in"}, "attendance": [null, {}]}
+		}
+	]
+}
