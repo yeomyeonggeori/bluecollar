@@ -461,7 +461,8 @@ func validateToolResultContract(contract *ToolResultContract) error {
 	if errorValue := validateToolSchema("resultContract.schema", contract.Schema, true); errorValue != nil {
 		return errorValue
 	}
-	if errorValue := validateEvidenceCondition(contract.Schema, contract.EvidenceCondition); errorValue != nil {
+	schema := schemaDocumentWithNullAsAbsent(contract.Schema)
+	if errorValue := validateEvidenceCondition(schema, contract.EvidenceCondition); errorValue != nil {
 		return errorValue
 	}
 	seenEffects := map[string]bool{}
@@ -474,11 +475,11 @@ func validateToolResultContract(contract *ToolResultContract) error {
 		if !isOneOf(strings.TrimSpace(effectContract.EffectIdentity), "id", "path", "url", "singleton") {
 			return errors.New("resultContract effectIdentity is invalid")
 		}
-		if errorValue := validateEffectIdentityField(contract.Schema, effectContract); errorValue != nil {
+		if errorValue := validateEffectIdentityField(schema, effectContract); errorValue != nil {
 			return errorValue
 		}
 		if effectContract.When != nil {
-			if errorValue := validateEvidenceCondition(contract.Schema, effectContract.When); errorValue != nil {
+			if errorValue := validateEvidenceCondition(schema, effectContract.When); errorValue != nil {
 				return errors.New("resultContract effect when condition is invalid: " + errorValue.Error())
 			}
 		}
@@ -505,7 +506,7 @@ func validateEffectIdentityField(schema json.RawMessage, effectContract Resource
 	if effectContract.When == nil && !schemaRequiresEffectIdentityField(schema, resultField) {
 		return errors.New("resultContract resultField must name a required string or nonempty unique string array property")
 	}
-	if effectContract.When != nil && !schemaDefinesConditionalEffectIdentityField(schema, resultField) {
+	if effectContract.When != nil && !schemaDefinesEffectIdentityField(schema, resultField) {
 		return errors.New("resultContract conditional effect resultField must name a string or nonempty unique string array property")
 	}
 	return nil
@@ -590,29 +591,6 @@ func schemaDefinesEffectIdentityField(document json.RawMessage, fieldName string
 	}
 	return property.Type == "string" ||
 		property.Type == "array" && property.Items.Type == "string" && property.MinItems >= 1 && property.UniqueItems
-}
-
-func schemaDefinesConditionalEffectIdentityField(document json.RawMessage, fieldName string) bool {
-	var schema struct {
-		Properties map[string]json.RawMessage `json:"properties"`
-	}
-	if json.Unmarshal(document, &schema) != nil {
-		return false
-	}
-	return schemaDefinesEffectIdentityField(document, fieldName) || schemaIsNullableString(schema.Properties[fieldName])
-}
-
-func schemaIsNullableString(document json.RawMessage) bool {
-	var property struct {
-		AnyOf []struct {
-			Type string `json:"type"`
-		} `json:"anyOf"`
-	}
-	if json.Unmarshal(document, &property) != nil || len(property.AnyOf) != 2 {
-		return false
-	}
-	types := map[string]bool{property.AnyOf[0].Type: true, property.AnyOf[1].Type: true}
-	return types["string"] && types["null"]
 }
 
 func validateToolSchema(fieldName string, schema json.RawMessage, requiresObject bool) error {
