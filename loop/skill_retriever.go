@@ -19,6 +19,7 @@ const defaultEmbeddingModelName = "embedding_create"
 const skillEmbeddingSearchTimeout = 15 * time.Second
 const skillSearchDocumentVersion = "skill-description-v2"
 const maxGeneratedSkillSearchQueries = 5
+const skillIndexStatusDimensionMismatch = "embedding_dimension_mismatch"
 
 type SkillSearchDocument struct {
 	SkillName      string    `json:"skillName"`
@@ -87,6 +88,9 @@ func (skillRetriever *EmbeddingSkillRetriever) Search(ctx context.Context, reque
 		return retrieveSkillsWithBM25QuerySet(request, skillInstructions, querySet, limit, "embedding_query_failed")
 	}
 	candidates, indexStatus := skillRetriever.embeddingCandidates(request, skillInstructions, queryEmbeddings, limit)
+	if indexStatus == skillIndexStatusDimensionMismatch {
+		candidates, indexStatus = skillRetriever.reembedAndRetry(embeddingContext, request, skillInstructions, queryEmbeddings, limit)
+	}
 	if indexStatus != "ready" {
 		return retrieveSkillsWithBM25QuerySet(request, skillInstructions, querySet, limit, indexStatus)
 	}
@@ -152,6 +156,31 @@ func (skillRetriever *EmbeddingSkillRetriever) refresh(ctx context.Context, skil
 	return skillRetriever.writeIndex(nextDocuments)
 }
 
+func (skillRetriever *EmbeddingSkillRetriever) reembedAndRetry(ctx context.Context, request AgentRequest, skillInstructions []SkillInstruction, queryEmbeddings [][]float32, limit int) ([]SkillCandidate, string) {
+	if !skillRetriever.forgetEmbeddingsOfOtherDimension(ctx, len(queryEmbeddings[0])) {
+		return nil, skillIndexStatusDimensionMismatch
+	}
+	if skillRetriever.refresh(ctx, skillInstructions) != nil {
+		return nil, skillIndexStatusDimensionMismatch
+	}
+	return skillRetriever.embeddingCandidates(request, skillInstructions, queryEmbeddings, limit)
+}
+
+func (skillRetriever *EmbeddingSkillRetriever) forgetEmbeddingsOfOtherDimension(ctx context.Context, dimensionCount int) bool {
+	if !skillRetriever.lockBeforeDeadline(ctx) {
+		return false
+	}
+	defer skillRetriever.mutex.Unlock()
+	kept := []SkillSearchDocument{}
+	for _, document := range skillRetriever.documents {
+		if len(document.Embedding) == dimensionCount {
+			kept = append(kept, document)
+		}
+	}
+	skillRetriever.documents = kept
+	return true
+}
+
 func (skillRetriever *EmbeddingSkillRetriever) lockBeforeDeadline(ctx context.Context) bool {
 	for {
 		if skillRetriever.mutex.TryLock() {
@@ -213,7 +242,7 @@ func (skillRetriever *EmbeddingSkillRetriever) embeddingCandidates(request Agent
 		})
 	}
 	if len(candidates) == 0 && hasDimensionMismatch {
-		return nil, "embedding_dimension_mismatch"
+		return nil, skillIndexStatusDimensionMismatch
 	}
 	sortSkillCandidates(candidates)
 	return limitSkillCandidates(candidates, limit), "ready"
