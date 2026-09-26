@@ -3,30 +3,30 @@ package loop
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"sort"
-	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func (agentTurnRunner *AgentTurnRunner) buildActionSchema(toolRegistry *toolcontract.ToolSet, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool) string {
+func (agentTurnRunner *AgentTurnRunner) buildActionSchema(toolRegistry *toolcontract.ToolSet, allowQualityCriteria bool, hasFailureDebt bool) string {
 	if toolRegistry != nil {
-		return ActionSchemaForToolSet(toolRegistry, allowQualityCriteria, blockedToolNames, hasFailureDebt)
+		return ActionSchemaForToolSet(toolRegistry, allowQualityCriteria, hasFailureDebt)
 	}
-	return buildActionSchemaFromToolDefinitions(nil, nil, allowQualityCriteria, blockedToolNames, hasFailureDebt)
+	return buildActionSchemaFromToolDefinitions(nil, nil, allowQualityCriteria, hasFailureDebt)
 }
 
-func ActionSchemaForToolSet(toolSet *toolcontract.ToolSet, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
-	return actionSchemaCitingEvidence(toolSet, nil, allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
+func ActionSchemaForToolSet(toolSet *toolcontract.ToolSet, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+	return actionSchemaCitingEvidence(toolSet, nil, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
 }
 
-func actionSchemaCitingEvidence(toolSet *toolcontract.ToolSet, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+func actionSchemaCitingEvidence(toolSet *toolcontract.ToolSet, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
 	if toolSet == nil {
-		return buildActionSchemaFromToolDefinitions(nil, citableEvidenceIDs, allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
+		return buildActionSchemaFromToolDefinitions(nil, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
 	}
-	return buildActionSchemaFromToolDefinitions(toolSet.ListToolDefinitions(), citableEvidenceIDs, allowQualityCriteria, blockedToolNames, hasFailureDebt, terminalActionValues...)
+	return buildActionSchemaFromToolDefinitions(toolSet.ListToolDefinitions(), citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
 }
 
-func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
 	allowFail := true
 	allowReply := true
 	if len(terminalActionValues) > 0 {
@@ -54,9 +54,6 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	}
 	hasContinueVariant := false
 	for _, toolDefinition := range toolDefinitions {
-		if blockedToolNames[strings.TrimSpace(toolDefinition.Name)] {
-			continue
-		}
 		if variant, isValid := continueActionSchema(toolDefinition); isValid {
 			variants = append(variants, variant)
 			hasContinueVariant = true
@@ -311,10 +308,6 @@ func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
 		properties["usedFailureFacts"] = failureReportFactsSchema()
 	}
 	return closedObjectSchema(properties)
-}
-
-func finalizerActionSchema() string {
-	return mustMarshalStructuredSchema(terminalActionUnifiedSchema(false))
 }
 
 func terminalNoToolsActionSchema() string {

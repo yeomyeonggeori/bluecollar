@@ -13,7 +13,7 @@ func TestActionSchemaCarriesNoNullValues(t *testing.T) {
 			for _, allowFail := range booleanValues {
 				for _, allowFinish := range booleanValues {
 					label := fmt.Sprintf("quality=%v debt=%v fail=%v finish=%v", allowQualityCriteria, hasFailureDebt, allowFail, allowFinish)
-					schema := actionSchemaForToolSet(nil, nil, allowQualityCriteria, nil, hasFailureDebt, allowFail, allowFinish)
+					schema := actionSchemaForToolSet(nil, nil, allowQualityCriteria, hasFailureDebt, allowFail, allowFinish)
 					var document any
 					if unmarshalError := json.Unmarshal([]byte(schema), &document); unmarshalError != nil {
 						t.Fatalf("%s: schema is not valid JSON: %v", label, unmarshalError)

@@ -306,11 +306,13 @@ After the facts, an expected change is unmet without further judgment when nothi
 
 After two refusals with nothing done in between, the loop withdraws the final reply from the action schema; after three it offers both the reply and `fail`.
 
+While budget remains, only the model ends a task. The runtime does not attach a file or write a final reply on its behalf; an undelivered file is an unmet `file attached`, and the model delivers it.
+
 ## Recovery and fail
 
 What happens after a tool call fails.
 
-A failed call opens failure debt. While debt exists, the action schema offers `fail`, and a final reply has to say how the debt was resolved: `recovered_with_success`, or `no_tool_fallback` when the answer can be given without the failed tool. A fallback can waive a failed requirement only when that requirement needed no side-effect evidence and no attachment.
+A failed call opens failure debt. While debt exists, the action schema offers `fail`, and a final reply has to say how the debt was resolved: `recovered_with_success`, or `no_tool_fallback` when the answer can be given without the failed tool.
 
 Recovery spends from typed allowances:
 
@@ -344,7 +346,7 @@ The level picks a profile. The first working tier is the 95th percentile of meas
 
 The clock is steps × cost of one step × 2. Before any call is measured, one step is assumed to cost 200 ms plus 205 output tokens at 20 tokens a second, the slowest speed the product plans for. After that, it is the median wall time of the model in use over its last hundred calls, bounded below by one second and above by two minutes a step. A host that sets an explicit wall keeps it.
 
-When the step, tool call or time limit arrives first, the loop finalizes if the recorded evidence already satisfies the contract. Otherwise, once per task and only when the budget came from the level, it extends to the next level's profile and records `agent.budget_extended_one_level`. After that it stops and reports how far it got. The model stays the one chosen when the task started.
+When the step, tool call or time limit arrives, the loop extends once per task to the next level's profile, only when the budget came from the level, and records `agent.budget_extended_one_level`. The model stays the one chosen when the task started. At the next limit the task stops, and the stop asks the same question a final reply does. It completes when the change check confirms every change the request asked for, or when the model's last call said the goal was done and the check does not refuse it. Completion is recorded before the reply is written, so a reply that runs out of time falls back to a plain sentence and never loses finished work. Any other stop reports how far the task got.
 
 A single model call that runs past twelve times the model's median is cancelled and reissued on the caller's deadline, and the ledger records the cut. Intake calls follow the same rule. A caller cancelling the turn is never retried.
 
