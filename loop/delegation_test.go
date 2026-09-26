@@ -21,7 +21,7 @@ func TestDelegationCostsNothingUntilAHostAsksForIt(t *testing.T) {
 	if strings.Contains(withoutDelegation, "Delegation:") {
 		t.Fatal("a host that never delegates pays for the paragraph on every step of every task forever")
 	}
-	schemaWithoutDelegation := buildActionSchemaFromToolDefinitions(nil, nil, false, nil, false, true, true, false)
+	schemaWithoutDelegation := buildActionSchemaFromToolDefinitions(nil, nil, false, false, true, true, false)
 	if strings.Contains(schemaWithoutDelegation, "delegate") {
 		t.Fatalf("and pays for the schema variant too: %s", schemaWithoutDelegation)
 	}
@@ -30,7 +30,7 @@ func TestDelegationCostsNothingUntilAHostAsksForIt(t *testing.T) {
 	if !strings.Contains(withDelegation, "may delegate 2 times in total") {
 		t.Fatalf("a limit the model is not told about is a limit it discovers by hitting it: %s", withDelegation)
 	}
-	if !strings.Contains(buildActionSchemaFromToolDefinitions(nil, nil, false, nil, false, true, true, true), `"delegate"`) {
+	if !strings.Contains(buildActionSchemaFromToolDefinitions(nil, nil, false, false, true, true, true), `"delegate"`) {
 		t.Fatal("the action has to be in the schema the model answers with")
 	}
 }

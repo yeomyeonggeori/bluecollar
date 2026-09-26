@@ -22,7 +22,7 @@ func TestBuildTurnProgressKeepsRecentFileContext(t *testing.T) {
 		},
 	}
 
-	progress := buildTurnProgress(AgentTurnRequest{}, observations)
+	progress := buildTurnProgress(observations)
 
 	if len(progress.RecentFiles) != 1 {
 		t.Fatalf("expected one recent file context, got %+v", progress.RecentFiles)

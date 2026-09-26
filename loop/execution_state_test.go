@@ -2,10 +2,11 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -199,7 +200,7 @@ func messagesText(messages []model.Message) string {
 }
 
 func TestExecutionStateSchemaIsPresentOnToolCalls(t *testing.T) {
-	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{Name: "bash"}}, nil, false, nil, false)
+	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{Name: "bash"}}, nil, false, false)
 	var schema struct {
 		OneOf []map[string]any `json:"oneOf"`
 	}

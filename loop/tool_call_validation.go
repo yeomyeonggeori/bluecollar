@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 )
@@ -166,25 +167,6 @@ func previousSuccessfulToolInputObservation(observations []turnObservation, tool
 		}
 	}
 	return turnObservation{}, false
-}
-
-func duplicateSuccessFinalizationRequirements(toolSet *toolcontract.ToolSet, requirements []toolUseRequirement, observations []turnObservation, actionDocument turnActionDocument) ([]toolUseRequirement, bool) {
-	if completionRequirementsHaveEvidence(toolSet, requirements, observations) {
-		return requirements, true
-	}
-	strictRequirements := []toolUseRequirement{}
-	for _, requirement := range requirements {
-		if !requirement.RequiresAttachment && !requirement.RequiresSideEffectEvidence {
-			continue
-		}
-		isSatisfied, _ := completionRequirementStatus(toolSet, requirement, observations)
-		if !isSatisfied {
-			return nil, false
-		}
-		strictRequirements = append(strictRequirements, requirement)
-	}
-	_, isFound := toolSet.ToolDefinition(actionDocument.ToolName)
-	return strictRequirements, isFound
 }
 
 func repeatedFileReadObservation(observations []turnObservation, actionDocument turnActionDocument, observationID string) (turnObservation, bool) {
@@ -679,10 +661,6 @@ func isTerminalExecutionTool(toolName string) bool {
 	default:
 		return false
 	}
-}
-
-func blockedToolNamesForPreconditions(toolRegistry *toolcontract.ToolSet, requirements []toolUseRequirement, observations []turnObservation) map[string]bool {
-	return map[string]bool{}
 }
 
 func toolAvailableForAction(toolRegistry *toolcontract.ToolSet, toolName string) bool {

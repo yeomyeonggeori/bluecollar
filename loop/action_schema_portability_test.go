@@ -46,7 +46,6 @@ func unmarshaledSchema(t *testing.T, document string) any {
 
 func TestSchemasSentWithoutTheirDefinitionsCarryNoReference(t *testing.T) {
 	for name, document := range map[string]string{
-		"finalizer":         finalizerActionSchema(),
 		"terminal no tools": terminalNoToolsActionSchema(),
 	} {
 		if references := schemaReferencePaths(t, name, unmarshaledSchema(t, document)); len(references) > 0 {

@@ -2,11 +2,12 @@ package loop
 
 import (
 	"encoding/base64"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type ValidityState struct {
@@ -28,10 +29,6 @@ type ArtifactValidity struct {
 	path         string
 }
 
-func buildArtifactValidityState(artifacts []CompletionArtifact) ValidityState {
-	return summarizeArtifactValidity(validateCompletionArtifacts(artifacts))
-}
-
 func buildAttachmentValidityState(workspaceRootPath string, attachments []toolcontract.FileAttachment, _ ...time.Time) ValidityState {
 	return summarizeArtifactValidity(validateAttachments(workspaceRootPath, attachments))
 }
@@ -49,14 +46,6 @@ func summarizeArtifactValidity(checkedArtifacts []ArtifactValidity) ValidityStat
 		state.InvalidArtifacts = append(state.InvalidArtifacts, artifact)
 	}
 	return state
-}
-
-func validateCompletionArtifacts(artifacts []CompletionArtifact) []ArtifactValidity {
-	checkedArtifacts := []ArtifactValidity{}
-	for _, artifact := range artifacts {
-		checkedArtifacts = append(checkedArtifacts, validateArtifactPath(artifact.path, artifact.Filename, artifact.RelativePath))
-	}
-	return checkedArtifacts
 }
 
 func validateAttachments(workspaceRootPath string, attachments []toolcontract.FileAttachment) []ArtifactValidity {

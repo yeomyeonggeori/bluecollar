@@ -2,13 +2,15 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
@@ -98,27 +100,23 @@ func TestElapsedClosingDurationIsPartOfTheTotalBudget(t *testing.T) {
 }
 
 func TestElapsedClosingCompletesFromExactEvidenceBeforeReply(t *testing.T) {
-	languageModel := newElapsedClosingLanguageModel("task_add", `{"title":"분기 결산 운영 검토"}`, "분기 결산 운영 검토 업무를 등록했습니다.")
+	languageModel := newElapsedClosingLanguageModel("task_delete", `{"taskID":"task-1"}`, "오래된 작업을 삭제했습니다.")
+	languageModel.expectedChanges = expectedChangesDocument(deleteOldTask)
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 1})
+	services.runner.UseDecisionModel(&scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9}})
 	languageModel.observeTaskStatus = func() agentcontract.TaskStatus {
 		return onlyTaskStatus(services.taskRunService, "person-1")
 	}
-	toolSet := newTestCapabilityToolSet([]string{"task_add"})
-	toolCallCount := 0
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "task_add"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCallCount++
-		return testToolSuccess(`{"taskID":"task-1"}`), nil
-	})
+	toolSet, toolCallCount := countedTaskDeleteToolSet()
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "분기 결산 운영 검토 업무를 등록해줘",
-		ResponseLanguage:      ResponseLanguageKorean,
-		ToolSet:               toolSet,
-		PinnedToolNames:       toolSet.ListToolNames(),
-		RequiredEvidenceTools: []string{"task_add"},
-		EffortStartedAt:       time.Now().Add(-500 * time.Millisecond),
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "오래된 작업을 삭제해줘",
+		ResponseLanguage:  ResponseLanguageKorean,
+		ToolSet:           toolSet,
+		PinnedToolNames:   toolSet.ListToolNames(),
+		EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
 	})
 
 	if errorValue != nil {
@@ -130,9 +128,9 @@ func TestElapsedClosingCompletesFromExactEvidenceBeforeReply(t *testing.T) {
 	if result.FinishMessage != languageModel.closingReply {
 		t.Fatalf("expected closing reply %q, got %q", languageModel.closingReply, result.FinishMessage)
 	}
-	assertSingleElapsedClosing(t, languageModel)
-	if toolCallCount != 1 {
-		t.Fatalf("expected one pre-cutoff tool call and no post-cutoff call, got %d", toolCallCount)
+	assertSingleClosing(t, languageModel, completionReplySchemaName)
+	if *toolCallCount != 1 {
+		t.Fatalf("expected one pre-cutoff tool call and no post-cutoff call, got %d", *toolCallCount)
 	}
 	if languageModel.structuredCalls != 0 {
 		t.Fatalf("expected no structured finalizer or verifier after cutoff, got %d calls", languageModel.structuredCalls)
@@ -180,29 +178,27 @@ func TestElapsedClosingBlocksBeforeReplyWhenEvidenceIsMissing(t *testing.T) {
 }
 
 func TestElapsedClosingUsesRemainingTotalBudget(t *testing.T) {
-	languageModel := newElapsedClosingLanguageModel("task_add", `{}`, "")
+	languageModel := newElapsedClosingLanguageModel("task_delete", `{"taskID":"task-1"}`, "")
+	languageModel.expectedChanges = expectedChangesDocument(deleteOldTask)
 	languageModel.closingStarted = make(chan struct{})
 	languageModel.blockClosing = true
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 1})
+	services.runner.UseDecisionModel(&scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9}})
 	languageModel.observeTaskStatus = func() agentcontract.TaskStatus {
 		return onlyTaskStatus(services.taskRunService, "person-1")
 	}
-	toolSet := newTestCapabilityToolSet([]string{"task_add"})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "task_add"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"taskID":"task-1"}`), nil
-	})
+	toolSet, _ := countedTaskDeleteToolSet()
 	resultChannel := make(chan AgentTurnResult, 1)
 	startedAt := time.Now()
 
 	go func() {
 		result, _ := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-			RequesterPersonID:     "person-1",
-			ConversationID:        "conversation-1",
-			Prompt:                "분기 결산 운영 검토 업무를 등록해줘",
-			ToolSet:               toolSet,
-			PinnedToolNames:       toolSet.ListToolNames(),
-			RequiredEvidenceTools: []string{"task_add"},
-			EffortStartedAt:       time.Now().Add(-500 * time.Millisecond),
+			RequesterPersonID: "person-1",
+			ConversationID:    "conversation-1",
+			Prompt:            "오래된 작업을 삭제해줘",
+			ToolSet:           toolSet,
+			PinnedToolNames:   toolSet.ListToolNames(),
+			EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
 		})
 		resultChannel <- result
 	}()
@@ -236,7 +232,7 @@ func TestElapsedClosingUsesRemainingTotalBudget(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("expected closing to stop at the hard total deadline")
 	}
-	assertSingleElapsedClosing(t, languageModel)
+	assertSingleClosing(t, languageModel, completionReplySchemaName)
 }
 
 func TestElapsedClosingTotalDeadlinePersistsRawFallback(t *testing.T) {
@@ -482,11 +478,16 @@ func TestMaxToolCallsClosingDefersToElapsedClosing(t *testing.T) {
 
 func assertSingleElapsedClosing(t *testing.T, languageModel *elapsedClosingLanguageModel) {
 	t.Helper()
+	assertSingleClosing(t, languageModel, elapsedReplySchemaName)
+}
+
+func assertSingleClosing(t *testing.T, languageModel *elapsedClosingLanguageModel, schemaName string) {
+	t.Helper()
 	if languageModel.closingCalls != 1 {
 		t.Fatalf("expected exactly one elapsed closing call, got %d", languageModel.closingCalls)
 	}
-	if languageModel.closingRequest.SchemaName != elapsedReplySchemaName {
-		t.Fatalf("expected %s schema provenance, got %q", elapsedReplySchemaName, languageModel.closingRequest.SchemaName)
+	if languageModel.closingRequest.SchemaName != schemaName {
+		t.Fatalf("expected %s schema provenance, got %q", schemaName, languageModel.closingRequest.SchemaName)
 	}
 	if len(languageModel.closingRequest.Tools) != 0 || len(languageModel.closingRequest.ToolChoice) != 0 || languageModel.closingRequest.ParallelToolCalls {
 		t.Fatalf("expected no-tools closing request, got %+v", languageModel.closingRequest)
@@ -519,6 +520,7 @@ type elapsedClosingLanguageModel struct {
 	actionToolNames    []string
 	actionToolInputs   []string
 	closingReply       string
+	expectedChanges    string
 	closingError       error
 	closingStarted     chan struct{}
 	blockClosing       bool
@@ -546,7 +548,10 @@ func (languageModel *elapsedClosingLanguageModel) GenerateResponse(context.Conte
 	return "", errors.New("legacy response path is not allowed")
 }
 
-func (languageModel *elapsedClosingLanguageModel) GenerateStructuredResponse(responseContext context.Context, _ model.StructuredResponseRequest) (model.StructuredResponse, error) {
+func (languageModel *elapsedClosingLanguageModel) GenerateStructuredResponse(responseContext context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	if request.StructuredOutputSchema.Name == expectedChangesSchemaName && languageModel.expectedChanges != "" {
+		return model.StructuredResponse{Content: languageModel.expectedChanges}, nil
+	}
 	languageModel.structuredCalls++
 	if languageModel.blockStructured {
 		<-responseContext.Done()
@@ -556,7 +561,7 @@ func (languageModel *elapsedClosingLanguageModel) GenerateStructuredResponse(res
 }
 
 func (languageModel *elapsedClosingLanguageModel) GenerateChatCompletion(responseContext context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
-	if request.SchemaName == elapsedReplySchemaName {
+	if request.SchemaName == elapsedReplySchemaName || request.SchemaName == completionReplySchemaName {
 		return languageModel.generateElapsedClosing(responseContext, request)
 	}
 	if request.SchemaName != agentActionSchemaName {
@@ -721,7 +726,7 @@ func TestRequestForStepNarrowsActionPaletteAtNinetyTwoPercentElapsed(t *testing.
 		t.Fatalf("expected the delivery-required tool retained at the narrow_palette stage, got %v", narrowedToolNames)
 	}
 
-	actionSchema := ActionSchemaForToolSet(afterNarrowing.ToolSet, false, nil, false)
+	actionSchema := ActionSchemaForToolSet(afterNarrowing.ToolSet, false, false)
 	if !strings.Contains(actionSchema, `"enum":["reply"]`) {
 		t.Fatalf("expected the reply action to remain available at the narrow_palette stage, got %s", actionSchema)
 	}
@@ -933,4 +938,18 @@ func TestAnElapsedWallGrantsTheSameOneLevelTheIterationWallDoes(t *testing.T) {
 	if isElapsedAfterGrant {
 		t.Fatal("the granted level's clock has to cover more than the level it replaced, or the grant bought nothing")
 	}
+}
+
+func countedTaskDeleteToolSet() (*toolcontract.ToolSet, *int) {
+	definition := taskDeleteToolDefinition()
+	toolSet := toolcontract.NewToolSet([]string{definition.Name})
+	toolSet.AllowTestReplacement()
+	toolCallCount := 0
+	registerTestTool(toolSet, definition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		toolCallCount++
+		result := toolcontract.ToolSuccessData("deleted", json.RawMessage(`{"taskID":"task-1"}`))
+		result.Effects = deletedTaskObservation().Effects
+		return result, nil
+	})
+	return toolSet, &toolCallCount
 }

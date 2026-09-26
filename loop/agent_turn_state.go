@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -40,8 +40,6 @@ type agentTaskState struct {
 	ToolCallCount                      int
 	GrantedTaskLevel                   TaskLevel
 	TurnStartedAt                      time.Time
-	PendingWait                        *agentPendingWait
-	Requirements                       []toolUseRequirement
 	LastModelMessage                   string
 	CompletionIntentToolName           string
 	ShouldRestrictNextActionToTerminal bool
@@ -77,64 +75,6 @@ func (state agentTaskState) budgetTaskLevel() TaskLevel {
 	return state.Request.TaskLevel
 }
 
-type agentPendingWait struct {
-	Kind    agentPendingWaitKind
-	Message string
-	Reason  string
-}
-
-type agentPendingWaitKind string
-
-const (
-	agentPendingWaitUserInput agentPendingWaitKind = "user_input"
-	agentPendingWaitApproval  agentPendingWaitKind = "approval"
-)
-
-type agentUserReply struct {
-	Text string
-}
-
-type agentEffectKind string
-
-const (
-	agentEffectNone            agentEffectKind = "none"
-	agentEffectCallModel       agentEffectKind = "call_model"
-	agentEffectContinue        agentEffectKind = "continue"
-	agentEffectWaitForUser     agentEffectKind = "wait_for_user"
-	agentEffectWaitForApproval agentEffectKind = "wait_for_approval"
-	agentEffectFinish          agentEffectKind = "finish"
-	agentEffectFail            agentEffectKind = "fail"
-)
-
-type agentEffect struct {
-	Kind      agentEffectKind
-	ModelCall *model.StructuredResponseRequest
-	ToolCall  *toolcontract.ToolInvocation
-	UserWait  *agentPendingWait
-	Finish    *agentFinish
-	Failure   *agentFailure
-}
-
-type agentFinish struct {
-	Reply       string
-	Attachments []toolcontract.FileAttachment
-}
-
-type agentFailure struct {
-	Reason string
-}
-
-type agentEvent struct {
-	Name string
-	Body string
-}
-
-type agentTransition struct {
-	State  agentTaskState
-	Effect agentEffect
-	Events []agentEvent
-}
-
 func buildInitialAgentTaskState(request AgentTurnRequest, options TurnOptions, taskRunID string) agentTaskState {
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now().Add(-2 * time.Second)
@@ -147,7 +87,6 @@ func buildInitialAgentTaskState(request AgentTurnRequest, options TurnOptions, t
 		Options:           normalizedOptions,
 		SystemInstruction: systemInstructionFor(normalizedOptions, request).Text(),
 		TurnStartedAt:     request.TurnStartedAt,
-		Requirements:      deriveToolUseRequirements(request),
 		Observations:      []turnObservation{},
 		Attachments:       []toolcontract.FileAttachment{},
 		ToolCallCount:     0,
@@ -340,48 +279,6 @@ func regroundingObservation(index int, sourcePaths []string) turnObservation {
 	return observation
 }
 
-func advanceAgentTask(state agentTaskState) agentTransition {
-	completionState := buildCompletionState(state.Request, state.Requirements, state.Observations)
-	switch completionState.RecommendedAction {
-	case completionActionAttachExistingArtifacts:
-		return agentTransition{
-			State: state,
-			Effect: agentEffect{
-				Kind: agentEffectContinue,
-				ToolCall: &toolcontract.ToolInvocation{
-					ToolName: toolcontract.FileDeliverToolName,
-					Input:    completionArtifactDeliveryInput(state, completionState),
-				},
-			},
-		}
-	case completionActionFinalizeWithEvidence:
-		actionDocument := completionStateFinishDocument(completionState, "")
-		return agentTransition{
-			State: state,
-			Effect: agentEffect{
-				Kind: agentEffectFinish,
-				Finish: &agentFinish{
-					Reply:       finishActionMessage(actionDocument),
-					Attachments: attachmentsFromAttachedEvidence(completionState.AttachedEvidence),
-				},
-			},
-		}
-	case completionActionBlockedInvalidArtifact:
-		observation := newFailureObservation(nextObservationIDForObservations(state.Observations), "policy", "", invalidCompletionArtifactObservationContent(completionState), toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "completion_state")
-		observation.PolicyCode = evidenceKindAttachmentValid
-		observation.RelatedPaths = appendUniqueStrings(completionValidityPaths(completionState))
-		state.Observations = append(state.Observations, observation)
-		return agentTransition{State: state, Effect: agentEffect{Kind: agentEffectNone}}
-	default:
-		request := BuildAgentActionRequest(state)
-		return agentTransition{State: state, Effect: agentEffect{Kind: agentEffectCallModel, ModelCall: &request}}
-	}
-}
-
-func completionArtifactDeliveryInput(state agentTaskState, completionState CompletionState) json.RawMessage {
-	return toolcontract.MarshalToolInput(map[string]any{"path": nextCompletionAttachmentPath(completionState)})
-}
-
 func operationInputSelectsDeliveryFile(requiredInput map[string]any) bool {
 	if path, isString := requiredInput["path"].(string); isString && strings.TrimSpace(path) != "" {
 		return true
@@ -402,38 +299,6 @@ func operationInputSelectsDeliveryFile(requiredInput map[string]any) bool {
 	return false
 }
 
-func nextCompletionAttachmentPath(state CompletionState) string {
-	paths := nextCompletionAttachmentPaths(state)
-	if len(paths) == 0 {
-		return ""
-	}
-	return paths[0]
-}
-
-func nextCompletionAttachmentPaths(state CompletionState) []string {
-	attachedPathByName := map[string]bool{}
-	paths := []string{}
-	for _, evidence := range state.AttachedEvidence {
-		if strings.TrimSpace(evidence.DevicePath) != "" {
-			attachedPathByName[strings.TrimSpace(evidence.DevicePath)] = true
-		}
-		if strings.TrimSpace(evidence.Filename) != "" {
-			attachedPathByName[strings.TrimSpace(evidence.Filename)] = true
-		}
-	}
-	for _, path := range state.AttachmentPaths {
-		trimmedPath := strings.TrimSpace(path)
-		if trimmedPath == "" {
-			continue
-		}
-		if attachedPathByName[trimmedPath] || attachedPathByName[filepath.Base(trimmedPath)] {
-			continue
-		}
-		paths = append(paths, trimmedPath)
-	}
-	return paths
-}
-
 func BuildAgentActionRequest(state agentTaskState) model.StructuredResponseRequest {
 	return buildAgentActionRequest(state, true, false)
 }
@@ -444,16 +309,11 @@ func buildAgentActionRequestCarryingToolResultsNatively(state agentTaskState) mo
 
 func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, toolResultsCarriedNatively bool) model.StructuredResponseRequest {
 	allowQualityCriteria := len(state.QualityCriteria) == 0
-	requirements := state.Requirements
-	if requirements == nil {
-		requirements = deriveToolUseRequirements(state.Request)
-	}
 	modelToolSet := modelCallableToolSet(state.Request.ToolSet, state.Request.RestrictActionToTerminalOnly)
-	blockedToolNames := blockedToolNamesForPreconditions(modelToolSet, requirements, state.Observations)
 	failureFacts := buildFailureReportFacts(state.Observations, state.Options.RecoveryBudget)
 	hasFailureDebt := len(failureFacts.Attempts) > 0
 	allowFail := shouldExposeFailAction(state)
-	allowFinish := shouldExposeFinishAction(state, requirements)
+	allowFinish := shouldExposeFinishAction(state)
 	toolDescription := ""
 	if includeToolDescription {
 		toolDescription = buildAgentToolDescription(modelToolSet)
@@ -476,7 +336,7 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, 
 		Messages: messages,
 		StructuredOutputSchema: model.StructuredOutputSchema{
 			Name:               "bluecollar_agent_turn_action",
-			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFail, allowFinish, delegationIsAllowed(state.Options)),
+			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, hasFailureDebt, allowFail, allowFinish, delegationIsAllowed(state.Options)),
 			IsStrictlyEnforced: true,
 		},
 		GenerationOptions: state.Options.GenerationOptions,
@@ -539,25 +399,6 @@ func turnIsAlreadyWrappingUp(state agentTaskState) bool {
 		limitUsageReached(state.ToolCallCount, state.Options.MaxToolCallCount, wrapUpThresholdPercent)
 }
 
-func shouldExposeFinishAction(state agentTaskState, requirements []toolUseRequirement) bool {
-	if completionGateHasRefusedEnough(state.Observations) {
-		return true
-	}
-	if finishWasRejectedWithoutAnyToolEvidence(state.Observations) {
-		return false
-	}
-	if finishKeepsBeingRefusedWithNothingDoneBetween(state.Observations) {
-		return false
-	}
-	if _, hasFailureDebt := activeFailureDebt(state.Observations); !hasFailureDebt {
-		return true
-	}
-	if !evaluateRecoveryAllowance(state.Observations, state.Options.RecoveryBudget).CanRecover {
-		return true
-	}
-	return len(requirements) == 0 || completionRequirementsHaveEvidence(state.Request.ToolSet, requirements, state.Observations)
-}
-
 // A refusal the agent answers with the same finish is the refusal saying nothing. Withdrawing
 // the action leaves the work and the exit, which is the choice the refusal was describing.
 func finishKeepsBeingRefusedWithNothingDoneBetween(observations []turnObservation) bool {
@@ -594,8 +435,8 @@ func finishWasRejectedWithoutAnyToolEvidence(observations []turnObservation) boo
 	return true
 }
 
-func actionSchemaForToolSet(toolSet *toolcontract.ToolSet, citableEvidenceIDs []string, allowQualityCriteria bool, blockedToolNames map[string]bool, hasFailureDebt bool, allowFailValues ...bool) string {
-	return actionSchemaCitingEvidence(toolSet, citableEvidenceIDs, allowQualityCriteria, blockedToolNames, hasFailureDebt, allowFailValues...)
+func actionSchemaForToolSet(toolSet *toolcontract.ToolSet, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, allowFailValues ...bool) string {
+	return actionSchemaCitingEvidence(toolSet, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, allowFailValues...)
 }
 
 func citableEvidenceIDs(observations []turnObservation) []string {
@@ -892,9 +733,6 @@ func retryAgentActionChatCompletionRequest(request model.ChatCompletionRequest, 
 			return retryRequest, true
 		}
 		toolName = firstPendingActionToolName(state)
-		if toolName == "" && agentActionCompletionIsReady(state) {
-			toolName = "reply"
-		}
 		if toolName == "" {
 			return retryRequest, true
 		}
@@ -923,33 +761,6 @@ func firstPendingActionToolName(state agentTaskState) string {
 		state.Request.ContractToolWorkingSet.RequiredNextTools,
 		state.Observations,
 	)
-}
-
-func agentActionCompletionIsReady(state agentTaskState) bool {
-	if agentActionCompletionIsBlocked(state) {
-		return false
-	}
-	requirements := state.Requirements
-	if requirements == nil {
-		requirements = deriveToolUseRequirements(state.Request)
-	}
-	completionState := buildCompletionState(state.Request, requirements, state.Observations)
-	if completionState.RecommendedAction != completionActionFinalizeWithEvidence {
-		return false
-	}
-	action := completionStateFinishDocument(completionState, "completion wording pending")
-	return validateCompletionFacts(state.Request, state.Observations, action).IsSatisfied
-}
-
-func agentActionCompletionIsBlocked(state agentTaskState) bool {
-	if state.PendingWait != nil {
-		return true
-	}
-	if hasPendingObservedSuggestedNextTool(state.Observations) {
-		return true
-	}
-	_, hasFailureDebt := activeFailureDebt(state.Observations)
-	return hasFailureDebt
 }
 
 func nativeActionParseCorrection(parseError error) model.StructuredOutputCorrection {
@@ -1195,12 +1006,23 @@ func nativeTerminalActionParameters(document map[string]json.RawMessage) (json.R
 	return json.Marshal(document)
 }
 
+func satisfiedFinishDocument(reply string) turnActionDocument {
+	goalSatisfied := true
+	return turnActionDocument{
+		Action:        "finish",
+		Final:         true,
+		Message:       reply,
+		GoalStatus:    "satisfied",
+		GoalSatisfied: &goalSatisfied,
+	}
+}
+
 func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools []model.ChatCompletionTool) (agentAction, error) {
 	if response.Message.Role != "assistant" {
 		return turnActionDocument{}, errors.New("native agent action chat message must be assistant")
 	}
 	if response.FinishReason == "stop" && len(response.Message.ToolCalls) == 0 && strings.TrimSpace(response.Message.Content) != "" {
-		action := completionStateFinishDocument(CompletionState{}, strings.TrimSpace(response.Message.Content))
+		action := satisfiedFinishDocument(strings.TrimSpace(response.Message.Content))
 		action.ModelReasoning = response.Message.Reasoning
 		action.ModelReasoningField = response.Message.ReasoningField
 		return action, nil
@@ -1339,19 +1161,6 @@ func applyToolResult(state agentTaskState, invocation toolcontract.ToolInvocatio
 	}
 	state.Observations = append(state.Observations, observation)
 	return state
-}
-
-func applyUserReply(state agentTaskState, reply agentUserReply) (agentTaskState, error) {
-	if state.PendingWait == nil {
-		return state, nil
-	}
-	state.PendingWait = nil
-	state.Status = agentcontract.TaskStatusRunning
-	state.Request.VisibleContext.Messages = append(state.Request.VisibleContext.Messages, VisibleContextMessage{
-		Speaker: state.Request.RequesterName,
-		Text:    strings.TrimSpace(reply.Text),
-	})
-	return state, nil
 }
 
 func qualityCriteriaForActionRequest(allowQualityCriteria bool) []qualityCriterion {
@@ -1534,16 +1343,12 @@ func (legacyObservation legacyTurnObservation) toTurnObservation() turnObservati
 	return observation
 }
 
-func attachmentsFromAttachedEvidence(evidence []CompletionAttachedEvidence) []toolcontract.FileAttachment {
-	attachments := []toolcontract.FileAttachment{}
-	for _, item := range evidence {
-		attachments = append(attachments, toolcontract.FileAttachment{
-			DevicePath:  item.DevicePath,
-			Filename:    item.Filename,
-			ContentType: item.ContentType,
-			SizeBytes:   item.SizeBytes,
-			Title:       item.Title,
-		})
+func shouldExposeFinishAction(state agentTaskState) bool {
+	if completionGateHasRefusedEnough(state.Observations) {
+		return true
 	}
-	return attachments
+	if finishWasRejectedWithoutAnyToolEvidence(state.Observations) {
+		return false
+	}
+	return !finishKeepsBeingRefusedWithNothingDoneBetween(state.Observations)
 }

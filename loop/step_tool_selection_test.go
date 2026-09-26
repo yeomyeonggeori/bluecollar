@@ -36,13 +36,13 @@ func TestConsecutiveIterationsOfOneStepSendTheSameInstructionAndToolCatalog(t *t
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-1")
 
 	firstIteration := services.runner.requestForStep(context.Background(), request, &state)
-	firstPrompt := buildAgentActionRequest(services.runner.actionStateForIteration(firstIteration, nil, state, false), true, false)
+	firstPrompt := buildAgentActionRequest(services.runner.actionStateForIteration(firstIteration, state, false), true, false)
 
 	state.Observations = append(state.Observations, newContentObservation("obs-001", "continue", "deal_update", "moved the deal"))
 	state.IterationCount = 1
 	state.ToolCallCount = 1
 	secondIteration := services.runner.requestForStep(context.Background(), request, &state)
-	secondPrompt := buildAgentActionRequest(services.runner.actionStateForIteration(secondIteration, nil, state, false), true, false)
+	secondPrompt := buildAgentActionRequest(services.runner.actionStateForIteration(secondIteration, state, false), true, false)
 
 	if firstPrompt.Messages[0].Content != secondPrompt.Messages[0].Content {
 		t.Fatalf("expected a byte-identical system instruction within one step.\nfirst:\n%s\nsecond:\n%s", firstPrompt.Messages[0].Content, secondPrompt.Messages[0].Content)

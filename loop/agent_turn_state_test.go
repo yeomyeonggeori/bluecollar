@@ -4,14 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"os"
-	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
@@ -324,98 +322,6 @@ func TestDecideAgentActionNativeChatRetryRequiresSinglePendingContractTool(t *te
 			}
 		})
 	}
-}
-
-func TestAgentActionFinishCorrectionUsesCompleteTypedState(t *testing.T) {
-	testCases := []struct {
-		name          string
-		updateState   func(*agentTaskState)
-		expectsFinish bool
-	}{
-		{name: "complete contract and effect", expectsFinish: true},
-		{
-			name:        "missing evidence",
-			updateState: func(state *agentTaskState) { state.Observations = nil },
-		},
-		{
-			name:          "message expected result ready for verification",
-			expectsFinish: true,
-			updateState: func(state *agentTaskState) {
-				state.Request.OutcomeContract.ExpectedResults = []ExpectedResult{{
-					Type:        ExpectedResultTypeMessage,
-					Description: "final reply",
-					Required:    true,
-				}}
-			},
-		},
-		{
-			name: "recovery pending",
-			updateState: func(state *agentTaskState) {
-				state.Observations[0].RecoveryPacket = &RecoveryPacket{AllowedTools: []string{"task_list"}}
-			},
-		},
-		{
-			name:        "user input pending",
-			updateState: func(state *agentTaskState) { state.PendingWait = &agentPendingWait{Kind: agentPendingWaitUserInput} },
-		},
-		{
-			name: "failed evidence",
-			updateState: func(state *agentTaskState) {
-				state.Observations[0].Failure = &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()}
-			},
-		},
-		{
-			name: "failure debt",
-			updateState: func(state *agentTaskState) {
-				state.Observations = append(state.Observations, turnObservation{
-					ObservationID: "observation-2",
-					Action:        "continue",
-					Tool:          "task_add",
-					ToolInputKey:  "task_add\x00{}",
-					Failure:       &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()},
-				})
-			},
-		},
-	}
-
-	for _, testCase := range testCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			state := nativeAgentActionCompletionReadyState()
-			if testCase.updateState != nil {
-				testCase.updateState(&state)
-			}
-
-			retryRequest := finishReasonRetryRequest(t, state)
-			isFinishRequired := len(retryRequest.Tools) == 1 && retryRequest.Tools[0].Function.Name == "reply"
-			if isFinishRequired != testCase.expectsFinish {
-				t.Fatalf("expected finish required=%t, got %+v", testCase.expectsFinish, retryRequest.Tools)
-			}
-			if isFinishRequired {
-				assertRequiredAgentActionTool(t, retryRequest, "reply")
-			}
-		})
-	}
-}
-
-func TestAgentActionFinishCorrectionPrecedenceAndFailClosed(t *testing.T) {
-	t.Run("required next tool precedes finish", func(t *testing.T) {
-		state := nativeAgentActionContractState()
-
-		assertRequiredAgentActionTool(t, finishReasonRetryRequest(t, state), "write")
-	})
-
-	t.Run("finish absent from request", func(t *testing.T) {
-		state := nativeAgentActionCompletionReadyState()
-		request := nativeAgentActionChatCompletionRequest(t, state)
-		request.Tools = slices.DeleteFunc(request.Tools, func(tool model.ChatCompletionTool) bool {
-			return tool.Function.Name == "reply"
-		})
-
-		_, canRetry := retryAgentActionChatCompletionRequest(request, finishReasonCorrection(), state)
-		if canRetry {
-			t.Fatal("expected completion-ready correction without finish to fail closed")
-		}
-	})
 }
 
 func TestDecideAgentActionNativeChatRetryPreservesModelChoiceOutsidePendingContract(t *testing.T) {
@@ -809,89 +715,6 @@ func nativeAgentActionContractState() agentTaskState {
 	return state
 }
 
-func nativeAgentActionCompletionReadyState() agentTaskState {
-	toolDefinition := testToolDescriptor("task_add")
-	toolDefinition.SideEffectClass = toolcontract.ToolSideEffectStateChange
-	toolDefinition.Completion = toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation}
-	toolDefinition.ResultContract = &toolcontract.ToolResultContract{
-		Schema: json.RawMessage(`{"type":"object","properties":{"taskID":{"type":"string"},"created":{"type":"boolean"}},"required":["taskID","created"],"additionalProperties":false}`),
-		Effects: []toolcontract.ResourceEffectContract{{
-			ObjectType:     "task",
-			Effect:         "created",
-			ResultField:    "taskID",
-			EffectIdentity: "id",
-		}},
-		EvidenceCondition: &toolcontract.EvidenceCondition{
-			ResultField: "created",
-			Equals:      json.RawMessage(`true`),
-		},
-	}
-	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{toolDefinition})
-	return agentTaskState{
-		Request: AgentTurnRequest{
-			Prompt:                "add task",
-			ToolSet:               toolSet,
-			RequiredEvidenceTools: []string{"task_add"},
-			OutcomeContract: OutcomeContract{
-				RequiredEvidenceTools: []string{"task_add"},
-				RequiredEffects: []OutcomeEffect{{
-					ObjectType: "task",
-					Effect:     "created",
-				}},
-			},
-		},
-		Observations: []turnObservation{{
-			ObservationID: "observation-1",
-			Action:        "continue",
-			Tool:          "task_add",
-			ToolID:        toolDefinition.ID,
-			ToolInput:     json.RawMessage(`{"title":"first"}`),
-			Output:        toolcontract.ToolOutput{Content: "added", Data: json.RawMessage(`{"taskID":"task-1","created":true}`)},
-			Effects:       []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "task-1"}},
-		}},
-	}
-}
-
-func finishReasonRetryRequest(t *testing.T, state agentTaskState) model.ChatCompletionRequest {
-	t.Helper()
-	request := nativeAgentActionChatCompletionRequest(t, state)
-	retryRequest, canRetry := retryAgentActionChatCompletionRequest(request, finishReasonCorrection(), state)
-	if !canRetry {
-		t.Fatal("expected finish-reason correction")
-	}
-	return retryRequest
-}
-
-func nativeAgentActionChatCompletionRequest(t *testing.T, state agentTaskState) model.ChatCompletionRequest {
-	t.Helper()
-	requestSource := buildAgentActionRequest(state, false, false)
-	request, isRepresentable := buildAgentActionChatCompletionRequest(requestSource, nil)
-	if !isRepresentable {
-		t.Fatal("expected native action request")
-	}
-	return request
-}
-
-func assertRequiredAgentActionTool(t *testing.T, request model.ChatCompletionRequest, toolName string) {
-	t.Helper()
-	if len(request.Tools) != 1 || request.Tools[0].Function.Name != toolName {
-		t.Fatalf("expected only %q, got %+v", toolName, request.Tools)
-	}
-	if string(request.ToolChoice) != `"required"` || request.ParallelToolCalls {
-		t.Fatalf("expected portable single-tool requirement, got choice=%s parallel=%t", request.ToolChoice, request.ParallelToolCalls)
-	}
-}
-
-func finishReasonCorrection() model.StructuredOutputCorrection {
-	return model.StructuredOutputCorrection{
-		Code: "structured_output_invalid",
-		Diagnostic: model.StructuredOutputDiagnostic{
-			Category:     model.StructuredOutputDiagnosticFinishReason,
-			FinishReason: model.StructuredOutputDiagnosticFinishStop,
-		},
-	}
-}
-
 func successfulContractObservation(observationID string, toolName string, toolID string, toolInput string) turnObservation {
 	return turnObservation{
 		ObservationID: observationID,
@@ -1180,7 +1003,7 @@ func TestDirectActionSchemaPreservesToolRequiredFields(t *testing.T) {
 	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{
 		Name:        "calendar_add",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"title":{"type":"string"}},"required":["title"]}`),
-	}}, nil, false, nil, false, false)
+	}}, nil, false, false, false)
 
 	continueVariant := actionSchemaVariant(t, schemaDocument, "continue")
 	properties := mapFromAny(continueVariant["properties"])
@@ -1197,7 +1020,7 @@ func TestActionSchemaOmitsToolsWithoutAnObjectInputSchema(t *testing.T) {
 		{Name: "invalid_schema", InputSchema: json.RawMessage(`{"type":`)},
 		{Name: "scalar_schema", InputSchema: json.RawMessage(`{"type":"string"}`)},
 		{Name: "valid_schema", InputSchema: json.RawMessage(`{"type":"object","properties":{}}`)},
-	}, nil, false, nil, false, false)
+	}, nil, false, false, false)
 
 	if strings.Contains(schemaDocument, "missing_schema") {
 		t.Fatalf("expected missing schema tool to be omitted, got %s", schemaDocument)
@@ -1217,7 +1040,7 @@ func TestActionSchemaPreservesRequiredFieldsOnArrayOfNestedObjects(t *testing.T)
 	schemaDocument := buildActionSchemaFromToolDefinitions([]toolcontract.ToolDefinition{{
 		Name:        "calendar_add",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"items":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}}},"required":["items"]}`),
-	}}, nil, false, nil, false, false)
+	}}, nil, false, false, false)
 
 	continueVariant := actionSchemaVariant(t, schemaDocument, "continue")
 	properties := mapFromAny(continueVariant["properties"])
@@ -1428,97 +1251,6 @@ func TestApplyToolResultAppendsObservationDeterministically(t *testing.T) {
 	}
 	if len(nextState.Attachments) != 1 || nextState.Attachments[0].Filename != "file.html" {
 		t.Fatalf("expected attachment to be appended, got %+v", nextState.Attachments)
-	}
-}
-
-func TestAdvanceAgentTaskReturnsModelCallEffectByDefault(t *testing.T) {
-	state := buildInitialAgentTaskState(AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "hello",
-	}, TurnOptions{}, "task-1")
-
-	transition := advanceAgentTask(state)
-
-	if transition.Effect.Kind != agentEffectCallModel {
-		t.Fatalf("expected model call effect, got %+v", transition.Effect)
-	}
-	if transition.Effect.ModelCall == nil {
-		t.Fatal("expected model call request")
-	}
-}
-
-func TestAdvanceAgentTaskReturnsAttachExistingArtifactEffect(t *testing.T) {
-	workspaceRootPath := t.TempDir()
-	artifactPath := filepath.Join(workspaceRootPath, "report.html")
-	if errorValue := os.WriteFile(artifactPath, []byte("<html></html>"), 0o600); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.FileDeliverToolName})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess("delivered"), nil
-	})
-	state := agentTaskState{
-		Request: AgentTurnRequest{
-			Prompt:                     "HTML make the file",
-			ToolSet:                    toolSet,
-			WorkspaceRootPath:          workspaceRootPath,
-			RequiredEvidenceTools:      []string{toolcontract.FileDeliverToolName},
-			RequiredAttachmentSuffixes: []string{".html"},
-			TurnStartedAt:              time.Now().Add(-time.Second),
-		},
-		Requirements: []toolUseRequirement{{
-			ToolName:           toolcontract.FileDeliverToolName,
-			RequiresAttachment: true,
-			AttachmentSuffixes: []string{".html"},
-		}},
-	}
-
-	transition := advanceAgentTask(state)
-
-	if transition.Effect.Kind != agentEffectContinue {
-		t.Fatalf("expected file delivery effect, got %+v", transition.Effect)
-	}
-	if transition.Effect.ToolCall == nil || transition.Effect.ToolCall.ToolName != toolcontract.FileDeliverToolName {
-		t.Fatalf("expected file_deliver tool call, got %+v", transition.Effect.ToolCall)
-	}
-	if !strings.Contains(string(transition.Effect.ToolCall.Input), artifactPath) {
-		t.Fatalf("expected artifact path in tool input, got %s", string(transition.Effect.ToolCall.Input))
-	}
-}
-
-func TestAdvanceAgentTaskReturnsFinishMessageEffectForSatisfiedBrowserOpen(t *testing.T) {
-	state := agentTaskState{
-		Request: AgentTurnRequest{
-			Prompt:    "open browser",
-			TaskShape: TaskShapeBrowserHandoffTask,
-			TaskLevel: TaskLevelXLow,
-			ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
-				Name:            "browser_open",
-				Namespace:       "browser",
-				SideEffectClass: toolcontract.ToolSideEffectConnect,
-				Completion:      toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
-			}}),
-			RequiredEvidenceTools: []string{"browser_open"},
-		},
-		Requirements: []toolUseRequirement{{
-			ToolName: "browser_open",
-		}},
-		Observations: []turnObservation{{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          "browser_open",
-			Output:        toolcontract.ToolOutput{Content: "opened"},
-		}},
-	}
-
-	transition := advanceAgentTask(state)
-
-	if transition.Effect.Kind != agentEffectFinish {
-		t.Fatalf("expected final reply effect, got %+v", transition.Effect)
-	}
-	if transition.Effect.Finish == nil {
-		t.Fatalf("expected completion finish effect, got %+v", transition.Effect.Finish)
 	}
 }
 
@@ -1836,7 +1568,7 @@ func TestAnAgentToldThreeTimesAlsoGetsFinishBack(t *testing.T) {
 		requiredToolRefusalObservation("obs-003"),
 	}
 
-	if !shouldExposeFinishAction(state, nil) {
+	if !shouldExposeFinishAction(state) {
 		t.Fatal("a gate that has refused three times has said what it has to say, and holding finish shut leaves failure as the only exit from finished work")
 	}
 }
@@ -1847,7 +1579,7 @@ func TestARequiredToolRefusalStillWithholdsFinishAtFirst(t *testing.T) {
 	state.Options.MaxToolCallCount = 100
 	state.Observations = []turnObservation{requiredToolRefusalObservation("obs-001")}
 
-	if shouldExposeFinishAction(state, nil) {
+	if shouldExposeFinishAction(state) {
 		t.Fatal("the first refusal is the gate naming the tool that has not run, and finish there answers it before the agent has")
 	}
 }
@@ -1916,7 +1648,7 @@ func TestATranscriptEntryWithNoReasoningCarriesNone(t *testing.T) {
 
 func TestEveryNativeActionCarriesAReasoningSlot(t *testing.T) {
 	toolSet := toolcontract.NewToolSet([]string{toolcontract.BashToolName})
-	schemaDocument := ActionSchemaForToolSet(toolSet, false, nil, false)
+	schemaDocument := ActionSchemaForToolSet(toolSet, false, false)
 	tools, errorValue := nativeAgentActionTools(schemaDocument)
 	if errorValue != nil || len(tools) == 0 {
 		t.Fatalf("tools: %v (%d)", errorValue, len(tools))

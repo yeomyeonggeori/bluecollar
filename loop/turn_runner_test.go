@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
@@ -233,19 +233,14 @@ func (languageModel *contextCancelingTurnLanguageModel) GenerateChatCompletion(_
 			Message:      model.ChatCompletionMessage{Role: "assistant", Content: "오래된 작업을 삭제했습니다."},
 		}, nil
 	}
+	languageModel.requestIndex++
+	toolCall := nativeAgentActionToolCall("task_delete", `{"taskID":"task-1"}`)
+	if languageModel.requestIndex > 1 {
+		toolCall = nativeAgentActionToolCall("reply", `{"final":true,"message":"오래된 작업을 삭제했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`)
+	}
 	return model.ChatCompletionResponse{
 		FinishReason: "tool_calls",
-		Message: model.ChatCompletionMessage{
-			Role: "assistant",
-			ToolCalls: []model.ChatCompletionToolCall{{
-				ID:   "call-1",
-				Type: "function",
-				Function: model.ChatCompletionToolCallFunction{
-					Name:      "task_delete",
-					Arguments: `{"taskID":"task-1"}`,
-				},
-			}},
-		},
+		Message:      model.ChatCompletionMessage{Role: "assistant", ToolCalls: []model.ChatCompletionToolCall{toolCall}},
 	}, nil
 }
 
@@ -1000,7 +995,7 @@ func TestBrowserActionSchemaUsesProviderCompatibleObjectInputs(t *testing.T) {
 			return toolcontract.ToolResult{}, nil
 		})
 	}
-	schemaDocument := runner.buildActionSchema(toolRegistry, true, nil, false)
+	schemaDocument := runner.buildActionSchema(toolRegistry, true, false)
 
 	if strings.Contains(schemaDocument, "anyOf") {
 		t.Fatalf("expected browser action schema to avoid anyOf, got %s", schemaDocument)
@@ -1313,128 +1308,9 @@ func TestAgentTurnRunnerSteersStalledTurnBeforeStopping(t *testing.T) {
 	}
 }
 
-func TestAgentTurnRunnerFinalizesSatisfiedGoalAtIterationEffort(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		directToolAction("continue", "", "browser_screenshot", `{}`),
-		directToolAction("continue", "", "browser_screenshot", `{}`),
-		finishMessageCiting("캡처했습니다.", "obs-002"),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 2})
-	toolRegistry := newTestCapabilityToolSet([]string{"browser_screenshot"})
-	screenshotIndex := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_screenshot"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		screenshotIndex++
-		filename := fmt.Sprintf("browser-screenshot-%d.png", screenshotIndex)
-		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-companion-files/` + filename + `"}`},
-			Attachments: []toolcontract.FileAttachment{{
-				DevicePath:  "/tmp/internkim-companion-files/" + filename,
-				Filename:    filename,
-				ContentType: "image/png",
-				SizeBytes:   10,
-			}},
-		}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "스크린샷 줘",
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"browser_screenshot"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected attachment completion, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
-	}
-	if len(result.Attachments) != 1 || result.Attachments[0].Filename != "browser-screenshot-2.png" {
-		t.Fatalf("expected latest screenshot attachment, got %+v", result.Attachments)
-	}
-	if result.FinishMessage != "캡처했습니다." {
-		t.Fatalf("expected finalizer reply, got %q", result.FinishMessage)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.finalizer_action", "obs-002") {
-		t.Fatal("expected finalizer action with completion evidence")
-	}
-}
-
-func TestAgentTurnRunnerFinalizesRepeatedSuccessfulSideEffectWithoutPlannedEvidence(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		directToolAction("continue", "", "task_add", `{"prompt":"보고서 작성"}`),
-		directToolAction("continue", "", "task_add", `{"prompt":"보고서 작성"}`),
-		finishMessageCiting("업무를 등록했습니다.", "obs-001"),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
-	toolRegistry := newTestCapabilityToolSet([]string{"task_add"})
-	toolCallCount := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "task_add"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCallCount++
-		return testToolSuccess(`{"taskID":"task-1"}`), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "보고서 작성 업무를 등록해줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
-	})
-	if errorValue != nil {
-		t.Fatalf("expected completed turn, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
-	}
-	if toolCallCount != 1 {
-		t.Fatalf("expected the side effect to run once, got %d", toolCallCount)
-	}
-	if result.FinishMessage != "업무를 등록했습니다." {
-		t.Fatalf("expected finalizer reply, got %q", result.FinishMessage)
-	}
-}
-
-func TestAgentTurnRunnerFinalizesRepeatedSuccessfulReadWithoutExecutingAgain(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		finishMessageCiting("업무가 있습니다.", "obs-001"),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
-	toolRegistry := newTestToolSet([]string{"task_list"})
-	toolCallCount := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "task_list"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCallCount++
-		return testToolSuccess(`{"tasks":[{"taskID":"task-1"}]}`), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "업무를 조회해줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
-	})
-	if errorValue != nil {
-		t.Fatalf("expected completed turn, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
-	}
-	if toolCallCount != 1 {
-		t.Fatalf("expected one read before finalization, got %d", toolCallCount)
-	}
-	if result.FinishMessage != "업무가 있습니다." {
-		t.Fatalf("expected finalizer reply, got %q", result.FinishMessage)
-	}
-}
-
-func TestAgentTurnRunnerFinalizesReadAfterCorrectedInputRecovery(t *testing.T) {
+func TestAgentTurnRunnerFinishesReadAfterCorrectedInputRecovery(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"task_list","toolInput":{"query":"invalid"}}`,
-		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
 		finishMessageCiting("업무가 있습니다.", "obs-003"),
 	}}
@@ -1465,81 +1341,6 @@ func TestAgentTurnRunnerFinalizesReadAfterCorrectedInputRecovery(t *testing.T) {
 	}
 	if toolCallCount != 2 {
 		t.Fatalf("expected failed input and one corrected read, got %d calls", toolCallCount)
-	}
-}
-
-func TestAgentTurnRunnerFinalizesSuccessfulReadDespiteUnsatisfiedReadHint(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		finishMessageCiting("업무가 있습니다.", "obs-001"),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
-	toolRegistry := newTestToolSet([]string{"task_list", "memory_search"})
-	toolCallCount := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "task_list"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCallCount++
-		return testToolSuccess(`{"tasks":[{"taskID":"task-1"}]}`), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "업무를 조회해줘",
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"memory_search"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected completed turn, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed task, got %s", result.TaskRun.Status)
-	}
-	if toolCallCount != 1 {
-		t.Fatalf("expected one read before finalization, got %d", toolCallCount)
-	}
-}
-
-func TestAgentTurnRunnerDoesNotDeliverAttachmentsWhenFinalizerFails(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		directToolAction("continue", "", "browser_screenshot", `{}`),
-		`{"action":"fail","reason":"not complete"}`,
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 1})
-	toolRegistry := newTestCapabilityToolSet([]string{"browser_screenshot"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_screenshot"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-companion-files/browser-screenshot.png"}`},
-			Attachments: []toolcontract.FileAttachment{{
-				DevicePath:  "/tmp/internkim-companion-files/browser-screenshot.png",
-				Filename:    "browser-screenshot.png",
-				ContentType: "image/png",
-				SizeBytes:   10,
-			}},
-		}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "스크린샷 줘",
-		TaskShape:             TaskShapeBrowserHandoffTask,
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"browser_screenshot"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected effort result, got error: %v", errorValue)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusBlocked {
-		t.Fatalf("expected blocked task, got %s", result.TaskRun.Status)
-	}
-	if len(result.Attachments) != 0 {
-		t.Fatalf("expected no secret attachment delivery, got %+v", result.Attachments)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.finalizer_rejected", "finalizer did not return a final reply") {
-		t.Fatal("expected finalizer rejection event")
 	}
 }
 
@@ -1679,35 +1480,6 @@ func TestAgentTurnRunnerStopsWhenToolEffortIsExceeded(t *testing.T) {
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.limit_stop", "max_tool_calls") {
 		t.Fatal("expected limit stop event")
-	}
-}
-
-func TestACallersDeadlineOutranksTheLevelsToolCallCount(t *testing.T) {
-	languageModel := &sequenceLanguageModel{
-		contents: []string{
-			directToolAction("continue", "", "loop", `{}`),
-			directToolAction("continue", "", "loop", `{}`),
-			`{"action":"reply","final":true,"message":"둘 다 돌고 마쳤습니다.","goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":["obs-001"],"qualityReview":[]}`,
-		},
-	}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 1, DeadlineSecond: 900})
-	toolRegistry := newTestCapabilityToolSet([]string{"loop"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "loop"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess("again"), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
-	})
-	if errorValue != nil {
-		t.Fatalf("expected a completed turn, got error: %v", errorValue)
-	}
-	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.limit_stop", "max_tool_calls") {
-		t.Fatal("a caller that allowed 900 seconds did not ask for the turn to end on a count a classifier picked")
 	}
 }
 
@@ -2217,49 +1989,5 @@ func TestApprovalObservationUserFacingMessageReadsConfirmQuestion(t *testing.T) 
 				t.Fatalf("approvalObservationUserFacingMessage = %q, want %q", got, testCase.want)
 			}
 		})
-	}
-}
-
-func TestTerminalStructuredRequestsLeaveTheOutputBudgetUnset(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		noToolFallbackFinishMessageDocument("done"),
-		noToolFallbackFinishMessageDocument("done"),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{RecoveryBudget: defaultRecoveryBudget()})
-	request := AgentTurnRequest{ToolSet: newTestToolSet(nil)}
-	services.runner.finalizerAction(context.Background(), request, nil, ExecutionState{})
-	services.runner.terminalNoToolsAction(context.Background(), request, nil, ExecutionState{}, "")
-	capturedRequests := languageModel.requests
-	if len(capturedRequests) != 2 {
-		t.Fatalf("expected finalizer and terminal requests, got %+v", structuredRequestNames(capturedRequests))
-	}
-	for _, structuredRequest := range capturedRequests {
-		if structuredRequest.GenerationOptions.MaxTokens != nil {
-			t.Fatalf("%s request must leave the output budget unset, got %+v", structuredRequest.StructuredOutputSchema.Name, structuredRequest.GenerationOptions)
-		}
-	}
-}
-
-func TestTheRuntimeSuppliesTheObservationIDItAlreadyKnows(t *testing.T) {
-	observations := []turnObservation{
-		{ObservationID: "obs-001", Tool: toolcontract.BashToolName},
-		{ObservationID: "obs-002", Tool: toolcontract.BashToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
-		{ObservationID: "obs-003", Tool: toolcontract.BashToolName},
-	}
-
-	cited, canCite := latestSuccessfulObservationForTool(observations, toolcontract.BashToolName)
-
-	if !canCite || cited.ObservationID != "obs-003" {
-		t.Fatalf("the runtime rejected eighteen finish attempts over an observation ID it could read off its own ledger, got %q", cited.ObservationID)
-	}
-}
-
-func TestNoObservationIsInventedWhenTheToolNeverSucceeded(t *testing.T) {
-	observations := []turnObservation{
-		{ObservationID: "obs-001", Tool: toolcontract.BashToolName, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound}},
-	}
-
-	if _, canCite := latestSuccessfulObservationForTool(observations, toolcontract.BashToolName); canCite {
-		t.Fatal("supplying evidence for work that never succeeded would let the runtime sign off on a claim the ledger contradicts")
 	}
 }

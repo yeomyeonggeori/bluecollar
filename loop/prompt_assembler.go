@@ -240,7 +240,7 @@ func withoutSummaries(observations []ProgressObservation) []ProgressObservation 
 }
 
 func buildProgressContext(request AgentTurnRequest, observations []turnObservation, toolResultsCarriedNatively bool) string {
-	progress := buildTurnProgress(request, observations)
+	progress := buildTurnProgress(observations)
 	if len(observations) == 0 {
 		progress.RemainingWork = "No tool work has been attempted yet."
 	}
