@@ -18,7 +18,7 @@ func TestTaskContextCompactionTriggersOnlyOverBudget(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
-	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, nil, agentTaskState{Observations: observations}, true)
+	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
 	if errorValue != nil {
 		t.Fatalf("expected over-budget action to succeed: %v", errorValue)
@@ -33,7 +33,7 @@ func TestTaskContextCompactionTriggersOnlyOverBudget(t *testing.T) {
 	underBudgetModel := &sequenceLanguageModel{contents: []string{finishMessageDocument("done")}}
 	underBudgetServices := newTurnRunnerTestServices(underBudgetModel, TurnOptions{ContextWindowTokens: 1000000})
 
-	_, errorValue = underBudgetServices.runner.nextAction(context.Background(), "task-2", AgentTurnRequest{Prompt: "ship"}, nil, agentTaskState{Observations: observations}, true)
+	_, errorValue = underBudgetServices.runner.nextAction(context.Background(), "task-2", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
 	if errorValue != nil {
 		t.Fatalf("expected under-budget action to succeed: %v", errorValue)
@@ -52,7 +52,7 @@ func TestTaskContextCompactionReplacesOldPromptObservationsOnly(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
-	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, nil, agentTaskState{Observations: observations}, true)
+	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
 	if errorValue != nil {
 		t.Fatalf("expected action to succeed: %v", errorValue)
@@ -86,7 +86,7 @@ func TestTaskContextCompactionPinsActiveFailureDebt(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
-	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "recover"}, nil, agentTaskState{Observations: observations}, true)
+	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "recover"}, agentTaskState{Observations: observations}, true)
 
 	if errorValue != nil {
 		t.Fatalf("expected action to succeed: %v", errorValue)
@@ -105,7 +105,7 @@ func TestTaskContextSummaryTruncationIsNonFatal(t *testing.T) {
 	languageModel := &truncatingSummaryLanguageModel{}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
-	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, nil, agentTaskState{Observations: observations}, true)
+	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
 	if errorValue != nil {
 		t.Fatalf("expected summary truncation to be non-fatal: %v", errorValue)
@@ -167,7 +167,7 @@ func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) 
 	languageModel := &sequenceLanguageModel{contents: []string{longSummary, finishMessageDocument("done"), finishMessageDocument("done")}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
-	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, nil, agentTaskState{Observations: observations}, true); errorValue != nil {
+	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true); errorValue != nil {
 		t.Fatalf("expected action to succeed: %v", errorValue)
 	}
 
@@ -179,7 +179,7 @@ func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) 
 		t.Fatalf("a discarded pass has to say so, or the next reader sees a task that never tried: %d events", len(taskEvents))
 	}
 
-	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, nil, agentTaskState{Observations: observations}, true); errorValue != nil {
+	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true); errorValue != nil {
 		t.Fatalf("expected the second action to succeed: %v", errorValue)
 	}
 	summaryRequestCount := 0
@@ -201,7 +201,7 @@ func TestCompactedStepsAreSavedWhereTheAgentCanReadThemBack(t *testing.T) {
 	store := &recordingSpillStore{locator: "/workspace/private/people/p1/tmp/tasks/task-1/spill/compacted-steps.jsonl", bytes: 24000, hint: "Use grep or sed on that path."}
 	services.runner.UseToolResultSpillStore(store)
 
-	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship", WorkspaceRootPath: "/workspace"}, nil, agentTaskState{Observations: observations}, true); errorValue != nil {
+	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship", WorkspaceRootPath: "/workspace"}, agentTaskState{Observations: observations}, true); errorValue != nil {
 		t.Fatalf("expected action to succeed: %v", errorValue)
 	}
 

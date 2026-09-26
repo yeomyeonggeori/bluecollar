@@ -30,8 +30,6 @@ type TurnProgress struct {
 	AttachmentCandidates          []ProgressAttachment  `json:"attachmentCandidates,omitempty"`
 	FailureDebt                   *ProgressFailureDebt  `json:"failureDebt,omitempty"`
 	AttemptLedger                 []attemptLedgerEntry  `json:"attemptLedger,omitempty"`
-	CompletionState               *CompletionState      `json:"completionState,omitempty"`
-	ValidityState                 *ValidityState        `json:"validityState,omitempty"`
 	RemainingWork                 string                `json:"remainingWork"`
 	OmittedObservationCount       int                   `json:"omittedObservationCount,omitempty"`
 }
@@ -97,7 +95,7 @@ type ToolResultContextItem struct {
 	Attachments    []ProgressAttachment `json:"attachments,omitempty"`
 }
 
-func buildTurnProgress(request AgentTurnRequest, observations []turnObservation) TurnProgress {
+func buildTurnProgress(observations []turnObservation) TurnProgress {
 	progress := TurnProgress{
 		Goal:          "Answer the current user request.",
 		RemainingWork: "Continue from the latest observation and complete the user's request.",
@@ -124,13 +122,6 @@ func buildTurnProgress(request AgentTurnRequest, observations []turnObservation)
 	if len(observations) > 0 && progress.LastSuccessfulObservationID == "" {
 		progress.RemainingWork = "Resolve the latest failed or blocked step, or return a truthful failure if the goal cannot be completed."
 	}
-	requirements := deriveToolUseRequirements(request)
-	if len(requirements) > 0 {
-		completionState := buildCompletionState(request, requirements, observations)
-		progress.CompletionState = &completionState
-		progress.ValidityState = &completionState.ValidityState
-		progress.RemainingWork = completionRemainingWork(completionState, progress.RemainingWork)
-	}
 	return progress
 }
 
@@ -146,21 +137,6 @@ func checkpointMessages(observations []turnObservation) []string {
 		}
 	}
 	return messages
-}
-
-func completionRemainingWork(completionState CompletionState, fallback string) string {
-	switch completionState.RecommendedAction {
-	case completionActionAttachExistingArtifacts:
-		return "Required artifacts already exist in the workspace. Attach the existing artifacts instead of rebuilding them."
-	case completionActionFinalizeWithEvidence:
-		return "Required evidence is attached. Return the final answer without starting more tool work."
-	case completionActionBlockedMissingTool:
-		return "Required artifact evidence exists, but the attachment tool is unavailable for this profile."
-	case completionActionBlockedInvalidArtifact:
-		return "Artifact candidates exist but failed validity checks. Regenerate or repair the artifacts before attaching them."
-	default:
-		return fallback
-	}
 }
 
 func compactProgressObservations(observations []turnObservation) []ProgressObservation {

@@ -2,9 +2,10 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func TestObservedURLInReplyIgnoresUncontractedOutput(t *testing.T) {
@@ -95,8 +96,4 @@ func canonicalLinkToolResult(publicURL string) toolcontract.ToolResult {
 		Output:  toolcontract.ToolOutput{Content: string(outputData), Data: outputData},
 		Effects: []toolcontract.ResourceEffect{{ObjectType: "website", Effect: "published", URL: publicURL}},
 	}
-}
-
-func satisfiedFinishDocument(message string) turnActionDocument {
-	return turnActionDocument{Action: "finish", Message: message, GoalSatisfied: boolPointer(true)}
 }

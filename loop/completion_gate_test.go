@@ -3,89 +3,14 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
-
-func TestCompletionStateWaitsForModelWordingBeforeCompleting(t *testing.T) {
-	services := newTurnRunnerTestServices(&sequenceLanguageModel{}, TurnOptions{})
-	transition := services.runner.finalizeCompletionState(context.Background(), "", "", AgentTurnRequest{}, nil, nil, nil, nil, CompletionState{}, "")
-	if transition.IsCompleted || transition.DidTransition {
-		t.Fatalf("expected empty model wording to defer completion, got %+v", transition)
-	}
-}
-
-func completionGateDeletedTaskState() CompletionState {
-	return CompletionState{EvidenceReferences: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "task_delete"}}}
-}
-
-func servicesExpectingOldTaskDeleted(decisionModel model.DecisionModel) turnRunnerTestServices {
-	services := newTurnRunnerTestServices(&stubStructuredLanguageModel{contents: []string{expectedChangesDocument(deleteOldTask)}}, TurnOptions{})
-	services.runner.UseDecisionModel(decisionModel)
-	return services
-}
-
-func finalizeDeletedTask(ctx context.Context, services turnRunnerTestServices) (completionTransition, string) {
-	request := deleteRequest(taskDeleteToolSet())
-	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
-	transition := services.runner.finalizeCompletionState(ctx, taskRun.TaskRunID, "step-1", request, nil, []turnObservation{deletedTaskObservation()}, nil, nil, completionGateDeletedTaskState(), "오래된 작업을 삭제했습니다.")
-	return transition, taskRun.TaskRunID
-}
-
-func TestFinalizeCompletionStateCompletesDespiteChangeCheckContextDeadlineExceeded(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	services := servicesExpectingOldTaskDeleted(&scriptedDecisionModel{cancel: cancel, errorValue: context.DeadlineExceeded})
-
-	transition, taskRunID := finalizeDeletedTask(ctx, services)
-
-	if !transition.IsCompleted || transition.Result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected the turn to complete despite the check's context expiring, got %+v", transition)
-	}
-	if transition.Result.FinishMessage != "오래된 작업을 삭제했습니다." {
-		t.Fatalf("expected the generated reply to be preserved, got %q", transition.Result.FinishMessage)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRunID), "completion.check_degraded", "") {
-		t.Fatal("expected a completion.check_degraded event to be recorded")
-	}
-}
-
-func TestFinalizeCompletionStateDeliversTheReplyAsItIsWhenChangesAreUnmetAndBudgetExpired(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	services := servicesExpectingOldTaskDeleted(&scriptedDecisionModel{cancel: cancel, noul: map[string]float64{"expected0": 0.1}})
-
-	transition, taskRunID := finalizeDeletedTask(ctx, services)
-
-	if !transition.IsCompleted || transition.Result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected best-effort completion once the budget is gone, got %+v", transition)
-	}
-	if transition.Result.FinishMessage != "오래된 작업을 삭제했습니다." {
-		t.Fatalf("expected the model's reply without a runtime-written caveat, got %q", transition.Result.FinishMessage)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRunID), "completion.change_check", `"unmet":[{"change":"task deleted"`) {
-		t.Fatal("expected a completion.change_check event naming the unmet change")
-	}
-}
-
-func TestFinalizeCompletionStateKeepsWorkingWhenChangesAreUnmetAndBudgetRemains(t *testing.T) {
-	services := servicesExpectingOldTaskDeleted(&scriptedDecisionModel{noul: map[string]float64{"expected0": 0.1}})
-
-	transition, taskRunID := finalizeDeletedTask(context.Background(), services)
-
-	if transition.IsCompleted {
-		t.Fatalf("expected the turn to keep working while an asked change is unmet, got %+v", transition)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRunID), "agent.completion_state_rejected", "Requested changes not done yet") {
-		t.Fatal("expected the rejection to name the unmet change")
-	}
-}
 
 func TestCompletionReplyPromptUsesOriginalInstructionForContinuation(t *testing.T) {
 	prompt := buildCompletionReplyPrompt(AgentTurnRequest{
@@ -93,7 +18,7 @@ func TestCompletionReplyPromptUsesOriginalInstructionForContinuation(t *testing.
 		ActiveGoal: ActiveGoal{
 			OriginalInstruction: "고객지원 보고서를 JSON으로 만들어 이 DM에 첨부해줘.",
 		},
-	}, nil, nil)
+	}, nil)
 
 	if !strings.Contains(prompt, "고객지원 보고서를 JSON으로 만들어 이 DM에 첨부해줘.") {
 		t.Fatalf("expected original instruction in completion prompt, got %q", prompt)
@@ -225,7 +150,7 @@ func TestAgentTurnRunnerAcceptsHtmlRequestWithHtmlAttachment(t *testing.T) {
 
 func TestValidateCompletionEvidenceDoesNotDeliverImageReadAttachment(t *testing.T) {
 	attachmentIndex := 0
-	attachments, errorValue := validateCompletionEvidence(nil, nil, []turnObservation{{
+	attachments, errorValue := validateCompletionEvidence(nil, []turnObservation{{
 		ObservationID: "obs-001",
 		Action:        "continue",
 		Tool:          "image_read",
@@ -334,263 +259,6 @@ func TestAgentTurnRunnerAcceptsReadableFileAttachObservation(t *testing.T) {
 	}
 	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.artifact_attach_rejected", "deck intent manifest is missing") {
 		t.Fatal("did not expect intent manifest rejection event")
-	}
-}
-
-func TestAgentTurnRunnerAutoAttachesRequiredWorkspaceArtifacts(t *testing.T) {
-	workspaceRootPath := t.TempDir()
-	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
-	if errorValue := os.MkdirAll(artifactDirectoryPath, 0700); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	turnStartedAt := time.Now().Add(-time.Minute)
-	writeValidPPTXTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pptx"))
-	writeValidPDFTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pdf"))
-
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"reply","final":true,"message":"자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001","obs-002"],"qualityReview":[]}`,
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-	toolRegistry := newTestToolSet([]string{"file_deliver"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		var request struct {
-			Path string `json:"path"`
-		}
-		if errorValue := json.Unmarshal(invocation.Input, &request); errorValue != nil {
-			return toolcontract.ToolResult{}, errorValue
-		}
-		attachments := []toolcontract.FileAttachment{{
-			DevicePath: request.Path,
-			Filename:   filepath.Base(request.Path),
-		}}
-		return toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "file attached"}, Attachments: attachments}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "피피티 만들어줘",
-		ToolSet:                    toolRegistry,
-		PinnedToolNames:            toolRegistry.ListToolNames(),
-		WorkspaceRootPath:          workspaceRootPath,
-		TurnStartedAt:              turnStartedAt,
-		RequiredEvidenceTools:      []string{"file_deliver"},
-		RequiredAttachmentSuffixes: []string{".pptx", ".pdf"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected auto attachment evidence to succeed: %v", errorValue)
-	}
-	if len(result.Attachments) != 2 {
-		t.Fatalf("expected two attachments, got %+v", result.Attachments)
-	}
-	if result.Attachments[0].Filename != "deck.pptx" && result.Attachments[1].Filename != "deck.pptx" {
-		t.Fatalf("expected deck.pptx attachment, got %+v", result.Attachments)
-	}
-	if result.Attachments[0].Filename != "deck.pdf" && result.Attachments[1].Filename != "deck.pdf" {
-		t.Fatalf("expected deck.pdf attachment, got %+v", result.Attachments)
-	}
-	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(taskEvents, "agent.completion_state_transition", "attach_existing_artifacts") {
-		t.Fatal("expected completion state attachment transition")
-	}
-	if !taskEventsContain(taskEvents, "tool.file_deliver.requested", "deck.pptx") {
-		t.Fatal("expected automatic file_deliver request")
-	}
-	if len(languageModel.requests) != 1 {
-		t.Fatalf("expected one model call for the final reply, got %d", len(languageModel.requests))
-	}
-}
-
-func TestAgentTurnRunnerCompletesAfterRequiredArtifactsExist(t *testing.T) {
-	workspaceRootPath := t.TempDir()
-	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","message":"자료를 완성했습니다.","toolName":"bash","toolInput":{"command":"build deck"}}`,
-		`{"action":"reply","final":true,"message":"완성한 발표 자료를 첨부했습니다.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003","obs-004"],"qualityReview":[]}`,
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-	toolRegistry := newTestToolSet([]string{"bash", "file_deliver"})
-	terminalCallCount := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "bash"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		terminalCallCount++
-		if errorValue := os.MkdirAll(artifactDirectoryPath, 0700); errorValue != nil {
-			return toolcontract.ToolResult{}, errorValue
-		}
-		writeValidPPTXTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pptx"))
-		writeValidPDFTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pdf"))
-		return testToolSuccess(`{"exitCode":0,"stdout":"built","stderr":"","timedOut":false}`), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		var request struct {
-			Path string `json:"path"`
-		}
-		if errorValue := json.Unmarshal(invocation.Input, &request); errorValue != nil {
-			return toolcontract.ToolResult{}, errorValue
-		}
-		attachments := []toolcontract.FileAttachment{{DevicePath: request.Path, Filename: filepath.Base(request.Path)}}
-		return toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "file attached"}, Attachments: attachments}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "피피티 만들어줘",
-		ToolSet:                    toolRegistry,
-		PinnedToolNames:            toolRegistry.ListToolNames(),
-		WorkspaceRootPath:          workspaceRootPath,
-		RequiredEvidenceTools:      []string{"file_deliver"},
-		RequiredAttachmentSuffixes: []string{".pptx", ".pdf"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected auto artifact completion: %v", errorValue)
-	}
-	if terminalCallCount != 1 {
-		t.Fatalf("expected one build command before auto completion, got %d", terminalCallCount)
-	}
-	if len(result.Attachments) != 2 {
-		t.Fatalf("expected two attachments, got %+v", result.Attachments)
-	}
-	if result.FinishMessage != "완성한 발표 자료를 첨부했습니다." {
-		t.Fatalf("expected post-evidence completion wording, got %q", result.FinishMessage)
-	}
-	if len(languageModel.requests) != 2 {
-		t.Fatalf("expected a post-evidence model call, got %d", len(languageModel.requests))
-	}
-}
-
-func TestAgentTurnRunnerDoesNotRepeatFailedAutomaticAttachment(t *testing.T) {
-	workspaceRootPath := t.TempDir()
-	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
-	if errorValue := os.MkdirAll(artifactDirectoryPath, 0700); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	turnStartedAt := time.Now().Add(-time.Minute)
-	writeValidPPTXTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pptx"))
-
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"fail","reason":"attachment unavailable"}`,
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4, RecoveryBudget: exhaustedRecoveryBudgetForTest()})
-	toolRegistry := newTestToolSet([]string{"file_deliver"})
-	attachmentCallCount := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		attachmentCallCount++
-		return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "tool", "attachment unavailable"), nil
-	})
-
-	_, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "피피티 만들어줘",
-		ToolSet:                    toolRegistry,
-		PinnedToolNames:            toolRegistry.ListToolNames(),
-		WorkspaceRootPath:          workspaceRootPath,
-		TurnStartedAt:              turnStartedAt,
-		RequiredEvidenceTools:      []string{"file_deliver"},
-		RequiredAttachmentSuffixes: []string{".pptx"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected failed turn to return result without runner error: %v", errorValue)
-	}
-	if attachmentCallCount != 1 {
-		t.Fatalf("expected one automatic attachment attempt, got %d", attachmentCallCount)
-	}
-}
-
-func TestAgentTurnRunnerBlocksReadableArtifactWithWrongFormat(t *testing.T) {
-	workspaceRootPath := t.TempDir()
-	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
-	if errorValue := os.MkdirAll(artifactDirectoryPath, 0700); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	turnStartedAt := time.Now().Add(-time.Minute)
-	writeAgentTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pptx"), "not a valid pptx")
-
-	languageModel := &sequenceLanguageModel{contents: []string{
-		finishMessageCiting("자료를 첨부했습니다.", "obs-001"),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	toolRegistry := newTestToolSet([]string{"file_deliver"})
-	attachmentCallCount := 0
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		attachmentCallCount++
-		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: "file attached"},
-			Attachments: []toolcontract.FileAttachment{{
-				DevicePath: "/workspace/private/people/person-1/artifacts/deck/deck.pptx",
-				Filename:   "deck.pptx",
-			}},
-		}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "피피티 만들어줘",
-		ToolSet:                    toolRegistry,
-		PinnedToolNames:            toolRegistry.ListToolNames(),
-		WorkspaceRootPath:          workspaceRootPath,
-		TurnStartedAt:              turnStartedAt,
-		RequiredEvidenceTools:      []string{"file_deliver"},
-		RequiredAttachmentSuffixes: []string{".pptx"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected invalid artifact turn to return result without runner error: %v", errorValue)
-	}
-	if attachmentCallCount != 0 {
-		t.Fatalf("expected wrong-format artifact not to be attached, got %d calls", attachmentCallCount)
-	}
-	if len(result.Attachments) != 0 {
-		t.Fatalf("expected no wrong-format artifact attachment, got %+v", result.Attachments)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.validity_review", `"passed":false`) {
-		t.Fatal("expected failed format validity review event")
-	}
-}
-
-func TestAgentTurnRunnerAutoCompletionKeepsQualityOutOfCorePolicy(t *testing.T) {
-	workspaceRootPath := t.TempDir()
-	artifactDirectoryPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "deck")
-	if errorValue := os.MkdirAll(artifactDirectoryPath, 0700); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	turnStartedAt := time.Now().Add(-time.Minute)
-	writeValidPPTXTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pptx"))
-	writeValidPDFTestFile(t, filepath.Join(artifactDirectoryPath, "deck.pdf"))
-
-	languageModel := &sequenceLanguageModel{contents: []string{finishMessageDocument("unused")}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-	toolRegistry := newTestToolSet([]string{"file_deliver"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_deliver"}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		var request struct {
-			Path string `json:"path"`
-		}
-		if errorValue := json.Unmarshal(invocation.Input, &request); errorValue != nil {
-			return toolcontract.ToolResult{}, errorValue
-		}
-		attachments := []toolcontract.FileAttachment{{DevicePath: request.Path, Filename: filepath.Base(request.Path)}}
-		return toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "file attached"}, Attachments: attachments}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "피피티 만들어줘",
-		ToolSet:                    toolRegistry,
-		PinnedToolNames:            toolRegistry.ListToolNames(),
-		WorkspaceRootPath:          workspaceRootPath,
-		TurnStartedAt:              turnStartedAt,
-		RequiredEvidenceTools:      []string{"file_deliver"},
-		RequiredAttachmentSuffixes: []string{".pptx", ".pdf"},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected artifact validity completion without core quality checks: %v", errorValue)
-	}
-	if len(result.Attachments) != 2 {
-		t.Fatalf("expected attachments, got %+v", result.Attachments)
-	}
-	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.quality_review", "marp_build_log_success") {
-		t.Fatal("expected no hard-coded slide quality check event")
 	}
 }
 
@@ -779,187 +447,6 @@ func TestCompletionGateUsesAttachmentsFromCompletionEvidence(t *testing.T) {
 
 	if !result.IsSatisfied || len(result.Attachments) != 1 {
 		t.Fatalf("expected completion evidence attachment to satisfy verification, got %+v", result)
-	}
-}
-
-func TestAgentTurnRunnerUsesNoToolChatWhenCompletionEvidenceIsReady(t *testing.T) {
-	languageModel := &completionReplyLanguageModel{}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	workspaceRootPath := t.TempDir()
-	artifactPath := filepath.Join(workspaceRootPath, "private", "people", "person-1", "artifacts", "report", "report.json")
-	toolSet := newTestToolSet([]string{"write", toolcontract.FileDeliverToolName})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		if errorValue := os.MkdirAll(filepath.Dir(artifactPath), 0700); errorValue != nil {
-			return toolcontract.ToolResult{}, errorValue
-		}
-		if errorValue := os.WriteFile(artifactPath, []byte(`{"status":"ready"}`), 0600); errorValue != nil {
-			return toolcontract.ToolResult{}, errorValue
-		}
-		return toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "file written"}}, nil
-	})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: "file attached"},
-			Attachments: []toolcontract.FileAttachment{{
-				DevicePath:  artifactPath,
-				Filename:    "report.json",
-				ContentType: "application/json",
-			}},
-		}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "JSON 보고서를 이 DM에 첨부해줘.",
-		ResponseLanguage:           "ko",
-		WorkspaceRootPath:          workspaceRootPath,
-		TurnStartedAt:              time.Now().Add(-time.Minute),
-		ToolSet:                    toolSet,
-		PinnedToolNames:            toolSet.ListToolNames(),
-		RequiredEvidenceTools:      []string{"write", toolcontract.FileDeliverToolName},
-		RequiredAttachmentSuffixes: []string{".json"},
-		OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools:      []string{"write", toolcontract.FileDeliverToolName},
-			ArtifactRequirement:        ArtifactRequirementRequired,
-			RequiredAttachmentSuffixes: []string{".json"},
-			ExpectedResults: []ExpectedResult{{
-				ID:          "attached-file",
-				Type:        ExpectedResultTypeFile,
-				Description: "requested JSON file attached",
-				Required:    true,
-			}},
-		},
-	})
-
-	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed file delivery, got result=%+v error=%v", result, errorValue)
-	}
-	if result.FinishMessage != "JSON 보고서를 첨부했습니다." || len(result.Attachments) != 1 {
-		t.Fatalf("expected completion reply and attachment, got %+v", result)
-	}
-	if languageModel.actionCalls != 1 || len(languageModel.completionRequests) != 1 {
-		t.Fatalf("expected one tool action then one completion reply, got actions=%d completions=%d", languageModel.actionCalls, len(languageModel.completionRequests))
-	}
-	request := languageModel.completionRequests[0]
-	if len(request.Tools) != 0 || len(request.ToolChoice) != 0 ||
-		!strings.Contains(request.Messages[0].Content, "file written") ||
-		!strings.Contains(request.Messages[0].Content, "report.json") {
-		t.Fatalf("expected evidence-grounded no-tool completion request, got %+v", request)
-	}
-	taskEvents := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if taskEventsContain(taskEvents, "agent.finalizer_rejected", "") {
-		t.Fatal("expected completion-ready chat to avoid structured finalizer rejection")
-	}
-	if !taskEventsContain(taskEvents, "tool.file_deliver.result", "report.json") {
-		t.Fatal("expected completion state to deliver the written file")
-	}
-	if !taskEventsContain(taskEvents, "agent.completion_state_finalized", `"observationID":"obs-001"`) ||
-		!taskEventsContain(taskEvents, "agent.completion_state_finalized", `"observationID":"obs-002"`) {
-		t.Fatal("expected finalization event to preserve exact write and delivery evidence")
-	}
-}
-
-func TestRejectedFinishWordingSurvivesAttachmentRepair(t *testing.T) {
-	finishMessage := "보고서 이름은 '고객지원 주간 운영 점검', 상태는 '검토 중', 담당은 '운영팀'입니다."
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"write","toolInput":{"path":"report.json","content":"{\"status\":\"ready\"}"}}`,
-		`{"action":"reply","final":true,"message":"` + finishMessage + `","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-009"]}`,
-		`{"action":"continue","toolName":"file_deliver","toolInput":{"files":[{"path":"report.json"}]}}`,
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
-	workspaceRootPath := t.TempDir()
-	artifactPath := filepath.Join(workspaceRootPath, "report.json")
-	toolSet := newTestToolSet([]string{"write", toolcontract.FileDeliverToolName})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: "write"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		if errorValue := os.WriteFile(artifactPath, []byte(`{"status":"ready"}`), 0600); errorValue != nil {
-			return toolcontract.ToolResult{}, errorValue
-		}
-		return toolcontract.ToolResult{Output: toolcontract.ToolOutput{Content: "file written"}}, nil
-	})
-	registerTestTool(toolSet, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: "file attached"},
-			Attachments: []toolcontract.FileAttachment{{
-				DevicePath:  artifactPath,
-				Filename:    "report.json",
-				ContentType: "application/json",
-			}},
-		}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "JSON 파일을 읽어서 보고서 이름, 상태, 담당을 확인해줘.",
-		ResponseLanguage:           "ko",
-		WorkspaceRootPath:          workspaceRootPath,
-		TurnStartedAt:              time.Now().Add(-time.Minute),
-		ToolSet:                    toolSet,
-		PinnedToolNames:            toolSet.ListToolNames(),
-		RequiredEvidenceTools:      []string{toolcontract.FileDeliverToolName},
-		RequiredAttachmentSuffixes: []string{".json"},
-		OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools:      []string{toolcontract.FileDeliverToolName},
-			ArtifactRequirement:        ArtifactRequirementRequired,
-			RequiredAttachmentSuffixes: []string{".json"},
-			ExpectedResults: []ExpectedResult{{
-				ID:          "attached-file",
-				Type:        ExpectedResultTypeFile,
-				Description: "requested JSON file attached",
-				Required:    true,
-			}},
-		},
-	})
-
-	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
-		t.Fatalf("expected completed delivery repair, got result=%+v error=%v", result, errorValue)
-	}
-	if result.FinishMessage != finishMessage {
-		t.Fatalf("expected the rejected finish wording to be delivered verbatim, got %q", result.FinishMessage)
-	}
-	if len(result.Attachments) != 1 {
-		t.Fatalf("expected one delivered attachment, got %+v", result.Attachments)
-	}
-}
-
-type completionReplyLanguageModel struct {
-	actionCalls        int
-	completionRequests []model.ChatCompletionRequest
-}
-
-func (languageModel *completionReplyLanguageModel) GenerateResponse(context.Context, string) (string, error) {
-	return "", nil
-}
-
-func (languageModel *completionReplyLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	return model.StructuredResponse{}, fmt.Errorf("unexpected structured schema %s", request.StructuredOutputSchema.Name)
-}
-
-func (languageModel *completionReplyLanguageModel) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
-	switch request.SchemaName {
-	case agentActionSchemaName:
-		languageModel.actionCalls++
-		if languageModel.actionCalls > 1 {
-			return model.ChatCompletionResponse{}, fmt.Errorf("unexpected repeated action request")
-		}
-		return model.ChatCompletionResponse{
-			FinishReason: "tool_calls",
-			Message: model.ChatCompletionMessage{
-				Role: "assistant",
-				ToolCalls: []model.ChatCompletionToolCall{
-					nativeAgentActionToolCall("write", `{"path":"report.json","content":"{\"status\":\"ready\"}"}`),
-				},
-			},
-		}, nil
-	case completionReplySchemaName:
-		languageModel.completionRequests = append(languageModel.completionRequests, request)
-		return model.ChatCompletionResponse{
-			FinishReason: "stop",
-			Message:      model.ChatCompletionMessage{Role: "assistant", Content: "JSON 보고서를 첨부했습니다."},
-		}, nil
-	default:
-		return model.ChatCompletionResponse{}, fmt.Errorf("unexpected chat schema %s", request.SchemaName)
 	}
 }
 
@@ -1400,20 +887,15 @@ func TestARejectedCitationNamesTheOnesThatWouldHaveDone(t *testing.T) {
 	}
 }
 
-func TestCitedEvidenceIsResolvedWhetherOrNotTheTurnHasRequirements(t *testing.T) {
+func TestCitingAnObservationTheTaskNeverMadeIsNotEvidence(t *testing.T) {
 	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 	observations := []turnObservation{
 		newContentObservation("obs-001", "continue", toolcontract.BashToolName, "ok"),
 	}
 	citesNothingReal := []completionEvidenceReference{{ObservationID: "obs-999"}}
 
-	for _, requirements := range [][]toolUseRequirement{
-		nil,
-		{{ToolName: toolcontract.BashToolName, Reason: "evidence"}},
-	} {
-		if _, errorValue := validateCompletionEvidence(toolSet, requirements, observations, citesNothingReal); errorValue == nil {
-			t.Errorf("a finish citing an observation the task never made is not evidence, and a turn with %d requirements checked it less than one with none", len(requirements))
-		}
+	if _, errorValue := validateCompletionEvidence(toolSet, observations, citesNothingReal); errorValue == nil {
+		t.Error("a finish citing an observation the task never made is not evidence")
 	}
 }
 

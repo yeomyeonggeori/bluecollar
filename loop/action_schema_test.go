@@ -3,11 +3,12 @@ package loop
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"sort"
 	"strconv"
 	"testing"
+
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
@@ -28,8 +29,7 @@ func TestActionSchemasRecursivelyCloseEveryObject(t *testing.T) {
 		}`),
 	}}
 	schemaDocuments := map[string]string{
-		"agent action":      buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, nil, true),
-		"finalizer":         finalizerActionSchema(),
+		"agent action":      buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, true),
 		"terminal no tools": terminalNoToolsActionSchema(),
 		"recovery decision": recoveryDecisionSchema(),
 	}
@@ -50,7 +50,7 @@ const eightToolActionSchemaByteCeiling = 19600
 func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 	toolDefinitions := eightToolCapabilityCatalogFixture(t)
 
-	schemaDocument := buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, nil, false)
+	schemaDocument := buildActionSchemaFromToolDefinitions(toolDefinitions, nil, true, false)
 
 	t.Logf("action schema byte length for an 8-tool catalog: %d", len(schemaDocument))
 	if len(schemaDocument) >= eightToolActionSchemaByteCeiling {
@@ -76,7 +76,6 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 		flatSchema     string
 		legacySchema   string
 	}{
-		{name: "finalizer", hasFailureDebt: false, flatSchema: finalizerActionSchema(), legacySchema: legacyRootOneOfFinalizerSchema(false)},
 		{name: "terminal no tools", hasFailureDebt: true, flatSchema: terminalNoToolsActionSchema(), legacySchema: legacyRootOneOfFinalizerSchema(true)},
 	}
 	for _, testCase := range cases {
@@ -108,14 +107,10 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 	}
 }
 
-func TestTerminalActionSchemasAcceptFinalReplyAndFailDocuments(t *testing.T) {
-	finishDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done","goalStatus":"satisfied","goalSatisfied":true,"action":"reply","final":true}`
-	failDocument := `{"executionStateUpdate":null,"failureResolution":"none","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","final":false}`
+func TestTerminalNoToolsSchemaAcceptsFinalReplyAndFailDocuments(t *testing.T) {
 	failWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","final":false,"usedFailureFacts":{"attempts":[{"toolName":"bash","errorCode":"operation_failed","failureStage":"bash","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
 	finishWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"reply","final":true,"usedFailureFacts":{"attempts":[],"budgetState":""}}`
 
-	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), finishDocument)
-	assertDocumentValidatesAgainstSchema(t, finalizerActionSchema(), failDocument)
 	assertDocumentValidatesAgainstSchema(t, terminalNoToolsActionSchema(), finishWithDebtDocument)
 	assertDocumentValidatesAgainstSchema(t, terminalNoToolsActionSchema(), failWithDebtDocument)
 }
@@ -198,7 +193,7 @@ func TestAStrictActionSchemaRequiresEveryPropertyItDeclares(t *testing.T) {
 
 	for _, allowQualityCriteria := range []bool{false, true} {
 		for _, hasFailureDebt := range []bool{false, true} {
-			document := actionSchemaForToolSet(toolSet, nil, allowQualityCriteria, nil, hasFailureDebt, true, true)
+			document := actionSchemaForToolSet(toolSet, nil, allowQualityCriteria, hasFailureDebt, true, true)
 			missing := propertiesMissingFromRequired(t, document)
 			if len(missing) > 0 {
 				t.Fatalf("a strict schema whose required list omits %v is rejected before the model ever sees it (quality=%v debt=%v)", missing, allowQualityCriteria, hasFailureDebt)
@@ -263,7 +258,7 @@ func asStrings(value any) []string {
 func TestFinishCanOnlyCiteEvidenceThatExists(t *testing.T) {
 	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 
-	document := actionSchemaForToolSet(toolSet, []string{"obs-001", "obs-003"}, false, nil, false, true, true)
+	document := actionSchemaForToolSet(toolSet, []string{"obs-001", "obs-003"}, false, false, true, true)
 
 	var schema any
 	if errorValue := json.Unmarshal([]byte(document), &schema); errorValue != nil {
@@ -278,7 +273,7 @@ func TestFinishCanOnlyCiteEvidenceThatExists(t *testing.T) {
 func TestFinishCitesFreelyWhenThereIsNoEvidenceToName(t *testing.T) {
 	toolSet := newTestToolSet([]string{toolcontract.BashToolName})
 
-	document := actionSchemaForToolSet(toolSet, nil, false, nil, false, true, true)
+	document := actionSchemaForToolSet(toolSet, nil, false, false, true, true)
 
 	var schema any
 	if errorValue := json.Unmarshal([]byte(document), &schema); errorValue != nil {
@@ -329,7 +324,7 @@ func TestAContinueVariantAsksOnlyForWhatTheLoopReads(t *testing.T) {
 			Required   []string                   `json:"required"`
 		} `json:"oneOf"`
 	}
-	if json.Unmarshal([]byte(ActionSchemaForToolSet(toolSet, false, nil, false)), &schema) != nil {
+	if json.Unmarshal([]byte(ActionSchemaForToolSet(toolSet, false, false)), &schema) != nil {
 		t.Fatal("the action schema is not JSON")
 	}
 

@@ -11,7 +11,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, requirements []toolUseRequirement, observations []turnObservation, attachments []toolcontract.FileAttachment, criteria []qualityCriterion, actionDocument turnActionDocument) completionGateResult {
+func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, actionDocument turnActionDocument) completionGateResult {
 	completionGateResult := validateCompletionFacts(request, observations, actionDocument)
 	if !completionGateResult.IsSatisfied || ctx.Err() != nil {
 		return completionGateResult
@@ -39,7 +39,7 @@ func (agentTurnRunner *AgentTurnRunner) evaluateExpectedChanges(ctx context.Cont
 	}
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionChangeCheck, marshalEventBody(check))
 	if len(check.Unmet) == 0 {
-		return completionGateResult{IsSatisfied: true}
+		return completionGateResult{IsSatisfied: true, AreChangesConfirmed: true}
 	}
 	return completionGateResult{
 		Message:            unmetChangesMessage(check),
