@@ -1391,7 +1391,7 @@ func TestBM25FallbackIsObservableWhenEmbeddingUnavailable(t *testing.T) {
 	}
 }
 
-func TestBM25FallbackIsObservableWhenEmbeddingDimensionMismatches(t *testing.T) {
+func TestSkillIndexReembedsDocumentsOfAnotherDimension(t *testing.T) {
 	instructionBundle := InstructionBundle{
 		Skills: []SkillInstruction{{
 			Name:        "presentation",
@@ -1407,11 +1407,11 @@ func TestBM25FallbackIsObservableWhenEmbeddingDimensionMismatches(t *testing.T) 
 		Prompt: "피피티",
 	}, retriever)
 
-	if selectedBundle.RetrievalMode != "bm25_fallback" || selectedBundle.IndexStatus != "embedding_dimension_mismatch" {
-		t.Fatalf("expected dimension mismatch BM25 fallback, got mode=%q status=%q", selectedBundle.RetrievalMode, selectedBundle.IndexStatus)
+	if selectedBundle.RetrievalMode != "embedding" || selectedBundle.IndexStatus != "ready" {
+		t.Fatalf("expected an index embedded by another model to be re-embedded, got mode=%q status=%q", selectedBundle.RetrievalMode, selectedBundle.IndexStatus)
 	}
 	if !strings.Contains(selectedBundle.Prompt, "Generate slides.") {
-		t.Fatalf("expected BM25 fallback to select skill, got %q", selectedBundle.Prompt)
+		t.Fatalf("expected the re-embedded skill to be selected, got %q", selectedBundle.Prompt)
 	}
 }
 
