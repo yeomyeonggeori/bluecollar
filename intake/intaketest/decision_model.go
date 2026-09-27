@@ -3,6 +3,7 @@ package intaketest
 import (
 	"context"
 	"encoding/json"
+	"sort"
 	"strings"
 	"sync"
 
@@ -60,12 +61,23 @@ func (decisionModel *DecisionModel) outcomeFor(messageKey string) Outcome {
 }
 
 func Answers(questions map[string]model.DecisionQuestion, outcomeFor func(messageKey string) Outcome) map[string]model.DecisionAnswer {
+	answers, _ := AnswersAndUnknownQuestions(questions, outcomeFor)
+	return answers
+}
+
+func AnswersAndUnknownQuestions(questions map[string]model.DecisionQuestion, outcomeFor func(messageKey string) Outcome) (map[string]model.DecisionAnswer, []string) {
 	answers := map[string]model.DecisionAnswer{}
+	unknownQuestionNames := []string{}
 	for questionName, question := range questions {
 		messageKey, shortName := splitQuestionName(questionName)
-		answers[questionName] = answerFor(shortName, question, outcomeFor(messageKey))
+		answer, isKnown := answerFor(shortName, question, outcomeFor(messageKey))
+		answers[questionName] = answer
+		if !isKnown {
+			unknownQuestionNames = append(unknownQuestionNames, questionName)
+		}
 	}
-	return answers
+	sort.Strings(unknownQuestionNames)
+	return answers, unknownQuestionNames
 }
 
 func splitQuestionName(questionName string) (string, string) {
@@ -76,61 +88,64 @@ func splitQuestionName(questionName string) (string, string) {
 	return questionName[:separatorIndex], questionName[separatorIndex+1:]
 }
 
-func answerFor(shortName string, question model.DecisionQuestion, outcome Outcome) model.DecisionAnswer {
+func answerFor(shortName string, question model.DecisionQuestion, outcome Outcome) (model.DecisionAnswer, bool) {
 	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixTool) {
-		return toolAnswer(strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixTool), outcome)
+		return toolAnswer(strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixTool), outcome), true
 	}
 	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat) {
-		return noulAnswer(containsValue(outcome.TurnDecision.RequestedOutputFormats, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat)))
+		return noulAnswer(containsValue(outcome.TurnDecision.RequestedOutputFormats, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat))), true
 	}
 	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixChoice) {
-		return noulAnswer(containsValue(outcome.TurnDecision.Choices, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixChoice)))
+		return noulAnswer(containsValue(outcome.TurnDecision.Choices, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixChoice))), true
 	}
-	return namedAnswer(shortName, question, outcome)
+	if answer, isKnown := namedAnswer(shortName, outcome); isKnown {
+		return answer, true
+	}
+	return model.DecisionAnswer{Type: question.Type}, false
 }
 
-func namedAnswer(shortName string, question model.DecisionQuestion, outcome Outcome) model.DecisionAnswer {
+func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool) {
 	switch shortName {
 	case agentcontract.IntakeQuestionTarget:
-		return choiceAnswer(addressingTargetName(outcome))
+		return choiceAnswer(addressingTargetName(outcome)), true
 	case agentcontract.IntakeQuestionShouldRespond:
-		return noulAnswer(outcome.Addressing.ShouldRespond)
+		return noulAnswer(outcome.Addressing.ShouldRespond), true
 	case agentcontract.IntakeQuestionReaction:
-		return reactionAnswer(outcome)
+		return reactionAnswer(outcome), true
 	case agentcontract.IntakeQuestionReactionEmoji:
-		return choiceAnswer(orDefault(outcome.Addressing.ReactionEmoji, agentcontract.DefaultReactionEmojiName))
+		return choiceAnswer(orDefault(outcome.Addressing.ReactionEmoji, agentcontract.DefaultReactionEmojiName)), true
 	case agentcontract.IntakeQuestionDuty:
-		return dutyAnswer(outcome)
+		return dutyAnswer(outcome), true
 	case agentcontract.IntakeQuestionRelatesToActiveTask:
-		return noulAnswer(outcome.RelatesToActiveTask)
+		return noulAnswer(outcome.RelatesToActiveTask), true
 	case agentcontract.IntakeQuestionRoute:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion))), true
 	case agentcontract.IntakeQuestionExpectedToolCount:
-		return choiceAnswer(string(scriptedExpectedToolCount(outcome.TurnDecision)))
+		return choiceAnswer(string(scriptedExpectedToolCount(outcome.TurnDecision))), true
 	case agentcontract.IntakeQuestionSingleToolChoice:
-		return choiceAnswer(firstScriptedToolName(outcome.TurnDecision))
+		return choiceAnswer(firstScriptedToolName(outcome.TurnDecision)), true
 	case agentcontract.IntakeQuestionHasIndependentWork:
-		return noulAnswer(outcome.TurnDecision.HasIndependentWork)
+		return noulAnswer(outcome.TurnDecision.HasIndependentWork), true
 	case agentcontract.IntakeQuestionIsExternalSendRequested:
-		return noulAnswer(outcome.TurnDecision.IsExternalSendRequested)
+		return noulAnswer(outcome.TurnDecision.IsExternalSendRequested), true
 	case agentcontract.IntakeQuestionTaskShape:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskShape), string(agentcontract.TaskShapeImmediateReply)))
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskShape), string(agentcontract.TaskShapeImmediateReply))), true
 	case agentcontract.IntakeQuestionLevel:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskLevel), string(agentcontract.TaskLevelLow)))
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskLevel), string(agentcontract.TaskLevelLow))), true
 	case agentcontract.IntakeQuestionDeliverableKind:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.DeliverableKind), string(agentcontract.DeliverableKindNone)))
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.DeliverableKind), string(agentcontract.DeliverableKindNone))), true
 	case agentcontract.IntakeQuestionResponseLanguage:
-		return choiceAnswer(orDefault(outcome.TurnDecision.ResponseLanguage, "other"))
+		return choiceAnswer(orDefault(outcome.TurnDecision.ResponseLanguage, "other")), true
 	case agentcontract.IntakeQuestionPriorTaskReference:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone)))
+		return choiceAnswer(orDefault(string(outcome.TurnDecision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone))), true
 	case agentcontract.IntakeQuestionApproval:
-		return choiceAnswer(approvalName(outcome))
+		return choiceAnswer(approvalName(outcome)), true
 	case agentcontract.IntakeQuestionBusyRoute:
-		return choiceAnswer(string(outcome.TurnDecision.BusyRoute))
+		return choiceAnswer(string(outcome.TurnDecision.BusyRoute)), true
 	case agentcontract.IntakeQuestionChoice:
-		return choiceAnswer(selectedChoiceKey(outcome))
+		return choiceAnswer(selectedChoiceKey(outcome)), true
 	}
-	return model.DecisionAnswer{Type: question.Type}
+	return model.DecisionAnswer{}, false
 }
 
 func addressingTargetName(outcome Outcome) string {
