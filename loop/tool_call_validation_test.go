@@ -393,10 +393,10 @@ func TestAgentTurnRunnerRejectsEmptyBrowserPressAfterFill(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	pressCallCount := 0
 	toolRegistry := newTestCapabilityToolSet([]string{"browser_fill", "browser_press"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill", InputSchema: requiredStringInputSchema("text")}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"ok":true}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_press"}, func(_ context.Context, toolInvocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_press", InputSchema: requiredStringInputSchema("key")}, func(_ context.Context, toolInvocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		pressCallCount++
 		return testToolSuccess(`{"ok":true}`), nil
 	})
@@ -434,7 +434,7 @@ func TestAgentTurnRunnerRejectsBrowserFillWithoutRequiredInput(t *testing.T) {
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_snapshot"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"snapshotText":"- textbox \"Google search\" [ref=e5]"}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill"}, func(_ context.Context, toolInvocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill", InputSchema: requiredStringInputSchema("text")}, func(_ context.Context, toolInvocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		fillCallCount++
 		return testToolSuccess(`{"ok":true}`), nil
 	})
@@ -455,7 +455,7 @@ func TestAgentTurnRunnerRejectsBrowserFillWithoutRequiredInput(t *testing.T) {
 	if fillCallCount != 0 {
 		t.Fatalf("expected malformed fill input not to invoke tool, got %d calls", fillCallCount)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.tool_input_malformed", "target/ref/selector, text") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.tool_input_malformed", "text") {
 		t.Fatal("expected malformed browser fill event")
 	}
 }
@@ -469,7 +469,7 @@ func TestAgentTurnRunnerRejectsEmptyGoogleNavigate(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	navigateCallCount := 0
 	toolRegistry := newTestCapabilityToolSet([]string{"browser_open"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_open"}, func(_ context.Context, toolInvocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_open", InputSchema: requiredStringInputSchema("url")}, func(_ context.Context, toolInvocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		navigateCallCount++
 		return testToolSuccess(`{"url":"https://www.google.com"}`), nil
 	})
@@ -506,7 +506,7 @@ func TestAgentTurnRunnerStopsRepeatedMalformedToolInputByLimit(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 40})
 	fillCallCount := 0
 	toolRegistry := newTestToolSet([]string{"browser_fill"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill", InputSchema: requiredStringInputSchema("text")}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		fillCallCount++
 		return testToolSuccess(`{"ok":true}`), nil
 	})
@@ -541,7 +541,7 @@ func TestAgentTurnRunnerDoesNotChargeMalformedInputToToolEffort(t *testing.T) {
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4, MaxToolCallCount: 2})
 	toolRegistry := newTestToolSet([]string{"browser_fill", "alpha", "beta"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_fill", InputSchema: requiredStringInputSchema("text")}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"ok":true}`), nil
 	})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "alpha"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -946,4 +946,8 @@ func TestAnAgentActionTypedAsTheWholeCommandIsStillRefused(t *testing.T) {
 			t.Errorf("%q is an action the model meant to call directly, and no shell can run it", command)
 		}
 	}
+}
+
+func requiredStringInputSchema(fieldName string) json.RawMessage {
+	return json.RawMessage(`{"type":"object","properties":{"` + fieldName + `":{"type":"string"}},"required":["` + fieldName + `"]}`)
 }

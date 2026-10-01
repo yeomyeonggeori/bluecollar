@@ -49,9 +49,6 @@ func malformedToolInputError(actionDocument turnActionDocument, toolSet *toolcon
 	if validationError := validateDescriptorToolInput(toolSet, actionDocument.ToolName, actionDocument.ToolInput); validationError != nil {
 		return validationError, toolcontract.FailureCodes.InvalidInput
 	}
-	if validationError := validateBrowserToolInput(actionDocument.ToolName, actionDocument.ToolInput); validationError != nil {
-		return validationError, toolcontract.FailureCodes.InvalidInput
-	}
 	validationError := validateTerminalToolInput(actionDocument.ToolName, actionDocument.ToolInput, toolSet)
 	if validationError != nil && isTerminalToolNameError(validationError) {
 		return validationError, toolcontract.FailureCodes.ToolNameInShell
@@ -341,25 +338,6 @@ func parseFileReadRange(value string) (fileReadRange, bool) {
 	return fileReadRange{StartLine: startLine, EndLine: endLine}, true
 }
 
-func validateBrowserToolInput(toolName string, toolInput json.RawMessage) error {
-	switch strings.TrimSpace(toolName) {
-	case "browser_open":
-		return validateRequiredToolInputFields(toolName, toolInput, "url")
-	case "browser_fill":
-		return validateBrowserTargetToolInput(toolName, toolInput, "text")
-	case "browser_click":
-		return validateBrowserTargetToolInput(toolName, toolInput)
-	case "browser_select":
-		return validateBrowserTargetToolInput(toolName, toolInput, "value")
-	case "browser_press":
-		return validateRequiredToolInputFields(toolName, toolInput, "key")
-	case "browser_wait":
-		return validateBrowserWaitInput(toolInput)
-	default:
-		return nil
-	}
-}
-
 var agentActionsNoShellCanRun = []string{"set_quality_criteria", "reply"}
 
 type terminalToolNameError struct {
@@ -423,82 +401,6 @@ func terminalCommandTokens(command string) []string {
 		">", " ",
 	)
 	return strings.Fields(replacer.Replace(command))
-}
-
-func validateBrowserTargetToolInput(toolName string, toolInput json.RawMessage, fieldNames ...string) error {
-	inputDocument, errorValue := parseToolInputDocument(toolName, toolInput)
-	if errorValue != nil {
-		return errorValue
-	}
-	missingFieldNames := []string{}
-	if firstNonEmptyString(stringValue(inputDocument["target"]), stringValue(inputDocument["ref"]), stringValue(inputDocument["selector"])) == "" {
-		missingFieldNames = append(missingFieldNames, "target/ref/selector")
-	}
-	for _, fieldName := range fieldNames {
-		if strings.TrimSpace(stringValue(inputDocument[fieldName])) == "" {
-			missingFieldNames = append(missingFieldNames, fieldName)
-		}
-	}
-	if len(missingFieldNames) > 0 {
-		return errors.New("missing required tool input for " + strings.TrimSpace(toolName) + ": " + strings.Join(missingFieldNames, ", ") + validInputExampleSuffix(toolName))
-	}
-	return nil
-}
-
-func validateRequiredToolInputFields(toolName string, toolInput json.RawMessage, fieldNames ...string) error {
-	inputDocument, errorValue := parseToolInputDocument(toolName, toolInput)
-	if errorValue != nil {
-		return errorValue
-	}
-	missingFieldNames := []string{}
-	for _, fieldName := range fieldNames {
-		if strings.TrimSpace(stringValue(inputDocument[fieldName])) == "" {
-			missingFieldNames = append(missingFieldNames, fieldName)
-		}
-	}
-	if len(missingFieldNames) > 0 {
-		return errors.New("missing required tool input for " + strings.TrimSpace(toolName) + ": " + strings.Join(missingFieldNames, ", ") + validInputExampleSuffix(toolName))
-	}
-	return nil
-}
-
-func validateBrowserWaitInput(toolInput json.RawMessage) error {
-	inputDocument, errorValue := parseToolInputDocument("browser_wait", toolInput)
-	if errorValue != nil {
-		return errorValue
-	}
-	if strings.TrimSpace(stringValue(inputDocument["target"])) != "" {
-		return nil
-	}
-	if strings.TrimSpace(stringValue(inputDocument["ref"])) != "" {
-		return nil
-	}
-	if strings.TrimSpace(stringValue(inputDocument["selector"])) != "" {
-		return nil
-	}
-	if numberValue(inputDocument["milliseconds"]) > 0 {
-		return nil
-	}
-	return errors.New("missing required tool input for browser_wait: target or milliseconds")
-}
-
-func validInputExampleSuffix(toolName string) string {
-	switch strings.TrimSpace(toolName) {
-	case "browser_open":
-		return `. Valid input example: {"url":"https://www.google.com"}`
-	case "browser_fill":
-		return `. Valid input example: {"target":"@e1","text":"hello world"}`
-	case "browser_click":
-		return `. Valid input example: {"target":"@e1"}`
-	case "browser_select":
-		return `. Valid input example: {"target":"@e1","value":"option"}`
-	case "browser_press":
-		return `. Valid input example: {"key":"Enter"}`
-	case "browser_wait":
-		return `. Valid input example: {"target":"@e1"} or {"milliseconds":1000}`
-	default:
-		return ""
-	}
 }
 
 func parseToolInputDocument(toolName string, toolInput json.RawMessage) (map[string]any, error) {

@@ -148,12 +148,11 @@ const (
 	TaskLevelXHigh  = agentcontract.TaskLevelXHigh
 	TaskLevelXLow   = agentcontract.TaskLevelXLow
 
-	TaskShapeApprovalGatedTask  = agentcontract.TaskShapeApprovalGatedTask
-	TaskShapeBrowserHandoffTask = agentcontract.TaskShapeBrowserHandoffTask
-	TaskShapeImmediateReply     = agentcontract.TaskShapeImmediateReply
-	TaskShapeMaintenanceTask    = agentcontract.TaskShapeMaintenanceTask
-	TaskShapeResearchTask       = agentcontract.TaskShapeResearchTask
-	TaskShapeScheduledTask      = agentcontract.TaskShapeScheduledTask
+	TaskShapeApprovalGatedTask = agentcontract.TaskShapeApprovalGatedTask
+	TaskShapeImmediateReply    = agentcontract.TaskShapeImmediateReply
+	TaskShapeMaintenanceTask   = agentcontract.TaskShapeMaintenanceTask
+	TaskShapeResearchTask      = agentcontract.TaskShapeResearchTask
+	TaskShapeScheduledTask     = agentcontract.TaskShapeScheduledTask
 
 	TurnRouteAnswerMeta     = agentcontract.TurnRouteAnswerMeta
 	TurnRouteAnswerQuestion = agentcontract.TurnRouteAnswerQuestion

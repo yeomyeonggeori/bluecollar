@@ -1115,11 +1115,11 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 }
 
 func TestParseAgentActionResponseDeliversTheFinishMessageOverAStatusLine(t *testing.T) {
-	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"Open https://intern.kim/handoff/handoff-1 and sign in.","replyParts":[{"type":"text","text":"Browser handed over, waiting for the user."}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
+	action, errorValue := ParseAgentActionResponse(model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"Open https://intern.kim/sign-in and sign in.","replyParts":[{"type":"text","text":"Waiting for the user to sign in."}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[]}`})
 	if errorValue != nil {
 		t.Fatalf("expected parsed action: %v", errorValue)
 	}
-	if finishActionMessage(action) != "Open https://intern.kim/handoff/handoff-1 and sign in." {
+	if finishActionMessage(action) != "Open https://intern.kim/sign-in and sign in." {
 		t.Fatalf("expected the finish message to be the reply, got %q", finishActionMessage(action))
 	}
 }
