@@ -79,14 +79,12 @@ func recoveryGuidanceContent(toolSet *toolcontract.ToolSet, observation turnObse
 	return strings.Join(parts, " ")
 }
 
-// The descriptor says the call needed the browser on the requester's own machine.
-// A name prefix said it too, right up until a tool was renamed.
 func browserPublicFetchRecoveryGuidance(toolSet *toolcontract.ToolSet, observation turnObservation) string {
 	definition, isFound := toolDefinitionForRecovery(toolSet, observation.Tool)
-	if !isFound || !definition.RequiresRequesterDevice {
+	if !isFound || definition.Namespace != "browser" {
 		return ""
 	}
-	return "Recovery route: browser tools run in the company computer's browser and are only for sign-in, page interaction, screenshots, or pages that block fetching. To read or copy public web page content, use web_fetch (or web_search) instead of a browser; only fall back to the browser handoff when fetching fails or the user explicitly asks for a visible browser. Do not pass a tool name or a localhost address as the browser URL."
+	return "Recovery route: browser tools run in the company computer's browser and are only for sign-in, page interaction, or pages that block fetching. To read or copy public web page content, use web_fetch (or web_search) instead of a browser; only return to the browser when fetching fails or the user explicitly asks for one. Do not pass a tool name or a localhost address as the browser URL."
 }
 
 func terminalWorkingDirectoryRecoveryGuidance(observation turnObservation) string {

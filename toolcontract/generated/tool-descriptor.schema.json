@@ -31,9 +31,6 @@
     "requiresUserPresence": {
       "type": "boolean"
     },
-    "requiresRequesterDevice": {
-      "type": "boolean"
-    },
     "worksOffline": {
       "type": "boolean"
     },

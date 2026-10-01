@@ -185,7 +185,7 @@ func TestStalledTurnUsesSuggestedNextToolBeforeExit(t *testing.T) {
 func TestBrowserFailureRecoveryGuidanceRedirectsToWebFetch(t *testing.T) {
 	failedBrowser := newFailureObservation("obs-001", "continue", "browser_open", "The browser is not reachable, so the page cannot be opened.", toolcontract.FailureDependencyUnavailable, toolcontract.FailureCodes.Unavailable, "browser_open")
 	browserToolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
-		{Name: "browser_open", Namespace: "browser", RequiresRequesterDevice: true, Description: "Open a page on the requester's machine", PrivacyClass: "local_browser", Visibility: "visible", PolicyResource: "tool:browser_open", SideEffectClass: "state_change"},
+		{Name: "browser_open", Namespace: "browser", Description: "Open a page in the company computer's browser", PrivacyClass: "device_browser", Visibility: "visible", PolicyResource: "tool:browser_open", SideEffectClass: "state_change"},
 	})
 	guidance := recoveryGuidanceContent(browserToolSet, failedBrowser, "")
 	if !strings.Contains(guidance, "web_fetch") {
