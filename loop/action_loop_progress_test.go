@@ -113,12 +113,12 @@ func TestARepeatedOutputDoesNotCountAsLoopProgress(t *testing.T) {
 	observations := []turnObservation{{
 		ObservationID: "obs-001",
 		Action:        "continue",
-		Tool:          "site_list",
+		Tool:          "task_list",
 		Output:        toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
 	}, {
 		ObservationID:        "obs-002",
 		Action:               "continue",
-		Tool:                 "site_list",
+		Tool:                 "task_list",
 		Output:               toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
 		RepeatsObservationID: "obs-001",
 	}, {

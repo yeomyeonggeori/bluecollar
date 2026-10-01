@@ -45,7 +45,7 @@ func TestActionSchemasRecursivelyCloseEveryObject(t *testing.T) {
 	}
 }
 
-const eightToolActionSchemaByteCeiling = 19600
+const eightToolActionSchemaByteCeiling = 18950
 
 func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 	toolDefinitions := eightToolCapabilityCatalogFixture(t)
@@ -152,7 +152,7 @@ func eightToolCapabilityCatalogFixture(t *testing.T) []toolcontract.ToolDefiniti
 	}
 	selectedToolNames := map[string]bool{
 		"task_add": true, "task_update": true, "message_send": true, "message_search": true,
-		"document_read": true, "image_read": true, "web_search": true, "site_serve": true,
+		"document_read": true, "image_read": true, "web_search": true, "person_list": true,
 	}
 	toolDefinitions := make([]toolcontract.ToolDefinition, 0, len(selectedToolNames))
 	for _, tool := range catalog.Tools {

@@ -89,8 +89,6 @@ func normalizeDecidedWork(decision agentcontract.TurnDecision) (agentcontract.Tu
 }
 
 func normalizeDeliverableTools(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
-	decision = normalizeWebsiteDeliverableKind(decision)
-	decision = normalizeSiteDeliverableFormats(decision)
 	return removeFileDeliveryToolWithoutArtifactFormat(decision)
 }
 
@@ -172,38 +170,6 @@ func normalizeTurnWords(decision agentcontract.TurnDecision) agentcontract.TurnD
 	decision.ClarificationOptions = normalizeClarificationOptions(decision.ClarificationOptions)
 	decision.ExpectedResults = agentcontract.NormalizeExpectedResults(decision.ExpectedResults)
 	return removeFileExpectedResultsWithoutArtifactFormat(decision)
-}
-
-func normalizeWebsiteDeliverableKind(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
-	if decision.DeliverableKind != agentcontract.DeliverableKindWebsite || decisionSuggestsSiteTool(decision) {
-		return decision
-	}
-	decision.InitialToolNames = toolcontract.AppendUniqueStrings(decision.InitialToolNames, "site_serve")
-	return decision
-}
-
-func normalizeSiteDeliverableFormats(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
-	if !decisionSuggestsSiteTool(decision) {
-		return decision
-	}
-	retainedFormats := []string{}
-	for _, format := range decision.RequestedOutputFormats {
-		if format == "html" {
-			continue
-		}
-		retainedFormats = append(retainedFormats, format)
-	}
-	decision.RequestedOutputFormats = retainedFormats
-	return decision
-}
-
-func decisionSuggestsSiteTool(decision agentcontract.TurnDecision) bool {
-	for _, toolName := range decision.InitialToolNames {
-		if strings.HasPrefix(strings.TrimSpace(toolName), "site_") {
-			return true
-		}
-	}
-	return false
 }
 
 func removeFileDeliveryToolWithoutArtifactFormat(decision agentcontract.TurnDecision) agentcontract.TurnDecision {

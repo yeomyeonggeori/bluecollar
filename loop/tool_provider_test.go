@@ -356,13 +356,13 @@ func TestRegisterProviderRejectsUnboundResultEffectIdentity(t *testing.T) {
 }
 
 func TestRegisterProviderAcceptsDistinctIdentitiesForOneEffect(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{"site_serve"})
-	providerTool := validProviderTool("capabilityd/site/site_serve", "site", "site_serve")
+	toolSet := toolcontract.NewToolSet([]string{"document_share"})
+	providerTool := validProviderTool("capabilityd/document/document_share", "document", "document_share")
 	providerTool.Definition.ResultContract = &toolcontract.ToolResultContract{
-		Schema: json.RawMessage(`{"type":"object","properties":{"siteID":{"type":"string"},"publishedURL":{"type":"string"}},"required":["siteID","publishedURL"],"additionalProperties":false}`),
+		Schema: json.RawMessage(`{"type":"object","properties":{"documentID":{"type":"string"},"publicURL":{"type":"string"}},"required":["documentID","publicURL"],"additionalProperties":false}`),
 		Effects: []toolcontract.ResourceEffectContract{
-			{ObjectType: "website", Effect: "published", ResultField: "siteID", EffectIdentity: "id"},
-			{ObjectType: "website", Effect: "published", ResultField: "publishedURL", EffectIdentity: "url"},
+			{ObjectType: "document", Effect: "published", ResultField: "documentID", EffectIdentity: "id"},
+			{ObjectType: "document", Effect: "published", ResultField: "publicURL", EffectIdentity: "url"},
 		},
 	}
 

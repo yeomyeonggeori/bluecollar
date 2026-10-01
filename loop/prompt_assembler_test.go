@@ -68,7 +68,7 @@ func TestBuildTurnMessagesKeepsStablePrefixClockInvariant(t *testing.T) {
 
 func TestBuildTurnMessagesPlacesVolatileContentAfterStablePrefix(t *testing.T) {
 	request := AgentTurnRequest{
-		Prompt:            "사이트 만들어줘",
+		Prompt:            "보고서 만들어줘",
 		TurnStartedAt:     time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC),
 		StepBudgetContext: "Step budget:\nTool calls: 10/24 used, 14 remaining.",
 	}
@@ -122,7 +122,7 @@ func TestBuildTemporalContextDescriptionAnchorsWeeksAcrossCalendarBoundaries(t *
 
 func TestPromptAssemblerIncludesStepBudgetContext(t *testing.T) {
 	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
-		Prompt:            "사이트 만들어줘",
+		Prompt:            "보고서 만들어줘",
 		TurnStartedAt:     time.Date(2026, 5, 12, 8, 32, 27, 0, time.UTC),
 		StepBudgetContext: "Step budget:\nTool calls: 10/24 used, 14 remaining.",
 	}, nil, "base", "")

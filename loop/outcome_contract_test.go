@@ -23,14 +23,14 @@ func TestSelectedRequiredAttachmentSuffixesStayAdvisoryForSlides(t *testing.T) {
 
 func TestSelectedEvidenceHintsComeFromSelectedSkills(t *testing.T) {
 	instructionBundle := InstructionBundle{
-		Skills:                []SkillInstruction{{Name: "site-prototype"}, {Name: "calendar"}},
-		SkillDecisions:        []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-		RequiredEvidenceTools: []string{"site_serve", "bash", "site_serve"},
+		Skills:                []SkillInstruction{{Name: "office"}, {Name: "calendar"}},
+		SkillDecisions:        []SkillSelectionDecision{{Name: "office", Status: "selected"}},
+		RequiredEvidenceTools: []string{"write", "bash", "file_deliver"},
 	}
 
 	toolNames := selectedEvidenceHintTools(instructionBundle)
 
-	if len(toolNames) != 3 || toolNames[0] != "site_serve" || toolNames[1] != "bash" || toolNames[2] != "site_serve" {
+	if len(toolNames) != 3 || toolNames[0] != "write" || toolNames[1] != "bash" || toolNames[2] != "file_deliver" {
 		t.Fatalf("expected selected skill evidence tools, got %+v", toolNames)
 	}
 }
@@ -112,7 +112,7 @@ func TestAttachmentOutcomeTreatsWorkspaceFileWriteAsIntermediate(t *testing.T) {
 func TestOutcomeContractPreservesActiveGoalEvidence(t *testing.T) {
 	contract := outcomeContractForRequest(
 		AgentRequest{ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"site_unserve"},
+			RequiredEvidenceTools: []string{"task_delete"},
 		}}},
 		IntakeDecision{
 			Classification: IntakeClassificationBoundedTask,
@@ -123,7 +123,7 @@ func TestOutcomeContractPreservesActiveGoalEvidence(t *testing.T) {
 		nil,
 	)
 
-	if !stringSliceContains(contract.RequiredEvidenceTools, "site_unserve") || stringSliceContains(contract.RequiredEvidenceTools, "file_delete") {
+	if !stringSliceContains(contract.RequiredEvidenceTools, "task_delete") || stringSliceContains(contract.RequiredEvidenceTools, "file_delete") {
 		t.Fatalf("expected active goal evidence to remain authoritative, got %+v", contract.RequiredEvidenceTools)
 	}
 }
@@ -149,66 +149,6 @@ func TestOutcomeContractDoesNotFallbackToScheduleCreateForScheduledTaskShape(t *
 	}
 }
 
-func TestOutcomeContractCreatesExpectedResultsForSitePublish(t *testing.T) {
-	contract := outcomeContractForRequest(
-		AgentRequest{Prompt: "build and deploy a personal homepage"},
-		IntakeDecision{Classification: IntakeClassificationBoundedTask, TaskShape: TaskShapeMaintenanceTask},
-		InstructionBundle{},
-		ExecutionPlan{PublicDeploy: true},
-		true,
-		nil,
-	)
-
-	if !expectedResultsContain(contract.ExpectedResults, ExpectedResultTypeLink, "public URL") {
-		t.Fatalf("expected site publish contract to require public link result, got %+v", contract.ExpectedResults)
-	}
-	if !expectedResultsContain(contract.ExpectedResults, ExpectedResultTypeMessage, "final reply") {
-		t.Fatalf("expected site publish contract to include final message result, got %+v", contract.ExpectedResults)
-	}
-}
-
-func TestOutcomeContractDoesNotRequirePublicLinkForSiteDelete(t *testing.T) {
-	contract := outcomeContractForRequest(
-		AgentRequest{
-			Prompt:  "delete the test website that was just deployed",
-			ToolSet: newTestToolSet([]string{"site_unserve"}),
-		},
-		IntakeDecision{
-			Classification: IntakeClassificationBoundedTask,
-			TaskShape:      TaskShapeMaintenanceTask,
-		},
-		InstructionBundle{RequiredEvidenceTools: []string{"site_unserve"}},
-		ExecutionPlan{},
-		false,
-		nil,
-	)
-
-	if expectedResultsContain(contract.ExpectedResults, ExpectedResultTypeLink, "public URL") {
-		t.Fatalf("expected site delete not to require public link result, got %+v", contract.ExpectedResults)
-	}
-	if !evidenceAnyOfContainsTool(contract.RequiredEvidenceAnyOf, "site_unserve") {
-		t.Fatalf("expected site_unserve evidence to be derived from the working set, got %+v", contract.RequiredEvidenceAnyOf)
-	}
-}
-
-func TestOutcomeContractRequiresCurrentEffectsForSiteModification(t *testing.T) {
-	contract := outcomeContractForRequest(
-		AgentRequest{
-			Prompt:  "the tangerine website looks far too rough, make it prettier.",
-			ToolSet: newTestToolSet([]string{"site_list", "edit", "site_serve"}),
-		},
-		IntakeDecision{Classification: IntakeClassificationBoundedTask, TaskShape: TaskShapeMaintenanceTask},
-		InstructionBundle{},
-		ExecutionPlan{},
-		false,
-		nil,
-	)
-
-	if len(contract.RequiredEffects) != 0 {
-		t.Fatalf("expected no text-derived site effects without explicit contract, got %+v", contract.RequiredEffects)
-	}
-}
-
 func TestOutcomeContractCreatesExpectedResultsForRequestedFile(t *testing.T) {
 	contract := outcomeContractForRequest(
 		AgentRequest{Prompt: "pptx make the file"},
@@ -224,47 +164,6 @@ func TestOutcomeContractCreatesExpectedResultsForRequestedFile(t *testing.T) {
 	}
 	if len(contract.ExpectedResults[0].AcceptanceHints) == 0 || contract.ExpectedResults[0].AcceptanceHints[0] != ".pptx" {
 		t.Fatalf("expected suffix hint to be preserved, got %+v", contract.ExpectedResults)
-	}
-}
-
-func TestOutcomeContractKeepsRequestedFileWhenSiteSkillOnlySelected(t *testing.T) {
-	instructionBundle := InstructionBundle{
-		Skills:                []SkillInstruction{{Name: "site-prototype"}},
-		SkillDecisions:        []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-		RequiredEvidenceTools: []string{"site_list", "site_serve"},
-	}
-	contract := outcomeContractForRequest(
-		AgentRequest{
-			Prompt: "make the corporate document guide as a docx",
-			ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
-				{Name: "site_list", Namespace: "site", SideEffectClass: toolcontract.ToolSideEffectRead},
-				{Name: "site_serve", Namespace: "site", SideEffectClass: toolcontract.ToolSideEffectExternalPublish},
-			}),
-		},
-		IntakeDecision{Classification: IntakeClassificationBoundedTask, RequestedOutputFormats: []string{".docx"}},
-		instructionBundle,
-		ExecutionPlan{},
-		false,
-		[]string{".docx"},
-	)
-
-	if len(contract.RequiredAttachmentSuffixes) != 1 || contract.RequiredAttachmentSuffixes[0] != ".docx" {
-		t.Fatalf("expected selected site skill not to clear requested file suffix, got %+v", contract.RequiredAttachmentSuffixes)
-	}
-	if !stringSliceContains(contract.RequiredEvidenceTools, "file_deliver") {
-		t.Fatalf("expected file_deliver requirement for requested file, got %+v", contract.RequiredEvidenceTools)
-	}
-	if stringSliceContains(contract.RequiredEvidenceTools, "site_serve") {
-		t.Fatalf("expected selected site skill not to require site publish, got %+v", contract.RequiredEvidenceTools)
-	}
-	if stringSliceContains(contract.SelectedEvidenceHints, "site_serve") {
-		t.Fatalf("expected selected site skill not to keep stale site hint, got %+v", contract.SelectedEvidenceHints)
-	}
-	if !expectedResultsContain(contract.ExpectedResults, ExpectedResultTypeFile, "file in the requested format") {
-		t.Fatalf("expected file result for requested attachment, got %+v", contract.ExpectedResults)
-	}
-	if expectedResultsContain(contract.ExpectedResults, ExpectedResultTypeLink, "public URL") {
-		t.Fatalf("expected selected site skill not to require public link, got %+v", contract.ExpectedResults)
 	}
 }
 
@@ -345,33 +244,25 @@ func TestUnresolvedInputKeepsAskInputContract(t *testing.T) {
 
 func TestOutcomeContractDoesNotTreatReplyInstructionAsExternalSend(t *testing.T) {
 	instructionBundle := InstructionBundle{
-		Skills: []SkillInstruction{{Name: "direct-message"}, {Name: "site-prototype"}},
-		SkillDecisions: []SkillSelectionDecision{
-			{Name: "direct-message", Status: "selected"},
-			{Name: "site-prototype", Status: "selected"},
-		},
-		RequiredEvidenceTools: []string{"message_send", "site_list", "site_serve"},
+		Skills:                []SkillInstruction{{Name: "direct-message"}},
+		SkillDecisions:        []SkillSelectionDecision{{Name: "direct-message", Status: "selected"}},
+		RequiredEvidenceTools: []string{"message_send"},
 	}
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 		{Name: "message_send", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
-		{Name: "site_list", Namespace: "site", SideEffectClass: toolcontract.ToolSideEffectRead},
-		{Name: "site_serve", Namespace: "site", SideEffectClass: toolcontract.ToolSideEffectExternalPublish},
 	})
 
 	contract := outcomeContractForRequest(
-		AgentRequest{Prompt: "build and deploy a personal homepage and just give me the URL", ToolSet: toolSet},
+		AgentRequest{Prompt: "summarize this week's tasks and just give me the summary", ToolSet: toolSet},
 		IntakeDecision{Classification: IntakeClassificationBoundedTask},
 		instructionBundle,
-		ExecutionPlan{PublicDeploy: true},
+		ExecutionPlan{},
 		true,
 		nil,
 	)
 
 	if stringSliceContains(contract.RequiredEvidenceTools, "message_send") {
 		t.Fatalf("expected reply instruction not to require external send evidence, got %+v", contract.RequiredEvidenceTools)
-	}
-	if !stringSliceContains(contract.RequiredEvidenceTools, "site_serve") {
-		t.Fatalf("expected site publish evidence to remain required, got %+v", contract.RequiredEvidenceTools)
 	}
 }
 
@@ -702,18 +593,16 @@ func TestOutcomeContractDerivesSideEffectEvidenceAnyOfGroupForMaintenanceTask(t 
 	}
 }
 
-func TestOutcomeReferenceToolSetHidesSendAndSiteToolsForDocumentGoal(t *testing.T) {
+func TestOutcomeReferenceToolSetHidesSendToolsForDocumentGoal(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
 		{Name: "web_fetch", Namespace: "web", SideEffectClass: toolcontract.ToolSideEffectRead},
 		{Name: "write", Namespace: "file", SideEffectClass: toolcontract.ToolSideEffectWorkspaceWrite},
 		{Name: "file_deliver", Namespace: "file", SideEffectClass: toolcontract.ToolSideEffectExternalWrite},
-		{Name: "site_serve", Namespace: "site", SideEffectClass: toolcontract.ToolSideEffectExternalWrite},
-		{Name: "site_serve", Namespace: "site", SideEffectClass: toolcontract.ToolSideEffectExternalPublish},
 		{Name: "message_send", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
 		{Name: "mail_message_send", Namespace: "mail", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
 	})
 	contract := OutcomeContract{
-		SelectedEvidenceHints: []string{"site_serve", "site_serve", "message_send", "mail_message_send"},
+		SelectedEvidenceHints: []string{"message_send", "mail_message_send"},
 	}
 
 	filteredToolSet := toolSetForOutcomeReference(toolSet, AgentRequest{Prompt: "https://example.com use it to write the business plan"}, ExecutionPlan{}, false, contract)
@@ -723,7 +612,7 @@ func TestOutcomeReferenceToolSetHidesSendAndSiteToolsForDocumentGoal(t *testing.
 			t.Fatalf("expected %s to remain available, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
 	}
-	for _, toolName := range []string{"site_serve", "site_serve", "message_send", "mail_message_send"} {
+	for _, toolName := range []string{"message_send", "mail_message_send"} {
 		if filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected %s to be hidden for document goal, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
@@ -749,134 +638,64 @@ func TestAgentTurnToolSetExposesPinnedNonKernelTools(t *testing.T) {
 	}
 }
 
-func TestOutcomeReferenceToolSetKeepsSiteToolsForSiteGoal(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "site_serve", "site_serve"})
-
-	filteredToolSet := toolSetForOutcomeReference(toolSet, AgentRequest{Prompt: "build and deploy a website"}, ExecutionPlan{}, false, OutcomeContract{
-		RequiredEvidenceTools: []string{"site_serve", "site_serve"},
-	})
-
-	for _, toolName := range []string{"site_serve", "site_serve"} {
-		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected %s to remain available for site goal, got %+v", toolName, filteredToolSet.ListToolNames())
-		}
-	}
-}
-
 func TestOutcomeReferenceToolSetKeepsActiveGoalEvidenceToolsForContinuation(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "bash", "site_serve", "site_serve"})
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		{Name: "web_fetch", Namespace: "web", SideEffectClass: toolcontract.ToolSideEffectRead},
+		{Name: "message_send", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
+	})
 	request := AgentRequest{
 		Prompt: "try again, it should work",
-		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a website", OutcomeContract: OutcomeContract{
-			SelectedEvidenceHints: []string{"site_serve", "bash", "site_serve"},
+		ActiveGoal: ActiveGoal{OriginalInstruction: "send Dana a DM saying the draft is ready", OutcomeContract: OutcomeContract{
+			RequiredEvidenceTools: []string{"message_send"},
 		}},
 	}
 
 	filteredToolSet := toolSetForOutcomeReference(toolSet, request, ExecutionPlan{}, false, OutcomeContract{})
 
-	for _, toolName := range []string{"site_serve", "site_serve"} {
+	for _, toolName := range []string{"message_send"} {
 		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected %s to remain available for active site continuation, got %+v", toolName, filteredToolSet.ListToolNames())
-		}
-	}
-}
-
-func TestAgentTurnToolSetHidesSiteToolsForActiveGoalContinuation(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "bash", "site_serve", "site_serve"})
-	instructionBundle := InstructionBundle{
-		Skills: []SkillInstruction{{
-			Name:           "site-prototype",
-			ToolReferences: []string{"bash", "site_serve", "site_serve"},
-		}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-	}
-	request := AgentRequest{
-		Prompt:          "try again, it should work",
-		PinnedToolNames: []string{"bash", "site_serve", "site_serve"},
-		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a website", OutcomeContract: OutcomeContract{
-			SelectedEvidenceHints: []string{"site_serve", "bash", "site_serve"},
-		}},
-	}
-	contract := OutcomeContract{SelectedEvidenceHints: []string{"site_serve", "bash", "site_serve"}}
-
-	filteredToolSet := toolSetForAgentTurn(toolSet, instructionBundle, request, ExecutionPlan{}, false, contract)
-
-	// Continuation of an active site goal keeps site.* exposed because it is still pinned.
-	for _, toolName := range []string{"bash", "site_serve", "site_serve"} {
-		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected pinned tool %s to remain available for an active site continuation, got %+v", toolName, filteredToolSet.ListToolNames())
-		}
-	}
-}
-
-func TestAgentTurnToolSetHidesSelectedSiteSkillToolsWhenActiveGoalWasAttachmentFallback(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "bash", "file_deliver", "site_serve", "site_serve"})
-	instructionBundle := InstructionBundle{
-		Skills: []SkillInstruction{{
-			Name:           "site-prototype",
-			ToolReferences: []string{"bash", "site_serve", "site_serve"},
-		}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-	}
-	request := AgentRequest{
-		Prompt:          "try again",
-		PinnedToolNames: []string{"bash", "site_serve", "site_serve"},
-		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a personal homepage", OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools:      []string{"file_deliver"},
-			RequiredAttachmentSuffixes: []string{".html"},
-			SelectedEvidenceHints:      []string{"site_serve", "bash", "site_serve"},
-			ArtifactRequirement:        ArtifactRequirementRequired,
-		}},
-	}
-	contract := outcomeContractForRequest(request, IntakeDecision{Classification: IntakeClassificationBoundedTask, TaskShape: TaskShapeImmediateReply}, instructionBundle, ExecutionPlan{}, false, nil)
-
-	filteredToolSet := toolSetForAgentTurn(toolSet, instructionBundle, request, ExecutionPlan{}, false, contract)
-
-	// A selected site skill keeps site.* exposed because it is still pinned, alongside the kernel tools.
-	for _, toolName := range []string{"bash", "file_deliver", "site_serve", "site_serve"} {
-		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected pinned tool %s to remain available after selected site skill, got %+v", toolName, filteredToolSet.ListToolNames())
+			t.Fatalf("expected %s to remain available for an active send continuation, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
 	}
 }
 
 func TestOutcomeContractRequiresActiveGoalRequiredEvidenceForContinuation(t *testing.T) {
 	instructionBundle := InstructionBundle{
-		Skills:                []SkillInstruction{{Name: "site-prototype"}},
-		SkillDecisions:        []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-		RequiredEvidenceTools: []string{"site_serve", "bash", "site_serve"},
+		Skills:                []SkillInstruction{{Name: "office"}},
+		SkillDecisions:        []SkillSelectionDecision{{Name: "office", Status: "selected"}},
+		RequiredEvidenceTools: []string{"bash", "file_deliver"},
 	}
 	request := AgentRequest{
 		Prompt: "try again, it should work",
-		ActiveGoal: ActiveGoal{OriginalInstruction: "build and deploy a website", OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"site_serve", "site_serve"},
-			SelectedEvidenceHints: []string{"site_serve", "bash", "site_serve"},
+		ActiveGoal: ActiveGoal{OriginalInstruction: "make the quarterly report as a docx", OutcomeContract: OutcomeContract{
+			RequiredEvidenceTools: []string{"file_deliver"},
+			SelectedEvidenceHints: []string{"bash", "file_deliver"},
 		}},
 	}
 
 	contract := outcomeContractForRequest(request, IntakeDecision{Classification: IntakeClassificationBoundedTask, TaskShape: TaskShapeMaintenanceTask}, instructionBundle, ExecutionPlan{}, false, nil)
 
-	for _, toolName := range []string{"site_serve", "site_serve"} {
+	for _, toolName := range []string{"file_deliver"} {
 		if !stringSliceContains(contract.RequiredEvidenceTools, toolName) {
-			t.Fatalf("expected active site continuation to require %s evidence, got %+v", toolName, contract.RequiredEvidenceTools)
+			t.Fatalf("expected an active continuation to require %s evidence, got %+v", toolName, contract.RequiredEvidenceTools)
 		}
 	}
 }
 
-func TestOutcomeContractPreservesSiteGoalDuringApprovalContinuation(t *testing.T) {
+func TestOutcomeContractPreservesGoalDuringApprovalContinuation(t *testing.T) {
 	request := AgentRequest{
 		Prompt:                 "check",
 		IsApprovalContinuation: true,
 		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"site_unserve"},
-			SelectedEvidenceHints: []string{"site_unserve"},
+			RequiredEvidenceTools: []string{"task_delete"},
+			SelectedEvidenceHints: []string{"task_delete"},
 		}},
 	}
 
 	contract := outcomeContractForRequest(request, IntakeDecision{Classification: IntakeClassificationBoundedTask, TaskShape: TaskShapeMaintenanceTask}, InstructionBundle{}, ExecutionPlan{}, false, nil)
 
-	if !stringSliceContains(contract.RequiredEvidenceTools, "site_unserve") {
-		t.Fatalf("expected site_unserve evidence to remain, got %+v", contract)
+	if !stringSliceContains(contract.RequiredEvidenceTools, "task_delete") {
+		t.Fatalf("expected task_delete evidence to remain, got %+v", contract)
 	}
 }
 
@@ -958,7 +777,7 @@ func TestConfirmationHintsIgnoreUnrelatedSelectedSkillEvidence(t *testing.T) {
 	hints := confirmationEvidenceHintsForRequest(
 		AgentRequest{Prompt: "https://example.com use it to write the business plan"},
 		IntakeDecision{Classification: IntakeClassificationBoundedTask, TaskShape: TaskShapeResearchTask},
-		[]string{"site_serve", "message_send"},
+		[]string{"task_add", "message_send"},
 	)
 
 	if len(hints) != 0 {

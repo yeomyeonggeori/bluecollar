@@ -560,7 +560,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			"step":     iteration,
 			"exposure": iterationRequest.ToolExposure,
 		}))
-		allowQualityCriteria := len(state.QualityCriteria) == 0 && outcomeContractNeedsQualityCriteria(iterationRequest.ToolSet, iterationRequest.OutcomeContract)
+		allowQualityCriteria := len(state.QualityCriteria) == 0 && outcomeContractNeedsQualityCriteria(iterationRequest.OutcomeContract)
 		actionDocument, isBatched := takeBatchedAction(&state)
 		iterationSpentModelCall = !isBatched
 		var actionError error
@@ -1212,12 +1212,12 @@ func (agentTurnRunner *AgentTurnRunner) decideActionPatiently(ctx context.Contex
 	return DecideAgentAction(ctx, agentTurnRunner.languageModel, state)
 }
 
-func outcomeContractNeedsQualityCriteria(toolSet *toolcontract.ToolSet, contract OutcomeContract) bool {
+func outcomeContractNeedsQualityCriteria(contract OutcomeContract) bool {
 	artifactRequirement := strings.TrimSpace(contract.ArtifactRequirement)
 	if artifactRequirement != "" && artifactRequirement != ArtifactRequirementNone {
 		return true
 	}
-	if len(contract.RequiredAttachmentSuffixes) > 0 || contractRequiresToolNamespace(toolSet, contract, "site") {
+	if len(contract.RequiredAttachmentSuffixes) > 0 {
 		return true
 	}
 	return expectedResultIncludesType(contract, ExpectedResultTypeFile) ||

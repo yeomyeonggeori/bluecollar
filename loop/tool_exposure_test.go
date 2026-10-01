@@ -253,16 +253,16 @@ func TestSelectedSkillRankingControlsToolBudget(t *testing.T) {
 
 func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 	selectedToolNames := []string{
-		"site_serve", "site.audit", "artifact_review", "site.snapshot",
-		"site_list", "site.history", "site.diff", "site.logs",
-		"site.rollback", "site.unpublish", "site.restore", "site_unserve",
-		"site.metrics", "site.backup", "site.scan", "site.verify", "site.export",
+		"document_share", "document.audit", "artifact_review", "document.snapshot",
+		"document_list", "document.history", "document.diff", "document.logs",
+		"document.rollback", "document.unpublish", "document.restore", "document_unshare",
+		"document.metrics", "document.backup", "document.scan", "document.verify", "document.export",
 		"file_read", "write", "edit", "bash",
 	}
 	toolSet := testToolSet(append(testBuiltInToolNames(), selectedToolNames...))
 	instructionBundle := InstructionBundle{
-		Skills:         []SkillInstruction{{Name: "website", ToolReferences: selectedToolNames}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "website", Status: "selected"}},
+		Skills:         []SkillInstruction{{Name: "document", ToolReferences: selectedToolNames}},
+		SkillDecisions: []SkillSelectionDecision{{Name: "document", Status: "selected"}},
 	}
 
 	filteredToolSet, event := toolSetForAgentTurnWithExposure(
@@ -294,15 +294,15 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 
 func TestRequiredEvidenceWinsToolBudget(t *testing.T) {
 	selectedToolNames := []string{
-		"site_serve", "site_serve", "artifact_review", "site_serve",
-		"site_list", "site.history", "site.diff", "site.logs",
-		"site.rollback", "site.unpublish", "site.restore", "site_unserve",
+		"document_share", "document_share", "artifact_review", "document_share",
+		"document_list", "document.history", "document.diff", "document.logs",
+		"document.rollback", "document.unpublish", "document.restore", "document_unshare",
 		"file_read", "write", "edit", "bash",
 	}
 	toolSet := testToolSet(append(append(testBuiltInToolNames(), selectedToolNames...), "task_update"))
 	instructionBundle := InstructionBundle{
-		Skills:         []SkillInstruction{{Name: "website", ToolReferences: selectedToolNames}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "website", Status: "selected"}},
+		Skills:         []SkillInstruction{{Name: "document", ToolReferences: selectedToolNames}},
+		SkillDecisions: []SkillSelectionDecision{{Name: "document", Status: "selected"}},
 	}
 
 	filteredToolSet, _ := toolSetForAgentTurnWithExposure(
@@ -378,17 +378,17 @@ func TestEachRequiredEvidenceAlternativeGroupKeepsOneTool(t *testing.T) {
 }
 
 func TestAuthoritativeWorkingSetKeepsSelectedSkillTools(t *testing.T) {
-	toolSet := testToolSet(append(testBuiltInToolNames(), "site_serve", "site_list"))
+	toolSet := testToolSet(append(testBuiltInToolNames(), "document_share", "document_list"))
 	instructionBundle := InstructionBundle{
 		HasContractSkillArbitration: true,
 		RequiredNextTools:           []string{"write"},
-		Skills:                      []SkillInstruction{{Name: "website", ToolReferences: []string{"site_serve", "site_list"}}},
-		SkillDecisions:              []SkillSelectionDecision{{Name: "website", Status: "selected"}},
+		Skills:                      []SkillInstruction{{Name: "document", ToolReferences: []string{"document_share", "document_list"}}},
+		SkillDecisions:              []SkillSelectionDecision{{Name: "document", Status: "selected"}},
 	}
 
 	filteredToolSet, event := toolSetForAgentTurnWithExposure(toolSet, instructionBundle, AgentRequest{}, ExecutionPlan{}, false, OutcomeContract{}, ToolExposureEvent{})
 
-	for _, toolName := range []string{"site_serve", "site_list"} {
+	for _, toolName := range []string{"document_share", "document_list"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected selected skill tool %s in authoritative working set, got %+v", toolName, event.ExposedToolIDs)
 		}

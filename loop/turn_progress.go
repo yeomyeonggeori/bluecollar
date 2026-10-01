@@ -284,8 +284,6 @@ func summarizeObservationContent(observation turnObservation) string {
 		return summarizeSafeJSONFields(content, []string{"filename", "sizeBytes", "contentType", "expiresAt"})
 	case "file_read":
 		return summarizeFileReadObservation(observation)
-	case "site_serve":
-		return summarizeSafeJSONFields(content, []string{"siteID", "slug", "mode", "previewURL", "publishedURL", "sourceSHA256"})
 	case "memory_search", "conversation_history":
 		return summarizeCollection(content)
 	default:

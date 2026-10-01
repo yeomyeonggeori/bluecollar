@@ -48,7 +48,7 @@ func TestTaskContextCompactionTriggersOnlyOverBudget(t *testing.T) {
 
 func TestTaskContextCompactionReplacesOldPromptObservationsOnly(t *testing.T) {
 	observations := numberedContextSummaryObservations(12, 2000, "OLD_MARKER")
-	summaryResponse := `{"goal":"ship","completedSteps":["rolled summary"],"artifacts":["/workspace/site/index.html"],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":["finish"]}`
+	summaryResponse := `{"goal":"ship","completedSteps":["rolled summary"],"artifacts":["/workspace/report/index.html"],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":["finish"]}`
 	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 

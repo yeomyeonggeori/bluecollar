@@ -120,9 +120,9 @@ func TestIndependentWorkDefersOnlyMissingInformationWithoutPolicyGates(t *testin
 
 func TestConfirmationPlanMessagesIncludeTemporalContextAndScheduleGuard(t *testing.T) {
 	messages := confirmationPlanMessages(AgentRequest{
-		Prompt:        "김인턴 구조 소개 웹사이트 만들어서 배포해줘",
+		Prompt:        "다음 주 회의 안건 정리해서 팀 채널에 공지해줘",
 		TurnStartedAt: time.Date(2026, time.May, 17, 1, 2, 3, 0, time.UTC),
-	}, []string{"site_serve"})
+	}, []string{"message_send"})
 
 	body := joinMessageContent(messages)
 	if strings.Contains(body, "Now:") {
@@ -133,45 +133,10 @@ func TestConfirmationPlanMessagesIncludeTemporalContextAndScheduleGuard(t *testi
 	}
 }
 
-func TestSitePrototypePublishDoesNotBuildConfirmationPlan(t *testing.T) {
-	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "bash"})
+func TestApprovalGatedTaskStillBuildsConfirmationPlan(t *testing.T) {
+	toolSet := newTestToolSet([]string{"task_delete", "bash"})
 	request := AgentRequest{
-		Prompt:  "김인턴 구조 소개 웹사이트 만들어서 배포해줘",
-		ToolSet: toolSet,
-	}
-	decision := IntakeDecision{
-		Classification: IntakeClassificationBoundedTask,
-		TaskShape:      TaskShapeMaintenanceTask,
-	}
-
-	if shouldBuildExecutionPlanForConfirmation(request, decision, []string{"site_serve", "site_serve"}) {
-		t.Fatal("site prototype publish is part of the normal create workflow and must not request approval")
-	}
-}
-
-func TestSitePrototypeContinuationDoesNotBuildConfirmationPlan(t *testing.T) {
-	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "bash"})
-	request := AgentRequest{
-		Prompt:  "다시 해봐 그럼 될 거야",
-		ToolSet: toolSet,
-		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
-			SelectedEvidenceHints: []string{"site_serve", "bash", "site_serve"},
-		}},
-	}
-	decision := IntakeDecision{
-		Classification: IntakeClassificationBoundedTask,
-		TaskShape:      TaskShapeMaintenanceTask,
-	}
-
-	if shouldBuildExecutionPlanForConfirmation(request, decision, []string{"site_serve", "site_serve"}) {
-		t.Fatal("site prototype continuation must not request approval")
-	}
-}
-
-func TestDestructiveSiteManagementStillBuildsConfirmationPlan(t *testing.T) {
-	toolSet := newTestToolSet([]string{"site_serve", "site_serve", "bash"})
-	request := AgentRequest{
-		Prompt:  "이 사이트 내려줘",
+		Prompt:  "지난 분기 업무 전부 지워줘",
 		ToolSet: toolSet,
 	}
 	decision := IntakeDecision{
@@ -179,8 +144,8 @@ func TestDestructiveSiteManagementStillBuildsConfirmationPlan(t *testing.T) {
 		TaskShape:      TaskShapeApprovalGatedTask,
 	}
 
-	if !shouldBuildExecutionPlanForConfirmation(request, decision, []string{"site_serve"}) {
-		t.Fatal("destructive site management should still request confirmation")
+	if !shouldBuildExecutionPlanForConfirmation(request, decision, []string{"task_delete"}) {
+		t.Fatal("an approval-gated task should still request confirmation")
 	}
 }
 
@@ -212,19 +177,19 @@ func TestConfirmationPlanUsesExplicitExternalSendIntentInsteadOfLikelyToolNames(
 
 func TestConfirmationMessageIncludesTemporalContextAndAvoidsInventedTiming(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"reply":"웹사이트 배포에 필요한 내용을 알려주세요."}`,
+		`{"reply":"보고서 공유에 필요한 내용을 알려주세요."}`,
 	}}
 	kernel := NewAgentKernel(nil, nil)
 	kernel.UseLanguageModelProvider(languageModel)
 
 	_, errorValue := kernel.GenerateClarificationMessage(context.Background(), AgentRequest{
-		Prompt:           "김인턴 구조 소개 웹사이트 만들어서 배포해줘",
+		Prompt:           "김인턴 구조 소개 보고서 만들어서 공유해줘",
 		ResponseLanguage: "ko",
 		TurnStartedAt:    time.Date(2026, time.May, 17, 1, 2, 3, 0, time.UTC),
 	}, ExecutionPlan{
-		OriginalInstruction: "김인턴 구조 소개 웹사이트 만들어서 배포해줘",
-		Summary:             "김인턴 구조 소개 웹사이트를 제작해 배포합니다.",
-		MissingInformation:  []string{"배포 대상 도메인"},
+		OriginalInstruction: "김인턴 구조 소개 보고서 만들어서 공유해줘",
+		Summary:             "김인턴 구조 소개 보고서를 제작해 공유합니다.",
+		MissingInformation:  []string{"공유 대상 그룹"},
 	}, ConfirmationPolicyDecision{RequiresClarification: true, Reason: "missing_information"})
 	if errorValue != nil {
 		t.Fatalf("expected clarification message: %v", errorValue)
@@ -369,7 +334,7 @@ func TestARiskyEffectTheRequesterNamedDoesNotHoldTheTask(t *testing.T) {
 func TestAuthorizationDoesNotUnlockAnEffectThatReachesPastTheWorkspace(t *testing.T) {
 	explicitAndWide := []ExecutionPlan{
 		{Summary: "message every customer", ThirdPartyExternalSend: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
-		{Summary: "publish the site", PublicDeploy: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
+		{Summary: "publish the price list publicly", PublicDeploy: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
 		{Summary: "buy the plan", PaidAction: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
 		{Summary: "grant them admin", PermissionChange: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
 	}

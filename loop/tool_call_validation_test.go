@@ -41,19 +41,19 @@ func TestAgentTurnRunnerRecordsDeniedToolAsObservation(t *testing.T) {
 
 func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		directToolAction("continue", "", "site_unserve", `{"siteID":42}`),
+		directToolAction("continue", "", "task_delete", `{"taskID":42}`),
 		noToolFallbackFinishMessageDocument("could not read the delete request format."),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
-	toolRegistry := newTestCapabilityToolSet([]string{"site_unserve"})
+	toolRegistry := newTestCapabilityToolSet([]string{"task_delete"})
 	handlerCallCount := 0
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{
-		Name:             "site_unserve",
+		Name:             "task_delete",
 		RequiresApproval: true,
 		InputSchema: json.RawMessage(`{
 			"type":"object",
-			"properties":{"siteID":{"type":"string"}},
-			"required":["siteID"],
+			"properties":{"taskID":{"type":"string"}},
+			"required":["taskID"],
 			"additionalProperties":false
 		}`),
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -64,9 +64,9 @@ func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
-		Prompt:            "delete the site",
+		Prompt:            "delete the task",
 		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"site_unserve"},
+		PinnedToolNames:   []string{"task_delete"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected malformed call recovery: %v", errorValue)
@@ -78,7 +78,7 @@ func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 		t.Fatalf("expected malformed input to stay outside the handler, got %d calls", handlerCallCount)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.tool_input_malformed", "site_unserve") {
+	if !taskEventsContain(events, "agent.tool_input_malformed", "task_delete") {
 		t.Fatalf("expected malformed input event, got %+v", events)
 	}
 	if taskEventsContain(events, "approval.pending_call", "") {
@@ -88,10 +88,10 @@ func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 
 func TestValidateTerminalToolInputRejectsRegisteredToolNameAsCommand(t *testing.T) {
 	toolRegistry := newTestToolSet([]string{"bash"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_serve"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "task_add"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("created"), nil
 	})
-	input := toolcontract.MarshalToolInput(map[string]any{"command": "site_serve --slug demo"})
+	input := toolcontract.MarshalToolInput(map[string]any{"command": "task_add --title demo"})
 
 	errorValue := validateTerminalToolInput("bash", input, toolRegistry)
 
@@ -659,11 +659,11 @@ func TestRepeatedFileReadObservationReturnsCachedCoveredRange(t *testing.T) {
 		ObservationID: "obs-001",
 		Action:        "continue",
 		Tool:          "file_read",
-		Output:        toolcontract.ToolOutput{Content: `{"path":"home/sites/site-1/draft/app/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":162,"totalLines":162,"sizeBytes":1000}`},
+		Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":162,"totalLines":162,"sizeBytes":1000}`},
 	}}
 	actionDocument := turnActionDocument{
 		ToolName:  "file_read",
-		ToolInput: json.RawMessage(`{"path":"home/sites/site-1/draft/app/src/prototype-data.ts","startLine":120,"lineCount":40}`),
+		ToolInput: json.RawMessage(`{"path":"home/reports/report-1/draft/src/prototype-data.ts","startLine":120,"lineCount":40}`),
 	}
 
 	observation, isRepeated := repeatedFileReadObservation(observations, actionDocument, "obs-002")
@@ -684,11 +684,11 @@ func TestRepeatedFileReadObservationReturnsCachedOverlappingRange(t *testing.T) 
 		ObservationID: "obs-001",
 		Action:        "continue",
 		Tool:          "file_read",
-		Output:        toolcontract.ToolOutput{Content: `{"path":"home/sites/site-1/draft/app/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":120,"totalLines":180,"sizeBytes":1000}`},
+		Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":120,"totalLines":180,"sizeBytes":1000}`},
 	}}
 	actionDocument := turnActionDocument{
 		ToolName:  "file_read",
-		ToolInput: json.RawMessage(`{"path":"home/sites/site-1/draft/app/src/prototype-data.ts","startLine":1,"lineCount":150}`),
+		ToolInput: json.RawMessage(`{"path":"home/reports/report-1/draft/src/prototype-data.ts","startLine":1,"lineCount":150}`),
 	}
 
 	observation, isRepeated := repeatedFileReadObservation(observations, actionDocument, "obs-002")
@@ -705,7 +705,7 @@ func TestRepeatedFileReadObservationReturnsCachedOverlappingRange(t *testing.T) 
 }
 
 func TestRepeatedFileReadObservationIgnoresCacheAfterFileWrite(t *testing.T) {
-	path := "home/sites/site-1/draft/app/src/prototype-data.ts"
+	path := "home/reports/report-1/draft/src/prototype-data.ts"
 	observations := []turnObservation{
 		{
 			ObservationID: "obs-001",
@@ -733,7 +733,7 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileWrite(t *testing.T) {
 }
 
 func TestRepeatedFileReadObservationIgnoresCacheAfterFileEdit(t *testing.T) {
-	path := "~/sites/site-1/draft/DESIGN.md"
+	path := "~/reports/report-1/draft/DESIGN.md"
 	observations := []turnObservation{
 		{
 			ObservationID: "obs-001",

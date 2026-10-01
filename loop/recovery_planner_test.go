@@ -12,13 +12,13 @@ func TestRecoveryPacketDoesNotHardCodeToolAllowedList(t *testing.T) {
 	observation := turnObservation{
 		ObservationID: "obs-001",
 		Action:        "continue",
-		Tool:          "site_serve",
-		Output:        toolcontract.ToolOutput{Content: "site workspace must contain app/dist; build in Blueclaw before publishing"},
+		Tool:          "task_update",
+		Output:        toolcontract.ToolOutput{Content: "task must carry a title before it is updated"},
 		Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureExternalService,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
-			Stage:           "site_serve",
-			UserSafeSummary: "site workspace must contain app/dist; build in Blueclaw before publishing",
+			Stage:           "task_update",
+			UserSafeSummary: "task must carry a title before it is updated",
 		},
 	}
 
@@ -61,8 +61,8 @@ func TestRecoveryPacketKeepsTypedHintTools(t *testing.T) {
 	failedObservation := turnObservation{
 		ObservationID: "obs-001",
 		Action:        "continue",
-		Tool:          "site_serve",
-		ToolInputKey:  "site_serve\x00{\"siteID\":\"site-1\"}",
+		Tool:          "task_update",
+		ToolInputKey:  "task_update\x00{\"taskID\":\"task-1\"}",
 		Failure: &toolcontract.ToolFailure{
 			RecoveryHints: []toolcontract.RecoveryHint{{ToolNames: []string{"edit"}}},
 		},

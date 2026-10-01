@@ -185,17 +185,17 @@ func TestToolSetInvokeRejectsHiddenTool(t *testing.T) {
 }
 
 func TestToolSetValidatesDescriptorInputSchemaBeforeHandler(t *testing.T) {
-	toolSet := NewToolSet([]string{"site_serve"})
+	toolSet := NewToolSet([]string{"task_update"})
 	handlerCallCount := 0
 	registerTestTool(toolSet, ToolDefinition{
-		Name: "site_serve",
+		Name: "task_update",
 		InputSchema: json.RawMessage(`{
 			"type":"object",
 			"properties":{
-				"siteID":{"type":"string","pattern":"^[a-z0-9-]+$"},
+				"taskID":{"type":"string","pattern":"^[a-z0-9-]+$"},
 				"revision":{"type":"integer","minimum":1}
 			},
-			"required":["siteID","revision"],
+			"required":["taskID","revision"],
 			"additionalProperties":false
 		}`),
 	}, func(context.Context, ToolInvocation) (ToolResult, error) {
@@ -205,14 +205,14 @@ func TestToolSetValidatesDescriptorInputSchemaBeforeHandler(t *testing.T) {
 
 	invalidInputs := []json.RawMessage{
 		nil,
-		json.RawMessage(`{"siteID":"site-1"}`),
-		json.RawMessage(`{"siteID":"SITE 1","revision":1}`),
-		json.RawMessage(`{"siteID":"site-1","revision":0}`),
-		json.RawMessage(`{"siteID":"site-1","revision":"1"}`),
-		json.RawMessage(`{"siteID":"site-1","revision":1,"confirm":true}`),
+		json.RawMessage(`{"taskID":"task-1"}`),
+		json.RawMessage(`{"taskID":"TASK 1","revision":1}`),
+		json.RawMessage(`{"taskID":"task-1","revision":0}`),
+		json.RawMessage(`{"taskID":"task-1","revision":"1"}`),
+		json.RawMessage(`{"taskID":"task-1","revision":1,"confirm":true}`),
 	}
 	for _, input := range invalidInputs {
-		result, errorValue := toolSet.Invoke(context.Background(), ToolInvocation{ToolName: "site_serve", Input: input})
+		result, errorValue := toolSet.Invoke(context.Background(), ToolInvocation{ToolName: "task_update", Input: input})
 		if errorValue != nil {
 			t.Fatal(errorValue)
 		}
@@ -225,8 +225,8 @@ func TestToolSetValidatesDescriptorInputSchemaBeforeHandler(t *testing.T) {
 	}
 
 	result, errorValue := toolSet.Invoke(context.Background(), ToolInvocation{
-		ToolName: "site_serve",
-		Input:    json.RawMessage(`{"siteID":"site-1","revision":1}`),
+		ToolName: "task_update",
+		Input:    json.RawMessage(`{"taskID":"task-1","revision":1}`),
 	})
 	if errorValue != nil || result.Failed() {
 		t.Fatalf("expected valid descriptor input, got result=%+v error=%v", result, errorValue)

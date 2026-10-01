@@ -7,34 +7,34 @@ import (
 
 func TestNormalizePersistedActiveGoalMigratesLegacyToolNames(t *testing.T) {
 	activeGoal := ActiveGoal{
-		RequiredNextTools: []string{"terminal.session", "site.promote"},
-		SelectedToolNames: []string{"terminal.session", "site.promote"},
+		RequiredNextTools: []string{"terminal.session", "file.attach"},
+		SelectedToolNames: []string{"terminal.session", "file.attach"},
 		OutcomeContract: OutcomeContract{
 			RequiredEvidenceTools: []string{"file.attach", "artifact.deliver"},
 			RequiredEvidenceAnyOf: [][]string{{"ask_choice", "terminal.session"}},
-			SelectedEvidenceHints: []string{"site.promote"},
+			SelectedEvidenceHints: []string{"artifact.deliver"},
 			ExpectedResults: []ExpectedResult{{
 				Description:     "choice",
 				Required:        true,
 				AcceptanceHints: []string{"ask_choice"},
 			}},
 			RequiredEffects: []OutcomeEffect{{
-				ObjectType:         "website",
-				Effect:             "published",
-				SuggestedNextTools: []string{"site.promote"},
+				ObjectType:         "file",
+				Effect:             "delivered",
+				SuggestedNextTools: []string{"artifact.deliver"},
 			}},
 		},
 	}
 
 	normalizedGoal := normalizePersistedActiveGoal(activeGoal)
 
-	assertSameStrings(t, normalizedGoal.RequiredNextTools, []string{toolcontract.BashToolName, "site_serve"})
-	assertSameStrings(t, normalizedGoal.SelectedToolNames, []string{toolcontract.BashToolName, "site_serve"})
+	assertSameStrings(t, normalizedGoal.RequiredNextTools, []string{toolcontract.BashToolName, toolcontract.FileDeliverToolName})
+	assertSameStrings(t, normalizedGoal.SelectedToolNames, []string{toolcontract.BashToolName, toolcontract.FileDeliverToolName})
 	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEvidenceTools, []string{toolcontract.FileDeliverToolName})
 	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEvidenceAnyOf[0], []string{toolcontract.AskInputToolName, toolcontract.BashToolName})
-	assertSameStrings(t, normalizedGoal.OutcomeContract.SelectedEvidenceHints, []string{"site_serve"})
+	assertSameStrings(t, normalizedGoal.OutcomeContract.SelectedEvidenceHints, []string{toolcontract.FileDeliverToolName})
 	assertSameStrings(t, normalizedGoal.OutcomeContract.ExpectedResults[0].AcceptanceHints, []string{toolcontract.AskInputToolName})
-	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEffects[0].SuggestedNextTools, []string{"site_serve"})
+	assertSameStrings(t, normalizedGoal.OutcomeContract.RequiredEffects[0].SuggestedNextTools, []string{toolcontract.FileDeliverToolName})
 }
 
 func TestNormalizePersistedActiveGoalCanonicalizesRenamedKernelTools(t *testing.T) {
@@ -60,18 +60,18 @@ func TestNormalizePersistedActiveGoalCanonicalizesRenamedKernelTools(t *testing.
 
 func TestNormalizePersistedActiveGoalDoesNotMutateSource(t *testing.T) {
 	activeGoal := ActiveGoal{
-		RequiredNextTools: []string{"site.promote"},
+		RequiredNextTools: []string{"artifact.deliver"},
 		SelectedToolNames: []string{"file.attach"},
 		OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"site.promote"},
+			RequiredEvidenceTools: []string{"artifact.deliver"},
 		},
 	}
 
 	normalizePersistedActiveGoal(activeGoal)
 
-	assertSameStrings(t, activeGoal.RequiredNextTools, []string{"site.promote"})
+	assertSameStrings(t, activeGoal.RequiredNextTools, []string{"artifact.deliver"})
 	assertSameStrings(t, activeGoal.SelectedToolNames, []string{"file.attach"})
-	assertSameStrings(t, activeGoal.OutcomeContract.RequiredEvidenceTools, []string{"site.promote"})
+	assertSameStrings(t, activeGoal.OutcomeContract.RequiredEvidenceTools, []string{"artifact.deliver"})
 }
 
 func TestNormalizeOutcomeContractRequiresDeliveryForRequiredFileResult(t *testing.T) {

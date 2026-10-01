@@ -109,28 +109,28 @@ func TestObservedResultProjectionDoesNotInferScheduleFactsFromToolName(t *testin
 }
 
 func TestObservedResultProjectionDoesNotTreatUnpublishedStatusAsPublished(t *testing.T) {
-	facts := factsFromObservation(newTestToolSet([]string{"site_list"}), newContentObservation("obs-001", "continue", "site_list", `{"siteID":"site-1","status":"published"}`))
+	facts := factsFromObservation(newTestToolSet([]string{"task_list"}), newContentObservation("obs-001", "continue", "task_list", `{"taskID":"task-1","status":"published"}`))
 
-	if projectionHasObservedFact(facts, "website", "published") {
+	if projectionHasObservedFact(facts, "task", "published") {
 		t.Fatalf("status text must not synthesize a published fact, got %+v", facts)
 	}
 }
 
-func TestObservedResultProjectionRequiresCurrentSiteModificationEffects(t *testing.T) {
+func TestObservedResultProjectionRequiresCurrentDocumentModificationEffects(t *testing.T) {
 	goalSatisfied := true
 	projection := buildObservedResultProjection(
 		AgentTurnRequest{
-			ToolSet: newTestToolSet([]string{"site_list", "edit", "site_serve"}),
+			ToolSet: newTestToolSet([]string{"document_read", "edit", "document_share"}),
 			OutcomeContract: OutcomeContract{RequiredEffects: []OutcomeEffect{
 				{ObjectType: "workspace", Effect: "modified", SuggestedNextTools: []string{"edit"}},
-				{ObjectType: "website", Effect: "published", SuggestedNextTools: []string{"site_serve"}},
+				{ObjectType: "document", Effect: "published", SuggestedNextTools: []string{"document_share"}},
 			}},
 		},
-		[]turnObservation{newContentObservation("obs-001", "continue", "site_list", `{"siteID":"site-1","status":"published","publishedURL":"https://pretty-gyul.example"}`)},
+		[]turnObservation{newContentObservation("obs-001", "continue", "document_read", `{"documentID":"document-1","status":"published","publicURL":"https://pretty-gyul.example"}`)},
 		nil,
 		turnActionDocument{
 			Action:        "finish",
-			Message:       "The tangerine site is already published: https://pretty-gyul.example",
+			Message:       "The tangerine document is already published: https://pretty-gyul.example",
 			GoalSatisfied: &goalSatisfied,
 		},
 	)
@@ -140,14 +140,14 @@ func TestObservedResultProjectionRequiresCurrentSiteModificationEffects(t *testi
 	}
 }
 
-func TestObservedResultProjectionAcceptsCurrentSiteModificationEffects(t *testing.T) {
+func TestObservedResultProjectionAcceptsCurrentDocumentModificationEffects(t *testing.T) {
 	goalSatisfied := true
 	fileDescriptor, fileObservation := canonicalEffectObservation(
 		"edit",
-		`{"paths":["/workspace/circles/staff/sites/pretty-gyul/draft/app/src/App.tsx"]}`,
+		`{"paths":["/workspace/circles/staff/documents/pretty-gyul/draft/notes.md"]}`,
 		[]toolcontract.ResourceEffect{
-			{ObjectType: "file", Effect: "updated", Path: "/workspace/circles/staff/sites/pretty-gyul/draft/app/src/App.tsx"},
-			{ObjectType: "workspace", Effect: "modified", Path: "/workspace/circles/staff/sites/pretty-gyul/draft/app/src/App.tsx"},
+			{ObjectType: "file", Effect: "updated", Path: "/workspace/circles/staff/documents/pretty-gyul/draft/notes.md"},
+			{ObjectType: "workspace", Effect: "modified", Path: "/workspace/circles/staff/documents/pretty-gyul/draft/notes.md"},
 		},
 		[]toolcontract.ResourceEffectContract{
 			{ObjectType: "file", Effect: "updated", ResultField: "paths", EffectIdentity: "path"},
@@ -155,17 +155,17 @@ func TestObservedResultProjectionAcceptsCurrentSiteModificationEffects(t *testin
 		},
 	)
 	publishDescriptor, publishObservation := canonicalEffectObservation(
-		"site_serve",
-		`{"siteID":"site-1"}`,
-		[]toolcontract.ResourceEffect{{ObjectType: "website", Effect: "published", ID: "site-1"}},
-		[]toolcontract.ResourceEffectContract{{ObjectType: "website", Effect: "published", ResultField: "siteID", EffectIdentity: "id"}},
+		"document_share",
+		`{"documentID":"document-1"}`,
+		[]toolcontract.ResourceEffect{{ObjectType: "document", Effect: "published", ID: "document-1"}},
+		[]toolcontract.ResourceEffectContract{{ObjectType: "document", Effect: "published", ResultField: "documentID", EffectIdentity: "id"}},
 	)
 	projection := buildObservedResultProjection(
 		AgentTurnRequest{
 			ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{fileDescriptor, publishDescriptor}),
 			OutcomeContract: OutcomeContract{RequiredEffects: []OutcomeEffect{
 				{ObjectType: "workspace", Effect: "modified", SuggestedNextTools: []string{"edit"}},
-				{ObjectType: "website", Effect: "published", SuggestedNextTools: []string{"site_serve"}},
+				{ObjectType: "document", Effect: "published", SuggestedNextTools: []string{"document_share"}},
 			}},
 		},
 		[]turnObservation{fileObservation, publishObservation},
@@ -185,53 +185,53 @@ func TestObservedResultProjectionAcceptsCurrentSiteModificationEffects(t *testin
 	}
 }
 
-func TestObservedResultProjectionDoesNotInferSiteReadEffectFromStatus(t *testing.T) {
+func TestObservedResultProjectionDoesNotInferTaskReadEffectFromStatus(t *testing.T) {
 	goalSatisfied := true
 	projection := buildObservedResultProjection(
 		AgentTurnRequest{
-			ToolSet: newTestToolSet([]string{"site_list"}),
+			ToolSet: newTestToolSet([]string{"task_list"}),
 			OutcomeContract: OutcomeContract{RequiredEffects: []OutcomeEffect{{
-				ObjectType:         "website",
+				ObjectType:         "task",
 				Effect:             "read",
-				SuggestedNextTools: []string{"site_list"},
+				SuggestedNextTools: []string{"task_list"},
 			}}},
 		},
-		[]turnObservation{newContentObservation("obs-001", "continue", "site_list", `{"siteID":"site-1","status":"published"}`)},
+		[]turnObservation{newContentObservation("obs-001", "continue", "task_list", `{"taskID":"task-1","status":"published"}`)},
 		nil,
 		turnActionDocument{
 			Action:        "finish",
-			Message:       "Checked the site status.",
+			Message:       "Checked the task status.",
 			GoalSatisfied: &goalSatisfied,
 		},
 	)
 
-	if !projectionMissingRequirementContains(projection.MissingRequirements, "website", "read") {
+	if !projectionMissingRequirementContains(projection.MissingRequirements, "task", "read") {
 		t.Fatalf("expected status without a canonical effect to remain missing, got %+v", projection.MissingRequirements)
 	}
 }
 
-func TestObservedResultProjectionAllowsSiteDeleteEffect(t *testing.T) {
+func TestObservedResultProjectionAllowsTaskDeleteEffect(t *testing.T) {
 	goalSatisfied := true
 	descriptor, observation := canonicalEffectObservation(
-		"site_unserve",
-		`{"siteID":"site-1"}`,
-		[]toolcontract.ResourceEffect{{ObjectType: "website", Effect: "deleted", ID: "site-1"}},
-		[]toolcontract.ResourceEffectContract{{ObjectType: "website", Effect: "deleted", ResultField: "siteID", EffectIdentity: "id"}},
+		"task_delete",
+		`{"taskID":"task-1"}`,
+		[]toolcontract.ResourceEffect{{ObjectType: "task", Effect: "deleted", ID: "task-1"}},
+		[]toolcontract.ResourceEffectContract{{ObjectType: "task", Effect: "deleted", ResultField: "taskID", EffectIdentity: "id"}},
 	)
 	projection := buildObservedResultProjection(
 		AgentTurnRequest{
 			ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{descriptor}),
 			OutcomeContract: OutcomeContract{RequiredEffects: []OutcomeEffect{{
-				ObjectType:         "website",
+				ObjectType:         "task",
 				Effect:             "deleted",
-				SuggestedNextTools: []string{"site_unserve"},
+				SuggestedNextTools: []string{"task_delete"},
 			}}},
 		},
 		[]turnObservation{observation},
 		nil,
 		turnActionDocument{
 			Action:        "finish",
-			Message:       "Deleted the site.",
+			Message:       "Deleted the task.",
 			GoalSatisfied: &goalSatisfied,
 		},
 	)
@@ -239,8 +239,8 @@ func TestObservedResultProjectionAllowsSiteDeleteEffect(t *testing.T) {
 	if len(projection.MissingRequirements) != 0 {
 		t.Fatalf("expected no missing requirements, got %+v", projection.MissingRequirements)
 	}
-	if !projectionHasObservedFact(projection.ObservedFacts, "website", "deleted") {
-		t.Fatalf("expected website deleted fact, got %+v", projection.ObservedFacts)
+	if !projectionHasObservedFact(projection.ObservedFacts, "task", "deleted") {
+		t.Fatalf("expected task deleted fact, got %+v", projection.ObservedFacts)
 	}
 }
 

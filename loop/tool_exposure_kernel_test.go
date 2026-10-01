@@ -6,15 +6,15 @@ import "testing"
 
 func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 	toolSet := testToolSet(append(testBuiltInToolNames(),
-		"site_serve",
-		"site_serve",
+		"document_share",
+		"document_share",
 		"message_send",
 	))
 
 	filteredToolSet, event := toolSetForAgentTurnWithExposure(
 		toolSet,
 		InstructionBundle{},
-		AgentRequest{Prompt: "create and publish a site"},
+		AgentRequest{Prompt: "create and share a document"},
 		ExecutionPlan{},
 		false,
 		OutcomeContract{},
@@ -24,7 +24,7 @@ func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 	if got := filteredToolSet.ListToolNames(); !sameStringSet(got, testBuiltInToolNames()) {
 		t.Fatalf("expected fixed kernel tools, got %+v", got)
 	}
-	for _, hiddenToolName := range []string{"site_serve", "site_serve", "message_send"} {
+	for _, hiddenToolName := range []string{"document_share", "document_share", "message_send"} {
 		if filteredToolSet.IsAllowed(hiddenToolName) {
 			t.Fatalf("expected non-kernel tool %s to be hidden, got %+v", hiddenToolName, filteredToolSet.ListToolNames())
 		}

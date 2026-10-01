@@ -391,32 +391,32 @@ func TestAgentTurnRunnerRemovesQualityCriteriaActionAfterCriteriaAreSet(t *testi
 func TestAgentTurnRunnerDoesNotBlockFinishedExpectedResultForMissingQualityReview(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"set_quality_criteria","qualityCriteria":["visual review: review the artifact"],"goalStatus":"in_progress","goalSatisfied":false}`,
-		`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish with the public URL","expectedTools":[],"expectedNextResults":["public URL"],"doneCriteria":["public URL is available"],"risk":"none","workingSetReason":"publish satisfies the link expected result"}}`,
-		`{"action":"reply","final":true,"message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
+		`{"action":"continue","toolName":"document_share","toolInput":{"documentID":"document-1"},"nextStepPlan":{"objective":"finish with the public URL","expectedTools":[],"expectedNextResults":["public URL"],"doneCriteria":["public URL is available"],"risk":"none","workingSetReason":"publish satisfies the link expected result"}}`,
+		`{"action":"reply","final":true,"message":"공유했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-002"]}`,
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
-	toolRegistry := newTestCapabilityToolSet([]string{"site_serve"})
-	registerTestTool(toolRegistry, canonicalLinkToolDefinition("site_serve"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestCapabilityToolSet([]string{"document_share"})
+	registerTestTool(toolRegistry, canonicalLinkToolDefinition("document_share"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return canonicalLinkToolResult("https://portfolio.example"), nil
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
-		Prompt:            "사이트를 배포해줘",
+		Prompt:            "문서를 공유해줘",
 		ToolSet:           toolRegistry,
 		PinnedToolNames:   toolRegistry.ListToolNames(),
 		OutcomeContract: OutcomeContract{ExpectedResults: []ExpectedResult{{
-			ID:          "site-public-link",
+			ID:          "document-public-link",
 			Type:        ExpectedResultTypeLink,
-			Description: "사용자가 열 수 있는 public URL의 웹사이트",
+			Description: "사용자가 열 수 있는 public URL의 문서",
 			Required:    true,
 		}}},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected finish to pass without qualityReview hard gate: %v", errorValue)
 	}
-	if result.FinishMessage != "배포했습니다: https://portfolio.example" {
+	if result.FinishMessage != "공유했습니다: https://portfolio.example" {
 		t.Fatalf("expected final publish message, got %q", result.FinishMessage)
 	}
 	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.completion_required", "qualityReview") {
@@ -453,13 +453,13 @@ func TestCompletionGateUsesAttachmentsFromCompletionEvidence(t *testing.T) {
 func TestAgentTurnRunnerExpectedResultsRequireTheirTypedToolEvidence(t *testing.T) {
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
-			`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1","message":"Publish"},"nextStepPlan":{"objective":"finish with public URL","expectedTools":[],"expectedNextResults":["public URL exists"],"doneCriteria":["public URL exists"],"risk":"none","workingSetReason":"publish should satisfy the expected result"}}`,
-			`{"action":"reply","final":true,"message":"배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+			`{"action":"continue","toolName":"document_share","toolInput":{"documentID":"document-1","message":"Publish"},"nextStepPlan":{"objective":"finish with public URL","expectedTools":[],"expectedNextResults":["public URL exists"],"doneCriteria":["public URL exists"],"risk":"none","workingSetReason":"publish should satisfy the expected result"}}`,
+			`{"action":"reply","final":true,"message":"공유했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
 		},
 	}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
-	toolRegistry := newTestCapabilityToolSet([]string{"site_serve"})
-	registerTestTool(toolRegistry, canonicalLinkToolDefinition("site_serve"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newTestCapabilityToolSet([]string{"document_share"})
+	registerTestTool(toolRegistry, canonicalLinkToolDefinition("document_share"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return canonicalLinkToolResult("https://portfolio.example"), nil
 	})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -473,11 +473,11 @@ func TestAgentTurnRunnerExpectedResultsRequireTheirTypedToolEvidence(t *testing.
 		Prompt:                "개인 홈페이지 배포해줘",
 		ToolSet:               toolRegistry,
 		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"site_serve"},
+		RequiredEvidenceTools: []string{"document_share"},
 		OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"site_serve"},
+			RequiredEvidenceTools: []string{"document_share"},
 			ExpectedResults: []ExpectedResult{{
-				ID:          "site-public-link",
+				ID:          "document-public-link",
 				Type:        ExpectedResultTypeLink,
 				Description: "사용자가 열 수 있는 public URL의 개인 홈페이지",
 				Required:    true,

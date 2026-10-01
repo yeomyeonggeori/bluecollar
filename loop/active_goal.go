@@ -43,8 +43,6 @@ func normalizePersistedToolName(toolName string) string {
 		return toolcontract.AskInputToolName
 	case "artifact.deliver", "file.attach":
 		return toolcontract.FileDeliverToolName
-	case "site.promote", "site.publish", "site.preview":
-		return "site_serve"
 	case "terminal.session":
 		return toolcontract.BashToolName
 	default:

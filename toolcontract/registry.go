@@ -123,7 +123,6 @@ const (
 	ToolSideEffectExternalPublish = "external_publish"
 	ToolSideEffectLocalFile       = "local_file"
 	ToolSideEffectPlatformReply   = "platform_reply"
-	ToolSideEffectSitePublish     = "site_publish"
 )
 
 func ToolDescriptorRequiresInputIntentSchema(toolDescriptor ToolDescriptor) bool {

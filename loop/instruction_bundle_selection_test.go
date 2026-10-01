@@ -93,18 +93,18 @@ func TestInstructionBundleWithToolOwningSkillsSelectsMissedOwner(t *testing.T) {
 	instructionBundle := InstructionBundle{
 		Skills: []SkillInstruction{
 			{Name: "web-search", ToolReferences: []string{"web_search"}},
-			{Name: "website", ToolReferences: []string{"site_serve", "site_serve"}},
+			{Name: "direct-message", ToolReferences: []string{"message_send", "message_send"}},
 		},
 		SkillDecisions: []SkillSelectionDecision{{Name: "web-search", Status: "selected", Reason: "embedding_similarity"}},
 	}
 
-	amendedBundle := instructionBundleWithToolOwningSkills(instructionBundle, AgentRequest{}, []string{"site_serve", "edit"})
+	amendedBundle := instructionBundleWithToolOwningSkills(instructionBundle, AgentRequest{}, []string{"message_send", "edit"})
 
-	if !selectedSkillNames(amendedBundle.SkillDecisions)["website"] {
+	if !selectedSkillNames(amendedBundle.SkillDecisions)["direct-message"] {
 		t.Fatalf("expected the skill owning a suggested tool to be selected, got %+v", amendedBundle.SkillDecisions)
 	}
 	unchangedBundle := instructionBundleWithToolOwningSkills(instructionBundle, AgentRequest{}, []string{"web_search"})
-	if selectedSkillNames(unchangedBundle.SkillDecisions)["website"] {
+	if selectedSkillNames(unchangedBundle.SkillDecisions)["direct-message"] {
 		t.Fatalf("expected no owner selection without a suggested tool match, got %+v", unchangedBundle.SkillDecisions)
 	}
 }

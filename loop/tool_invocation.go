@@ -245,7 +245,7 @@ func modelVisibleToolResultSummary(ctx context.Context, languageModel model.Lang
 
 func shouldUseSanitizedToolPresenter(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
-	case "file_pick", toolcontract.FileDeliverToolName, "file_read", "site_serve", "site_list":
+	case "file_pick", toolcontract.FileDeliverToolName, "file_read":
 		return true
 	default:
 		return false
@@ -269,10 +269,6 @@ func sanitizedToolResultSummary(observation turnObservation) string {
 		return attachmentResultSummary("File attached", observation.Attachments)
 	case "file_read":
 		return summarizeFileReadObservation(observation)
-	case "site_serve":
-		return summarizeSafeJSONFields(observation.ContentText(), []string{"siteID", "slug", "mode", "previewURL", "publishedURL", "sourceSHA256"})
-	case "site_list":
-		return summarizeSafeJSONFields(observation.ContentText(), []string{"sites", "siteID", "slug", "title", "status", "publishedURL", "updatedAt"})
 	default:
 		return summarizeObservationContent(observation)
 	}

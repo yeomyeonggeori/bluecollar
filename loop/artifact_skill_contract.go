@@ -7,7 +7,7 @@ import (
 import "strings"
 
 const artifactContractKindFile = "file"
-const artifactContractKindSite = "site"
+const artifactContractKindLink = "link"
 const artifactContractKindSlides = "slides"
 
 type artifactContractRequirement struct {
@@ -17,8 +17,8 @@ type artifactContractRequirement struct {
 
 func artifactContractRequirementsForRequest(request AgentRequest) []artifactContractRequirement {
 	requirements := []artifactContractRequirement{}
-	if requestNeedsSiteArtifactContract(request) {
-		requirements = appendUniqueArtifactContractRequirements(requirements, artifactContractRequirement{Kind: artifactContractKindSite})
+	if expectedResultIncludesType(request.ActiveGoal.OutcomeContract, ExpectedResultTypeLink) {
+		requirements = appendUniqueArtifactContractRequirements(requirements, artifactContractRequirement{Kind: artifactContractKindLink})
 	}
 	for _, format := range artifactFormatsForRequest(request) {
 		requirements = appendUniqueArtifactContractRequirements(requirements, artifactContractRequirement{Kind: artifactContractKindFile, Format: format})
@@ -47,32 +47,9 @@ func artifactFormatsForAttachmentSuffixes(suffixes []string) []string {
 	return normalizeRequestedOutputFormats(formats)
 }
 
-func requestNeedsSiteArtifactContract(request AgentRequest) bool {
-	if contractRequiresToolNamespace(request.ToolSet, request.ActiveGoal.OutcomeContract, "site") {
-		return true
-	}
-	if outcomeContractHasSiteEffect(request.ActiveGoal.OutcomeContract) {
-		return true
-	}
-	return expectedResultIncludesType(request.ActiveGoal.OutcomeContract, ExpectedResultTypeLink)
-}
-
 func requestNeedsSlidesArtifactContract(request AgentRequest) bool {
 	return outcomeContractMentionsAttachmentSuffix(request.ActiveGoal.OutcomeContract, ".pptx") ||
 		outcomeContractMentionsAttachmentSuffix(request.ActiveGoal.OutcomeContract, ".ppt")
-}
-
-func outcomeContractHasSiteEffect(contract OutcomeContract) bool {
-	for _, effect := range contract.RequiredEffects {
-		if strings.EqualFold(strings.TrimSpace(effect.ObjectType), "website") {
-			return true
-		}
-	}
-	return false
-}
-
-func skillSupportsSiteArtifact(toolSet *toolcontract.ToolSet, skillInstruction SkillInstruction) bool {
-	return requiredEvidenceIncludesNamespace(toolSet, SkillToolNames(skillInstruction), "site")
 }
 
 func skillSupportsFileDelivery(skillInstruction SkillInstruction) bool {

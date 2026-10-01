@@ -249,7 +249,7 @@ Decides what an inbound message means before a turn runs.
 | `consume` | acknowledge with an emoji and say nothing |
 | `give_up` | the request is impossible or plainly improper on its face |
 
-Intake chooses the level from `low`, `medium` and `high`. A request for slides, a site prototype or another visual deliverable is raised to `xhigh`. When the route starts, continues or revises work, one chat call writes the expected results: what should exist when the work is done and which tool result, file or link proves it. The other routes that need words (`clarify`, `answer_question`, `answer_meta`, `give_up`) get them from the same kind of call.
+Intake chooses the level from `low`, `medium` and `high`. A request for slides or another visual deliverable is raised to `xhigh`. When the route starts, continues or revises work, one chat call writes the expected results: what should exist when the work is done and which tool result, file or link proves it. The other routes that need words (`clarify`, `answer_question`, `answer_meta`, `give_up`) get them from the same kind of call.
 
 ## Plan
 
@@ -298,7 +298,7 @@ A follow-up turn does not inherit the previous task's contract. The host supplie
 
 What a final reply has to pass before the task completes.
 
-The deterministic part checks facts only. A final reply must claim `goalSatisfied`, report no remaining work, and cite only successful observations of this task. A site the turn published must be linked in the reply by its exact URL, and delivered attachments must exist and validate. The reply carries the attachments it cites, or every file this turn delivered when it cites none.
+The deterministic part checks facts only. A final reply must claim `goalSatisfied`, report no remaining work, and cite only successful observations of this task. A URL a tool published during the turn must appear in the reply exactly, and delivered attachments must exist and validate. The reply carries the attachments it cites, or every file this turn delivered when it cites none.
 
 When the turn starts, and while the work runs, one model call lists the changes the request asks for. Each entry is a kind taken from the effects the offered tools declare, and the file a reply delivers (`task deleted`, `calendar created`, `file attached`), with the words that ask for it copied exactly from the request or from the latest message about it. A quote found in neither is asked for once more and then dropped, so a change the model invented has nothing to be checked against. A request that asks only for words expects no change and skips the check. The list is recorded as `completion.expected_changes`.
 
@@ -430,7 +430,7 @@ What running a tool changes, which decides approval and completion evidence.
 | class | needs side-effect evidence |
 | --- | --- |
 | `none`, `read`, `computation` | no |
-| `state_change`, `workspace_write`, `external_write`, `external_send`, `external_publish`, `site_publish`, `platform_reply`, `local_file`, `connect`, `destructive`, `approval` | yes |
+| `state_change`, `workspace_write`, `external_write`, `external_send`, `external_publish`, `platform_reply`, `local_file`, `connect`, `destructive`, `approval` | yes |
 
 The loop reads the class from `SideEffectClass`, or from the recovery card's `SideEffect` when that is empty, and accepts `readonly`, `compute` and `write` style spellings. `RequiresApproval` and `ApprovalScope` let a host pause a call for a person's decision, so the decision comes from what a tool does.
 

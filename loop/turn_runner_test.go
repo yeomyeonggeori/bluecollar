@@ -587,7 +587,7 @@ func TestAgentTurnRunnerAuditsSelectedSkillDecisions(t *testing.T) {
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := toolcontract.NewToolSet([]string{"bash"})
-	for _, toolName := range []string{"bash", "site_serve"} {
+	for _, toolName := range []string{"bash", "document_share"} {
 		currentToolName := toolName
 		registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: currentToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return testToolSuccess("ok"), nil
@@ -600,7 +600,7 @@ func TestAgentTurnRunnerAuditsSelectedSkillDecisions(t *testing.T) {
 		Prompt:             "피피티 만들어줘",
 		ToolSet:            toolRegistry,
 		PinnedToolNames:    toolRegistry.ListToolNames(),
-		AvailableSkills:    []SkillInstruction{{Name: "presentation", ToolReferences: []string{"bash", "site_serve"}}},
+		AvailableSkills:    []SkillInstruction{{Name: "presentation", ToolReferences: []string{"bash", "document_share"}}},
 		InstructionPrompt:  "Available skill index.\n\nSelected skill instructions:\nGenerate PPTX with Marp.",
 		InstructionSources: []InstructionSource{{Path: "skills/presentation/SKILL.md", SkillName: "presentation", SHA256: "abc"}},
 		SkillDecisions: []SkillSelectionDecision{{
@@ -628,7 +628,7 @@ func TestAgentTurnRunnerAuditsSelectedSkillDecisions(t *testing.T) {
 	}
 	if !taskEventsContain(taskEvents, "agent.instructions_loaded", "registeredToolCount") ||
 		!taskEventsContain(taskEvents, "agent.instructions_loaded", "hiddenDescribedToolNames") ||
-		!taskEventsContain(taskEvents, "agent.instructions_loaded", "site_serve") {
+		!taskEventsContain(taskEvents, "agent.instructions_loaded", "document_share") {
 		t.Fatal("expected tool visibility debug fields in instructions event")
 	}
 	if !taskEventsContain(taskEvents, "agent.instructions_loaded", "selectedSkillToolReferences") {
@@ -708,18 +708,18 @@ func TestContinueActionSchemaRequiresCompletionIntent(t *testing.T) {
 }
 
 func TestActionSchemaOffersFailureReportAndRecoveryWhileBudgetRemains(t *testing.T) {
-	toolRegistry := newTestToolSet([]string{"site_serve", "write"})
+	toolRegistry := newTestToolSet([]string{"document_share", "write"})
 	request := BuildAgentActionRequest(agentTaskState{
-		Request: AgentTurnRequest{ToolSet: toolRegistry, RequiredEvidenceTools: []string{"site_serve"}},
+		Request: AgentTurnRequest{ToolSet: toolRegistry, RequiredEvidenceTools: []string{"document_share"}},
 		Options: TurnOptions{RecoveryBudget: defaultRecoveryBudget()},
 		Observations: []turnObservation{{
 			ObservationID:      "obs-001",
 			Action:             "continue",
-			Tool:               "site_serve",
+			Tool:               "document_share",
 			Output:             toolcontract.ToolOutput{Content: "starter scaffold remains"},
-			Failure:            &toolcontract.ToolFailure{Kind: toolcontract.FailureInvalidInput, Code: toolcontract.FailureCodes.InvalidInput.String(), Stage: "site_publish", UserSafeSummary: "starter scaffold remains"},
-			ToolInputKey:       "site_serve\x00{\"siteID\":\"site-1\"}",
-			AttemptFingerprint: "site_serve\x00{\"siteID\":\"site-1\"}\x00invalid_input",
+			Failure:            &toolcontract.ToolFailure{Kind: toolcontract.FailureInvalidInput, Code: toolcontract.FailureCodes.InvalidInput.String(), Stage: "document_share", UserSafeSummary: "starter scaffold remains"},
+			ToolInputKey:       "document_share\x00{\"documentID\":\"document-1\"}",
+			AttemptFingerprint: "document_share\x00{\"documentID\":\"document-1\"}\x00invalid_input",
 		}},
 	})
 	schemaDocument := request.StructuredOutputSchema.Document
@@ -1094,144 +1094,6 @@ func assertProviderSafeNestedSchemaValue(t *testing.T, value any, isPropertiesMa
 	}
 }
 
-func TestAgentTurnRunnerSiteLoopBuildsReviewsPublishesBeforeFinish(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"site_serve","toolInput":{"slug":"portfolio","title":"Portfolio"},"nextStepPlan":{"objective":"build the created site","expectedTools":["site_build","artifact_review"],"doneCriteria":["site build succeeds"],"risk":"draft may be incomplete","workingSetReason":"creation must lead into build and review"}}`,
-		`{"action":"continue","toolName":"site_build","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"review the built artifact","expectedTools":["artifact_review","site_serve"],"doneCriteria":["review passes"],"risk":"visual issues may block publish","workingSetReason":"build output needs review before publish"}}`,
-		`{"action":"continue","toolName":"artifact_review","toolInput":{"path":"home/sites/site-1/app/dist/index.html"},"nextStepPlan":{"objective":"publish reviewed site","expectedTools":["site_serve","site_list"],"doneCriteria":["publish succeeds"],"risk":"publish may reject stale build","workingSetReason":"review evidence allows publish"}}`,
-		`{"action":"continue","toolName":"site_serve","toolInput":{"siteID":"site-1","message":"Publish portfolio"},"nextStepPlan":{"objective":"confirm final status","expectedTools":["site_list"],"doneCriteria":["status shows published URL"],"risk":"status may not reflect latest version","workingSetReason":"final status is required evidence"}}`,
-		`{"action":"continue","toolName":"site_list","toolInput":{"siteID":"site-1"},"nextStepPlan":{"objective":"finish with status evidence","expectedTools":[],"doneCriteria":["finish with published URL"],"risk":"none","workingSetReason":"all required evidence has been collected"}}`,
-		`{"action":"reply","final":true,"message":"같은 URL에 배포했습니다: https://portfolio.example","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-003","obs-004","obs-005","obs-006"]}`,
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 8, MaxToolCallCount: 8})
-	toolRegistry := newTestCapabilityToolSet([]string{"site_list", "site_serve", "site_build", "artifact_review", "site_serve"})
-	toolCalls := []string{}
-	hasBuildQuality := false
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_list"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site_list")
-		return testToolSuccess(`{"siteID":"site-1","status":"published","publishedURL":"https://portfolio.example","revisionCount":1}`), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_serve"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site_serve")
-		return testToolSuccess(`{"siteID":"site-1","sourceWorkspacePath":"home/sites/site-1","appWorkspacePath":"home/sites/site-1/app","publishedURL":"https://portfolio.example"}`), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site_build")
-		hasBuildQuality = true
-		return testToolSuccess(`{"qualityPath":"home/sites/site-1/.internkim/build-quality.json","distPath":"home/sites/site-1/app/dist"}`), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "artifact_review"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "artifact_review")
-		return testToolSuccess(`{"status":"passed","blockingIssueCount":0}`), nil
-	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{
-		Name:            "site_serve",
-		Namespace:       "site",
-		SideEffectClass: toolcontract.ToolSideEffectExternalPublish,
-		Completion:      toolcontract.ToolCompletion{Mode: toolcontract.ToolCompletionObservation},
-	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		toolCalls = append(toolCalls, "site_serve")
-		if !hasBuildQuality {
-			return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "site_publish", "missing build-quality.json"), nil
-		}
-		return testToolSuccess(`{"siteID":"site-1","publishedURL":"https://portfolio.example","currentVersionID":"rev-2"}`), nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "개인 홈페이지 만들고 배포해줘",
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       toolRegistry.ListToolNames(),
-		RequiredEvidenceTools: []string{"site_list", "site_build", "artifact_review", "site_serve"},
-		AvailableSkills: []SkillInstruction{{
-			Name:           "site-prototype",
-			ToolReferences: []string{"site_list", "site_serve", "site_build", "artifact_review", "site_serve"},
-		}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-	})
-	if errorValue != nil {
-		t.Fatalf("expected site loop to succeed: %v", errorValue)
-	}
-	expectedCalls := []string{"site_serve", "site_build", "artifact_review", "site_serve", "site_list"}
-	if strings.Join(toolCalls, ",") != strings.Join(expectedCalls, ",") {
-		t.Fatalf("expected site tool loop %v, got %v", expectedCalls, toolCalls)
-	}
-	if result.TaskRun.Status != agentcontract.TaskStatusCompleted || !strings.Contains(result.FinishMessage, "배포") {
-		t.Fatalf("expected completed publish finish, got status=%s message=%q", result.TaskRun.Status, result.FinishMessage)
-	}
-}
-
-func TestAgentTurnRunnerSiteWorkingSetKeepsCreationRouteWithRequiredEvidence(t *testing.T) {
-	languageModel := &sequenceLanguageModel{}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-	toolRegistry := newTestToolSet([]string{
-		"site_list",
-		"site_serve",
-		"write",
-		"bash",
-		"site_build",
-		"artifact_review",
-		"site_serve",
-		"file_deliver",
-	})
-	request := AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		ConversationID:        "conversation-1",
-		Prompt:                "김인턴 너의 개인 홈페이지 하나 만들어서 배포해봐.",
-		ToolSet:               toolRegistry,
-		PinnedToolNames:       []string{"site_list", "site_serve", "write", "site_build", "artifact_review", "site_serve"},
-		RequiredEvidenceTools: []string{"site_list", "site_build", "site_serve", "file_deliver"},
-		AvailableSkills: []SkillInstruction{{
-			Name: "site-prototype",
-			ToolReferences: []string{
-				"site_list",
-				"site_serve",
-				"write",
-				"bash",
-				"site_build",
-				"artifact_review",
-				"site_serve",
-				"file_deliver",
-			},
-		}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
-		ActiveGoal: ActiveGoal{
-			OriginalInstruction: "김인턴 너의 개인 홈페이지 하나 만들어서 배포해봐.",
-			Status:              ActiveGoalStatusActive,
-			OutcomeContract: OutcomeContract{
-				RequiredEvidenceTools: []string{"site_list", "site_build", "site_serve", "file_deliver"},
-				ArtifactRequirement:   ArtifactRequirementRequired,
-			},
-		},
-	}
-
-	stepRequest := services.runner.requestForStep(context.Background(), request, &agentTaskState{Request: request})
-	for _, toolName := range []string{"site_list", "site_serve", "write", "site_build", "artifact_review", "site_serve"} {
-		if !stepRequest.ToolSet.CanExpose(toolName) {
-			t.Fatalf("expected initial site working set to expose %s, got %+v", toolName, stepRequest.ToolExposure.ExposedToolIDs)
-		}
-	}
-}
-
-func TestSiteRequestWithCalendarContentDoesNotPinCalendarTools(t *testing.T) {
-	request := AgentTurnRequest{
-		Prompt: "메일, 일정, 브라우저 제어 역량을 소개하는 홈페이지를 만들어서 배포해줘",
-		ActiveGoal: ActiveGoal{
-			OriginalInstruction: "메일, 일정, 브라우저 제어 역량을 소개하는 홈페이지를 만들어서 배포해줘",
-			OutcomeContract: OutcomeContract{ExpectedResults: []ExpectedResult{
-				{ID: "site-public-link", Type: "link", Description: "public website URL", Required: true},
-			}},
-		},
-	}
-
-	updatedRequest := requestWithStepWorkingSetTools(request, agentTaskState{})
-
-	if stringSliceContains(updatedRequest.PinnedToolNames, "calendar_add") || stringSliceContains(updatedRequest.PinnedToolNames, "calendar_delete") {
-		t.Fatalf("did not expect calendar operations pinned for site content mention, got %+v", updatedRequest.PinnedToolNames)
-	}
-}
-
 func TestSlidesRequestWithCalendarContentDoesNotPinCalendarTools(t *testing.T) {
 	request := AgentTurnRequest{
 		Prompt: "메일, 일정, 브라우저 제어 역량을 소개하는 5장 발표자료를 PPTX로 만들어줘",
@@ -1445,7 +1307,7 @@ func TestAgentTurnRunnerDoesNotEscalateIterationLimitForInspectionOnlyProgress(t
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"file_read","toolInput":{"path":"tmp/app/index.html"}}`,
-			`{"action":"continue","toolName":"site_list","toolInput":{"siteID":"site-1"}}`,
+			`{"action":"continue","toolName":"task_list","toolInput":{"taskID":"task-1"}}`,
 		},
 		textResponses: []string{"progress saved"},
 	}
@@ -1454,20 +1316,20 @@ func TestAgentTurnRunnerDoesNotEscalateIterationLimitForInspectionOnlyProgress(t
 		MaxIterationCount: 2,
 		MaxToolCallCount:  10,
 	})
-	toolRegistry := newTestToolSet([]string{"file_read", "site_list"})
+	toolRegistry := newTestToolSet([]string{"file_read", "task_list"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_read"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"path":"tmp/app/index.html","content":"one"}`), nil
 	})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_list"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "task_list"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess(`{"status":"draft"}`), nil
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
-		Prompt:            "inspect the site",
+		Prompt:            "inspect the task list",
 		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"file_read", "site_list"},
+		PinnedToolNames:   []string{"file_read", "task_list"},
 	})
 
 	if errorValue != nil {

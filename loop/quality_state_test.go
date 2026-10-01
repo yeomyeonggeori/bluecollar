@@ -76,19 +76,19 @@ func TestCompletionGateTreatsFailedDeclaredQualityCriterionAsReviewHint(t *testi
 		Action:             "finish",
 		GoalStatus:         "satisfied",
 		GoalSatisfied:      boolPointer(true),
-		CompletionEvidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "site_serve"}},
+		CompletionEvidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "task_update"}},
 		QualityReview: []qualityReviewItem{{
 			ID:       "business-plan-sample-is-complete",
 			Passed:   false,
-			Evidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "site_serve"}},
+			Evidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "task_update"}},
 		}},
 		Message: "Done.",
 	}
 	observations := []turnObservation{{
 		ObservationID: "obs-001",
 		Action:        "continue",
-		Tool:          "site_serve",
-		Output:        toolcontract.ToolOutput{Content: `{"siteID":"site-1"}`},
+		Tool:          "task_update",
+		Output:        toolcontract.ToolOutput{Content: `{"taskID":"task-1"}`},
 	}}
 
 	result := validateCompletionFacts(AgentTurnRequest{}, observations, actionDocument)
