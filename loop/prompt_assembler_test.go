@@ -473,3 +473,30 @@ func TestTheProgressLedgerDoesNotClaimResultsItNoLongerCarries(t *testing.T) {
 		t.Fatalf("the path that does carry the results still says so: %s", flattened)
 	}
 }
+
+func TestPromptAssemblerSummarizesPageAndImageResultsByShapeNotToolName(t *testing.T) {
+	observations := []turnObservation{
+		{
+			ObservationID: "obs-001",
+			Action:        "continue",
+			Tool:          "inspect_page",
+			Output:        toolcontract.ToolOutput{Content: `{"url":"https://example.com","snapshotText":"` + strings.Repeat("raw-page-text ", 500) + `","interactiveRefs":["@e7"],"profilePath":"/Users/me/Profile"}`},
+		},
+		{
+			ObservationID: "obs-002",
+			Action:        "continue",
+			Tool:          "capture_page",
+			Output:        toolcontract.ToolOutput{Content: `{"ok":true,"attachments":[{"contentBase64":"` + strings.Repeat("QUJD", 2000) + `"}]}`},
+			Attachments:   []toolcontract.FileAttachment{{DevicePath: "shot.png", Filename: "shot.png", ContentType: "image/png"}},
+		},
+	}
+
+	body := joinMessageContent((PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{Prompt: "continue"}, observations, "base", ""))
+
+	if !strings.Contains(body, "@e7") || strings.Contains(body, "/Users/me/Profile") || strings.Contains(body, strings.Repeat("raw-page-text ", 50)) {
+		t.Fatalf("expected the page snapshot to be summarized, got %s", body)
+	}
+	if strings.Contains(body, "QUJDQUJD") {
+		t.Fatalf("expected image bytes to stay out of the prompt, got %d bytes", len(body))
+	}
+}
