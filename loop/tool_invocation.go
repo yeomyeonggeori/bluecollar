@@ -228,7 +228,7 @@ func modelVisibleToolResultSummary(ctx context.Context, languageModel model.Lang
 			return summary
 		}
 	}
-	if shouldUseSanitizedToolPresenter(toolName) {
+	if shouldUseSanitizedToolPresenter(toolName) || carriesPageSnapshot(content) || carriesImageAttachment(observation) {
 		return sanitizedToolResultSummary(observation)
 	}
 	if len(content) <= rawToolResultInlineLimit {
@@ -245,7 +245,7 @@ func modelVisibleToolResultSummary(ctx context.Context, languageModel model.Lang
 
 func shouldUseSanitizedToolPresenter(toolName string) bool {
 	switch strings.TrimSpace(toolName) {
-	case "browser_snapshot", "browser.observe", "browser_screenshot", "file_pick", toolcontract.FileDeliverToolName, "file_read", "site_serve", "site_list":
+	case "file_pick", toolcontract.FileDeliverToolName, "file_read", "site_serve", "site_list":
 		return true
 	default:
 		return false
@@ -263,13 +263,6 @@ func shouldSummarizeLongToolResult(toolName string) bool {
 
 func sanitizedToolResultSummary(observation turnObservation) string {
 	switch strings.TrimSpace(observation.Tool) {
-	case "browser_snapshot", "browser.observe":
-		return summarizeBrowserSnapshot(observation.ContentText())
-	case "browser_screenshot":
-		if len(observation.Attachments) > 0 {
-			return "Screenshot captured. Use the imageRefs for visual inspection."
-		}
-		return summarizeSafeJSONFields(observation.ContentText(), []string{"capturedAt", "contentType", "filename", "sizeBytes"})
 	case "file_pick":
 		return attachmentResultSummary("User selected file", observation.Attachments)
 	case toolcontract.FileDeliverToolName:

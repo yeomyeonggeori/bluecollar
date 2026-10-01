@@ -270,14 +270,13 @@ func summarizeObservationContent(observation turnObservation) string {
 		}
 	}
 	content := observation.ContentText()
-	switch strings.TrimSpace(observation.Tool) {
-	case "browser_snapshot", "browser.observe":
+	if carriesPageSnapshot(content) {
 		return summarizeBrowserSnapshot(content)
-	case "browser_screenshot":
-		if len(observation.Attachments) > 0 {
-			return "Screenshot captured with attachment evidence."
-		}
-		return summarizeSafeJSONFields(content, []string{"capturedAt", "contentType", "filename", "sizeBytes"})
+	}
+	if carriesImageAttachment(observation) {
+		return "Image captured with attachment evidence."
+	}
+	switch strings.TrimSpace(observation.Tool) {
 	case "file_pick":
 		if len(observation.Attachments) > 0 {
 			return "User selected a file and it is available as attachment evidence."
@@ -285,10 +284,6 @@ func summarizeObservationContent(observation turnObservation) string {
 		return summarizeSafeJSONFields(content, []string{"filename", "sizeBytes", "contentType", "expiresAt"})
 	case "file_read":
 		return summarizeFileReadObservation(observation)
-	case "browser_open":
-		return summarizeSafeJSONFields(content, []string{"url", "title", "status", "ok"})
-	case "browser_click", "browser_fill", "browser_select", "browser_press", "browser_wait":
-		return summarizeSafeJSONFields(content, []string{"ok", "action", "target", "capturedAt"})
 	case "site_serve":
 		return summarizeSafeJSONFields(content, []string{"siteID", "slug", "mode", "previewURL", "publishedURL", "sourceSHA256"})
 	case "memory_search", "conversation_history":
@@ -297,7 +292,7 @@ func summarizeObservationContent(observation turnObservation) string {
 		if observation.Failed() {
 			return truncateText(compactWhitespace(redactUnsafeText(content)), 500)
 		}
-		if fields := summarizeSafeJSONFields(content, []string{"ok", "status", "message", "error", "url", "title", "filename", "sizeBytes", "contentType"}); fields != "" {
+		if fields := summarizeSafeJSONFields(content, []string{"ok", "action", "target", "status", "message", "error", "url", "title", "filename", "sizeBytes", "contentType", "capturedAt"}); fields != "" {
 			return fields
 		}
 		return truncateText(redactUnsafeText(content), unredactedOutputLimit)
@@ -595,6 +590,22 @@ func summarizeTerminalFailure(observation turnObservation) string {
 		return ""
 	}
 	return strings.Join(parts, "; ")
+}
+
+func carriesPageSnapshot(content string) bool {
+	var document struct {
+		SnapshotText *string `json:"snapshotText"`
+	}
+	return json.Unmarshal([]byte(content), &document) == nil && document.SnapshotText != nil
+}
+
+func carriesImageAttachment(observation turnObservation) bool {
+	for _, attachment := range observation.Attachments {
+		if strings.HasPrefix(attachment.ContentType, "image/") {
+			return true
+		}
+	}
+	return false
 }
 
 func summarizeBrowserSnapshot(content string) string {
