@@ -964,7 +964,7 @@ func TestAgentTurnRunnerCompletesBrowserOpenWithPostEvidenceReply(t *testing.T) 
 		ConversationID:        "conversation-1",
 		Prompt:                "브라우저 열어줘.",
 		TaskLevel:             TaskLevelXLow,
-		TaskShape:             TaskShapeBrowserHandoffTask,
+		TaskShape:             TaskShapeResearchTask,
 		ToolSet:               toolRegistry,
 		PinnedToolNames:       toolRegistry.ListToolNames(),
 		RequiredEvidenceTools: []string{"browser_open"},
@@ -977,6 +977,36 @@ func TestAgentTurnRunnerCompletesBrowserOpenWithPostEvidenceReply(t *testing.T) 
 	}
 	if len(languageModel.requests) != 2 {
 		t.Fatalf("expected a post-evidence model call, got %d", len(languageModel.requests))
+	}
+}
+
+func TestAgentTurnRunnerLeavesBrowserTargetValidationToTheTool(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		directToolAction("continue", "Clicking.", "browser_click", `{}`),
+		`{"action":"reply","final":true,"message":"Done.","goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"],"qualityReview":[]}`,
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	toolRegistry := newTestCapabilityToolSet([]string{"browser_click"})
+	invocationCount := 0
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "browser_click"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		invocationCount++
+		return testToolSuccess(`{"ok":true}`), nil
+	})
+
+	_, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "click it",
+		TaskLevel:         TaskLevelXLow,
+		TaskShape:         TaskShapeResearchTask,
+		ToolSet:           toolRegistry,
+		PinnedToolNames:   toolRegistry.ListToolNames(),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected turn to succeed: %v", errorValue)
+	}
+	if invocationCount != 1 {
+		t.Fatalf("expected the runner to hand the schema-valid call to the tool, got %d invocations", invocationCount)
 	}
 }
 

@@ -294,12 +294,11 @@ func (builder questionBuilder) taskShapeQuestion(messageKey string) model.Decisi
 	return model.ChoiceQuestion{
 		Instructions: builder.about(messageKey) + "What shape does the executable work take? If some work can proceed while another part awaits clarification, classify the work that can proceed.",
 		OptionDescriptions: optionDescriptions(agentcontract.TaskShapeNames, map[string]string{
-			string(agentcontract.TaskShapeImmediateReply):     "a tool-free answer; only for a quick reply or an unsupported request",
-			string(agentcontract.TaskShapeResearchTask):       "information acquisition from an external or private source, or synthesis across source material",
-			string(agentcontract.TaskShapeMaintenanceTask):    "work that changes state: adding, updating, or deleting records, files, or settings",
-			string(agentcontract.TaskShapeScheduledTask):      "work the message asks to run later, repeatedly, or on a schedule",
-			string(agentcontract.TaskShapeBrowserHandoffTask): "work that needs a person at a browser, such as a sign-in or a captcha",
-			string(agentcontract.TaskShapeApprovalGatedTask):  "work held for a missing essential choice about the requested goal, target, or outcome that only the requester can resolve; tool-discoverable operational requirements belong to the work itself",
+			string(agentcontract.TaskShapeImmediateReply):    "a tool-free answer; only for a quick reply or an unsupported request",
+			string(agentcontract.TaskShapeResearchTask):      "information acquisition from an external or private source, or synthesis across source material",
+			string(agentcontract.TaskShapeMaintenanceTask):   "work that changes state: adding, updating, or deleting records, files, or settings",
+			string(agentcontract.TaskShapeScheduledTask):     "work the message asks to run later, repeatedly, or on a schedule",
+			string(agentcontract.TaskShapeApprovalGatedTask): "work held for a missing essential choice about the requested goal, target, or outcome that only the requester can resolve; tool-discoverable operational requirements belong to the work itself",
 		}),
 	}.Question()
 }

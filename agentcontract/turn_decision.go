@@ -17,12 +17,11 @@ const (
 	IntakeClassificationNeedsConfirmation IntakeClassification = "needs_confirmation"
 	IntakeClassificationUnsupported       IntakeClassification = "unsupported"
 
-	TaskShapeImmediateReply     TaskShape = "immediate_reply"
-	TaskShapeResearchTask       TaskShape = "research_task"
-	TaskShapeMaintenanceTask    TaskShape = "maintenance_task"
-	TaskShapeScheduledTask      TaskShape = "scheduled_task"
-	TaskShapeBrowserHandoffTask TaskShape = "browser_handoff_task"
-	TaskShapeApprovalGatedTask  TaskShape = "approval_gated_task"
+	TaskShapeImmediateReply    TaskShape = "immediate_reply"
+	TaskShapeResearchTask      TaskShape = "research_task"
+	TaskShapeMaintenanceTask   TaskShape = "maintenance_task"
+	TaskShapeScheduledTask     TaskShape = "scheduled_task"
+	TaskShapeApprovalGatedTask TaskShape = "approval_gated_task"
 
 	TurnRouteContinueTask   TurnRoute = "continue_task"
 	TurnRouteReviseTask     TurnRoute = "revise_task"
@@ -208,7 +207,7 @@ var IntakeClassificationNames = []string{
 
 var TaskShapeNames = []string{
 	string(TaskShapeImmediateReply), string(TaskShapeResearchTask), string(TaskShapeMaintenanceTask),
-	string(TaskShapeScheduledTask), string(TaskShapeBrowserHandoffTask), string(TaskShapeApprovalGatedTask),
+	string(TaskShapeScheduledTask), string(TaskShapeApprovalGatedTask),
 }
 
 var DeliverableKindNames = []string{
