@@ -236,7 +236,7 @@ func (failureCode FailureCode) String() string {
 func CanonicalFailureCode(code FailureCode) string {
 	trimmedCode := code.String()
 	switch trimmedCode {
-	case "unavailable", "memory_search_unavailable", "memory.search.unavailable", "tool.unavailable", "memory_queue_unavailable", "terminal_service_unavailable", "companion_bridge_unavailable", "schedule_repository_unavailable", "mattermost_unavailable":
+	case "unavailable", "memory_search_unavailable", "memory.search.unavailable", "tool.unavailable", "memory_queue_unavailable", "terminal_service_unavailable", "schedule_repository_unavailable", "mattermost_unavailable":
 		return FailureCodes.Unavailable.String()
 	case "tool.input.invalid", "invalid_input", "approval_message_required":
 		return FailureCodes.InvalidInput.String()

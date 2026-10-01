@@ -1352,9 +1352,9 @@ func TestAgentTurnRunnerDoesNotCompleteEffortStopFromUnrequestedAttachment(t *te
 	toolRegistry := newTestToolSet([]string{"file_pick"})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_pick"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-companion-files/report.txt"}`},
+			Output: toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-device-files/report.txt"}`},
 			Attachments: []toolcontract.FileAttachment{{
-				DevicePath:  "/tmp/internkim-companion-files/report.txt",
+				DevicePath:  "/tmp/internkim-device-files/report.txt",
 				Filename:    "report.txt",
 				ContentType: "text/plain",
 				SizeBytes:   10,

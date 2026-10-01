@@ -225,9 +225,9 @@ func TestAStoppedChildsArtifactsSurviveIntoTheParent(t *testing.T) {
 			return testToolSuccess(`{"status":"cancelled"}`), nil
 		}
 		return toolcontract.ToolResult{
-			Output: toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-companion-files/release-notes.md"}`},
+			Output: toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-device-files/release-notes.md"}`},
 			Attachments: []toolcontract.FileAttachment{{
-				DevicePath:  "/tmp/internkim-companion-files/release-notes.md",
+				DevicePath:  "/tmp/internkim-device-files/release-notes.md",
 				Filename:    "release-notes.md",
 				ContentType: "text/markdown",
 				SizeBytes:   12,
@@ -248,7 +248,7 @@ func TestAStoppedChildsArtifactsSurviveIntoTheParent(t *testing.T) {
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)
 	}
-	if !hasAttachmentDevicePath(result.Attachments, "/tmp/internkim-companion-files/release-notes.md") {
+	if !hasAttachmentDevicePath(result.Attachments, "/tmp/internkim-device-files/release-notes.md") {
 		t.Fatalf("work a stopped child finished is work the requester paid for, and the parent threw it away: %+v", result.Attachments)
 	}
 }

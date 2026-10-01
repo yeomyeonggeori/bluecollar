@@ -86,7 +86,7 @@ func browserPublicFetchRecoveryGuidance(toolSet *toolcontract.ToolSet, observati
 	if !isFound || !definition.RequiresRequesterDevice {
 		return ""
 	}
-	return "Recovery route: browser capability operations run on the user's Companion and are only for sign-in, page interaction, screenshots, or pages that block fetching. To read or copy public web page content, use web_fetch (or web_search) instead of a browser; only fall back to the browser handoff when fetching fails or the user explicitly asks for a visible browser. Do not pass a tool name or a localhost address as the browser URL."
+	return "Recovery route: browser tools run in the company computer's browser and are only for sign-in, page interaction, screenshots, or pages that block fetching. To read or copy public web page content, use web_fetch (or web_search) instead of a browser; only fall back to the browser handoff when fetching fails or the user explicitly asks for a visible browser. Do not pass a tool name or a localhost address as the browser URL."
 }
 
 func terminalWorkingDirectoryRecoveryGuidance(observation turnObservation) string {
