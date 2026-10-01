@@ -18,31 +18,30 @@ import (
 )
 
 type ToolDescriptor struct {
-	ID                      string              `json:"id,omitempty"`
-	ProviderID              string              `json:"providerID,omitempty"`
-	Namespace               string              `json:"namespace,omitempty"`
-	NamespaceSummary        string              `json:"namespaceSummary,omitempty"`
-	Name                    string              `json:"name"`
-	Description             string              `json:"description"`
-	WhenToUse               string              `json:"whenToUse,omitempty"`
-	WhenNotToUse            string              `json:"whenNotToUse,omitempty"`
-	PrivacyClass            string              `json:"privacyClass,omitempty"`
-	RequiresUserPresence    bool                `json:"requiresUserPresence,omitempty"`
-	RequiresRequesterDevice bool                `json:"requiresRequesterDevice,omitempty"`
-	WorksOffline            bool                `json:"worksOffline,omitempty"`
-	RecoveryCard            ToolRecoveryCard    `json:"recoveryCard,omitempty"`
-	InputSchema             json.RawMessage     `json:"inputSchema,omitempty"`
-	InputIntentSchema       json.RawMessage     `json:"inputIntentSchema,omitempty"`
-	OutputSchema            json.RawMessage     `json:"outputSchema,omitempty"`
-	ResultContract          *ToolResultContract `json:"resultContract,omitempty"`
-	Visibility              string              `json:"visibility,omitempty"`
-	PolicyResource          string              `json:"policyResource,omitempty"`
-	SideEffectClass         string              `json:"sideEffectClass,omitempty"`
-	RequiresApproval        bool                `json:"requiresApproval,omitempty"`
-	ApprovalScope           string              `json:"approvalScope,omitempty"`
-	Completion              ToolCompletion      `json:"completion,omitempty"`
-	Idempotency             string              `json:"idempotency,omitempty"`
-	IdempotencyScope        string              `json:"idempotencyScope,omitempty"`
+	ID                   string              `json:"id,omitempty"`
+	ProviderID           string              `json:"providerID,omitempty"`
+	Namespace            string              `json:"namespace,omitempty"`
+	NamespaceSummary     string              `json:"namespaceSummary,omitempty"`
+	Name                 string              `json:"name"`
+	Description          string              `json:"description"`
+	WhenToUse            string              `json:"whenToUse,omitempty"`
+	WhenNotToUse         string              `json:"whenNotToUse,omitempty"`
+	PrivacyClass         string              `json:"privacyClass,omitempty"`
+	RequiresUserPresence bool                `json:"requiresUserPresence,omitempty"`
+	WorksOffline         bool                `json:"worksOffline,omitempty"`
+	RecoveryCard         ToolRecoveryCard    `json:"recoveryCard,omitempty"`
+	InputSchema          json.RawMessage     `json:"inputSchema,omitempty"`
+	InputIntentSchema    json.RawMessage     `json:"inputIntentSchema,omitempty"`
+	OutputSchema         json.RawMessage     `json:"outputSchema,omitempty"`
+	ResultContract       *ToolResultContract `json:"resultContract,omitempty"`
+	Visibility           string              `json:"visibility,omitempty"`
+	PolicyResource       string              `json:"policyResource,omitempty"`
+	SideEffectClass      string              `json:"sideEffectClass,omitempty"`
+	RequiresApproval     bool                `json:"requiresApproval,omitempty"`
+	ApprovalScope        string              `json:"approvalScope,omitempty"`
+	Completion           ToolCompletion      `json:"completion,omitempty"`
+	Idempotency          string              `json:"idempotency,omitempty"`
+	IdempotencyScope     string              `json:"idempotencyScope,omitempty"`
 	// Declaring TimeoutMS promises the handler honors the invocation context: the
 	// deadline notifies through that context and never kills a handler that ignores it.
 	TimeoutMS int `json:"timeoutMS,omitempty"`
