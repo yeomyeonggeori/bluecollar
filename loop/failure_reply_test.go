@@ -57,7 +57,7 @@ func TestAgentTurnRunnerRepairsInvalidFailureReply(t *testing.T) {
 		recoveryDecisionDocument("check presentation temporary directory handling", "explain the exact failed stages"),
 	}, textResponses: []string{
 		"브라우저 연결 문제와 시스템 환경 오류가 있어 파일이 생성되지 않았습니다.",
-		"PPTX는 첨부되지 않았습니다. 브라우저 열기는 Companion 미연결로 실패했고, 슬라이드 빌드는 Marp 임시 HTML 생성 권한 문제로 중단되어 presentation 임시 디렉터리 설정 확인이 필요합니다.",
+		"PPTX는 첨부되지 않았습니다. 브라우저 열기는 연결 문제로 실패했고, 슬라이드 빌드는 Marp 임시 HTML 생성 권한 문제로 중단되어 presentation 임시 디렉터리 설정 확인이 필요합니다.",
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 

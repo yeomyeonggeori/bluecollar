@@ -319,7 +319,7 @@ func TestPromptAssemblerDoesNotExposeAttachmentDevicePath(t *testing.T) {
 		ObservationID: "obs-001",
 		Action:        "continue",
 		Tool:          "browser_screenshot",
-		Output:        toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-companion-files/screen.png","filename":"screen.png","contentType":"image/png"}`},
+		Output:        toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-device-files/screen.png","filename":"screen.png","contentType":"image/png"}`},
 		Summary:       "Screenshot captured. Use the imageRefs for visual inspection.",
 		ImageRefs: []ToolResultImageRef{{
 			ObservationID:   "obs-001",
@@ -328,7 +328,7 @@ func TestPromptAssemblerDoesNotExposeAttachmentDevicePath(t *testing.T) {
 			Filename:        "screen.png",
 		}},
 		Attachments: []toolcontract.FileAttachment{{
-			DevicePath:    "/tmp/internkim-companion-files/screen.png",
+			DevicePath:    "/tmp/internkim-device-files/screen.png",
 			Filename:      "screen.png",
 			ContentType:   "image/png",
 			SizeBytes:     123,
@@ -341,7 +341,7 @@ func TestPromptAssemblerDoesNotExposeAttachmentDevicePath(t *testing.T) {
 	}, observations, "base", "")
 	body := joinMessageContent(messages)
 
-	if strings.Contains(body, "/tmp/internkim-companion-files/screen.png") || strings.Contains(body, "devicePath") {
+	if strings.Contains(body, "/tmp/internkim-device-files/screen.png") || strings.Contains(body, "devicePath") {
 		t.Fatalf("expected device path to stay out of prompt, got %s", body)
 	}
 	if !strings.Contains(body, `"attachmentIndex":0`) || !strings.Contains(body, `"filename":"screen.png"`) {

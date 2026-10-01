@@ -765,7 +765,7 @@ rate.
 
 - `terminal_run` sat in the sanitized-presenter list, which reduced a
   successful run to `exitCode` and `timedOut`. That list exists for the
-  companion privacy boundary — browser snapshots, screenshots, file picks,
+  local browser privacy boundary — browser snapshots, screenshots, file picks,
   whose raw output carries cookies and local paths — and a command the agent
   ran itself is not on it. Every terminal call this loop had ever made came
   back to the model as `exitCode=0`, and a second path had the summariser
