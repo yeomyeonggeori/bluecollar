@@ -905,9 +905,6 @@ func elapsedBudgetForProfile(taskLevelProfile TaskLevelProfile, throughput Itera
 }
 
 func artifactTaskLevelFloor(request AgentRequest, intakeDecision IntakeDecision) TaskLevel {
-	if requestHasSitePrototypeEvidence(request) {
-		return TaskLevelXHigh
-	}
 	if requestLooksLikeSlidesArtifactWork(request) || intakeDecisionRequestsVisualDeliverable(intakeDecision) {
 		return TaskLevelXHigh
 	}
@@ -977,10 +974,6 @@ func restorePersistedToolSelection(request AgentRequest) AgentRequest {
 	request.PinnedToolNames = appendUniqueStrings(request.PinnedToolNames, request.ActiveGoal.SelectedToolNames...)
 	request.PinnedSkillNames = appendUniqueStrings(request.PinnedSkillNames, request.ActiveGoal.SelectedSkillNames...)
 	return request
-}
-
-func requestHasSitePrototypeEvidence(request AgentRequest) bool {
-	return contractRequiresToolNamespace(request.ToolSet, request.ActiveGoal.OutcomeContract, "site")
 }
 
 func routedTurnDecision(request AgentRequest) (TurnDecision, error) {

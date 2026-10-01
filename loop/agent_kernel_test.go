@@ -336,7 +336,7 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 
 			plan := testCase.plan
 			plan.OriginalInstruction = "Research a short company profile and ask me which domain to use before publishing"
-			plan.Summary = "Research the company profile before publishing the site"
+			plan.Summary = "Research the company profile before publishing it"
 			plan.ContinuationInstruction = "Research the profile and leave deployment until the domain is supplied."
 			planDocument, errorValue := json.Marshal(plan)
 			if errorValue != nil {
@@ -428,22 +428,22 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeMaintenanceTask,
 		TaskLevel:        TaskLevelLow,
-		InitialToolNames: []string{"site_unserve"},
+		InitialToolNames: []string{"task_delete"},
 		ResponseLanguage: "ko",
 		Reason:           "approval reply classified with hallucinated evidence",
 	}})
 
 	toolCallCount := 0
-	siteDeleteDefinition := testToolDescriptor("site_unserve")
-	siteDeleteDefinition.InputSchema = json.RawMessage(`{"type":"object","properties":{"siteID":{"type":"string"}},"required":["siteID"],"additionalProperties":false}`)
-	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{siteDeleteDefinition})
-	registerTestTool(toolSet, siteDeleteDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	taskDeleteDefinition := testToolDescriptor("task_delete")
+	taskDeleteDefinition.InputSchema = json.RawMessage(`{"type":"object","properties":{"taskID":{"type":"string"}},"required":["taskID"],"additionalProperties":false}`)
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{taskDeleteDefinition})
+	registerTestTool(toolSet, taskDeleteDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		toolCallCount++
 		return testToolSuccess(`{"deleted":true}`), nil
 	})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"site_unserve","toolInput":{"siteID":"site-1"}}`,
-		finishMessageCiting("웹사이트를 삭제했습니다.", "obs-001"),
+		`{"action":"continue","toolName":"task_delete","toolInput":{"taskID":"task-1"}}`,
+		finishMessageCiting("업무를 삭제했습니다.", "obs-001"),
 	}})
 
 	request := kernelTestRequest("응 확인했어, 진행해줘")
@@ -452,11 +452,11 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 	request.ActiveGoal = ActiveGoal{
 		GoalID:              "goal-approval-continuation",
 		TaskRunID:           "task-approval-continuation",
-		OriginalInstruction: "테스트 웹사이트를 삭제해줘",
-		CurrentObjective:    "site_unserve 승인 후 실행",
+		OriginalInstruction: "테스트 업무를 삭제해줘",
+		CurrentObjective:    "task_delete 승인 후 실행",
 		Status:              ActiveGoalStatusActive,
 		OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"site_unserve"},
+			RequiredEvidenceTools: []string{"task_delete"},
 		},
 	}
 
@@ -474,26 +474,26 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 
 func TestExistingTaskRunIDDoesNotAuthorizeConfirmationBypass(t *testing.T) {
 	agentKernel, taskRunService := newKernelTestServices()
-	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: destructiveSiteDeleteDecision()})
+	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: destructiveTaskDeleteDecision()})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
-		destructiveSiteDeleteExecutionPlan(),
-		`{"action":"continue","toolName":"site_unserve","toolInput":{}}`,
-		`{"question":"site-1 웹사이트를 삭제할까요?"}`,
+		destructiveTaskDeleteExecutionPlan(),
+		`{"action":"continue","toolName":"task_delete","toolInput":{}}`,
+		`{"question":"task-1 업무를 삭제할까요?"}`,
 	}})
-	siteDeleteDefinition := testToolDescriptor("site_unserve")
-	siteDeleteDefinition.RequiresApproval = true
-	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{siteDeleteDefinition})
+	taskDeleteDefinition := testToolDescriptor("task_delete")
+	taskDeleteDefinition.RequiresApproval = true
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{taskDeleteDefinition})
 	toolCallCount := 0
-	registerTestTool(toolSet, siteDeleteDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	registerTestTool(toolSet, taskDeleteDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		toolCallCount++
 		return testToolSuccess(`{"deleted":true}`), nil
 	})
-	existingTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "site-1 웹사이트를 삭제해줘")
+	existingTaskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "task-1 업무를 삭제해줘")
 	toolSet.UseToolCallGate(holdingToolCallGate{
 		taskRunService: taskRunService,
-		confirmation:   "site-1 웹사이트를 삭제할까요?",
+		confirmation:   "task-1 업무를 삭제할까요?",
 	})
-	request := kernelTestRequest("site-1 웹사이트를 삭제해줘")
+	request := kernelTestRequest("task-1 업무를 삭제해줘")
 	request.ToolSet = toolSet
 	request.ExistingTaskRunID = existingTaskRun.TaskRunID
 
@@ -669,19 +669,19 @@ func TestInvalidPersistedActiveGoalBlocksBeforeToolHandler(t *testing.T) {
 	}
 }
 
-func destructiveSiteDeleteDecision() TurnDecision {
+func destructiveTaskDeleteDecision() TurnDecision {
 	return TurnDecision{
 		Route:            TurnRouteStartTask,
 		Classification:   IntakeClassificationBoundedTask,
 		TaskShape:        TaskShapeApprovalGatedTask,
 		TaskLevel:        TaskLevelLow,
-		InitialToolNames: []string{"site_unserve"},
+		InitialToolNames: []string{"task_delete"},
 		ResponseLanguage: "ko",
 	}
 }
 
-func destructiveSiteDeleteExecutionPlan() string {
-	return `{"originalInstruction":"site-1 웹사이트를 삭제해줘","summary":"site-1 삭제","targets":["site-1"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":false,"thirdPartyExternalSend":false,"repeated":false,"highFrequency":false,"destructive":true,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"승인 후 삭제"}`
+func destructiveTaskDeleteExecutionPlan() string {
+	return `{"originalInstruction":"task-1 업무를 삭제해줘","summary":"task-1 삭제","targets":["task-1"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":false,"thirdPartyExternalSend":false,"repeated":false,"highFrequency":false,"destructive":true,"permissionChange":false,"publicDeploy":false,"paidAction":false,"missingInformation":[],"continuationInstruction":"승인 후 삭제"}`
 }
 
 func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *testing.T) {
@@ -823,40 +823,6 @@ func TestAgentKernelRunsBoundedTaskThroughTurnRunner(t *testing.T) {
 	}
 	if !strings.Contains(result.TaskRun.Result, "수요일") {
 		t.Fatalf("expected finish message in result, got %q", result.TaskRun.Result)
-	}
-}
-
-func TestSitePrototypeIntakePromotesToXHighLimits(t *testing.T) {
-	agentKernel, _ := newKernelTestServices()
-	siteToolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
-		Name:            "site_serve",
-		Namespace:       "site",
-		SideEffectClass: toolcontract.ToolSideEffectExternalPublish,
-	}})
-	request := AgentRequest{
-		ToolSet: siteToolSet,
-		ActiveGoal: ActiveGoal{
-			OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"site_serve"}},
-		},
-	}
-	intakeDecision := promoteArtifactTaskLevel(request, IntakeDecision{
-		TaskLevel: TaskLevelLow,
-	})
-
-	turnOptions := agentKernel.turnOptionsForIntakeDecision(context.Background(), intakeDecision)
-	xHighProfile := TaskLevelProfileForLevel(TaskLevelXHigh)
-
-	if taskLevelRank(turnOptions.TaskLevel) < taskLevelRank(TaskLevelXHigh) {
-		t.Fatalf("expected at least xhigh task level, got %q", turnOptions.TaskLevel)
-	}
-	if turnOptions.MaxIterationCount < xHighProfile.MaxIterationCount {
-		t.Fatalf("expected xhigh iteration limit, got %d", turnOptions.MaxIterationCount)
-	}
-	if turnOptions.MaxToolCallCount < xHighProfile.MaxToolCallCount {
-		t.Fatalf("expected xhigh tool call limit, got %d", turnOptions.MaxToolCallCount)
-	}
-	if turnOptions.MaxElapsedSecond != int(xHighProfile.Duration.Seconds()) {
-		t.Fatalf("expected xhigh work duration, got %d seconds", turnOptions.MaxElapsedSecond)
 	}
 }
 
@@ -1009,7 +975,7 @@ func TestAgentKernelXHighTaskKeepsHourBudgetWithLowExecutionModel(t *testing.T) 
 		TaskShape:      TaskShapeImmediateReply,
 		TaskLevel:      TaskLevelXHigh,
 	}
-	request := kernelTestRequest("웹사이트를 만들어줘")
+	request := kernelTestRequest("업무를 만들어줘")
 	request.PrecomputedTurnDecision = &precomputedDecision
 	request.IsPrecomputedDecisionExact = true
 	request.SkipSkillSelection = true
@@ -1070,7 +1036,7 @@ func TestAgentKernelClampsStaleNonResumeAnchorInsteadOfInstantElapsing(t *testin
 
 func TestExactPrecomputedDecisionSkipsArtifactTaskLevelPromotion(t *testing.T) {
 	intakeDecision := promoteArtifactTaskLevelForRequest(AgentRequest{
-		Prompt:                     "Create and publish a PDF website",
+		Prompt:                     "Create and share a PDF report",
 		IsPrecomputedDecisionExact: true,
 	}, IntakeDecision{TaskLevel: TaskLevelLow})
 
@@ -1091,7 +1057,7 @@ func TestAgentKernelPreservesExactPrecomputedTaskLevel(t *testing.T) {
 		PriorTaskReference: PriorTaskReferenceNone,
 		Reason:             "LLMD topology diagnostic",
 	}
-	request := kernelTestRequest("Create and publish a PDF website")
+	request := kernelTestRequest("Create and share a PDF report")
 	request.PrecomputedTurnDecision = &precomputedDecision
 	request.IsPrecomputedDecisionExact = true
 	request.SkipSkillSelection = true

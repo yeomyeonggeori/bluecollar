@@ -207,15 +207,15 @@ func TestFailureNoticeGeneratorRejectsUngroundedGeneratedReply(t *testing.T) {
 	generator := FailureNoticeGenerator{LanguageModel: &recoveryChatNoticeProvider{
 		chatReplies: []string{
 			"4. I am a large language model, trained by Google DeepMind. I am an open weights model.",
-			"사이트 빌드가 정체되어 요청하신 귤 웹사이트를 아직 게시하지 못했습니다. 현재 작업 상태를 다시 확인한 뒤 같은 프로젝트에서 이어가겠습니다.",
+			"문서 작성이 정체되어 요청하신 귤 소개 문서를 아직 게시하지 못했습니다. 현재 작업 상태를 다시 확인한 뒤 같은 프로젝트에서 이어가겠습니다.",
 		},
 	}}
 
 	notice, status := generator.Generate(context.Background(), FailureReport{
 		Phase:              "stall",
 		StopReason:         "stopped after repeated model actions without workspace progress",
-		FailedOperation:    "site_build",
-		SafeFailureSummary: "site_build could not create the build scaffold",
+		FailedOperation:    "write",
+		SafeFailureSummary: "write could not create the document scaffold",
 		OriginalRequest:    "더 해 괜찮아",
 		ResponseLanguage:   toolcontract.ResponseLanguageKorean,
 		DiagnosticEventID:  "task-1:stall",
@@ -236,7 +236,7 @@ func TestFailureNoticePromptUsesCompactContextOnly(t *testing.T) {
 	report := FailureReport{
 		Phase:              "failure",
 		StopReason:         "tool failed",
-		FailedOperation:    "site_build",
+		FailedOperation:    "write",
 		SafeFailureSummary: "build tool could not write the requested output",
 		OriginalRequest:    "발표자료 만들어줘",
 		ResponseLanguage:   toolcontract.ResponseLanguageKorean,

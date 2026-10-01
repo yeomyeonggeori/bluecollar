@@ -305,7 +305,7 @@ func TestAgentKernelUsesIntakeBeforeRunningTools(t *testing.T) {
 
 func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs output choice","userFacingReply":"","clarificationQuestion":"어떤 형식으로 만들까요?","clarificationOptions":[{"key":"A","label":"웹사이트","value":"website"},{"key":"B","label":"발표자료","value":"slides"}]}`,
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs output choice","userFacingReply":"","clarificationQuestion":"어떤 형식으로 만들까요?","clarificationOptions":[{"key":"A","label":"문서","value":"document"},{"key":"B","label":"발표자료","value":"slides"}]}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("should not run"),

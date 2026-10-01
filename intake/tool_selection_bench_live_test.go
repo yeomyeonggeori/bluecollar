@@ -65,7 +65,6 @@ var benchmarkCases = []benchmarkCase{
 	{"우리 회사 이번 분기 매출 지표 기록해줘", []string{"company_metric_record"}},
 	{"경쟁사 최근 소식 검색해봐", []string{"web_search"}},
 	{"이 링크 내용 읽고 요약해줘", []string{"web_fetch"}},
-	{"워크스페이스에 만들어둔 소개 사이트 게시해줘", []string{"site_serve"}},
 	{"이 대화 알림 꺼줘", []string{"conversation_mute"}},
 	{"내일 오후 2시 회의 잡고 참석자들한테 공지해줘", []string{"event_add", "message_send"}},
 	{"지난주 근태 정리해서 김샘플 님한테 보내줘", []string{"attendance_list", "message_send"}},

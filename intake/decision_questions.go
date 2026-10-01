@@ -318,7 +318,6 @@ func (builder questionBuilder) deliverableKindQuestion(messageKey string) model.
 	return model.ChoiceQuestion{
 		Instructions: builder.about(messageKey) + "What is the primary deliverable the work ultimately is? This is about the final form, not which tool runs first.",
 		OptionDescriptions: optionDescriptions(agentcontract.DeliverableKindNames, map[string]string{
-			string(agentcontract.DeliverableKindWebsite):      "a live site, web page, landing page, dashboard, or demo served at a URL, at every stage including an unpublished draft",
 			string(agentcontract.DeliverableKindPresentation): "a slide deck",
 			string(agentcontract.DeliverableKindDocument):     "a text document that exists as a file",
 			string(agentcontract.DeliverableKindNone):         "anything else, including everything whose final form is a message in the conversation",
@@ -364,9 +363,8 @@ func (builder questionBuilder) busyRouteQuestion(messageKey string) model.Decisi
 
 func (builder questionBuilder) outputFormatQuestion(messageKey string, formatName string) model.DecisionQuestion {
 	return model.NoulQuestion{
-		Instructions: builder.about(messageKey) + "Does it explicitly ask for a deliverable file in " + formatName + " format?",
-		TrueDescription: "the message names that file format for something it asks to create, edit, convert, generate, or deliver. Words like presentation, slides, deck, 피피티, and 발표자료 name the kind of artifact, not a pptx file. " +
-			"A request to create or update a website or web page is a live site, not an html file",
+		Instructions:     builder.about(messageKey) + "Does it explicitly ask for a deliverable file in " + formatName + " format?",
+		TrueDescription:  "the message names that file format for something it asks to create, edit, convert, generate, or deliver. Words like presentation, slides, deck, 피피티, and 발표자료 name the kind of artifact, not a pptx file",
 		FalseDescription: "anything else, including reading, summarizing, searching, or analyzing an input attachment, and anything whose final form is a message in the conversation",
 	}.Question()
 }

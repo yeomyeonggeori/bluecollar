@@ -446,7 +446,7 @@ func taskContextSummaryInput(request AgentTurnRequest, currentSummary TaskContex
 		"currentSummary":  normalizeTaskContextSummary(currentSummary),
 		"observations":    observations,
 		"responseFields":  []string{"goal", "completedSteps", "artifacts", "keyDecisions", "exhaustedRecoveryRoutes", "activeFailureDebt", "nextPlan"},
-		"copyExactValues": []string{"observationID", "siteID", "URL", "path"},
+		"copyExactValues": []string{"observationID", "URL", "path"},
 	})
 }
 

@@ -91,37 +91,3 @@ func TestAgentTurnRunnerStoresLargeToolResultAsArtifact(t *testing.T) {
 		t.Fatalf("expected one task artifact, got %d", len(services.taskArtifactService.ListTaskArtifact(result.TaskRun.TaskRunID)))
 	}
 }
-
-func TestModelVisibleToolResultSummaryKeepsPublishedSiteURL(t *testing.T) {
-	content := `{"siteID":"site-1","slug":"tangerine-hub","mode":"publish","publishedURL":"https://tangerine-hub.example.test","sourceSHA256":"` + strings.Repeat("a", 64) + `","description":"` + strings.Repeat("x", 4096) + `"}`
-	summary := modelVisibleToolResultSummary(context.Background(), nil, "site_serve", turnObservation{
-		Tool: "site_serve",
-		Output: toolcontract.ToolOutput{
-			Content: content,
-		},
-	})
-
-	if !strings.Contains(summary, "publishedURL=https://tangerine-hub.example.test") {
-		t.Fatalf("expected exact publishedURL in summary, got %q", summary)
-	}
-	if strings.Contains(summary, strings.Repeat("x", 512)) {
-		t.Fatalf("expected site summary to omit long nonessential fields, got %q", summary)
-	}
-}
-
-func TestModelVisibleToolResultSummaryKeepsPreviewURLForPreviewServe(t *testing.T) {
-	content := `{"siteID":"site-1","slug":"draft-site","mode":"preview","previewURL":"https://draft-site.example.test/__preview/preview-1","sourceSHA256":"` + strings.Repeat("a", 64) + `"}`
-	summary := modelVisibleToolResultSummary(context.Background(), nil, "site_serve", turnObservation{
-		Tool: "site_serve",
-		Output: toolcontract.ToolOutput{
-			Content: content,
-		},
-	})
-
-	if !strings.Contains(summary, "previewURL=https://draft-site.example.test/__preview/preview-1") {
-		t.Fatalf("expected exact previewURL in summary, got %q", summary)
-	}
-	if strings.Contains(summary, "publishedURL") {
-		t.Fatalf("preview serve summary must not invent a publishedURL, got %q", summary)
-	}
-}

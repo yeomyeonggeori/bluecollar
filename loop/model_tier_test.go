@@ -2,7 +2,6 @@ package loop
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -97,21 +96,7 @@ func TestTaskLevelProfileForLevelMapsLimits(t *testing.T) {
 	}
 }
 
-func TestArtifactTaskLevelFloorRaisesSiteAndSlidesToXHigh(t *testing.T) {
-	siteToolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
-		Name:            "site_serve",
-		Namespace:       "site",
-		SideEffectClass: toolcontract.ToolSideEffectExternalPublish,
-	}})
-	siteRequest := AgentRequest{
-		ToolSet:    siteToolSet,
-		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"site_serve"}}},
-	}
-	siteFloor := artifactTaskLevelFloor(siteRequest, IntakeDecision{})
-	if siteFloor != TaskLevelXHigh {
-		t.Fatalf("expected site request to floor at xhigh, got %q", siteFloor)
-	}
-
+func TestArtifactTaskLevelFloorRaisesSlidesToXHigh(t *testing.T) {
 	slidesRequest := AgentRequest{ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{RequiredAttachmentSuffixes: []string{".pptx"}}}}
 	slidesFloor := artifactTaskLevelFloor(slidesRequest, IntakeDecision{})
 	if slidesFloor != TaskLevelXHigh {

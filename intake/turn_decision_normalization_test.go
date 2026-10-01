@@ -114,24 +114,6 @@ func TestAConsumedTurnCarriesNoTools(t *testing.T) {
 	}
 }
 
-func TestAWebsiteDeliverableCarriesTheToolThatServesIt(t *testing.T) {
-	toolSet := newTestToolSet([]string{"site_serve"})
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask)
-	decidedFields.DeliverableKind = agentcontract.DeliverableKindWebsite
-	decidedFields.RequestedOutputFormats = []string{"html", "pdf"}
-
-	decision := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{ToolSet: toolSet})
-
-	if len(decision.InitialToolNames) != 1 || decision.InitialToolNames[0] != "site_serve" {
-		t.Fatalf("expected site_serve to be added, got %v", decision.InitialToolNames)
-	}
-	for _, format := range decision.RequestedOutputFormats {
-		if format == "html" {
-			t.Fatalf("expected a served site to drop the html file format, got %v", decision.RequestedOutputFormats)
-		}
-	}
-}
-
 func TestOnlyRegisteredToolsSurviveNormalization(t *testing.T) {
 	toolSet := newTestToolSet([]string{"task_add"})
 	decidedFields := decidedTurnFields(agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask)

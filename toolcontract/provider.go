@@ -384,7 +384,6 @@ func validateProviderTool(boundTool BoundTool) error {
 		ToolSideEffectExternalPublish,
 		ToolSideEffectLocalFile,
 		ToolSideEffectPlatformReply,
-		ToolSideEffectSitePublish,
 	) {
 		return errors.New("sideEffectClass is invalid")
 	}

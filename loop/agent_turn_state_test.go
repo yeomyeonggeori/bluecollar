@@ -854,7 +854,7 @@ func (provider *structuredOnlyAgentActionLanguageModel) GenerateStructuredRespon
 func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T) {
 	seed := int64(77)
 	temperature := 0.4
-	toolSet := toolcontract.NewToolSet([]string{toolcontract.BashToolName, "site_serve"})
+	toolSet := toolcontract.NewToolSet([]string{toolcontract.BashToolName, "task_update"})
 	registerTestTool(toolSet, toolcontract.ToolDefinition{
 		Name:        toolcontract.BashToolName,
 		Description: "Run a command.",
@@ -863,9 +863,9 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 		return testToolSuccess("ran"), nil
 	})
 	registerTestTool(toolSet, toolcontract.ToolDefinition{
-		Name:        "site_serve",
-		Description: "Publish a site.",
-		InputSchema: json.RawMessage(`{"type":"object","properties":{"siteID":{"type":"string"}},"required":["siteID"],"additionalProperties":false}`),
+		Name:        "task_update",
+		Description: "Update a task.",
+		InputSchema: json.RawMessage(`{"type":"object","properties":{"taskID":{"type":"string"}},"required":["taskID"],"additionalProperties":false}`),
 	}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("published"), nil
 	})
@@ -876,7 +876,7 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 			Prompt:            "publish it",
 			VisibleContext: VisibleContext{Messages: []VisibleContextMessage{{
 				Speaker: "Lee",
-				Text:    "Please publish the site.",
+				Text:    "Please update the task.",
 			}}},
 			ToolSet: toolSet,
 		},
@@ -932,7 +932,7 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 	if !strings.Contains(request.StructuredOutputSchema.Document, `"toolName":{"enum":["bash"]`) {
 		t.Fatalf("expected kernel toolName enum to be preserved, got %s", request.StructuredOutputSchema.Document)
 	}
-	if !strings.Contains(request.StructuredOutputSchema.Document, `"toolName":{"enum":["site_serve"]`) {
+	if !strings.Contains(request.StructuredOutputSchema.Document, `"toolName":{"enum":["task_update"]`) {
 		t.Fatalf("expected selected domain operation to remain in the model-facing schema, got %s", request.StructuredOutputSchema.Document)
 	}
 	if !strings.Contains(request.StructuredOutputSchema.Document, `"toolInput"`) {
@@ -1091,9 +1091,9 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 		Body: marshalEventBody(TaskContextSummary{
 			ObservationID:                 "context-summary-001",
 			CompactedThroughObservationID: "obs-007",
-			Goal:                          "finish the site",
+			Goal:                          "finish the report",
 			CompletedSteps:                []string{"created the app"},
-			Artifacts:                     []string{"/workspace/site/index.html"},
+			Artifacts:                     []string{"/workspace/report/index.html"},
 			NextPlan:                      []string{"run verification"},
 		}),
 	}}
@@ -1109,7 +1109,7 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 	if state.ContextSummary.CompactedThroughObservationID != "obs-007" {
 		t.Fatalf("expected context summary to be restored, got %+v", state.ContextSummary)
 	}
-	if len(state.ContextSummary.Artifacts) != 1 || state.ContextSummary.Artifacts[0] != "/workspace/site/index.html" {
+	if len(state.ContextSummary.Artifacts) != 1 || state.ContextSummary.Artifacts[0] != "/workspace/report/index.html" {
 		t.Fatalf("expected artifact path to be preserved, got %+v", state.ContextSummary.Artifacts)
 	}
 }
@@ -1306,7 +1306,7 @@ func TestWaitingTaskResumeRestoresObservationsWithoutFlags(t *testing.T) {
 func TestBlockedResumeRestoresPriorObservations(t *testing.T) {
 	taskEventService := taskstate.NewTaskEventService()
 	taskRunService := taskstate.NewTaskRunService(taskEventService)
-	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "build site")
+	taskRun := taskRunService.CreateTaskRun("person-1", "conversation-1", "build report")
 	runningTaskRun, errorValue := taskRunService.AdvanceTaskRun(taskRun.TaskRunID, "assistant")
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -1356,13 +1356,13 @@ func TestDecodeLegacyObservationNormalizesMemorySearchFailureCode(t *testing.T) 
 
 func TestUserResumeClearsInheritedFailureDebt(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: "site_serve", Output: toolcontract.ToolOutput{Content: `{"siteID":"site-1"}`}},
+		{ObservationID: "obs-001", Action: "continue", Tool: "task_update", Output: toolcontract.ToolOutput{Content: `{"taskID":"task-1"}`}},
 		{
 			ObservationID: "obs-002",
 			Action:        "continue",
-			Tool:          "site_serve",
+			Tool:          "task_update",
 			Failure:       &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()},
-			ToolInputKey:  "site_serve\x00{\"siteID\":\"site-1\"}",
+			ToolInputKey:  "task_update\x00{\"taskID\":\"task-1\"}",
 		},
 	}
 	if _, hasDebt := activeFailureDebt(observations); !hasDebt {

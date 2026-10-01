@@ -3,7 +3,6 @@ package loop
 import (
 	"encoding/json"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"path/filepath"
 	"strconv"
 	"strings"
 )
@@ -110,9 +109,6 @@ func failureDebtWithEpisodeStart(observations []turnObservation) (FailureDebt, i
 			continue
 		}
 		if observation.Failed() && strings.TrimSpace(observation.ToolInputKey) != "" {
-			if failureObservationDoesNotCreateDebt(observation) {
-				continue
-			}
 			if strings.TrimSpace(activeDebt.LatestFailure.ObservationID) == "" {
 				episodeStartIndex = index
 			}
@@ -135,35 +131,6 @@ func recoveryEpisodeObservations(observations []turnObservation) []turnObservati
 		return nil
 	}
 	return observations[episodeStartIndex:]
-}
-
-func failureObservationDoesNotCreateDebt(observation turnObservation) bool {
-	if strings.TrimSpace(observation.Tool) != "file_read" {
-		return false
-	}
-	if observation.FailureCode() != toolcontract.FailureCodes.NotFound.String() {
-		return false
-	}
-	return optionalSiteControlFileToolInputKey(observation.ToolInputKey)
-}
-
-func optionalSiteControlFileToolInputKey(toolInputKey string) bool {
-	input := inputDocumentFromToolInputKey(toolInputKey)
-	if input == nil {
-		return false
-	}
-	normalizedPath := strings.ToLower(filepath.ToSlash(strings.TrimSpace(stringValue(input["path"]))))
-	for _, suffix := range []string{
-		".internkim/site.json",
-		".internkim/idea.md",
-		".internkim/artifact-brief.md",
-		".internkim/review-log.json",
-	} {
-		if normalizedPath == suffix || strings.HasSuffix(normalizedPath, "/"+suffix) {
-			return true
-		}
-	}
-	return false
 }
 
 func successfulObservationKeepsFailureDebt(observation turnObservation) bool {

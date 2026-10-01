@@ -100,27 +100,27 @@ func TestSelectInstructionBundleDoesNotUseTriggerHintOutsideRetrievalCandidates(
 		Prompt: "base",
 		Skills: []SkillInstruction{
 			{
-				Name:           "site-prototype",
-				Description:    "Create and publish web prototypes.",
-				WhenToUse:      "Use for website prototype requests.",
-				Prompt:         "Use site_serve, shell, and site.serve.",
-				ToolReferences: []string{"bash", "site_serve", "site_serve"},
-				Source:         InstructionSource{Path: "/srv/agent/skills/site-prototype/SKILL.md", SkillName: "site-prototype"},
+				Name:           "task-manager",
+				Description:    "Create and update tasks.",
+				WhenToUse:      "Use for task management requests.",
+				Prompt:         "Use task_add, shell, and task.add.",
+				ToolReferences: []string{"bash", "task_add", "task_list"},
+				Source:         InstructionSource{Path: "/srv/agent/skills/task-manager/SKILL.md", SkillName: "task-manager"},
 			},
 		},
 	}
 
 	selectedBundle := selectInstructionBundleForRequest(instructionBundle, AgentRequest{
-		Prompt:  "웹사이트 하나 만들어서 배포해봐",
-		ToolSet: testToolSet([]string{"bash", "site_serve", "site_serve"}),
+		Prompt:  "업무 하나 만들어서 등록해봐",
+		ToolSet: testToolSet([]string{"bash", "task_add", "task_list"}),
 	})
 
-	if strings.Contains(selectedBundle.Prompt, "Use site_serve") {
+	if strings.Contains(selectedBundle.Prompt, "Use task_add") {
 		t.Fatalf("expected trigger hint not to load full skill body, got %q", selectedBundle.Prompt)
 	}
 	for _, skillDecision := range selectedBundle.SkillDecisions {
-		if skillDecision.Name == "site-prototype" && skillDecision.Status == "selected" {
-			t.Fatalf("expected trigger hint not to select site-prototype, got %+v", selectedBundle.SkillDecisions)
+		if skillDecision.Name == "task-manager" && skillDecision.Status == "selected" {
+			t.Fatalf("expected trigger hint not to select task-manager, got %+v", selectedBundle.SkillDecisions)
 		}
 	}
 }
@@ -130,25 +130,25 @@ func TestToolSetForAgentTurnExposesSelectedSkillToolsAlongsideKernel(t *testing.
 		"conversation_history",
 		"memory_search",
 		"bash",
-		"site_serve",
-		"site_serve",
+		"task_add",
+		"task_list",
 		"schedule_create",
 	})
 	instructionBundle := InstructionBundle{
 		Skills: []SkillInstruction{
 			{
-				Name:           "site-prototype",
-				ToolReferences: []string{"bash", "site_serve", "site_serve"},
+				Name:           "task-manager",
+				ToolReferences: []string{"bash", "task_add", "task_list"},
 			},
 			{
 				Name:           "scheduled-task",
 				ToolReferences: []string{"schedule_create"},
 			},
 		},
-		SkillDecisions: []SkillSelectionDecision{{Name: "site-prototype", Status: "selected"}},
+		SkillDecisions: []SkillSelectionDecision{{Name: "task-manager", Status: "selected"}},
 	}
 
-	filteredToolSet := toolSetForAgentTurn(fullToolSet, instructionBundle, AgentRequest{Prompt: "사이트 만들어줘"}, ExecutionPlan{}, false, OutcomeContract{})
+	filteredToolSet := toolSetForAgentTurn(fullToolSet, instructionBundle, AgentRequest{Prompt: "업무 만들어줘"}, ExecutionPlan{}, false, OutcomeContract{})
 
 	// shell and conversation_history are kernel tools in this fixture; memory_search is not.
 	for _, toolName := range []string{"bash", "conversation_history"} {
@@ -161,7 +161,7 @@ func TestToolSetForAgentTurnExposesSelectedSkillToolsAlongsideKernel(t *testing.
 			t.Fatalf("expected unselected tool %s to stay hidden, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
 	}
-	for _, toolName := range []string{"site_serve", "site_serve"} {
+	for _, toolName := range []string{"task_add", "task_list"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected selected skill tool %s to be directly callable, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
@@ -368,38 +368,38 @@ func TestSkillSelectorSkipsSkillWhenEveryToolIsMissing(t *testing.T) {
 }
 
 func TestSelectInstructionBundleKeepsSkillWhenDirectToolsAreAvailable(t *testing.T) {
-	toolSet := toolcontract.NewToolSet([]string{"bash", "site_serve", "site_serve"})
-	for _, toolName := range []string{"bash", "site_serve", "site_serve"} {
+	toolSet := toolcontract.NewToolSet([]string{"bash", "task_add", "task_list"})
+	for _, toolName := range []string{"bash", "task_add", "task_list"} {
 		currentToolName := toolName
 		registerTestTool(toolSet, toolcontract.ToolDefinition{Name: currentToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 			return testToolSuccess("ok"), nil
 		})
 	}
 	instructionBundle := InstructionBundle{Skills: []SkillInstruction{{
-		Name:           "site-prototype",
-		Description:    "Create and publish website prototypes.",
-		Prompt:         "SITE BODY",
-		ToolReferences: []string{"bash", "site_serve", "site_serve"},
+		Name:           "task-manager",
+		Description:    "Create and update tasks.",
+		Prompt:         "TASK BODY",
+		ToolReferences: []string{"bash", "task_add", "task_list"},
 	}}}
 	retriever := staticSkillRetriever{result: SkillRetrievalResult{
 		RetrievalMode: "test",
 		SelectedCandidates: []SkillCandidate{{
-			Name:   "site-prototype",
+			Name:   "task-manager",
 			Score:  1,
 			Reason: "test",
 		}},
 	}}
 
 	selectedBundle := selectInstructionBundleForRequestWithRetriever(context.Background(), instructionBundle, AgentRequest{
-		Prompt:  "김인턴 소개 웹사이트 만들어줘",
+		Prompt:  "김인턴 소개 업무 만들어줘",
 		ToolSet: toolSet,
 	}, retriever)
 
 	if len(selectedBundle.SkillDecisions) != 1 || selectedBundle.SkillDecisions[0].Status != "selected" {
-		t.Fatalf("expected directly callable site skill to be selected, got %+v", selectedBundle.SkillDecisions)
+		t.Fatalf("expected directly callable task skill to be selected, got %+v", selectedBundle.SkillDecisions)
 	}
-	filteredToolSet := toolSetForAgentTurn(toolSet, selectedBundle, AgentRequest{Prompt: "김인턴 소개 웹사이트 만들어줘"}, ExecutionPlan{}, false, OutcomeContract{})
-	if !filteredToolSet.IsAllowed("site_serve") || !filteredToolSet.IsAllowed("site_serve") {
+	filteredToolSet := toolSetForAgentTurn(toolSet, selectedBundle, AgentRequest{Prompt: "김인턴 소개 업무 만들어줘"}, ExecutionPlan{}, false, OutcomeContract{})
+	if !filteredToolSet.IsAllowed("task_add") || !filteredToolSet.IsAllowed("task_list") {
 		t.Fatalf("expected selected skill tools to be directly callable, got %+v", filteredToolSet.ListToolNames())
 	}
 }
@@ -409,7 +409,7 @@ func TestSelectInstructionBundleSkipsSkillWhenDirectToolIsUnavailable(t *testing
 	registerTestTool(toolSet, testToolDescriptor("bash"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return testToolSuccess("ok"), nil
 	})
-	for _, toolName := range []string{"site_serve", "site_serve"} {
+	for _, toolName := range []string{"task_add", "task_list"} {
 		toolSet.RegisterBoundTool(toolcontract.BoundTool{
 			Definition:   toolcontract.ToolDefinition{Name: toolName},
 			Availability: toolcontract.ToolAvailability{Status: toolcontract.ToolAvailabilityUnavailable},
@@ -419,22 +419,22 @@ func TestSelectInstructionBundleSkipsSkillWhenDirectToolIsUnavailable(t *testing
 		})
 	}
 	instructionBundle := InstructionBundle{Skills: []SkillInstruction{{
-		Name:           "site-prototype",
-		Description:    "Create and publish website prototypes.",
-		Prompt:         "SITE BODY",
-		ToolReferences: []string{"bash", "site_serve", "site_serve"},
+		Name:           "task-manager",
+		Description:    "Create and update tasks.",
+		Prompt:         "TASK BODY",
+		ToolReferences: []string{"bash", "task_add", "task_list"},
 	}}}
 	retriever := staticSkillRetriever{result: SkillRetrievalResult{
 		RetrievalMode: "test",
 		SelectedCandidates: []SkillCandidate{{
-			Name:   "site-prototype",
+			Name:   "task-manager",
 			Score:  1,
 			Reason: "test",
 		}},
 	}}
 
 	selectedBundle := selectInstructionBundleForRequestWithRetriever(context.Background(), instructionBundle, AgentRequest{
-		Prompt:  "김인턴 소개 웹사이트 만들어줘",
+		Prompt:  "김인턴 소개 업무 만들어줘",
 		ToolSet: toolSet,
 	}, retriever)
 
@@ -512,79 +512,6 @@ func TestBM25RetrieverSelectsStandardSkill(t *testing.T) {
 	}
 }
 
-func TestSiteArtifactRequestAllowsContentDomainSkillsButGuidesPromptToTheActualTask(t *testing.T) {
-	instructionBundle := InstructionBundle{
-		Skills: []SkillInstruction{
-			{
-				Name:        "site-prototype",
-				Description: "Create, publish, and update website prototypes, homepages, web apps, landing pages, and deployed sites.",
-				WhenToUse:   "Use for website, homepage, web app, site, publish, deploy, 홈페이지, 웹사이트, 사이트, and 배포 requests.",
-				Prompt:      "Follow site prototype workflow.",
-				Source:      InstructionSource{Path: "/srv/agent/skills/site-prototype/SKILL.md", SkillName: "site-prototype"},
-			},
-			{
-				Name:        "mail",
-				Description: "Search, read, and send mail messages.",
-				WhenToUse:   "Use when the user wants to operate on real email.",
-				Prompt:      "Follow mail workflow.",
-				Source:      InstructionSource{Path: "skills/mail/SKILL.md", SkillName: "mail"},
-			},
-			{
-				Name:        "calendar",
-				Description: "Create, list, and update calendar events and schedules.",
-				WhenToUse:   "Use when the user wants to operate on real calendar data.",
-				Prompt:      "Follow calendar workflow.",
-				Source:      InstructionSource{Path: "skills/calendar/SKILL.md", SkillName: "calendar"},
-			},
-			{
-				Name:        "browser",
-				Description: "Control the browser and inspect web pages.",
-				WhenToUse:   "Use when the user wants interactive browser control.",
-				Prompt:      "Follow browser workflow.",
-				Source:      InstructionSource{Path: "skills/browser/SKILL.md", SkillName: "browser"},
-			},
-		},
-	}
-
-	retriever := staticSkillRetriever{result: SkillRetrievalResult{
-		SelectedCandidates: []SkillCandidate{
-			{Name: "mail", Score: 30, Reason: "bm25_fallback"},
-			{Name: "calendar", Score: 29, Reason: "bm25_fallback"},
-			{Name: "browser", Score: 28, Reason: "bm25_fallback"},
-			{Name: "site-prototype", Score: 8, Reason: "bm25_fallback"},
-		},
-		RetrievalMode: "bm25_fallback",
-		IndexStatus:   "ready",
-	}}
-	languageModel := &schemaStructuredLanguageModel{contentBySchema: map[string]string{
-		"bluecollar_skill_search_queries":       `{"queries":[]}`,
-		"bluecollar_contract_skill_arbitration": `{"selectedSkillNames":["site-prototype","mail","calendar","browser"],"rejectedSkillNames":[],"requiredNextToolNames":[],"expectedEvidence":[],"unmetPreconditions":[],"reason":"Use the website workflow and the referenced capability descriptions as content."}`,
-	}}
-	selectedBundle := selectInstructionBundleForRequestWithRetrieverAndRouter(
-		context.Background(),
-		instructionBundle,
-		AgentRequest{
-			Prompt: "메일, 일정, 브라우저 제어 능력을 소개하는 세련된 개인 홈페이지 하나 만들어서 배포해줘",
-			ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{ExpectedResults: []ExpectedResult{
-				{ID: "site-public-link", Type: "link", Description: "public website URL", Required: true},
-			}}},
-		},
-		retriever,
-		NewSkillSearchQueryRouter(languageModel),
-	)
-
-	if !skillDecisionHasStatus(selectedBundle.SkillDecisions, "site-prototype", "selected") {
-		t.Fatalf("expected site-prototype selected, got %+v", selectedBundle.SkillDecisions)
-	}
-	// Mentioning mail/calendar/browser as content for the site is a legitimate reason to
-	// select those skills too (the model may need their descriptions to write accurate
-	// copy). Selection is not narrowed deterministically; instead the prompt tells the
-	// model to only act on what the request actually needs.
-	if !strings.Contains(selectedBundle.Prompt, "only use the ones this specific request actually needs") {
-		t.Fatalf("expected selected-skill prompt to guide the model toward the actual task, got %q", selectedBundle.Prompt)
-	}
-}
-
 func TestNonArtifactFlowTaskRequestIsNotDominatedByPresentation(t *testing.T) {
 	instructionBundle := InstructionBundle{
 		Skills: []SkillInstruction{
@@ -616,7 +543,7 @@ func TestNonArtifactFlowTaskRequestIsNotDominatedByPresentation(t *testing.T) {
 	}}
 
 	selectedBundle := selectInstructionBundleForRequestWithRetriever(context.Background(), instructionBundle, AgentRequest{
-		Prompt: "업무 등록해줘\n- 메일 페이지 앱 비밀번호, 다양한 사이트 관련 링크로 이동으로 개선하기",
+		Prompt: "업무 등록해줘\n- 메일 페이지 앱 비밀번호, 다양한 페이지 관련 링크로 이동으로 개선하기",
 		ToolSet: testToolSet([]string{
 			"bash",
 			"write",
@@ -779,12 +706,12 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 		Prompt: "base",
 		Skills: []SkillInstruction{
 			{
-				Name:           "public-web-builder",
-				Description:    "Create, update, build, and publish website prototypes with public URLs.",
-				WhenToUse:      "Use for website, homepage, web app, landing page, deploy, and publish requests.",
-				Prompt:         "Follow website build and publish workflow.",
-				ToolReferences: []string{"write", "bash", "site_serve", "site_build", "site_serve"},
-				Source:         InstructionSource{Path: "skills/public-web-builder/SKILL.md", SkillName: "public-web-builder"},
+				Name:           "public-page-publisher",
+				Description:    "Create, update, and publish public pages with public URLs.",
+				WhenToUse:      "Use for public page, share link, and publish requests.",
+				Prompt:         "Follow public page publish workflow.",
+				ToolReferences: []string{"write", "bash", "document_share", "document_publish"},
+				Source:         InstructionSource{Path: "skills/public-page-publisher/SKILL.md", SkillName: "public-page-publisher"},
 			},
 			{
 				Name:           "enterprise-document-maker",
@@ -798,7 +725,7 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 	}
 	retriever := staticSkillRetriever{result: SkillRetrievalResult{
 		SelectedCandidates: []SkillCandidate{
-			{Name: "public-web-builder", Score: 30, Reason: "embedding_similarity"},
+			{Name: "public-page-publisher", Score: 30, Reason: "embedding_similarity"},
 			{Name: "enterprise-document-maker", Score: 8, Reason: "embedding_similarity"},
 		},
 		RetrievalMode: "embedding",
@@ -806,7 +733,7 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 	}}
 	languageModel := &schemaStructuredLanguageModel{contentBySchema: map[string]string{
 		"bluecollar_skill_search_queries":       `{"queries":[{"description":"Recover and attach the requested .docx enterprise guide file."}]}`,
-		"bluecollar_contract_skill_arbitration": `{"selectedSkillNames":["enterprise-document-maker"],"rejectedSkillNames":["public-web-builder"],"requiredNextToolNames":["write","bash","file.promote","file_deliver"],"expectedEvidence":["file_deliver"],"unmetPreconditions":[],"reason":"The outcome contract requires a .docx attachment, not a public website."}`,
+		"bluecollar_contract_skill_arbitration": `{"selectedSkillNames":["enterprise-document-maker"],"rejectedSkillNames":["public-page-publisher"],"requiredNextToolNames":["write","bash","file.promote","file_deliver"],"expectedEvidence":["file_deliver"],"unmetPreconditions":[],"reason":"The outcome contract requires a .docx attachment, not a public page."}`,
 	}}
 
 	selectedBundle := selectInstructionBundleForRequestWithRetrieverAndRouter(context.Background(), instructionBundle, AgentRequest{
@@ -816,9 +743,8 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 			"bash",
 			"file.promote",
 			"file_deliver",
-			"site_serve",
-			"site_build",
-			"site_serve",
+			"document_share",
+			"document_publish",
 		}),
 		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
 			RequiredEvidenceTools:      []string{"file_deliver"},
@@ -838,10 +764,10 @@ func TestContractSkillArbitrationSelectsUsefulCandidateFromTopK(t *testing.T) {
 	if !skillDecisionHasReason(selectedBundle.SkillDecisions, "enterprise-document-maker", "contract_arbitration") {
 		t.Fatalf("expected enterprise document skill selected by arbitration, got %+v", selectedBundle.SkillDecisions)
 	}
-	if skillDecisionHasStatus(selectedBundle.SkillDecisions, "public-web-builder", "selected") {
-		t.Fatalf("expected website skill not to be selected by artifact contract arbitration, got %+v", selectedBundle.SkillDecisions)
+	if skillDecisionHasStatus(selectedBundle.SkillDecisions, "public-page-publisher", "selected") {
+		t.Fatalf("expected public page skill not to be selected by artifact contract arbitration, got %+v", selectedBundle.SkillDecisions)
 	}
-	if !strings.Contains(selectedBundle.Prompt, "Create the document") || strings.Contains(selectedBundle.Prompt, "Use website build") {
+	if !strings.Contains(selectedBundle.Prompt, "Create the document") || strings.Contains(selectedBundle.Prompt, "Use public page publish") {
 		t.Fatalf("expected only arbitrated document instructions, got %q", selectedBundle.Prompt)
 	}
 	if !selectedBundle.HasContractSkillArbitration || !reflect.DeepEqual(selectedBundle.RequiredEvidenceTools, []string{"file_deliver"}) {
@@ -1097,12 +1023,12 @@ func TestSkillQueryRouterMessagesPrioritizeLatestRequest(t *testing.T) {
 	router := NewSkillSearchQueryRouter(staticStructuredLanguageModel{content: `{"queries":[]}`})
 
 	messages := router.buildMessages(AgentRequest{
-		Prompt: "김인턴의 구조에 대해 웹사이트 하나 소개 형식으로 만들어줘.",
+		Prompt: "김인턴의 구조에 대해 보고서 하나 소개 형식으로 만들어줘.",
 		VisibleContext: VisibleContext{Messages: []VisibleContextMessage{
 			{Speaker: "user", Text: "example.com 스타일로 사업계획서 PPT 만들어줘."},
 		}},
 		ActiveGoal:    ActiveGoal{CurrentObjective: "example.com 발표 자료 생성"},
-		ToolSet:       testToolSet([]string{"site_serve", "site_serve", "bash"}),
+		ToolSet:       testToolSet([]string{"task_add", "task_list", "bash"}),
 		TurnStartedAt: time.Date(2026, time.May, 17, 1, 2, 3, 0, time.UTC),
 	})
 
@@ -1123,29 +1049,29 @@ func TestSkillQueryRouterMessagesPrioritizeLatestRequest(t *testing.T) {
 	}
 }
 
-func TestStructuredSkillQueryRecordsLatestRequestWebsiteQueryWithStaleContext(t *testing.T) {
+func TestStructuredSkillQueryRecordsLatestRequestQueryWithStaleContext(t *testing.T) {
 	instructionBundle := InstructionBundle{
 		Prompt: "base",
 		Skills: []SkillInstruction{{
-			Name:           "site-prototype",
-			Description:    "Create and publish website prototypes.",
-			Prompt:         "Use site_serve and site.serve.",
-			ToolReferences: []string{"site_serve", "site_serve"},
-			Source:         InstructionSource{Path: "/srv/agent/skills/site-prototype/SKILL.md", SkillName: "site-prototype"},
+			Name:           "task-manager",
+			Description:    "Create and update tasks.",
+			Prompt:         "Use task_add and task.add.",
+			ToolReferences: []string{"task_add", "task_list"},
+			Source:         InstructionSource{Path: "/srv/agent/skills/task-manager/SKILL.md", SkillName: "task-manager"},
 		}},
 	}
 	retriever := NewEmbeddingSkillRetriever(nil, "")
-	router := NewSkillSearchQueryRouter(staticStructuredLanguageModel{content: `{"queries":[{"description":"Create a website introducing InternKim's structure."}]}`})
+	router := NewSkillSearchQueryRouter(staticStructuredLanguageModel{content: `{"queries":[{"description":"Create a task introducing InternKim's structure."}]}`})
 
 	selectedBundle := selectInstructionBundleForRequestWithRetrieverAndRouter(context.Background(), instructionBundle, AgentRequest{
-		Prompt: "김인턴의 구조에 대해 웹사이트 하나 소개 형식으로 만들어줘.",
+		Prompt: "김인턴의 구조에 대해 보고서 하나 소개 형식으로 만들어줘.",
 		VisibleContext: VisibleContext{Messages: []VisibleContextMessage{
 			{Speaker: "user", Text: "https://example.com 내용으로 사업계획서 PPT 만들어줘."},
 		}},
-		ToolSet: testToolSet([]string{"site_serve", "site_serve"}),
+		ToolSet: testToolSet([]string{"task_add", "task_list"}),
 	}, retriever, router)
 
-	if len(selectedBundle.SkillQueries) != 2 || selectedBundle.SkillQueries[0] != "김인턴의 구조에 대해 웹사이트 하나 소개 형식으로 만들어줘." || !strings.Contains(selectedBundle.SkillQueries[1], "InternKim") {
+	if len(selectedBundle.SkillQueries) != 2 || selectedBundle.SkillQueries[0] != "김인턴의 구조에 대해 보고서 하나 소개 형식으로 만들어줘." || !strings.Contains(selectedBundle.SkillQueries[1], "InternKim") {
 		t.Fatalf("expected raw request first and router query second, got %+v", selectedBundle.SkillQueries)
 	}
 	if strings.Contains(strings.Join(selectedBundle.SkillQueries, "\n"), "example.com") || strings.Contains(strings.ToLower(strings.Join(selectedBundle.SkillQueries, "\n")), "ppt") {
@@ -1299,18 +1225,18 @@ func TestFifthRetrievedSkillIsSelectedBeforeLimit(t *testing.T) {
 	}
 }
 
-func TestWebsiteSkillSurvivesWhenSkillIsFifthCandidate(t *testing.T) {
+func TestTaskSkillSurvivesWhenSkillIsFifthCandidate(t *testing.T) {
 	skills := []SkillInstruction{
 		{Name: "presentation", Description: "Create slides.", Prompt: "SLIDES BODY"},
 		{Name: "handout", Description: "Create printable handouts.", Prompt: "HANDOUT BODY"},
 		{Name: "direct-message", Description: "Send direct messages.", Prompt: "DM BODY"},
 		{Name: "report", Description: "Write reports.", Prompt: "REPORT BODY"},
 		{
-			Name:           "site-prototype",
-			Description:    "Create and publish website prototypes.",
-			Prompt:         "SITE BODY",
-			ToolReferences: []string{"bash", "site_serve", "site_serve"},
-			Source:         InstructionSource{Path: "/srv/agent/skills/site-prototype/SKILL.md", SkillName: "site-prototype"},
+			Name:           "task-manager",
+			Description:    "Create and update tasks.",
+			Prompt:         "TASK BODY",
+			ToolReferences: []string{"bash", "task_add", "task_list"},
+			Source:         InstructionSource{Path: "/srv/agent/skills/task-manager/SKILL.md", SkillName: "task-manager"},
 		},
 		{Name: "extra", Description: "Extra skill.", Prompt: "EXTRA BODY"},
 	}
@@ -1325,16 +1251,16 @@ func TestWebsiteSkillSurvivesWhenSkillIsFifthCandidate(t *testing.T) {
 	}}
 
 	selectedBundle := selectInstructionBundleForRequestWithRetriever(context.Background(), instructionBundle, AgentRequest{
-		Prompt: "김인턴의 구조에 대해 웹사이트 하나 소개 형식으로 만들어줘.",
+		Prompt: "김인턴의 구조에 대해 보고서 하나 소개 형식으로 만들어줘.",
 		ToolSet: testToolSet([]string{
 			"bash",
-			"site_serve",
-			"site_serve",
+			"task_add",
+			"task_add",
 		}),
 	}, retriever)
 
-	if !strings.Contains(selectedBundle.Prompt, "SITE BODY") {
-		t.Fatalf("expected fifth candidate site skill body to be selected, got %q", selectedBundle.Prompt)
+	if !strings.Contains(selectedBundle.Prompt, "TASK BODY") {
+		t.Fatalf("expected fifth candidate task skill body to be selected, got %q", selectedBundle.Prompt)
 	}
 	if strings.Contains(selectedBundle.Prompt, "EXTRA BODY") {
 		t.Fatalf("expected sixth candidate body to stay out, got %q", selectedBundle.Prompt)

@@ -118,7 +118,6 @@ const (
 	DeliverableKindDocument     = agentcontract.DeliverableKindDocument
 	DeliverableKindNone         = agentcontract.DeliverableKindNone
 	DeliverableKindPresentation = agentcontract.DeliverableKindPresentation
-	DeliverableKindWebsite      = agentcontract.DeliverableKindWebsite
 
 	DefaultReactionEmojiName = agentcontract.DefaultReactionEmojiName
 

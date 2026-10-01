@@ -50,15 +50,15 @@ func TestObservedURLInReplyIgnoresWhatALookupFound(t *testing.T) {
 }
 
 func TestCompletionFactsRequireExactObservedURLInReply(t *testing.T) {
-	toolSet, observation := canonicalLinkObservation("site_serve", "https://portfolio.example")
+	toolSet, observation := canonicalLinkObservation("document_share", "https://portfolio.example")
 	request := AgentTurnRequest{ToolSet: toolSet}
 
-	wrongURL := validateCompletionFacts(request, []turnObservation{observation}, satisfiedFinishDocument("Deployed it: https://different.example"))
+	wrongURL := validateCompletionFacts(request, []turnObservation{observation}, satisfiedFinishDocument("Shared it: https://different.example"))
 	if wrongURL.IsSatisfied || !strings.Contains(wrongURL.Message, "https://portfolio.example") {
 		t.Fatalf("expected exact observed URL requirement, got %+v", wrongURL)
 	}
 
-	exactURL := validateCompletionFacts(request, []turnObservation{observation}, satisfiedFinishDocument("Deployed it: https://portfolio.example/"))
+	exactURL := validateCompletionFacts(request, []turnObservation{observation}, satisfiedFinishDocument("Shared it: https://portfolio.example/"))
 	if !exactURL.IsSatisfied {
 		t.Fatalf("expected normalized exact URL to pass, got %+v", exactURL)
 	}
@@ -81,7 +81,7 @@ func canonicalLinkToolDefinition(toolName string) toolcontract.ToolDefinition {
 	descriptor.ResultContract = &toolcontract.ToolResultContract{
 		Schema: json.RawMessage(`{"type":"object","properties":{"publicURL":{"type":"string"}},"required":["publicURL"],"additionalProperties":false}`),
 		Effects: []toolcontract.ResourceEffectContract{{
-			ObjectType:     "website",
+			ObjectType:     "document",
 			Effect:         "published",
 			ResultField:    "publicURL",
 			EffectIdentity: "url",
@@ -94,6 +94,6 @@ func canonicalLinkToolResult(publicURL string) toolcontract.ToolResult {
 	outputData := json.RawMessage(marshalEventBody(map[string]string{"publicURL": publicURL}))
 	return toolcontract.ToolResult{
 		Output:  toolcontract.ToolOutput{Content: string(outputData), Data: outputData},
-		Effects: []toolcontract.ResourceEffect{{ObjectType: "website", Effect: "published", URL: publicURL}},
+		Effects: []toolcontract.ResourceEffect{{ObjectType: "document", Effect: "published", URL: publicURL}},
 	}
 }

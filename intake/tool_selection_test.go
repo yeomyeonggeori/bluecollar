@@ -30,7 +30,7 @@ func measurementToolNames() []string {
 		"leave_request", "leave_update", "mail_message_list", "mail_message_read",
 		"mail_message_search", "mail_message_send", "message_context", "message_search",
 		"message_send", "message_update", "person_invite", "person_list", "person_update",
-		"site_list", "site_serve", "site_unserve", "task_add", "task_delete", "task_list",
+		"task_add", "task_delete", "task_list",
 		"task_update", "team_add", "team_list", "team_update", "web_fetch", "web_search",
 	}
 }

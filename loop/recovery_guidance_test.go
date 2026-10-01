@@ -67,8 +67,8 @@ func TestRecoveryAttemptCountOnlyIncludesSpentInterventions(t *testing.T) {
 
 func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"site_build","toolInput":{"siteID":"site-1"}}`,
-		`{"action":"continue","toolName":"file_read","toolInput":{"path":"home/sites/site-1/draft/app/src/App.tsx"}}`,
+		`{"action":"continue","toolName":"task_update","toolInput":{"taskID":"task-1"}}`,
+		`{"action":"continue","toolName":"file_read","toolInput":{"path":"home/reports/report-1/draft/src/App.tsx"}}`,
 		finishMessageDocument("Checked."),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{
@@ -81,15 +81,15 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 			NoToolFallback: 0,
 		},
 	})
-	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_read", "edit"}, []string{"site_build"})
-	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "site_build"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+	toolRegistry := newHybridKernelCapabilityToolSet([]string{"file_read", "edit"}, []string{"task_update"})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "task_update"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		return toolcontract.ToolResult{
 			Output: toolcontract.ToolOutput{Content: "source failed"},
 			Failure: &toolcontract.ToolFailure{
 				Kind:            toolcontract.FailureInvalidInput,
 				Code:            toolcontract.FailureCodes.InvalidInput.String(),
-				Stage:           "site_build_source",
-				UserSafeSummary: "site source failed",
+				Stage:           "task_update_source",
+				UserSafeSummary: "task source failed",
 				Retryable:       true,
 				FailureClass:    failureClassQuality,
 				RetryPolicy:     retryPolicyAfterPrecondition,
@@ -100,18 +100,18 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 	fileReadCount := 0
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "file_read", SideEffectClass: toolcontract.ToolSideEffectRead}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		fileReadCount++
-		return testToolSuccess(`{"path":"home/sites/site-1/draft/app/src/App.tsx","content":"broken"}`), nil
+		return testToolSuccess(`{"path":"home/reports/report-1/draft/src/App.tsx","content":"broken"}`), nil
 	})
 	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: "edit"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		return testToolSuccess(`{"path":"home/sites/site-1/draft/app/src/App.tsx","matchCount":1}`), nil
+		return testToolSuccess(`{"path":"home/reports/report-1/draft/src/App.tsx","matchCount":1}`), nil
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
-		Prompt:            "look into the site build problem",
+		Prompt:            "look into the task update problem",
 		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"site_build", "file_read", "edit"},
+		PinnedToolNames:   []string{"task_update", "file_read", "edit"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected inspection recovery to continue: %v", errorValue)

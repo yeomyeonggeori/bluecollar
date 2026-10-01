@@ -51,7 +51,6 @@ const (
 	ApprovalSignalReject      ApprovalSignal = "reject"
 	ApprovalSignalUnclear     ApprovalSignal = "unclear"
 
-	DeliverableKindWebsite      DeliverableKind = "website"
 	DeliverableKindPresentation DeliverableKind = "presentation"
 	DeliverableKindDocument     DeliverableKind = "document"
 	DeliverableKindNone         DeliverableKind = "none"
@@ -211,7 +210,7 @@ var TaskShapeNames = []string{
 }
 
 var DeliverableKindNames = []string{
-	string(DeliverableKindWebsite), string(DeliverableKindPresentation), string(DeliverableKindDocument), string(DeliverableKindNone),
+	string(DeliverableKindPresentation), string(DeliverableKindDocument), string(DeliverableKindNone),
 }
 
 var ApprovalSignalNames = []string{

@@ -12,13 +12,13 @@ func TestBuildTurnProgressKeepsRecentFileContext(t *testing.T) {
 			ObservationID: "obs-001",
 			Action:        "continue",
 			Tool:          "file_read",
-			Output:        toolcontract.ToolOutput{Content: `{"path":"home/sites/site-1/draft/app/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
+			Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
 		},
 		{
 			ObservationID: "obs-002",
 			Action:        "continue",
 			Tool:          "file_read",
-			Output:        toolcontract.ToolOutput{Content: `{"path":"home/sites/site-1/draft/app/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
+			Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
 		},
 	}
 
@@ -28,7 +28,7 @@ func TestBuildTurnProgressKeepsRecentFileContext(t *testing.T) {
 		t.Fatalf("expected one recent file context, got %+v", progress.RecentFiles)
 	}
 	fileContext := progress.RecentFiles[0]
-	if fileContext.Path != "home/sites/site-1/draft/app/src/prototype-data.ts" {
+	if fileContext.Path != "home/reports/report-1/draft/src/prototype-data.ts" {
 		t.Fatalf("expected prototype data path, got %q", fileContext.Path)
 	}
 	for _, expected := range []string{"profile", "services", "1-20"} {

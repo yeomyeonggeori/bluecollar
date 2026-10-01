@@ -49,7 +49,7 @@ func TestTheCapabilityCatalogFixtureStillCarriesTheToolsTheLoopShapesActionsFor(
 	}
 	for _, toolName := range []string{
 		"task_add", "task_update", "message_send", "message_search",
-		"document_read", "image_read", "web_search", "site_serve",
+		"document_read", "image_read", "web_search", "person_list",
 	} {
 		if !carried[toolName] {
 			t.Errorf("%s is gone from the fixture; refresh it from %s", toolName, capabilityCatalogFixtureSource)
