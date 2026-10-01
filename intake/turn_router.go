@@ -105,7 +105,7 @@ func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontrac
 			SenderHandle: request.RequesterHandle,
 			SentAt:       request.TurnStartedAt,
 			InputParts:   request.InputParts,
-			Attachments:  request.IntakeAttachmentFacts,
+			Attachments:  agentcontract.AttachmentFactsFromParts(request.InputParts),
 
 			IsAttachmentsOnly: strings.TrimSpace(request.Prompt) == "" && len(agentcontract.ImagePartsOf(request.InputParts)) > 0,
 		}},
@@ -284,7 +284,7 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	messages := []model.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(firstNonEmptyAddressingText(decidedFields.ResponseLanguage, request.ResponseLanguage))},
-		{Role: "system", Content: decidedTurnFactsDescription(request, decidedFields)},
+		{Role: "system", Content: decidedTurnFactsDescription(decidedFields)},
 	}
 	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
@@ -317,7 +317,7 @@ func turnWordsUserMessage(request agentcontract.AgentRequest) model.Message {
 	return message
 }
 
-func decidedTurnFactsDescription(request agentcontract.AgentRequest, decidedFields agentcontract.TurnDecision) string {
+func decidedTurnFactsDescription(decidedFields agentcontract.TurnDecision) string {
 	lines := []string{
 		"Decided for this turn:",
 		"- route: " + string(decidedFields.Route),
@@ -331,11 +331,6 @@ func decidedTurnFactsDescription(request agentcontract.AgentRequest, decidedFiel
 	}
 	if len(decidedFields.InitialToolNames) > 0 {
 		lines = append(lines, "- likely tools: "+strings.Join(decidedFields.InitialToolNames, ", "))
-	}
-	for _, attachment := range request.IntakeAttachmentFacts {
-		if description := strings.TrimSpace(attachment.Description); description != "" {
-			lines = append(lines, "- attachment "+strings.TrimSpace(attachment.FileName)+": "+description)
-		}
 	}
 	return strings.Join(lines, "\n")
 }

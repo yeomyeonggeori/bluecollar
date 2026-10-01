@@ -49,7 +49,6 @@ type AgentRequest struct {
 	PrecomputedTurnDecision    *TurnDecision
 	IsPrecomputedDecisionExact bool
 	DecidedTurnFields          *TurnDecision
-	IntakeAttachmentFacts      []IntakeAttachmentFact
 	SkipSkillSelection         bool
 	TaskLevel                  TaskLevel
 	TurnStartedAt              time.Time
