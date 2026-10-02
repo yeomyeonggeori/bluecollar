@@ -204,10 +204,9 @@ var formatContextTimestamp = agentcontract.FormatContextTimestamp
 var buildVisibleContextDescription = agentcontract.BuildVisibleContextDescription
 
 const (
-	MemoryScopeUser         = agentcontract.MemoryScopeUser
-	MemoryScopeWorkspace    = agentcontract.MemoryScopeWorkspace
-	MemoryScopeCircle       = agentcontract.MemoryScopeCircle
-	MemoryScopeConversation = agentcontract.MemoryScopeConversation
+	MemoryScopePerson    = agentcontract.MemoryScopePerson
+	MemoryScopeWorkspace = agentcontract.MemoryScopeWorkspace
+	MemoryScopeCircle    = agentcontract.MemoryScopeCircle
 )
 
 var buildMemoryContext = agentcontract.BuildMemoryContext
