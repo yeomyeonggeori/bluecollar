@@ -249,3 +249,14 @@ func TestTurnRouterFailsWhenTheDecisionCallFails(t *testing.T) {
 		t.Fatalf("expected the decision failure to survive, got %v", errorValue)
 	}
 }
+
+func TestTurnRouterDecidesWithTheFilesAttachedToTheMessage(t *testing.T) {
+	csvPart := agentcontract.AgentPart{Type: agentcontract.AgentPartTypeFile, File: &agentcontract.AgentFilePart{Filename: "판매실적_2026.csv", ContentType: "text/csv", SizeBytes: 4791}}
+
+	decisionRequest := TurnRequestDecisionRequest(agentcontract.AgentRequest{Prompt: "첨부한 판매 실적 CSV로 엑셀 파일 만들어줘", InputParts: []agentcontract.AgentPart{csvPart}})
+
+	attachments := decisionRequest.Messages[0].Attachments
+	if len(attachments) != 1 || attachments[0].FileName != "판매실적_2026.csv" || attachments[0].Kind != "file" {
+		t.Fatalf("expected the router to be told about the attached CSV, got %+v", attachments)
+	}
+}
