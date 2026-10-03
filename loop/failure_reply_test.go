@@ -269,7 +269,7 @@ func TestAgentTurnRunnerHonorsCallerDeadlineDuringMaxIterationsReply(t *testing.
 		ConversationID:    "conversation-1",
 		Prompt:            taskRun.Prompt,
 		ResponseLanguage:  ResponseLanguageKorean,
-	}, "max_iterations", nil, nil, ExecutionState{}, 4, 0)
+	}, "max_iterations", nil, limitFiles{}, ExecutionState{}, 4, 0)
 
 	if errorValue != nil {
 		t.Fatalf("expected bounded max-iterations result, got %v", errorValue)
@@ -688,7 +688,7 @@ func TestAgentTurnRunnerLimitReplyPromptHidesUndeliveredAttachments(t *testing.T
 	if strings.Contains(languageModel.textPrompts[0], "deck.html") {
 		t.Fatalf("expected blocked limit reply prompt to omit undeliverable attachments, got %s", languageModel.textPrompts[0])
 	}
-	if !strings.Contains(languageModel.textPrompts[0], "Do not claim an attachment or completed artifact exists unless attachment filenames are listed") {
+	if !strings.Contains(languageModel.textPrompts[0], "Do not claim an attachment or completed artifact exists unless attachmentFilenames or carriedFilenames lists it") {
 		t.Fatalf("expected prompt to describe attachment evidence boundary, got %s", languageModel.textPrompts[0])
 	}
 	if len(result.Attachments) != 0 {
@@ -779,5 +779,88 @@ func TestAFailureNoticeIsToldOfAFileAnEarlierReplySent(t *testing.T) {
 
 	if !report.HasAttachments || len(report.AttachmentFilenames) != 1 || report.AttachmentFilenames[0] != "native-install-rig.pdf" {
 		t.Fatalf("a file a reply already sent is the user's, got %+v", report)
+	}
+}
+
+func limitResultAfterHandingAFileToDelivery(t *testing.T) (AgentTurnResult, *sequenceLanguageModel) {
+	t.Helper()
+	languageModel := &sequenceLanguageModel{
+		contents: []string{
+			`{"action":"continue","toolName":"file_deliver","toolInput":{"files":[{"path":"~/documents/floor-plan-estimate.xlsx"}]}}`,
+		},
+		textResponses: []string{"The run stopped at its step limit; the latest estimate is attached but was not confirmed finished."},
+	}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 1})
+	toolRegistry := newTestToolSet([]string{toolcontract.FileDeliverToolName})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return toolcontract.ToolResult{
+			Output: toolcontract.ToolOutput{Content: "staged"},
+			Attachments: []toolcontract.FileAttachment{{
+				Filename:    "floor-plan-estimate.xlsx",
+				ContentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+				DevicePath:  "/home/bc_person_sample/documents/floor-plan-estimate.xlsx",
+			}},
+		}, nil
+	})
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "Make a renovation cost estimate spreadsheet and send it to me.",
+		ToolSet:           toolRegistry,
+		PinnedToolNames:   toolRegistry.ListToolNames(),
+	})
+	if errorValue != nil {
+		t.Fatalf("expected limit result, got error: %v", errorValue)
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusBlocked {
+		t.Fatalf("expected a blocked task at the step limit, got %+v", result.TaskRun)
+	}
+	return result, languageModel
+}
+
+func TestALimitStopCarriesTheFileTheAgentHandedToDelivery(t *testing.T) {
+	result, _ := limitResultAfterHandingAFileToDelivery(t)
+
+	if len(result.Attachments) != 1 || result.Attachments[0].Filename != "floor-plan-estimate.xlsx" {
+		t.Fatalf("a file the agent handed to delivery was lost to the step limit: %+v", result.Attachments)
+	}
+}
+
+func TestALimitNoticeIsToldItCarriesTheHandedOverFile(t *testing.T) {
+	_, languageModel := limitResultAfterHandingAFileToDelivery(t)
+
+	if len(languageModel.textPrompts) == 0 {
+		t.Fatal("expected a generated limit notice")
+	}
+	prompt := languageModel.textPrompts[len(languageModel.textPrompts)-1]
+	if !strings.Contains(prompt, `"carriedFilenames":["floor-plan-estimate.xlsx"]`) {
+		t.Fatalf("the notice was not told which file it carries: %s", prompt)
+	}
+	if strings.Contains(prompt, "The requested file artifact was not delivered") {
+		t.Fatalf("a notice that carries the file was told it was not delivered: %s", prompt)
+	}
+}
+
+func TestALimitStopDoesNotCarryAFileAReplyAlreadyDelivered(t *testing.T) {
+	staged := toolcontract.FileAttachment{Filename: "seating-chart.pdf", DevicePath: "/home/bc_person_sample/documents/seating-chart.pdf"}
+	state := agentTaskState{
+		Attachments:              []toolcontract.FileAttachment{staged},
+		DeliveredAttachmentPaths: []string{staged.DevicePath},
+		Observations: []turnObservation{{
+			ObservationID: "obs-001",
+			Action:        "continue",
+			Tool:          toolcontract.FileDeliverToolName,
+			Attachments:   []toolcontract.FileAttachment{staged},
+		}},
+	}
+
+	files := filesAtLimit(state)
+
+	if len(files.Carried) != 0 {
+		t.Fatalf("a file already delivered would go out twice: %+v", files.Carried)
+	}
+	if len(files.Delivered) != 1 {
+		t.Fatalf("expected the delivered file to be named as delivered, got %+v", files.Delivered)
 	}
 }

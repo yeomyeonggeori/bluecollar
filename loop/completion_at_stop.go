@@ -5,6 +5,7 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func (agentTurnRunner *AgentTurnRunner) completeAtStop(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState) (AgentTurnResult, bool) {
@@ -16,7 +17,8 @@ func (agentTurnRunner *AgentTurnRunner) completeAtStop(ctx context.Context, task
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionPersistFailed, marshalEventBody(map[string]string{"error": errorValue.Error()}))
 		return AgentTurnResult{}, false
 	}
-	reply := agentTurnRunner.writeCompletionReply(ctx, taskRunID, request, state.Observations)
+	carried := attachmentsNotYetDelivered(state.Attachments, state.DeliveredAttachmentPaths)
+	reply := agentTurnRunner.writeCompletionReply(ctx, taskRunID, request, state.Observations, carried)
 	detachedContext, cancelDetached := context.WithTimeout(context.WithoutCancel(ctx), completionPersistenceTimeout)
 	defer cancelDetached()
 	reply = agentTurnRunner.prepareFinishMessageForPlatform(detachedContext, request, reply)
@@ -24,7 +26,7 @@ func (agentTurnRunner *AgentTurnRunner) completeAtStop(ctx context.Context, task
 	return AgentTurnResult{
 		TaskRun:         persistTaskRunResult(agentTurnRunner.taskRunService, completedTaskRun, reply),
 		FinishMessage:   reply,
-		Attachments:     attachmentsNotYetDelivered(state.Attachments, state.DeliveredAttachmentPaths),
+		Attachments:     carried,
 		RecoveryActions: recoveryActionsFromObservations(state.Observations),
 	}, true
 }
@@ -57,12 +59,12 @@ func modelDeclaredCompletion(state agentTaskState) bool {
 	return state.CompletionIntentToolName != ""
 }
 
-func (agentTurnRunner *AgentTurnRunner) writeCompletionReply(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation) string {
+func (agentTurnRunner *AgentTurnRunner) writeCompletionReply(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, carried []toolcontract.FileAttachment) string {
 	chatCompleter, isAvailable := model.ResolveTextChatCompleter(agentTurnRunner.languageModel)
 	if !isAvailable {
 		return completionRawReply(request)
 	}
-	reply, errorValue := generateCompletionReply(ctx, chatCompleter, request, observations)
+	reply, errorValue := generateCompletionReply(ctx, chatCompleter, request, observations, carried)
 	if errorValue == nil {
 		return reply
 	}

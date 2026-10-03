@@ -16,8 +16,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
-const elapsedReplySchemaName = "bluecollar_elapsed_reply"
-
 func newTimePressureRunner() *AgentTurnRunner {
 	return &AgentTurnRunner{
 		options: TurnOptions{
@@ -174,6 +172,35 @@ func TestElapsedClosingBlocksBeforeReplyWhenEvidenceIsMissing(t *testing.T) {
 	assertSingleElapsedClosing(t, languageModel)
 	if languageModel.structuredCalls != 0 {
 		t.Fatalf("expected no structured finalizer or verifier after cutoff, got %d calls", languageModel.structuredCalls)
+	}
+}
+
+func TestAnElapsedClosingThatWritesTheDeliverableIsNotSentAsTheNotice(t *testing.T) {
+	writtenDeliverable := "# Lease Agreement\n\n" + strings.Repeat("The tenant shall keep the premises in good repair and return them in the same condition. ", 30)
+	shortNotice := "Time ran out before the lease file was finished; nothing was delivered. Reply to continue."
+	languageModel := newElapsedClosingLanguageModel("", "", writtenDeliverable)
+	languageModel.laterClosingReplies = []string{shortNotice}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 1})
+	toolSet := newTestCapabilityToolSet([]string{"task_add"})
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID:     "person-1",
+		ConversationID:        "conversation-1",
+		Prompt:                "Draft a residential lease as a docx and send it to me.",
+		ToolSet:               toolSet,
+		PinnedToolNames:       toolSet.ListToolNames(),
+		RequiredEvidenceTools: []string{"task_add"},
+		EffortStartedAt:       time.Now().Add(-500 * time.Millisecond),
+	})
+
+	if errorValue != nil {
+		t.Fatalf("expected elapsed block, got %v", errorValue)
+	}
+	if strings.Contains(result.UserNotice, "The tenant shall") {
+		t.Fatalf("a limit notice the model wrote as the deliverable itself went out as the notice: %q", result.UserNotice)
+	}
+	if result.UserNotice != shortNotice {
+		t.Fatalf("expected the rewritten notice, got %q", result.UserNotice)
 	}
 }
 
@@ -515,24 +542,25 @@ func (deadlineBlockingLanguageModel) GenerateStructuredResponse(responseContext 
 }
 
 type elapsedClosingLanguageModel struct {
-	actionToolName     string
-	actionToolInput    string
-	actionToolNames    []string
-	actionToolInputs   []string
-	closingReply       string
-	expectedChanges    string
-	closingError       error
-	closingStarted     chan struct{}
-	blockClosing       bool
-	blockStructured    bool
-	observeTaskStatus  func() agentcontract.TaskStatus
-	statusAtClosing    agentcontract.TaskStatus
-	closingHasDeadline bool
-	closingRequest     model.ChatCompletionRequest
-	actionCalls        int
-	closingCalls       int
-	structuredCalls    int
-	legacyCalls        int
+	actionToolName      string
+	actionToolInput     string
+	actionToolNames     []string
+	actionToolInputs    []string
+	closingReply        string
+	laterClosingReplies []string
+	expectedChanges     string
+	closingError        error
+	closingStarted      chan struct{}
+	blockClosing        bool
+	blockStructured     bool
+	observeTaskStatus   func() agentcontract.TaskStatus
+	statusAtClosing     agentcontract.TaskStatus
+	closingHasDeadline  bool
+	closingRequest      model.ChatCompletionRequest
+	actionCalls         int
+	closingCalls        int
+	structuredCalls     int
+	legacyCalls         int
 }
 
 func newElapsedClosingLanguageModel(actionToolName string, actionToolInput string, closingReply string) *elapsedClosingLanguageModel {
@@ -561,7 +589,7 @@ func (languageModel *elapsedClosingLanguageModel) GenerateStructuredResponse(res
 }
 
 func (languageModel *elapsedClosingLanguageModel) GenerateChatCompletion(responseContext context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
-	if request.SchemaName == elapsedReplySchemaName || request.SchemaName == completionReplySchemaName {
+	if strings.HasPrefix(request.SchemaName, elapsedReplySchemaName) || request.SchemaName == completionReplySchemaName {
 		return languageModel.generateElapsedClosing(responseContext, request)
 	}
 	if request.SchemaName != agentActionSchemaName {
@@ -608,9 +636,13 @@ func (languageModel *elapsedClosingLanguageModel) generateElapsedClosing(respons
 	if languageModel.closingError != nil {
 		return model.ChatCompletionResponse{}, languageModel.closingError
 	}
+	reply := languageModel.closingReply
+	if laterIndex := languageModel.closingCalls - 2; laterIndex >= 0 && laterIndex < len(languageModel.laterClosingReplies) {
+		reply = languageModel.laterClosingReplies[laterIndex]
+	}
 	return model.ChatCompletionResponse{
 		FinishReason: "stop",
-		Message:      model.ChatCompletionMessage{Role: "assistant", Content: languageModel.closingReply},
+		Message:      model.ChatCompletionMessage{Role: "assistant", Content: reply},
 	}, nil
 }
 
@@ -798,6 +830,34 @@ func TestAGrantRaisesTheClockWithTheCounts(t *testing.T) {
 	}
 	if services.runner.options.MaxElapsedSecond <= 451 {
 		t.Fatalf("a turn granted more calls and more steps has to be given the time to spend them, got %d", services.runner.options.MaxElapsedSecond)
+	}
+}
+
+func TestAGrantGivesMoreTimeEvenWhenStepsGotCheaperSinceTheBudgetWasSet(t *testing.T) {
+	lowProfile := TaskLevelProfileForLevel(TaskLevelLow)
+	mediumProfile := TaskLevelProfileForLevel(TaskLevelMedium)
+	services := newTurnRunnerTestServices(nil, TurnOptions{
+		MaxToolCallCount:  lowProfile.MaxToolCallCount,
+		MaxIterationCount: lowProfile.MaxIterationCount,
+	})
+	services.runner.noteModelInUse("measured-model")
+	for range 3 {
+		services.runner.iterationCostObserver.Record("measured-model", 8*time.Second)
+	}
+	services.runner.setElapsedBudgetFromProfile(lowProfile)
+	budgetSetAtIntake := services.runner.options.MaxElapsedSecond
+	for range 9 {
+		services.runner.iterationCostObserver.Record("measured-model", 3*time.Second)
+	}
+	state := &agentTaskState{Request: AgentTurnRequest{TaskLevel: TaskLevelLow}}
+
+	if !services.runner.extendBudgetOneLevelOnce("task-1", state) {
+		t.Fatal("expected the grant to fire")
+	}
+	grantedSeconds := services.runner.options.MaxElapsedSecond
+	proportionalSeconds := budgetSetAtIntake * mediumProfile.MaxIterationCount / lowProfile.MaxIterationCount
+	if grantedSeconds < proportionalSeconds {
+		t.Fatalf("a grant of twice the steps has to bring the time to spend them: %d seconds at intake, %d granted, at least %d expected", budgetSetAtIntake, grantedSeconds, proportionalSeconds)
 	}
 }
 

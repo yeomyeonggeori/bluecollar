@@ -18,13 +18,27 @@ func TestCompletionReplyPromptUsesOriginalInstructionForContinuation(t *testing.
 		ActiveGoal: ActiveGoal{
 			OriginalInstruction: "고객지원 보고서를 JSON으로 만들어 이 DM에 첨부해줘.",
 		},
-	}, nil)
+	}, nil, nil)
 
 	if !strings.Contains(prompt, "고객지원 보고서를 JSON으로 만들어 이 DM에 첨부해줘.") {
 		t.Fatalf("expected original instruction in completion prompt, got %q", prompt)
 	}
 	if strings.Contains(prompt, "Original request:\n승인") {
 		t.Fatalf("continuation prompt must not replace the original instruction: %q", prompt)
+	}
+}
+
+func TestACompletionReplyIsToldWhichFilesItCarries(t *testing.T) {
+	carried := []toolcontract.FileAttachment{{Filename: "volunteer-roster.csv", DevicePath: "/home/bc_person_sample/documents/volunteer-roster.csv"}}
+
+	withFile := buildCompletionReplyPrompt(AgentTurnRequest{Prompt: "Export the volunteer roster as CSV."}, nil, carried)
+	withoutFile := buildCompletionReplyPrompt(AgentTurnRequest{Prompt: "Export the volunteer roster as CSV."}, nil, nil)
+
+	if !strings.Contains(withFile, "Files this reply carries: volunteer-roster.csv.") {
+		t.Fatalf("the completion reply was not told the file it carries: %q", withFile)
+	}
+	if !strings.Contains(withoutFile, "Files this reply carries: none.") {
+		t.Fatalf("a completion reply carrying nothing was not told so: %q", withoutFile)
 	}
 }
 

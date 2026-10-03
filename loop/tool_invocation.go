@@ -266,7 +266,7 @@ func sanitizedToolResultSummary(observation turnObservation) string {
 	case "file_pick":
 		return attachmentResultSummary("User selected file", observation.Attachments)
 	case toolcontract.FileDeliverToolName:
-		return attachmentResultSummary("File attached", observation.Attachments)
+		return attachmentResultSummary("File staged to go out with the final reply", observation.Attachments)
 	case "file_read":
 		return summarizeFileReadObservation(observation)
 	default:
