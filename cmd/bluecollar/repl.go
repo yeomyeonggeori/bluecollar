@@ -15,6 +15,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 const conversationHistoryLimit = 12
@@ -64,6 +65,7 @@ func newConversationSession(ctx context.Context, options runOptions) (*conversat
 }
 
 func (session *conversationSession) runPrompt(ctx context.Context, prompt string) (agentcontract.AgentTurnResult, error) {
+	toolSet := turnToolSet(session.options, session.runningShell, session.toolSelector)
 	request := agentcontract.AgentTurnRequest{
 		RequesterPersonID:    "person-local",
 		RequesterName:        currentUserName(),
@@ -73,7 +75,8 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 		WorkspaceRootPath:    session.workspacePath,
 		EnvironmentNow:       session.options.environmentNow,
 		WorkspaceDefaultPath: session.workspacePath,
-		ToolSet:              turnToolSet(session.options, session.runningShell, session.toolSelector),
+		ToolSet:              toolSet,
+		PinnedToolNames:      workspacePinnedToolNames(toolSet),
 		VisibleContext:       agentcontract.VisibleContext{Messages: session.history},
 	}
 
@@ -93,6 +96,13 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 	writeTrace(session.options.tracePath, session.taskRunService, result)
 	session.remember(prompt, result)
 	return result, errorValue
+}
+
+func workspacePinnedToolNames(toolSet *toolcontract.ToolSet) []string {
+	if toolSet == nil {
+		return nil
+	}
+	return toolSet.ListToolNames()
 }
 
 func (session *conversationSession) remember(prompt string, result agentcontract.AgentTurnResult) {
