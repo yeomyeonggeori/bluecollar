@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -284,5 +285,84 @@ func TestExpectedChangesCanAskForAFileTheReplyDelivers(t *testing.T) {
 
 	if !slices.Contains(vocabulary.Kinds, "file attached") || !slices.Contains(vocabulary.Kinds, "file created") {
 		t.Fatalf("expected the reply's file delivery beside the model's own tools, got %v", vocabulary.Kinds)
+	}
+}
+
+func kernelFileToolSet() *toolcontract.ToolSet {
+	write := declaringPathToolDefinition("write", "Overwrite one UTF-8 text file under the Blueclaw workspace.", "file", "created")
+	edit := declaringPathToolDefinition("edit", "Apply one or more exact text replacements to workspace files as one atomic edit.", "file", "updated")
+	fileDelete := declaringPathToolDefinition("file_delete", "Delete one file from the Blueclaw workspace by its path.", "file", "deleted")
+	fileDeliver := declaringPathToolDefinition(toolcontract.FileDeliverToolName, "Deliver one or more existing workspace files as final reply evidence.", "file", "attached")
+	fileDeliver.Visibility = toolcontract.ToolVisibilityInternal
+	bash := testToolDescriptor(toolcontract.BashToolName)
+	bash.Description = "Run a shell command as the requester."
+	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{write, edit, fileDelete, fileDeliver, bash})
+}
+
+func declaringPathToolDefinition(toolName string, description string, objectType string, effect string) toolcontract.ToolDefinition {
+	definition := testToolDescriptor(toolName)
+	definition.Description = description
+	definition.ResultContract = &toolcontract.ToolResultContract{
+		Schema:  json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"],"additionalProperties":false}`),
+		Effects: []toolcontract.ResourceEffectContract{{ObjectType: objectType, Effect: effect, ResultField: "path", EffectIdentity: "path"}},
+	}
+	return definition
+}
+
+func fileMadeByCommandThenDelivered(command string, filename string, contentType string) []turnObservation {
+	devicePath := "/home/bc_person_sample/documents/" + filename
+	commandInput, _ := json.Marshal(map[string]string{"command": command})
+	deliverInput, _ := json.Marshal(map[string]string{"path": "~/documents/" + filename})
+	deliverData, _ := json.Marshal(map[string]any{"deliveredPaths": []string{devicePath}, "attachmentCount": 1})
+	return []turnObservation{
+		{
+			ObservationID: "obs-001",
+			Action:        "continue",
+			Tool:          toolcontract.BashToolName,
+			ToolInput:     commandInput,
+			Output:        toolcontract.ToolOutput{Content: `{"completed":true,"exitCode":0}`, Data: json.RawMessage(`{"completed":true,"exitCode":0,"stdout":"","stderr":""}`)},
+		},
+		{
+			ObservationID: "obs-002",
+			Action:        "continue",
+			Tool:          toolcontract.FileDeliverToolName,
+			ToolInput:     deliverInput,
+			Output:        toolcontract.ToolOutput{Content: "files delivered", Data: deliverData},
+			Effects:       []toolcontract.ResourceEffect{{ObjectType: "file", Effect: "attached", Path: devicePath}},
+			Attachments:   []toolcontract.FileAttachment{{Filename: filename, ContentType: contentType, SizeBytes: 1342, DevicePath: devicePath}},
+		},
+	}
+}
+
+const pdfCommand = `python3 make_pdf.py 'native install rig 7d9a1a5a' ~/documents/native-install-rig.pdf`
+
+var makeTheAskedPDF = expectedChange{Change: "file created", Asked: "Make a one-page PDF whose only line reads 'native install rig 7d9a1a5a'"}
+
+func TestJevSeesTheCommandThatMadeAFileAndTheFileItDelivered(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
+	request := AgentTurnRequest{Prompt: makeTheAskedPDF.Asked + ", and send me the PDF file itself.", ToolSet: kernelFileToolSet()}
+
+	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{makeTheAskedPDF}, fileMadeByCommandThenDelivered(pdfCommand, "native-install-rig.pdf", "application/pdf"))
+
+	state, _ := json.Marshal(decisionModel.requests[0].State)
+	commandInput, _ := json.Marshal(map[string]string{"command": pdfCommand})
+	for _, want := range []string{
+		`"unrecordedWork":[{"tool":"bash","input":` + string(commandInput),
+		`"file":{"filename":"native-install-rig.pdf","contentType":"application/pdf","sizeBytes":1342}`,
+	} {
+		if !strings.Contains(string(state), want) {
+			t.Fatalf("expected %s in the change check state, got %s", want, state)
+		}
+	}
+}
+
+func TestUnrecordedWorkHoldsNeitherLookupsNorRecordedChanges(t *testing.T) {
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{taskDeleteToolDefinition(), testToolDescriptor("task_list")})
+	lookup := successfulSideEffectObservation("obs-002", "task_list", `{}`, "[]")
+
+	work := unrecordedWork(toolSet, []turnObservation{deletedTaskObservation(), lookup}, time.UTC)
+
+	if len(work) != 0 {
+		t.Fatalf("a lookup and a recorded change are not unrecorded work, got %+v", work)
 	}
 }

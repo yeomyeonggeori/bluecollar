@@ -15,6 +15,7 @@ const (
 	changeCheckSchemaName     = "bluecollar_change_check"
 	changeCarriedOutThreshold = 0.6
 	changeLookupLimit         = 2
+	unrecordedWorkLimit       = 4
 	changeValueMaximumLength  = 1500
 )
 
@@ -31,7 +32,20 @@ type changedRecord struct {
 }
 
 type changeStep struct {
-	Change string `json:"change"`
+	Change string     `json:"change"`
+	Input  any        `json:"input,omitempty"`
+	Result any        `json:"result,omitempty"`
+	File   *fileFacts `json:"file,omitempty"`
+}
+
+type fileFacts struct {
+	Filename    string `json:"filename,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
+	SizeBytes   int64  `json:"sizeBytes,omitempty"`
+}
+
+type unrecordedCall struct {
+	Tool   string `json:"tool"`
 	Input  any    `json:"input,omitempty"`
 	Result any    `json:"result,omitempty"`
 }
@@ -82,7 +96,8 @@ func changeCheckQuestions(indexes []int) map[string]model.DecisionQuestion {
 		questions[changeQuestionKey(index)] = model.NoulQuestion{
 			Instructions: strings.Join([]string{
 				fmt.Sprintf("Was expectedChanges[%d] carried out? asked is the user's own words asking for it; read them in request and conversationBefore, with relative words (now, tomorrow, by 6:30) read against now.", index),
-				"changedRecords lists every record the task changed with its changes in order; judge a record by where its history ends. It is carried out when the records asked about end up the way asked says, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
+				"changedRecords lists every record a tool recorded changing, with its changes in order; judge a record by where its history ends. unrecordedWork lists calls that can change things but record no change of their own, such as commands: a record they made or changed shows in changedRecords only through a later recorded change, so read the two together.",
+				"It is carried out when the records asked about end up the way asked says, as changedRecords and unrecordedWork show together, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
 				"A value counts as the same when it means the same in another format or spelling.",
 				"Do not require anything asked does not state; a value the task chose where the user said nothing is never a failure.",
 			}, "\n"),
@@ -109,6 +124,9 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 	}
 	if lookups := changeLookups(request.ToolSet, expected, observations, location); len(lookups) > 0 {
 		state["lookups"] = lookups
+	}
+	if work := unrecordedWork(request.ToolSet, observations, location); len(work) > 0 {
+		state["unrecordedWork"] = work
 	}
 	return state
 }
@@ -157,10 +175,39 @@ func changedRecords(observations []turnObservation, location *time.Location) []c
 				Change: changeKind(effect.ObjectType, effect.Effect),
 				Input:  boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location)),
 				Result: boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location)),
+				File:   attachedFileFacts(observation.Attachments, effect.Path),
 			})
 		}
 	}
 	return records
+}
+
+func attachedFileFacts(attachments []toolcontract.FileAttachment, path string) *fileFacts {
+	for _, attachment := range attachments {
+		if strings.TrimSpace(path) != "" && strings.TrimSpace(attachment.DevicePath) == strings.TrimSpace(path) {
+			return &fileFacts{Filename: strings.TrimSpace(attachment.Filename), ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes}
+		}
+	}
+	return nil
+}
+
+func unrecordedWork(toolSet *toolcontract.ToolSet, observations []turnObservation, location *time.Location) []unrecordedCall {
+	if toolSet == nil {
+		return nil
+	}
+	calls := []unrecordedCall{}
+	for _, observation := range successfulToolObservations(observations) {
+		definition, isFound := toolSet.ToolDefinition(observation.Tool)
+		if !isFound || len(observation.Effects) > 0 || !toolcontract.ToolDefinitionRequiresSideEffectEvidence(definition) {
+			continue
+		}
+		calls = append(calls, unrecordedCall{
+			Tool:   observation.Tool,
+			Input:  boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location)),
+			Result: boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location)),
+		})
+	}
+	return calls[max(0, len(calls)-unrecordedWorkLimit):]
 }
 
 func changeLookups(toolSet *toolcontract.ToolSet, expected []expectedChange, observations []turnObservation, location *time.Location) []changeLookup {
