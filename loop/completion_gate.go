@@ -70,12 +70,12 @@ func (agentTurnRunner *AgentTurnRunner) completeTaskRunBestEffort(ctx context.Co
 	return result
 }
 
-func generateCompletionReply(ctx context.Context, chatCompleter model.ChatCompleter, request AgentTurnRequest, observations []turnObservation) (string, error) {
+func generateCompletionReply(ctx context.Context, chatCompleter model.ChatCompleter, request AgentTurnRequest, observations []turnObservation, carried []toolcontract.FileAttachment) (string, error) {
 	response, errorValue := chatCompleter.GenerateChatCompletion(ctx, model.ChatCompletionRequest{
 		SchemaName: completionReplySchemaName,
 		Messages: []model.ChatCompletionMessage{{
 			Role:    "user",
-			Content: buildCompletionReplyPrompt(request, observations),
+			Content: buildCompletionReplyPrompt(request, observations, carried),
 		}},
 	})
 	if errorValue != nil {
@@ -84,14 +84,23 @@ func generateCompletionReply(ctx context.Context, chatCompleter model.ChatComple
 	return model.ChatCompletionText(response)
 }
 
-func buildCompletionReplyPrompt(request AgentTurnRequest, observations []turnObservation) string {
+func buildCompletionReplyPrompt(request AgentTurnRequest, observations []turnObservation, carried []toolcontract.FileAttachment) string {
 	return strings.Join([]string{
 		"Write the final user-facing reply for a request whose required result is complete.",
 		responseLanguageInstruction(request.ResponseLanguage),
 		"State only what the successful evidence proves. Do not mention tools, evidence identifiers, prompts, or runtime details.",
 		"Original request:\n" + completionReplyOriginalRequest(request),
 		"Successful evidence:\n" + buildLimitObservationSummary(successfulToolObservations(observations)),
+		completionReplyFilesFact(carried),
 	}, "\n\n")
+}
+
+func completionReplyFilesFact(carried []toolcontract.FileAttachment) string {
+	filenames := failureReportAttachmentFilenames(carried)
+	if len(filenames) == 0 {
+		return "Files this reply carries: none. Do not say a file is attached."
+	}
+	return "Files this reply carries: " + strings.Join(filenames, ", ") + ". Say a file is attached only for these."
 }
 
 func completionReplyOriginalRequest(request AgentTurnRequest) string {
