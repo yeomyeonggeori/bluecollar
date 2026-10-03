@@ -1729,7 +1729,7 @@ func (agentTurnRunner *AgentTurnRunner) shouldPauseForStalledRecovery(taskRunID 
 }
 
 func (agentTurnRunner *AgentTurnRunner) pauseTurnForStall(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, reason string, progressEvaluation actionProgressEvaluation, allowance recoveryAllowance, state agentTaskState) (AgentTurnResult, bool) {
-	notice, replyStatus, hasReply := agentTurnRunner.generateStallPauseNotice(ctx, taskRunID, request, reason, state.Observations, state.Attachments, state.ExecutionState)
+	notice, replyStatus, hasReply := agentTurnRunner.generateStallPauseNotice(ctx, taskRunID, request, reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStallPauseReply, marshalEventBody(replyStatus))
 	if !hasReply {
 		return AgentTurnResult{}, false
@@ -1751,7 +1751,7 @@ func (agentTurnRunner *AgentTurnRunner) pauseTurnForStall(ctx context.Context, t
 }
 
 func (agentTurnRunner *AgentTurnRunner) blockTurnForStall(ctx context.Context, taskRunID string, stepID string, request AgentTurnRequest, reason string, progressEvaluation actionProgressEvaluation, allowance recoveryAllowance, state agentTaskState) (AgentTurnResult, bool) {
-	notice, replyStatus, hasReply := agentTurnRunner.generateStallPauseNotice(ctx, taskRunID, request, reason, state.Observations, state.Attachments, state.ExecutionState)
+	notice, replyStatus, hasReply := agentTurnRunner.generateStallPauseNotice(ctx, taskRunID, request, reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStallBlockedReply, marshalEventBody(replyStatus))
 	blockedTaskRun, errorValue := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusBlocked, reason)
 	if errorValue != nil {
@@ -1766,7 +1766,7 @@ func (agentTurnRunner *AgentTurnRunner) blockTurnForStall(ctx context.Context, t
 	agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusBlocked, "no_progress_loop_stopped", reason)
 	if !hasReply {
 		agentTurnRunner.appendUnavailableReplyEvents(taskRunID, "stall", reason, replyStatus)
-		failureReport := buildFailureReport(request, taskRunID, "stall", reason, state.Observations, state.Attachments, state.ExecutionState, recoveryDecision{})
+		failureReport := buildFailureReport(request, taskRunID, "stall", reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState, recoveryDecision{})
 		notice = buildRawErrorFailureNotice(failureReport)
 		fallbackReply := notice.SendableMessage()
 		blockedTaskRun = persistTaskRunResult(agentTurnRunner.taskRunService, blockedTaskRun, fallbackReply)
@@ -1810,7 +1810,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeIfSatisfiedOrFail(ctx context.Co
 	if errors.Is(effortError, context.DeadlineExceeded) || agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
 		return agentTurnRunner.stopAtElapsedLimit(ctx, state.TaskRunID, request, state, usedIterationCount)
 	}
-	return agentTurnRunner.failTurnWithContext(ctx, state.TaskRunID, request, reason, state.Observations, state.Attachments, state.ExecutionState)
+	return agentTurnRunner.failTurnWithContext(ctx, state.TaskRunID, request, reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
 }
 
 func (agentTurnRunner *AgentTurnRunner) failTurn(taskRunID string, request AgentTurnRequest, reason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) (AgentTurnResult, error) {
@@ -2020,7 +2020,7 @@ func (agentTurnRunner *AgentTurnRunner) stopAtElapsedLimit(ctx context.Context, 
 		}))
 		return result, nil
 	}
-	return agentTurnRunner.blockAtElapsedLimit(ctx, taskRunID, request, state.Observations, state.Attachments, state.ExecutionState)
+	return agentTurnRunner.blockAtElapsedLimit(ctx, taskRunID, request, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
 }
 
 func (agentTurnRunner *AgentTurnRunner) toolInvocationContext(taskContext context.Context, effortContext context.Context, request AgentTurnRequest, toolName string) (context.Context, context.CancelFunc) {
@@ -2190,7 +2190,7 @@ func (agentTurnRunner *AgentTurnRunner) failTerminalNoToolsFailure(taskRunID str
 		return AgentTurnResult{}, false, failureReportResult.Message
 	}
 	reason := strings.TrimSpace(firstNonEmptyString(actionDocument.Message, actionDocument.Reason, "agent reported failure"))
-	notice, failureReport, validationMessage := failureNoticeFromTerminalAction(request, taskRunID, reason, state.Observations, state.Attachments, state.ExecutionState)
+	notice, failureReport, validationMessage := failureNoticeFromTerminalAction(request, taskRunID, reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
 	if validationMessage != "" {
 		return AgentTurnResult{}, false, validationMessage
 	}

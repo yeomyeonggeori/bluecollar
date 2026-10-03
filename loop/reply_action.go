@@ -183,6 +183,16 @@ func attachmentsNotYetDelivered(attachments []toolcontract.FileAttachment, deliv
 	return remaining
 }
 
+func attachmentsAlreadyDelivered(attachments []toolcontract.FileAttachment, deliveredPaths []string) []toolcontract.FileAttachment {
+	delivered := []toolcontract.FileAttachment{}
+	for _, attachment := range attachments {
+		if stringSliceContains(deliveredPaths, strings.TrimSpace(attachment.DevicePath)) {
+			delivered = append(delivered, attachment)
+		}
+	}
+	return delivered
+}
+
 func deliveredAttachmentPathsFromTaskEvents(events []agentcontract.TaskEvent) []string {
 	devicePaths := []string{}
 	for _, event := range events {

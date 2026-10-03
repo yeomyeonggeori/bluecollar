@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -725,5 +726,58 @@ func TestAgentTurnRunnerDoesNotRegenerateLimitReplyFromStringPatterns(t *testing
 	}
 	if len(languageModel.textPrompts) != 1 {
 		t.Fatalf("expected one model wording call without deterministic repair, got %d prompts", len(languageModel.textPrompts))
+	}
+}
+
+func failureReportAfterStagingAFile(t *testing.T, deliveredPaths []string) (FailureReport, AgentTurnResult) {
+	t.Helper()
+	services := newTurnRunnerTestServices(failingRecoveryLanguageModel{errorValue: errors.New("model unavailable")}, TurnOptions{})
+	request := AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "Make a one-page PDF and send me the PDF file itself.",
+		OutcomeContract:   OutcomeContract{ArtifactRequirement: ArtifactRequirementRequired},
+	}
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
+	state := agentTaskState{
+		TaskRunID:                taskRun.TaskRunID,
+		Attachments:              []toolcontract.FileAttachment{{Filename: "native-install-rig.pdf", ContentType: "application/pdf", DevicePath: "/home/bc_person_sample/documents/native-install-rig.pdf"}},
+		DeliveredAttachmentPaths: deliveredPaths,
+	}
+
+	result, _ := services.runner.finalizeIfSatisfiedOrFail(context.Background(), request, "completion gate refused", &state, 1)
+
+	for _, event := range services.taskEventService.ListTaskEvent(taskRun.TaskRunID) {
+		if event.Name != "agent.failure_report" {
+			continue
+		}
+		var body struct {
+			Report FailureReport `json:"report"`
+		}
+		if errorValue := json.Unmarshal([]byte(event.Body), &body); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		return body.Report, result
+	}
+	t.Fatal("expected an agent.failure_report event")
+	return FailureReport{}, result
+}
+
+func TestAFailureNoticeIsNotToldOfAFileItsReplyDoesNotCarry(t *testing.T) {
+	report, result := failureReportAfterStagingAFile(t, nil)
+
+	if report.HasAttachments || len(report.AttachmentFilenames) != 0 || len(result.Attachments) != 0 {
+		t.Fatalf("a file staged but never sent is not the user's, got report=%+v attachments=%+v", report, result.Attachments)
+	}
+	if !strings.Contains(buildFailureNoticePrompt(report), "The requested file artifact was not delivered") {
+		t.Fatal("the notice must be told the asked file did not reach the user")
+	}
+}
+
+func TestAFailureNoticeIsToldOfAFileAnEarlierReplySent(t *testing.T) {
+	report, _ := failureReportAfterStagingAFile(t, []string{"/home/bc_person_sample/documents/native-install-rig.pdf"})
+
+	if !report.HasAttachments || len(report.AttachmentFilenames) != 1 || report.AttachmentFilenames[0] != "native-install-rig.pdf" {
+		t.Fatalf("a file a reply already sent is the user's, got %+v", report)
 	}
 }
