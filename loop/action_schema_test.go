@@ -45,7 +45,7 @@ func TestActionSchemasRecursivelyCloseEveryObject(t *testing.T) {
 	}
 }
 
-const eightToolActionSchemaByteCeiling = 18950
+const eightToolActionSchemaByteCeiling = 19050
 
 func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 	toolDefinitions := eightToolCapabilityCatalogFixture(t)

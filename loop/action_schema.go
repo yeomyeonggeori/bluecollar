@@ -116,7 +116,8 @@ func replyChoiceArraySchema() map[string]any {
 
 func replyAttachmentArraySchema() map[string]any {
 	return map[string]any{
-		"type": "array",
+		"type":        "array",
+		"description": "Files listed here are attached to this reply and reach the person you are answering, in this conversation.",
 		"items": closedObjectSchema(map[string]any{
 			"path":     stringSchema(),
 			"filename": stringSchema(),
