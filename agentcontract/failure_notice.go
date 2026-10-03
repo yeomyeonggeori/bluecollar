@@ -512,7 +512,7 @@ func BuildFailureNoticePrompt(report FailureReport) string {
 		"Do not claim an attachment or completed artifact exists unless attachment filenames are listed.",
 	)
 	if report.ArtifactRequired && len(report.AttachmentFilenames) > 0 {
-		sections = append(sections, "A requested file artifact WAS delivered and is attached ("+strings.Join(report.AttachmentFilenames, ", ")+"). Acknowledge the attached file as the current result. Do not claim it was not created, not made, or not delivered. If the run stopped before further refinement, say only that this delivered version is the best result so far and further polishing was interrupted.")
+		sections = append(sections, "A requested file artifact was already sent to the user earlier in this task ("+strings.Join(report.AttachmentFilenames, ", ")+"); this notice itself carries no file. Acknowledge the file already sent as the current result, without saying it is attached here. Do not claim it was not created, not made, or not delivered. If the run stopped before further refinement, say only that the version already sent is the best result so far and further polishing was interrupted.")
 	}
 	if report.ArtifactRequired && len(report.AttachmentFilenames) == 0 {
 		sections = append(sections, "The requested file artifact was not delivered. State that plainly, summarize the concrete failed operation and safe failure reason, and give the next practical check. Do not offer chat text as a substitute.")
