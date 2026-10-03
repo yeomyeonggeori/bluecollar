@@ -72,9 +72,10 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		return check, nil
 	}
 	location := companyLocation(request.Company.TimeZone)
+	state := changeCheckState(request, location, expected, observations)
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
-		State:     changeCheckState(request, location, expected, observations),
-		Questions: changeCheckQuestions(recordedIndexes),
+		State:     state,
+		Questions: changeCheckQuestions(recordedIndexes, hasDocuments(state)),
 	})
 	if errorValue != nil {
 		return changeCheck{}, errorValue
@@ -90,22 +91,37 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 	return check, nil
 }
 
-func changeCheckQuestions(indexes []int) map[string]model.DecisionQuestion {
+func changeCheckQuestions(indexes []int, hasDocuments bool) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	for _, index := range indexes {
 		questions[changeQuestionKey(index)] = model.NoulQuestion{
-			Instructions: strings.Join([]string{
+			Instructions: strings.Join(append([]string{
 				fmt.Sprintf("Was expectedChanges[%d] carried out? asked is the user's own words asking for it; read them in request and conversationBefore, with relative words (now, tomorrow, by 6:30) read against now.", index),
 				"changedRecords lists every record a tool recorded changing, with its changes in order; judge a record by where its history ends. unrecordedWork lists calls that can change things but record no change of their own, such as commands: a record they made or changed shows in changedRecords only through a later recorded change, so read the two together.",
 				"It is carried out when the records asked about end up the way asked says, as changedRecords and unrecordedWork show together, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
 				"A value counts as the same when it means the same in another format or spelling.",
 				"Do not require anything asked does not state; a value the task chose where the user said nothing is never a failure.",
-			}, "\n"),
+			}, documentInstructions(hasDocuments)...), "\n"),
 			TrueDescription:  "carried out, or already so",
 			FalseDescription: "not carried out, done to a different record, or something asked states differs",
 		}.Question()
 	}
 	return questions
+}
+
+func documentInstructions(hasDocuments bool) []string {
+	if !hasDocuments {
+		return nil
+	}
+	return []string{
+		"documents holds the text each changed file now carries. A value the request states for a file (an amount, rate, date, period, quantity, name, or a clause asked for) is carried out only when that text says the same; a different value there, or an asked clause absent from text that is not truncated, means it is not.",
+		"Wording, layout, order, formatting, and content the request did not ask about are never failures; text cut off by truncated is not evidence that a value is missing.",
+	}
+}
+
+func hasDocuments(state map[string]any) bool {
+	_, isPresent := state["documents"]
+	return isPresent
 }
 
 func changeQuestionKey(index int) string {
@@ -128,7 +144,40 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 	if work := unrecordedWork(request.ToolSet, observations, location); len(work) > 0 {
 		state["unrecordedWork"] = work
 	}
+	if documents := changedDocuments(request.WorkspaceRootPath, observations); len(documents) > 0 {
+		state["documents"] = documents
+	}
 	return state
+}
+
+func changedDocuments(workspaceRootPath string, observations []turnObservation) []documentExtract {
+	documents := []documentExtract{}
+	for _, recordedPath := range changedPathsNewestFirst(observations) {
+		if len(documents) == documentExtractLimit {
+			break
+		}
+		if document, isRead := documentExtractOf(workspaceRootPath, recordedPath); isRead {
+			documents = append(documents, document)
+		}
+	}
+	return documents
+}
+
+func changedPathsNewestFirst(observations []turnObservation) []string {
+	paths := []string{}
+	isSeen := map[string]bool{}
+	successful := successfulToolObservations(observations)
+	for index := len(successful) - 1; index >= 0; index-- {
+		for _, effect := range successful[index].Effects {
+			recordedPath := strings.TrimSpace(effect.Path)
+			if recordedPath == "" || isSeen[recordedPath] {
+				continue
+			}
+			isSeen[recordedPath] = true
+			paths = append(paths, recordedPath)
+		}
+	}
+	return paths
 }
 
 func objectTypeByChangeKind(toolSet *toolcontract.ToolSet) map[string]string {
