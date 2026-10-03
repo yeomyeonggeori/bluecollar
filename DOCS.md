@@ -454,12 +454,10 @@ type MemoryFact struct {
 	SourceEpisodeID   string
 	SourceKind        string
 	ValidAt           time.Time
-	SecurityLevelRank int
-	RequiredClasses   []string
 }
 ```
 
-`BuildMemoryContext` groups facts by scope (`user`, `circle`, `workspace`, `conversation`) under a "Relevant memory" heading, prefixes each with its score, kind, source and valid date, and cuts content at 240 characters. Filtering what a requester may see is the host's job before the facts arrive.
+`BuildMemoryContext` renders one statement to a line under "What you already know", dated where the fact carries a date, and cuts a statement at 240 characters. The score, the origin and the source kind say how a fact was found rather than what it says, so they are left out of a prompt that is charged on every turn. Filtering what a requester may see is the host's job before the facts arrive.
 
 ## Task state
 
