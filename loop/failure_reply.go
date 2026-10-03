@@ -150,11 +150,11 @@ func stallNoticeCanReachUser(notice FailureNotice, source string) bool {
 	return notice.SendableMessage() != ""
 }
 
-func (agentTurnRunner *AgentTurnRunner) generateLimitReachedNotice(parentContext context.Context, taskRunID string, request AgentTurnRequest, stopReason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) (FailureNotice, limitReplyStatus, bool) {
+func (agentTurnRunner *AgentTurnRunner) generateLimitReachedNotice(parentContext context.Context, taskRunID string, request AgentTurnRequest, stopReason string, observations []turnObservation, files limitFiles, executionState ExecutionState) (FailureNotice, limitReplyStatus, bool) {
 	recoveryContext, cancelRecovery := agentTurnRunner.replyFinalizationContext(parentContext, request)
 	defer cancelRecovery()
-	decision, decisionError := agentTurnRunner.generateRecoveryDecision(recoveryContext, request, stopReason, observations, attachments, executionState, "limit")
-	failureReport := buildFailureReport(request, taskRunID, "limit", stopReason, observations, attachments, executionState, decision)
+	decision, decisionError := agentTurnRunner.generateRecoveryDecision(recoveryContext, request, stopReason, observations, files.Delivered, executionState, "limit")
+	failureReport := limitFailureReport(request, taskRunID, stopReason, observations, files, executionState, decision)
 	failureReport = limitFailureReportWithCheckpointContext(failureReport, stopReason)
 	status := limitReplyStatus{Decision: decision, FailureReportFacts: buildFailureReportFacts(observations, agentTurnRunner.options.RecoveryBudget)}
 	if decisionError != nil {

@@ -31,6 +31,7 @@ type FailureReport struct {
 	ArtifactRequired    bool                `json:"artifactRequired,omitempty"`
 	HasAttachments      bool                `json:"hasAttachments,omitempty"`
 	AttachmentFilenames []string            `json:"attachmentFilenames,omitempty"`
+	CarriedFilenames    []string            `json:"carriedFilenames,omitempty"`
 	DiagnosticEventID   string              `json:"diagnosticEventID,omitempty"`
 	IntakeFacts         *IntakeFailureFacts `json:"intakeFacts,omitempty"`
 }
@@ -509,12 +510,16 @@ func BuildFailureNoticePrompt(report FailureReport) string {
 		"Write one or two natural sentences.",
 		"Keep the notice under 600 Korean characters or an equivalent short length.",
 		"Preserve the safe meaning of the failure, but do not expose provider errors, stack traces, internal service URLs, internal filesystem paths, tokens, or serialized reply status.",
-		"Do not claim an attachment or completed artifact exists unless attachment filenames are listed.",
+		"Do not claim an attachment or completed artifact exists unless attachmentFilenames or carriedFilenames lists it.",
+		"This notice reports what happened to the work; it never contains the work itself. Do not write out the requested document, letter, contract, table, list or code in place of a file or result that was not delivered.",
 	)
+	if len(report.CarriedFilenames) > 0 {
+		sections = append(sections, "This notice itself carries the file(s) in carriedFilenames ("+strings.Join(report.CarriedFilenames, ", ")+"): the agent had handed them over for delivery before the run stopped. Say they are attached here as the latest version, and that the run stopped before the work was confirmed finished, so they may be incomplete or unchecked. Do not call them final or verified.")
+	}
 	if report.ArtifactRequired && len(report.AttachmentFilenames) > 0 {
 		sections = append(sections, "A requested file artifact was already sent to the user earlier in this task ("+strings.Join(report.AttachmentFilenames, ", ")+"); this notice itself carries no file. Acknowledge the file already sent as the current result, without saying it is attached here. Do not claim it was not created, not made, or not delivered. If the run stopped before further refinement, say only that the version already sent is the best result so far and further polishing was interrupted.")
 	}
-	if report.ArtifactRequired && len(report.AttachmentFilenames) == 0 {
+	if report.ArtifactRequired && len(report.AttachmentFilenames) == 0 && len(report.CarriedFilenames) == 0 {
 		sections = append(sections, "The requested file artifact was not delivered. State that plainly, summarize the concrete failed operation and safe failure reason, and give the next practical check. Do not offer chat text as a substitute.")
 	}
 	sections = append(sections, "Compact failure context:\n"+marshalEventBody(report))

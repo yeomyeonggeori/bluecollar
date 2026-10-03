@@ -331,12 +331,28 @@ func (agentTurnRunner *AgentTurnRunner) recordIterationCost(startedAt time.Time)
 
 // Every clock a level profile draws goes through here.
 func (agentTurnRunner *AgentTurnRunner) setElapsedBudgetFromProfile(taskLevelProfile TaskLevelProfile) {
+	agentTurnRunner.options.MaxElapsedSecond = agentTurnRunner.elapsedSecondForProfile(taskLevelProfile)
+}
+
+func (agentTurnRunner *AgentTurnRunner) elapsedSecondForProfile(taskLevelProfile TaskLevelProfile) int {
 	budgetSecond := int(elapsedBudgetForProfile(taskLevelProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
-	deadlineSecond := agentTurnRunner.options.DeadlineSecond
-	if deadlineSecond > 0 && budgetSecond > deadlineSecond {
-		budgetSecond = deadlineSecond
+	return agentTurnRunner.withinDeadline(budgetSecond)
+}
+
+func (agentTurnRunner *AgentTurnRunner) withinDeadline(budgetSecond int) int {
+	if deadlineSecond := agentTurnRunner.options.DeadlineSecond; deadlineSecond > 0 {
+		return min(budgetSecond, deadlineSecond)
 	}
-	agentTurnRunner.options.MaxElapsedSecond = budgetSecond
+	return budgetSecond
+}
+
+func (agentTurnRunner *AgentTurnRunner) elapsedSecondForGrant(grantedProfile TaskLevelProfile) int {
+	profileSecond := agentTurnRunner.elapsedSecondForProfile(grantedProfile)
+	if agentTurnRunner.options.MaxElapsedSecond <= 0 || agentTurnRunner.options.MaxIterationCount <= 0 {
+		return profileSecond
+	}
+	proportionalSecond := agentTurnRunner.options.MaxElapsedSecond * grantedProfile.MaxIterationCount / agentTurnRunner.options.MaxIterationCount
+	return max(profileSecond, agentTurnRunner.withinDeadline(proportionalSecond))
 }
 
 func (agentTurnRunner *AgentTurnRunner) refreshElapsedBudget(taskLevel TaskLevel) {
@@ -1326,9 +1342,9 @@ func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID strin
 	}
 	grantedProfile := TaskLevelProfileForLevel(grantedLevel)
 	state.GrantedTaskLevel = grantedLevel
+	agentTurnRunner.options.MaxElapsedSecond = agentTurnRunner.elapsedSecondForGrant(grantedProfile)
 	agentTurnRunner.options.MaxToolCallCount = grantedProfile.MaxToolCallCount
 	agentTurnRunner.options.MaxIterationCount = grantedProfile.MaxIterationCount
-	agentTurnRunner.setElapsedBudgetFromProfile(grantedProfile)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentBudgetExtendedOneLevel, marshalEventBody(map[string]any{
 		"grantedLevel":      string(grantedLevel),
 		"maxToolCallCount":  grantedProfile.MaxToolCallCount,
@@ -1914,16 +1930,8 @@ func (agentTurnRunner *AgentTurnRunner) reachableLimits(state agentTaskState) re
 	return reachableLimits{
 		MaxIterationCount: grantedProfile.MaxIterationCount,
 		MaxToolCallCount:  grantedProfile.MaxToolCallCount,
-		MaxWorkDuration:   agentTurnRunner.workDurationForProfile(grantedProfile),
+		MaxWorkDuration:   workDurationWithinTotal(time.Duration(agentTurnRunner.elapsedSecondForGrant(grantedProfile)) * time.Second),
 	}
-}
-
-func (agentTurnRunner *AgentTurnRunner) workDurationForProfile(taskLevelProfile TaskLevelProfile) time.Duration {
-	budgetSecond := int(elapsedBudgetForProfile(taskLevelProfile, agentTurnRunner.iterationCostObserver.CostOfModelInUse()).Seconds())
-	if deadlineSecond := agentTurnRunner.options.DeadlineSecond; deadlineSecond > 0 && budgetSecond > deadlineSecond {
-		budgetSecond = deadlineSecond
-	}
-	return workDurationWithinTotal(time.Duration(budgetSecond) * time.Second)
 }
 
 func limitPressureStageFor(usedIterationCount int, usedToolCallCount int, elapsed time.Duration, limits reachableLimits) string {
@@ -1987,7 +1995,7 @@ func (agentTurnRunner *AgentTurnRunner) completeOrStopForLimit(ctx context.Conte
 	if result, isCompleted := agentTurnRunner.completeAtStop(ctx, taskRunID, request, state); isCompleted {
 		return result, nil
 	}
-	return agentTurnRunner.stopForLimit(ctx, taskRunID, request, reason, state.Observations, state.Attachments, state.ExecutionState, usedIterationCount, state.ToolCallCount)
+	return agentTurnRunner.stopForLimit(ctx, taskRunID, request, reason, state.Observations, filesAtLimit(*state), state.ExecutionState, usedIterationCount, state.ToolCallCount)
 }
 
 func (agentTurnRunner *AgentTurnRunner) currentEffortElapsed(turnStartedAt time.Time) bool {
@@ -2020,7 +2028,7 @@ func (agentTurnRunner *AgentTurnRunner) stopAtElapsedLimit(ctx context.Context, 
 		}))
 		return result, nil
 	}
-	return agentTurnRunner.blockAtElapsedLimit(ctx, taskRunID, request, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
+	return agentTurnRunner.blockAtElapsedLimit(ctx, taskRunID, request, state.Observations, filesAtLimit(*state), state.ExecutionState)
 }
 
 func (agentTurnRunner *AgentTurnRunner) toolInvocationContext(taskContext context.Context, effortContext context.Context, request AgentTurnRequest, toolName string) (context.Context, context.CancelFunc) {
@@ -2224,9 +2232,9 @@ func (agentTurnRunner *AgentTurnRunner) recordTerminalNoToolsRejection(taskRunID
 	agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusCompleted, "terminal_no_tools_rejected", observation.ContentText())
 }
 
-func (agentTurnRunner *AgentTurnRunner) blockAtElapsedLimit(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) (AgentTurnResult, error) {
+func (agentTurnRunner *AgentTurnRunner) blockAtElapsedLimit(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, files limitFiles, executionState ExecutionState) (AgentTurnResult, error) {
 	taskRun, _ := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusBlocked, "max_elapsed")
-	reply, replyStatus := agentTurnRunner.generateElapsedClosingReply(ctx, request, observations, attachments, executionState)
+	reply, replyStatus := agentTurnRunner.generateElapsedClosingReply(ctx, request, observations, files, executionState)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(replyStatus))
 	if ctx.Err() != nil {
 		return AgentTurnResult{
@@ -2247,30 +2255,27 @@ func (agentTurnRunner *AgentTurnRunner) blockAtElapsedLimit(ctx context.Context,
 		DiagnosticEventID: diagnosticEventID(request, taskRunID, "limit"),
 		IsSendable:        strings.TrimSpace(reply) != "",
 	}
-	return AgentTurnResult{TaskRun: taskRun, UserNotice: reply, FailureNotice: failureNotice, RecoveryActions: recoveryActionsFromObservations(observations)}, nil
+	return AgentTurnResult{TaskRun: taskRun, UserNotice: reply, FailureNotice: failureNotice, Attachments: files.Carried, RecoveryActions: recoveryActionsFromObservations(observations)}, nil
 }
 
-func (agentTurnRunner *AgentTurnRunner) generateElapsedClosingReply(ctx context.Context, request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) (string, limitReplyStatus) {
-	prompt := buildElapsedBlockedPrompt(request, observations, attachments, executionState)
+func (agentTurnRunner *AgentTurnRunner) generateElapsedClosingReply(ctx context.Context, request AgentTurnRequest, observations []turnObservation, files limitFiles, executionState ExecutionState) (string, limitReplyStatus) {
+	report := limitFailureReport(request, "", "max_elapsed", observations, files, executionState, recoveryDecision{})
 	chatCompleter, isAvailable := model.ResolveTextChatCompleter(agentTurnRunner.languageModel)
 	if !isAvailable {
 		return buildElapsedLimitRawErrorFailureNotice(request).SendableMessage(), limitReplyStatus{Source: "raw_error", Reason: "chat_unavailable"}
 	}
 	closingContext, cancelClosing := agentTurnRunner.elapsedClosingContext(ctx, request.EffortStartedAt)
 	defer cancelClosing()
-	response, errorValue := chatCompleter.GenerateChatCompletion(closingContext, model.ChatCompletionRequest{
-		SchemaName: "bluecollar_elapsed_reply",
-		Messages: []model.ChatCompletionMessage{{
-			Role:    "user",
-			Content: prompt,
-		}},
-	})
+	reply, errorValue := elapsedClosingText(closingContext, chatCompleter, elapsedReplySchemaName, buildFailureNoticePrompt(report))
+	if errorValue == nil && failureNoticeMessageIsSendable(reply) {
+		return reply, limitReplyStatus{Source: "generated"}
+	}
 	if errorValue == nil {
-		reply, responseError := model.RecoveryChatCompletionText(response)
-		if responseError == nil {
-			return reply, limitReplyStatus{Source: "generated"}
+		repairedReply, repairError := elapsedClosingText(closingContext, chatCompleter, elapsedReplyRepairSchemaName, buildFailureNoticeRepairPrompt(report, reply, 1))
+		if repairError == nil && failureNoticeMessageIsSendable(repairedReply) {
+			return repairedReply, limitReplyStatus{Source: "generated_repair", FirstInvalid: true, RepairCount: 1}
 		}
-		errorValue = responseError
+		errorValue = firstError(repairError, errors.New("the generated notice did not fit a notice"))
 	}
 	return buildElapsedLimitRawErrorFailureNotice(request).SendableMessage(), limitReplyStatus{
 		Source:            "raw_error",
@@ -2279,9 +2284,32 @@ func (agentTurnRunner *AgentTurnRunner) generateElapsedClosingReply(ctx context.
 	}
 }
 
-func buildElapsedBlockedPrompt(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) string {
-	report := buildFailureReport(request, "", "limit", "max_elapsed", observations, attachments, executionState, recoveryDecision{})
-	return buildFailureNoticePrompt(report)
+const (
+	elapsedReplySchemaName       = "bluecollar_elapsed_reply"
+	elapsedReplyRepairSchemaName = "bluecollar_elapsed_reply_repair"
+)
+
+func elapsedClosingText(closingContext context.Context, chatCompleter model.ChatCompleter, schemaName string, prompt string) (string, error) {
+	response, errorValue := chatCompleter.GenerateChatCompletion(closingContext, model.ChatCompletionRequest{
+		SchemaName: schemaName,
+		Messages: []model.ChatCompletionMessage{{
+			Role:    "user",
+			Content: prompt,
+		}},
+	})
+	if errorValue != nil {
+		return "", errorValue
+	}
+	return model.RecoveryChatCompletionText(response)
+}
+
+func firstError(errorValues ...error) error {
+	for _, errorValue := range errorValues {
+		if errorValue != nil {
+			return errorValue
+		}
+	}
+	return nil
 }
 
 func completionRawReply(request AgentTurnRequest) string {
@@ -2318,24 +2346,24 @@ func (agentTurnRunner *AgentTurnRunner) limitStopEventBody(reason string, observ
 	}
 }
 
-func (agentTurnRunner *AgentTurnRunner) stopForLimit(ctx context.Context, taskRunID string, request AgentTurnRequest, reason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState, usedIterationCount int, usedToolCallCount int) (AgentTurnResult, error) {
-	blockedTaskRun := agentTurnRunner.pauseForLimit(taskRunID, reason, observations, attachments, usedIterationCount, usedToolCallCount)
-	failureNotice, replyStatus, hasReply := agentTurnRunner.generateLimitReachedNotice(ctx, taskRunID, request, reason, observations, nil, executionState)
+func (agentTurnRunner *AgentTurnRunner) stopForLimit(ctx context.Context, taskRunID string, request AgentTurnRequest, reason string, observations []turnObservation, files limitFiles, executionState ExecutionState, usedIterationCount int, usedToolCallCount int) (AgentTurnResult, error) {
+	blockedTaskRun := agentTurnRunner.pauseForLimit(taskRunID, reason, observations, files.staged(), usedIterationCount, usedToolCallCount)
+	failureNotice, replyStatus, hasReply := agentTurnRunner.generateLimitReachedNotice(ctx, taskRunID, request, reason, observations, files, executionState)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(replyStatus))
 	if !hasReply {
 		agentTurnRunner.appendUnavailableReplyEvents(taskRunID, "limit", reason, replyStatus)
-		failureReport := buildFailureReport(request, taskRunID, "limit", reason, observations, attachments, executionState, recoveryDecision{})
+		failureReport := limitFailureReport(request, taskRunID, reason, observations, files, executionState, recoveryDecision{})
 		failureNotice = buildRawErrorFailureNotice(failureReport)
 		if reason == "max_elapsed" {
 			failureNotice = buildElapsedLimitRawErrorFailureNotice(request)
 		}
 		fallbackReply := failureNotice.SendableMessage()
 		blockedTaskRun = persistTaskRunResult(agentTurnRunner.taskRunService, blockedTaskRun, fallbackReply)
-		return AgentTurnResult{TaskRun: blockedTaskRun, UserNotice: fallbackReply, FailureNotice: failureNotice, RecoveryActions: recoveryActionsFromObservations(observations)}, nil
+		return AgentTurnResult{TaskRun: blockedTaskRun, UserNotice: fallbackReply, FailureNotice: failureNotice, Attachments: files.Carried, RecoveryActions: recoveryActionsFromObservations(observations)}, nil
 	}
 	reply := failureNotice.SendableMessage()
 	blockedTaskRun = persistTaskRunResult(agentTurnRunner.taskRunService, blockedTaskRun, reply)
-	return AgentTurnResult{TaskRun: blockedTaskRun, UserNotice: reply, FailureNotice: failureNotice, RecoveryActions: recoveryActionsFromObservations(observations)}, nil
+	return AgentTurnResult{TaskRun: blockedTaskRun, UserNotice: reply, FailureNotice: failureNotice, Attachments: files.Carried, RecoveryActions: recoveryActionsFromObservations(observations)}, nil
 }
 
 func persistTaskRunResult(taskRunService taskstate.TaskRunStore, taskRun agentcontract.TaskRun, result string) agentcontract.TaskRun {

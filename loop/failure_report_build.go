@@ -36,6 +36,47 @@ func buildFailureReport(request AgentTurnRequest, taskRunID string, phase string
 	return report
 }
 
+type limitFiles struct {
+	Delivered []toolcontract.FileAttachment
+	Carried   []toolcontract.FileAttachment
+}
+
+func filesAtLimit(state agentTaskState) limitFiles {
+	return limitFiles{
+		Delivered: attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths),
+		Carried:   attachmentsNotYetDelivered(filesHandedToDelivery(state.Observations), state.DeliveredAttachmentPaths),
+	}
+}
+
+func filesHandedToDelivery(observations []turnObservation) []toolcontract.FileAttachment {
+	files := []toolcontract.FileAttachment{}
+	seenPaths := map[string]bool{}
+	for _, observation := range successfulToolObservations(observations) {
+		if !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+			continue
+		}
+		for _, attachment := range observation.Attachments {
+			path := strings.TrimSpace(attachment.DevicePath)
+			if path == "" || seenPaths[path] {
+				continue
+			}
+			seenPaths[path] = true
+			files = append(files, attachment)
+		}
+	}
+	return files
+}
+
+func (files limitFiles) staged() []toolcontract.FileAttachment {
+	return append(append([]toolcontract.FileAttachment{}, files.Delivered...), files.Carried...)
+}
+
+func limitFailureReport(request AgentTurnRequest, taskRunID string, stopReason string, observations []turnObservation, files limitFiles, executionState ExecutionState, decision recoveryDecision) FailureReport {
+	report := buildFailureReport(request, taskRunID, "limit", stopReason, observations, files.Delivered, executionState, decision)
+	report.CarriedFilenames = failureReportAttachmentFilenames(files.Carried)
+	return report
+}
+
 func requestContextForTurn(request AgentTurnRequest) model.RequestContext {
 	return model.RequestContext{
 		RequesterPersonID:       request.RequesterPersonID,
