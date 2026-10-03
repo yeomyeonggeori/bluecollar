@@ -9,15 +9,14 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/evaltest"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 )
 
 func TestRoutedSelectionReachesEveryToolTheWorkNeeds(t *testing.T) {
 	toolSet, toolNames := catalogToolSet(t)
 	endpoint, errorValue := decisions.EndpointFromEnvironment()
-	if errorValue != nil {
-		t.Skipf("decisions endpoint: %v", errorValue)
-	}
+	evaltest.RequireConfigured(t, "the decision model", errorValue)
 	planner := NewDecisionPlanner(endpoint.DecisionModel(), nil, func() float64 { return 1 })
 
 	selectedByCase := make([][]string, len(benchmarkCases))

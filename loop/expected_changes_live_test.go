@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/bluecollar/evaltest"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
@@ -36,10 +37,7 @@ var expectedChangesLiveCases = []expectedChangesLiveCase{
 }
 
 func TestLiveExpectedChangesDefinition(t *testing.T) {
-	catalogPath := os.Getenv("BLUECOLLAR_CAPABILITY_CATALOG")
-	if catalogPath == "" {
-		t.Skip("set BLUECOLLAR_CAPABILITY_CATALOG to the generated capability-tools.json")
-	}
+	catalogPath := evaltest.RequireInput(t, "BLUECOLLAR_CAPABILITY_CATALOG", "point it at the generated capability-tools.json")
 	provider, errorValue := (openaicompatible.Endpoint{URL: os.Getenv("BLUECOLLAR_MODEL_ENDPOINT"), ModelName: os.Getenv("BLUECOLLAR_MODEL_NAME"), APIKey: os.Getenv("BLUECOLLAR_MODEL_API_KEY")}).Provider()
 	if errorValue != nil {
 		t.Fatal(errorValue)
