@@ -12,14 +12,13 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/evaltest"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 func TestLivePriorTaskReinterpretation(t *testing.T) {
-	if os.Getenv("BLUECOLLAR_RECOVERY_LIVE") != "1" {
-		t.Skip("set BLUECOLLAR_RECOVERY_LIVE=1 to exercise the live model")
-	}
+	evaltest.RequireExactly(t, "BLUECOLLAR_RECOVERY_LIVE", "1", "set it to 1 to accept that the evaluation calls a paid model")
 	provider, errorValue := (openaicompatible.Endpoint{URL: os.Getenv("BLUECOLLAR_MODEL_ENDPOINT"), ModelName: os.Getenv("BLUECOLLAR_MODEL_NAME"), APIKey: os.Getenv("BLUECOLLAR_MODEL_API_KEY")}).Provider()
 	if errorValue != nil {
 		t.Fatal(errorValue)

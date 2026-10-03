@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/evaltest"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -172,10 +173,7 @@ func applyPolicy(policy selectionPolicy, probabilityByToolName map[string]float6
 }
 
 func catalogToolSet(t *testing.T) (*toolcontract.ToolSet, []string) {
-	catalogPath := strings.TrimSpace(os.Getenv(catalogPathEnvironmentName))
-	if catalogPath == "" {
-		t.Skipf("set %s to the generated capability-tools.json", catalogPathEnvironmentName)
-	}
+	catalogPath := evaltest.RequireInput(t, catalogPathEnvironmentName, "point it at the generated capability-tools.json")
 	document, errorValue := os.ReadFile(catalogPath)
 	if errorValue != nil {
 		t.Fatalf("read catalog: %v", errorValue)
@@ -252,9 +250,7 @@ func rankOf(toolName string, ranked []string) int {
 
 func TestToolSelectionPolicyBenchmark(t *testing.T) {
 	endpoint, errorValue := decisions.EndpointFromEnvironment()
-	if errorValue != nil {
-		t.Skipf("%v", errorValue)
-	}
+	evaltest.RequireConfigured(t, "the decision model", errorValue)
 	toolSet, toolNames := catalogToolSet(t)
 	inCatalog := map[string]bool{}
 	for _, toolName := range toolNames {

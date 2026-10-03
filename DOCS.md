@@ -518,7 +518,7 @@ The loop's guarantees are written as tests, so their names are the specification
 go test -run 'Checkpoint|Resume|Approval' -v ./loop
 ```
 
-CI runs `gofmt`, `go vet`, `go build` and `go test`, then the same inside the ACP module, with no network, credentials or database. Live model evaluations sit behind the `llmeval` build tag and never run by default.
+CI runs `gofmt`, `go vet`, `go build` and `go test`, then the same inside the ACP module, with no network, credentials or database. Live model evaluations sit behind the `llmeval` build tag and never run by default. Building with `-tags llmeval` is the request to run them, so an evaluation missing an input fails and names it; `evaltest` holds the checks, and a new evaluation calls it instead of `t.Skip`. Each one states its variables in the failure: `BLUECOLLAR_RECOVERY_LIVE=1` and the model variables for `loop`, `BLUECOLLAR_CAPABILITY_CATALOG` for the expected-changes evaluation, and `BLUECOLLAR_SELECTION_BENCH_CATALOG` with `BLUECOLLAR_DECISION_API_KEY` and `BLUECOLLAR_DECISION_MODEL` for `intake`.
 
 # Q&A
 
