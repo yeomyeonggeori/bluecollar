@@ -660,8 +660,7 @@ func evidenceReferencesFromIDs(values []string) []completionEvidenceReference {
 
 func DecideAgentAction(ctx context.Context, languageModel model.LanguageModelProvider, state agentTaskState) (agentAction, error) {
 	if chatCompleter, isAvailable := model.ResolveTextChatCompleter(languageModel); isAvailable {
-		chatRequestSource := buildAgentActionRequestCarryingToolResultsNatively(state)
-		if chatRequest, isRepresentable := buildAgentActionChatCompletionRequest(chatRequestSource, state.Observations); isRepresentable {
+		if chatRequest, isRepresentable := nativeAgentActionRequest(state); isRepresentable {
 			return decideAgentActionWithChat(ctx, chatCompleter, chatRequest, state)
 		}
 	}
@@ -793,6 +792,10 @@ func agentActionCorrectionMessage(correction model.StructuredOutputCorrection) s
 		messageParts = append(messageParts, "Validation issue: "+issue.FieldPath+" ("+string(issue.Code)+").")
 	}
 	return strings.Join(messageParts, " ")
+}
+
+func nativeAgentActionRequest(state agentTaskState) (model.ChatCompletionRequest, bool) {
+	return buildAgentActionChatCompletionRequest(buildAgentActionRequestCarryingToolResultsNatively(state), state.Observations)
 }
 
 func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredResponseRequest, observations []turnObservation) (model.ChatCompletionRequest, bool) {

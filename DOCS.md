@@ -358,7 +358,7 @@ The system instruction is fixed at the start of the run. Each request carries th
 
 A tool result larger than its share of the context has its middle elided. A host that registers a `ToolResultSpillStore` receives the full output and the model is told where to read it. The share comes from the declared context window.
 
-Compaction starts when the estimated prompt passes 60 percent of the context window, or 96,000 tokens when no window is declared. Long tool results are pruned first. If that is not enough, older observations are summarized into a pinned `TaskContextSummary` (goal, completed steps, artifacts, key decisions, exhausted routes, active failure debt, next plan), keeping the ten most recent, and a new summary needs at least six new observations and 20,000 new characters.
+Compaction starts when the estimated prompt passes 60 percent of the context window, or 96,000 tokens when no window is declared. For native tool calling, the estimate counts full call arguments, results and tool definitions in the request sent to the model. Long tool results are pruned first. If that is not enough, older observations are summarized into a pinned `TaskContextSummary` (goal, completed steps, artifacts, key decisions, exhausted routes, active failure debt, next plan), keeping the ten most recent, and a new summary needs at least six new observations and 20,000 new characters.
 
 ## Model tiers
 
