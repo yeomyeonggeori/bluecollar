@@ -93,7 +93,7 @@ func liftFileDeliverableToBoundedTask(decision agentcontract.TurnDecision) agent
 	if decision.Classification != agentcontract.IntakeClassificationQuickReply {
 		return decision
 	}
-	if decision.DeliverableKind != agentcontract.DeliverableKindDocument && decision.DeliverableKind != agentcontract.DeliverableKindPresentation {
+	if !hasFileDeliverable(decision) && decision.DeliverableKind != agentcontract.DeliverableKindDocument && decision.DeliverableKind != agentcontract.DeliverableKindPresentation {
 		return decision
 	}
 	decision.Classification = agentcontract.IntakeClassificationBoundedTask
@@ -101,7 +101,7 @@ func liftFileDeliverableToBoundedTask(decision agentcontract.TurnDecision) agent
 }
 
 func normalizeDeliverableTools(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
-	return removeFileDeliveryToolWithoutArtifactFormat(decision)
+	return removeFileDeliveryToolWithoutFileDeliverable(decision)
 }
 
 func liftBoundedImmediateReplyToMaintenance(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
@@ -181,27 +181,27 @@ func normalizeTurnWords(decision agentcontract.TurnDecision) agentcontract.TurnD
 	decision.ClarificationQuestion = strings.TrimSpace(decision.ClarificationQuestion)
 	decision.ClarificationOptions = normalizeClarificationOptions(decision.ClarificationOptions)
 	decision.ExpectedResults = agentcontract.NormalizeExpectedResults(decision.ExpectedResults)
-	return removeFileExpectedResultsWithoutArtifactFormat(decision)
+	return decision
 }
 
-func removeFileDeliveryToolWithoutArtifactFormat(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
-	if hasArtifactOutputFormat(decision.RequestedOutputFormats) {
+func removeFileDeliveryToolWithoutFileDeliverable(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+	if hasFileDeliverable(decision) {
 		return decision
 	}
 	decision.InitialToolNames = removeToolName(decision.InitialToolNames, toolcontract.FileDeliverToolName)
 	return decision
 }
 
-func removeFileExpectedResultsWithoutArtifactFormat(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
-	if hasArtifactOutputFormat(decision.RequestedOutputFormats) {
-		return decision
+func hasFileDeliverable(decision agentcontract.TurnDecision) bool {
+	if len(agentcontract.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)) > 0 {
+		return true
 	}
-	decision.ExpectedResults = removeExpectedResultsByType(decision.ExpectedResults, agentcontract.ExpectedResultTypeFile)
-	return decision
-}
-
-func hasArtifactOutputFormat(formats []string) bool {
-	return len(agentcontract.NormalizeRequestedOutputFormats(formats)) > 0
+	for _, result := range agentcontract.NormalizeExpectedResults(decision.ExpectedResults) {
+		if result.Type == agentcontract.ExpectedResultTypeFile && result.Required {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeTaskShape(taskShape agentcontract.TaskShape) agentcontract.TaskShape {
@@ -318,16 +318,6 @@ func clarificationOptionKey(index int) string {
 		return string(rune('A' + index))
 	}
 	return "O"
-}
-
-func removeExpectedResultsByType(results []agentcontract.ExpectedResult, removedType string) []agentcontract.ExpectedResult {
-	filteredResults := []agentcontract.ExpectedResult{}
-	for _, result := range results {
-		if result.Type != removedType {
-			filteredResults = append(filteredResults, result)
-		}
-	}
-	return filteredResults
 }
 
 func removeToolName(toolNames []string, removedToolName string) []string {
