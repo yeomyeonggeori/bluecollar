@@ -142,6 +142,7 @@ type turnObservation struct {
 	RecoveryPacket       *RecoveryPacket               `json:"recoveryPacket,omitempty"`
 	Attachments          []toolcontract.FileAttachment `json:"attachments,omitempty"`
 	RecoveryActions      []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
+	ChangeCheck          *changeCheck                  `json:"changeCheck,omitempty"`
 	DurationMS           int64                         `json:"durationMs"`
 }
 
@@ -691,6 +692,9 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			if reply == "" {
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "finish", "empty final reply message")
 				return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "empty final reply message", &state, iteration)
+			}
+			if completionGateResult.leavesChangesUnmet() {
+				reply = agentTurnRunner.replyStatingUnmetChanges(workContext, taskRun.TaskRunID, request, reply, *completionGateResult.ChangeCheck)
 			}
 			reply = agentTurnRunner.prepareFinishMessageForPlatform(workContext, request, reply)
 			if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {

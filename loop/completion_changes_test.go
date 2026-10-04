@@ -535,3 +535,15 @@ func TestARecordedWorkbookWithHoldsShowsNoneOfTheRecordsThatMadeIt(t *testing.T)
 		t.Fatalf("expected only the delivered workbook, by a neutral reference, got %s", records)
 	}
 }
+
+func TestARecordRepeatingAnIdenticalStepShowsItOnce(t *testing.T) {
+	first := deletedTaskObservation()
+	second := deletedTaskObservation()
+	second.ObservationID = "obs-002"
+
+	records := changedRecords([]turnObservation{first, second}, time.UTC, map[string]bool{})
+
+	if len(records) != 1 || len(records[0].History) != 1 {
+		t.Fatalf("expected the repeated identical deletion shown once, got %+v", records)
+	}
+}

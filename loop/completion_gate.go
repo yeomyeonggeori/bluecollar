@@ -41,7 +41,12 @@ type completionGateResult struct {
 	SuggestedNextTools  []string
 	IsChangeCheckUnmet  bool
 	AreChangesConfirmed bool
+	ChangeCheck         *changeCheck
 	PolicyCode          string
+}
+
+func (result completionGateResult) leavesChangesUnmet() bool {
+	return result.IsSatisfied && result.ChangeCheck != nil && len(result.ChangeCheck.Unmet) > 0
 }
 
 const policyCodeGoalNotClaimedSatisfied = "goal_not_claimed_satisfied"
@@ -53,6 +58,7 @@ const (
 	evidenceKindAttachmentValid  = "attachment_invalid"
 	evidenceKindReference        = "evidence_reference_invalid"
 	completionReplySchemaName    = "bluecollar_completion_reply"
+	unmetChangesReplySchemaName  = "bluecollar_unmet_changes_reply"
 	completionPersistenceTimeout = 5 * time.Second
 )
 
@@ -294,6 +300,7 @@ func completionGateObservation(index int, result completionGateResult, toolSet *
 	observation.Summary = content
 	observation.PolicyCode = evidenceKind
 	observation.RelatedPaths = invalidValidityPaths(result.ValidityState)
+	observation.ChangeCheck = result.ChangeCheck
 	observation.Failure.Retryable = true
 	observation.Failure.SafeRetry = true
 	return observation
