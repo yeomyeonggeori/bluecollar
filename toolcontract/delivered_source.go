@@ -6,7 +6,6 @@ import (
 )
 
 const (
-	DeliveredSourceSuffix       = ".source.json"
 	DeliveredSourceMaximumBytes = 1 << 20
 	deliveredKnownMaximumBytes  = 8000
 )
@@ -28,10 +27,6 @@ type sourceDocument struct {
 	Declaration json.RawMessage `json:"declaration"`
 	Claims      []SourceClaim   `json:"claims"`
 	Known       json.RawMessage `json:"known"`
-}
-
-func DeliveredSourcePath(filePath string) string {
-	return strings.TrimSpace(filePath) + DeliveredSourceSuffix
 }
 
 func DeliveredSourceOf(document []byte) (*DeliveredSource, bool) {
