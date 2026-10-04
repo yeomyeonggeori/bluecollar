@@ -136,7 +136,7 @@ func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontrac
 	return agentcontract.IntakeDecisionRequest{
 		Messages: []agentcontract.IntakeDecisionMessage{{
 			Prompt:       request.Prompt,
-			SenderName:   request.RequesterCallingName,
+			SenderName:   firstNonEmptyAddressingText(request.RequesterCallingName, request.RequesterName),
 			SenderHandle: request.RequesterHandle,
 			SentAt:       request.TurnStartedAt,
 			InputParts:   request.InputParts,
