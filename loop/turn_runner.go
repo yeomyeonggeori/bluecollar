@@ -2148,7 +2148,7 @@ func terminalNoToolsInstruction(observations []turnObservation, budget RecoveryB
 	parts := []string{
 		"Recovery tool budget is exhausted. Do not call tools and do not select tools.",
 		"Return exactly one terminal action.",
-		"Use reply with final=true only when you can answer from current context with failureResolution=no_tool_fallback.",
+		"Use reply with final=true only when the original request is fulfilled from current context with failureResolution=no_tool_fallback. Include the requested answer in the reply itself; claiming it was delivered is not delivery. Required attachments and other requested effects must already be recorded as successful.",
 		"Use fail only when completion is blocked, with failureResolution=failure_report and usedFailureFacts copied from FailureReportFacts.",
 		"Only the recorded tool calls in FailureReportFacts were attempted. Guidance and model calls are not tool executions. Do not invent retries or infer that a failed response means a write was not saved; report an unverified outcome as uncertain.",
 		"FailureReportFacts:\n" + marshalEventBody(facts),
@@ -2174,7 +2174,7 @@ func (agentTurnRunner *AgentTurnRunner) completeTerminalNoToolsFinish(ctx contex
 	if !isRecoveredFailureDebtResolution(actionDocument.FailureResolution) {
 		return AgentTurnResult{}, false, "a final reply requires failureResolution to be recovered_with_success or no_tool_fallback"
 	}
-	completionGateResult := validateCompletionFacts(request, state.Observations, actionDocument)
+	completionGateResult := agentTurnRunner.validateCompletionGateWithChanges(ctx, taskRunID, request, state.Observations, actionDocument)
 	agentTurnRunner.appendValidityReview(taskRunID, "terminal_no_tools_finish", completionGateResult.ValidityState)
 	if !completionGateResult.IsSatisfied {
 		return AgentTurnResult{}, false, completionGateResult.Message

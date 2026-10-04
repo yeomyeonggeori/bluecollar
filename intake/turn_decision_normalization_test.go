@@ -126,31 +126,38 @@ func TestOnlyRegisteredToolsSurviveNormalization(t *testing.T) {
 	}
 }
 
-func TestAFileResultNeedsAnArtifactFormat(t *testing.T) {
+func TestRequiredAttachmentSurvivesWithoutAnArtifactFormat(t *testing.T) {
 	toolSet := newTestToolSet([]string{toolcontract.FileDeliverToolName})
 	decidedFields := decidedTurnFields(agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask)
 	decidedFields.InitialToolNames = []string{toolcontract.FileDeliverToolName}
 	decidedFields.ExpectedResults = []agentcontract.ExpectedResult{
-		{ID: "deck", Type: agentcontract.ExpectedResultTypeFile, Description: "덱", Required: true},
+		{ID: "screenshot", Type: agentcontract.ExpectedResultTypeFile, Description: "Attach a screenshot", Required: true},
 		{ID: "reply", Type: agentcontract.ExpectedResultTypeMessage, Description: "답", Required: true},
 	}
 
 	withoutFormat := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{ToolSet: toolSet})
-	for _, expectedResult := range withoutFormat.ExpectedResults {
-		if expectedResult.Type == agentcontract.ExpectedResultTypeFile {
-			t.Fatalf("expected the file result to go with no artifact format, got %+v", withoutFormat.ExpectedResults)
-		}
+	if len(withoutFormat.ExpectedResults) != 2 {
+		t.Fatalf("expected the attachment requirement to survive without a format, got %+v", withoutFormat.ExpectedResults)
 	}
-	for _, toolName := range withoutFormat.InitialToolNames {
-		if toolName == toolcontract.FileDeliverToolName {
-			t.Fatalf("expected the delivery tool to go with no artifact format, got %v", withoutFormat.InitialToolNames)
-		}
+	if len(withoutFormat.InitialToolNames) != 1 || withoutFormat.InitialToolNames[0] != toolcontract.FileDeliverToolName {
+		t.Fatalf("expected the delivery tool for the attachment, got %v", withoutFormat.InitialToolNames)
 	}
 
 	decidedFields.RequestedOutputFormats = []string{"pptx"}
 	withFormat := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{ToolSet: toolSet})
 	if len(withFormat.ExpectedResults) != 2 {
 		t.Fatalf("expected both results to survive an artifact format, got %+v", withFormat.ExpectedResults)
+	}
+}
+
+func TestRequiredAttachmentCannotBecomeAnImmediateReply(t *testing.T) {
+	decidedFields := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
+	decidedFields.ExpectedResults = []agentcontract.ExpectedResult{
+		{ID: "existing-file", Type: agentcontract.ExpectedResultTypeFile, Description: "Attach the existing file", Required: true},
+	}
+	decision := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{})
+	if decision.Classification != agentcontract.IntakeClassificationBoundedTask || decision.TaskShape == agentcontract.TaskShapeImmediateReply {
+		t.Fatalf("a required attachment became an immediate reply: %+v", decision)
 	}
 }
 
