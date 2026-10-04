@@ -50,6 +50,7 @@ func registerImageTool(toolSet *toolcontract.ToolSet, runningShell shell) {
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[imageReadInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/image_read",
+			ProviderID:      toolcontract.BuiltInToolProviderID,
 			Name:            toolcontract.ImageReadToolName,
 			SideEffectClass: toolcontract.ToolSideEffectRead,
 			OutputSchema:    imageReadOutputSchema,

@@ -40,3 +40,13 @@ func TestTheHostOffersEquipOnlyWhenItCanAnswerIt(t *testing.T) {
 		}
 	}
 }
+
+func TestEveryToolTheRunnerBringsIsAKernelTool(t *testing.T) {
+	toolSet := newWorkspaceToolSet(shell{workingDirectoryPath: t.TempDir()}, stubToolSelector{})
+
+	for _, toolName := range toolSet.ListRegisteredToolNames() {
+		if !toolSet.IsBuiltInTool(toolName) {
+			t.Fatalf("%s is registered as an extension tool, so a plan step's shortlist can hide it and a step that hides plan can never end", toolName)
+		}
+	}
+}

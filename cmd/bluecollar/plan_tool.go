@@ -66,6 +66,7 @@ func registerPlanTool(toolSet *toolcontract.ToolSet) {
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[planInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/plan",
+			ProviderID:      toolcontract.BuiltInToolProviderID,
 			Name:            toolcontract.PlanToolName,
 			SideEffectClass: toolcontract.ToolSideEffectNone,
 			OutputSchema:    planOutputSchema,

@@ -57,6 +57,7 @@ func registerEquipTool(toolSet *toolcontract.ToolSet, toolSelector agentcontract
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[equipInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/equip",
+			ProviderID:      toolcontract.BuiltInToolProviderID,
 			Name:            toolcontract.EquipToolName,
 			Description:     "Describe in one sentence what you need a tool to do, and get back the tools that do it with a one-line description each. They become callable on your next step.",
 			WhenToUse:       "the tool you need is not in hand.",
