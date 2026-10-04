@@ -323,16 +323,50 @@ func TestClarificationOptionsAreKeyedAndKeptAboveOne(t *testing.T) {
 
 func TestAClarifyTurnRequiresAQuestion(t *testing.T) {
 	clarifyRoute := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask)
-	if validateClarificationQuestion(clarifyRoute, agentcontract.TurnWords{}) == nil {
+	if validateClarificationQuestion(clarifyRoute, agentcontract.TurnWords{ClarificationDisposition: agentcontract.ClarificationDispositionAsk}) == nil {
 		t.Fatal("expected a clarify route with no question to be refused")
 	}
 	needsConfirmation := decidedTurnFields(agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationNeedsConfirmation)
-	if validateClarificationQuestion(needsConfirmation, agentcontract.TurnWords{}) == nil {
+	if validateClarificationQuestion(needsConfirmation, agentcontract.TurnWords{ClarificationDisposition: agentcontract.ClarificationDispositionAsk}) == nil {
 		t.Fatal("expected a needs_confirmation turn with no question to be refused")
 	}
 	answering := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
 	if errorValue := validateClarificationQuestion(answering, agentcontract.TurnWords{}); errorValue != nil {
 		t.Fatalf("expected an answering turn to need no clarification question: %v", errorValue)
+	}
+}
+
+func TestClarificationDispositionRequiresConsistentQuestionAndOptions(t *testing.T) {
+	clarify := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation)
+	validAsk := agentcontract.TurnWords{
+		ClarificationDisposition: agentcontract.ClarificationDispositionAsk,
+		ClarificationQuestion:    "어느 기간으로 볼까요?",
+	}
+	if errorValue := validateClarificationQuestion(clarify, validAsk); errorValue != nil {
+		t.Fatalf("expected a nonempty ask question to be valid: %v", errorValue)
+	}
+	if errorValue := validateClarificationQuestion(clarify, agentcontract.TurnWords{
+		ClarificationDisposition: agentcontract.ClarificationDispositionStartWork,
+	}); errorValue != nil {
+		t.Fatalf("expected start_work with no question or options to be valid: %v", errorValue)
+	}
+	if validateClarificationQuestion(clarify, agentcontract.TurnWords{
+		ClarificationDisposition: agentcontract.ClarificationDispositionStartWork,
+		ClarificationOptions:     []agentcontract.ClarificationOption{{Label: "선택지"}},
+	}) == nil {
+		t.Fatal("expected start_work with clarification options to be refused")
+	}
+	if validateClarificationQuestion(clarify, agentcontract.TurnWords{
+		ClarificationDisposition: agentcontract.ClarificationDispositionStartWork,
+		ClarificationQuestion:    "null",
+	}) == nil {
+		t.Fatal("expected start_work with a nonempty question to be refused")
+	}
+	if validateClarificationQuestion(clarify, agentcontract.TurnWords{
+		ClarificationDisposition: agentcontract.ClarificationDisposition("unknown"),
+		ClarificationQuestion:    "어느 기간으로 볼까요?",
+	}) == nil {
+		t.Fatal("expected an unknown disposition to be refused")
 	}
 }
 
@@ -395,7 +429,7 @@ func TestTheWordsCallForWorkAsksOnlyForItsAcceptance(t *testing.T) {
 func TestTheWordsCallIsCorrectedOnceAndThenHandsTheTurnOver(t *testing.T) {
 	correctedModel := &sequenceLanguageModel{contents: []string{
 		`{"reason":"","userFacingReply":"","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
-		`{"reason":"물어본다","userFacingReply":"","clarificationQuestion":"어떤 형식으로 드릴까요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
+		`{"reason":"물어본다","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"어떤 형식으로 드릴까요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
 	}}
 	turnRouter := turnRouterWith(correctedModel, clarifyOutcome())
 
@@ -426,9 +460,9 @@ func TestTheWordsCallIsCorrectedOnceAndThenHandsTheTurnOver(t *testing.T) {
 	}
 }
 
-func TestTheWordsCallCarriesAStablePrefixEndingInTheClock(t *testing.T) {
+func TestClarificationReviewCarriesAStablePrefixEndingInTheClock(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"reason":"묻는다","userFacingReply":"","clarificationQuestion":"어떤 형식으로?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
+		`{"reason":"묻는다","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"어떤 형식으로?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
 	}}
 	turnRouter := turnRouterWith(languageModel, clarifyOutcome())
 
@@ -444,11 +478,11 @@ func TestTheWordsCallCarriesAStablePrefixEndingInTheClock(t *testing.T) {
 	}
 
 	messages := languageModel.requests[0].Messages
-	if messages[0].Content != turnWordsSystemPrompt {
-		t.Fatalf("expected the words prompt first, got %q", messages[0].Content)
+	if messages[0].Content != clarificationWordsSystemPrompt {
+		t.Fatalf("expected the clarification review prompt first, got %q", messages[0].Content)
 	}
-	if !strings.Contains(messages[2].Content, "Decided for this turn:") {
-		t.Fatalf("expected the decided facts third, got %q", messages[2].Content)
+	if !strings.Contains(messages[2].Content, "Proposed decision") {
+		t.Fatalf("expected the proposed routing fields third, got %q", messages[2].Content)
 	}
 	lastMessage := messages[len(messages)-1]
 	if lastMessage.Role != "user" || lastMessage.Content != request.Prompt {

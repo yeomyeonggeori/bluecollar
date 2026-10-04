@@ -11,6 +11,7 @@ import (
 type AgentRequest struct {
 	RequesterPersonID          string
 	RequesterName              string
+	AgentIdentity              AgentIdentity
 	RequesterCallingName       string
 	RequesterHandle            string
 	RequesterCircles           []string

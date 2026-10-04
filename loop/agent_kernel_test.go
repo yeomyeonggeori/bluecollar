@@ -16,15 +16,28 @@ import (
 )
 
 type intakeDecisionLanguageModel struct {
-	decision TurnDecision
+	decision                 TurnDecision
+	clarificationDisposition agentcontract.ClarificationDisposition
 }
 
 func (languageModel intakeDecisionLanguageModel) GenerateResponse(context.Context, string) (string, error) {
 	return "", errors.New("intake model only serves structured routing")
 }
 
-func (languageModel intakeDecisionLanguageModel) GenerateStructuredResponse(context.Context, model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	document, errorValue := json.Marshal(languageModel.decision)
+func (languageModel intakeDecisionLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	var response any = languageModel.decision
+	if strings.Contains(request.StructuredOutputSchema.Document, `"clarificationDisposition"`) {
+		response = agentcontract.TurnWords{
+			Reason:                   languageModel.decision.Reason,
+			UserFacingReply:          languageModel.decision.UserFacingReply,
+			ClarificationDisposition: languageModel.clarificationDisposition,
+			ClarificationQuestion:    languageModel.decision.ClarificationQuestion,
+			ClarificationOptions:     languageModel.decision.ClarificationOptions,
+			BusyInstruction:          languageModel.decision.BusyInstruction,
+			ExpectedResults:          languageModel.decision.ExpectedResults,
+		}
+	}
+	document, errorValue := json.Marshal(response)
 	if errorValue != nil {
 		return model.StructuredResponse{}, errorValue
 	}
@@ -249,7 +262,7 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 
 func TestAgentKernelPausesNeedsConfirmationDisambiguation(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
-	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
+	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{clarificationDisposition: agentcontract.ClarificationDispositionAsk, decision: TurnDecision{
 		Route:                 TurnRouteClarify,
 		Classification:        IntakeClassificationNeedsConfirmation,
 		TaskShape:             TaskShapeApprovalGatedTask,

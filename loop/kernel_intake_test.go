@@ -269,7 +269,7 @@ func TestAgentKernelRecoversPriorTaskOutcomeWithThePriorTaskInContext(t *testing
 
 func TestAgentKernelUsesIntakeBeforeRunningTools(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"medium","requestedOutputFormats":null,"reason":"ambiguous target","clarificationQuestion":"Which one do you mean?","clarificationOptions":[{"key":"A","label":"First","value":"First"},{"key":"B","label":"Second","value":"Second"}],"userFacingReply":"Which one do you mean?"}`,
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"medium","requestedOutputFormats":null,"reason":"ambiguous target","clarificationDisposition":"ask","clarificationQuestion":"Which one do you mean?","clarificationOptions":[{"key":"A","label":"First","value":"First"},{"key":"B","label":"Second","value":"Second"}],"userFacingReply":"Which one do you mean?"}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("should not run"),
@@ -305,7 +305,7 @@ func TestAgentKernelUsesIntakeBeforeRunningTools(t *testing.T) {
 
 func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs output choice","userFacingReply":"","clarificationQuestion":"어떤 형식으로 만들까요?","clarificationOptions":[{"key":"A","label":"문서","value":"document"},{"key":"B","label":"발표자료","value":"slides"}]}`,
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs output choice","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"어떤 형식으로 만들까요?","clarificationOptions":[{"key":"A","label":"문서","value":"document"},{"key":"B","label":"발표자료","value":"slides"}]}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("should not run"),
@@ -342,7 +342,7 @@ func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 
 func TestAgentKernelAsksTheClarificationQuestionWithoutOptions(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs the target company","userFacingReply":"네, 바로 조사를 시작하겠습니다.","clarificationQuestion":"어느 회사를 조사할까요?","clarificationOptions":[]}`,
+		`{"route":"clarify","classification":"needs_confirmation","taskShape":"approval_gated_task","level":"low","requestedOutputFormats":null,"responseLanguage":"ko","reason":"needs the target company","userFacingReply":"네, 바로 조사를 시작하겠습니다.","clarificationDisposition":"ask","clarificationQuestion":"어느 회사를 조사할까요?","clarificationOptions":[]}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		finishMessageDocument("should not run"),

@@ -87,7 +87,7 @@ func TestTurnRouterWritesNothingForAConsumedTurn(t *testing.T) {
 
 func TestTurnRouterAsksTheChatModelOnlyForTheWords(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"reason":"missing the deadline","userFacingReply":"","clarificationQuestion":"언제까지 필요하세요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
+		`{"reason":"missing the deadline","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"언제까지 필요하세요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
 	}}
 	turnRouter := turnRouterWith(languageModel, clarifyOutcome())
 
@@ -118,7 +118,7 @@ func TestTurnRouterAsksTheChatModelOnlyForTheWords(t *testing.T) {
 
 func TestTurnRouterHandsTheDecidedFieldsToTheWordsCallAsFacts(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"reason":"","userFacingReply":"","clarificationQuestion":"어느 팀 기준으로 볼까요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
+		`{"reason":"","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"어느 팀 기준으로 볼까요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
 	}}
 	turnRouter := turnRouterWith(languageModel, clarifyOutcome())
 
@@ -137,6 +137,132 @@ func TestTurnRouterHandsTheDecidedFieldsToTheWordsCallAsFacts(t *testing.T) {
 	}
 	if !strings.Contains(systemContent, string(agentcontract.TaskLevelLow)) {
 		t.Fatalf("expected the decided level to be handed over as a fact, got %s", systemContent)
+	}
+}
+
+func TestTurnRouterClarificationSchemaAddsOnlyTheDispositionField(t *testing.T) {
+	clarificationSchema := clarificationTurnWordsSchema()
+	if !strings.Contains(clarificationSchema, `"clarificationDisposition"`) || !strings.Contains(clarificationSchema, `"start_work"`) {
+		t.Fatalf("expected a finite clarification disposition in the clarification schema, got %s", clarificationSchema)
+	}
+	if strings.Contains(turnWordsSchema(), `"clarificationDisposition"`) {
+		t.Fatal("expected other words routes to keep their existing schema")
+	}
+}
+
+func TestSteeringKeepsItsExistingWordsShape(t *testing.T) {
+	decision := agentcontract.TurnDecision{
+		Route:           agentcontract.TurnRouteContinueTask,
+		Classification:  agentcontract.IntakeClassificationBoundedTask,
+		BusyRoute:       agentcontract.BusyRouteSteer,
+	}
+	wordsShape, needsWords := turnWordsShapeFor(decision)
+	if !needsWords || wordsShape.systemPrompt != turnWordsSystemPrompt {
+		t.Fatalf("expected steering to keep its existing words prompt, got %+v", wordsShape)
+	}
+	if strings.Contains(wordsShape.schemaDocument, `"clarificationDisposition"`) {
+		t.Fatalf("expected steering words to keep their existing schema, got %s", wordsShape.schemaDocument)
+	}
+}
+
+func TestTurnRouterStartsWorkWhenVisibleContextAlreadyAnswersTheClarification(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		`{"reason":"The requester already named both measures.","userFacingReply":"","clarificationDisposition":"start_work","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"","expectedResults":[{"id":"comparison","type":"file","description":"A comparison of both requested measures","required":true,"acceptanceHints":["requested comparison"]}]}`,
+	}}
+	request := agentcontract.AgentRequest{
+		Prompt:           "Use both measures.",
+		ResponseLanguage: "en",
+		VisibleContext: agentcontract.VisibleContext{Messages: []agentcontract.VisibleContextMessage{{
+			Speaker: "Requester",
+			Text:    "Compare monthly revenue and headcount, and show both as chart lines.",
+		}}},
+		PendingChoice: agentcontract.PendingChoiceContext{
+			TaskRunID: "task-run-choice",
+			Question:  "Which measure should the comparison include?",
+			Options: []agentcontract.ChoiceReplyOption{
+				{Key: "revenue", Label: "Revenue"},
+				{Key: "headcount", Label: "Headcount"},
+			},
+		},
+		ActiveGoal: agentcontract.ActiveGoal{TaskRunID: "goal-1", OriginalInstruction: "Compare monthly revenue and headcount."},
+	}
+	turnRouter := turnRouterWith(languageModel, clarifyOutcome())
+
+	decision, errorValue := turnRouter.Plan(context.Background(), request)
+	if errorValue != nil {
+		t.Fatalf("expected enough visible context to start the work: %v", errorValue)
+	}
+	if decision.Route != agentcontract.TurnRouteStartTask || decision.Classification != agentcontract.IntakeClassificationBoundedTask || decision.TaskShape != agentcontract.TaskShapeMaintenanceTask {
+		t.Fatalf("expected the proposal to become bounded work, got %+v", decision)
+	}
+	if decision.ClarificationQuestion != "" || len(decision.ClarificationOptions) != 0 || len(decision.ExpectedResults) != 1 || decision.ExpectedResults[0].ID != "comparison" {
+		t.Fatalf("expected the question to clear while the requested outcome survives, got %+v", decision)
+	}
+	if len(languageModel.requests) != 1 {
+		t.Fatalf("expected one words call, got %d", len(languageModel.requests))
+	}
+	systemContent := ""
+	for _, message := range languageModel.requests[0].Messages {
+		if message.Role == "system" {
+			systemContent += message.Content + "\n"
+		}
+	}
+	if !strings.Contains(systemContent, "Proposed decision") || !strings.Contains(systemContent, "Compare monthly revenue and headcount") || !strings.Contains(systemContent, "Compare monthly revenue and headcount.") {
+		t.Fatalf("expected the proposal, visible context, and active goal to reach the words call, got %s", systemContent)
+	}
+}
+
+func TestClarificationRecoveryKeepsTheActiveTaskSteer(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		`{"reason":"The requester clarified the direction.","userFacingReply":"","clarificationDisposition":"start_work","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"Switch the chart to a line chart.","expectedResults":[{"id":"revised-chart","type":"file","description":"The requested chart revision","required":true,"acceptanceHints":["revised chart"]}]}`,
+	}}
+	outcome := clarifyOutcome()
+	outcome.TurnDecision.BusyRoute = agentcontract.BusyRouteSteer
+	request := agentcontract.AgentRequest{
+		Prompt:           "Use a line chart instead.",
+		ResponseLanguage: "en",
+		ActiveTask:       agentcontract.ActiveTaskContext{TaskRunID: "task-run-1", Prompt: "Prepare the report", Status: "running"},
+	}
+	decision, errorValue := turnRouterWith(languageModel, outcome).Plan(context.Background(), request)
+	if errorValue != nil {
+		t.Fatalf("expected clarification recovery to preserve the active task: %v", errorValue)
+	}
+	if decision.Route != agentcontract.TurnRouteStartTask || decision.BusyRoute != agentcontract.BusyRouteSteer || decision.BusyInstruction != "Switch the chart to a line chart." {
+		t.Fatalf("expected work recovery to retain the steer, got %+v", decision)
+	}
+	if !strings.Contains(languageModel.requests[0].Messages[0].Content, "Preserve that correction in busyInstruction") {
+		t.Fatalf("expected the clarification prompt to preserve steer semantics, got %s", languageModel.requests[0].Messages[0].Content)
+	}
+}
+
+func TestTurnRouterRepairsAnOldClarificationAnswerWithoutDisposition(t *testing.T) {
+	oldAnswer := `{"reason":"","userFacingReply":"","clarificationQuestion":"null","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`
+	validAnswer := `{"reason":"A time period is missing.","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"Which period should I use?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`
+	turnRouter, languageModel := routerWithAnswers([]string{oldAnswer, validAnswer}, []error{nil, nil}, clarifyOutcome())
+
+	decision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "Create a report.", ResponseLanguage: "en"})
+	if errorValue != nil {
+		t.Fatalf("expected the old answer to be repaired: %v", errorValue)
+	}
+	if len(languageModel.requests) != 2 || decision.Route != agentcontract.TurnRouteClarify || decision.ClarificationQuestion != "Which period should I use?" {
+		t.Fatalf("expected one repair to produce a real question, got %d calls and %+v", len(languageModel.requests), decision)
+	}
+}
+
+func TestTurnRouterHandsAnEmptyAskQuestionToTheAgentLoopAfterOneRepair(t *testing.T) {
+	oldAnswer := `{"reason":"","userFacingReply":"","clarificationQuestion":"null","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`
+	emptyAsk := `{"reason":"","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`
+	turnRouter, languageModel := routerWithAnswers([]string{oldAnswer, emptyAsk}, []error{nil, nil}, clarifyOutcome())
+
+	decision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "Create a report.", ResponseLanguage: "en"})
+	if errorValue != nil {
+		t.Fatalf("malformed clarification words must reach the agent loop: %v", errorValue)
+	}
+	if len(languageModel.requests) != 2 || decision.Route != agentcontract.TurnRouteStartTask || decision.RoutingFallbackReason == "" {
+		t.Fatalf("expected one repair followed by the existing fallback, got %d calls and %+v", len(languageModel.requests), decision)
+	}
+	if decision.ClarificationQuestion != "" || strings.Contains(decision.UserFacingReply, "null") {
+		t.Fatalf("a malformed placeholder must not be sent as a question, got %+v", decision)
 	}
 }
 
@@ -294,7 +420,7 @@ func routerWithAnswers(answers []string, errorValues []error, outcome intaketest
 
 func TestTurnRouterAsksOnceMoreWhenTheWordsAreNotTheSchemasObject(t *testing.T) {
 	turnRouter, languageModel := routerWithAnswers(
-		[]string{"", `{"reason":"r","userFacingReply":"","clarificationQuestion":"어느 분기인가요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`},
+		[]string{"", `{"reason":"r","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"어느 분기인가요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`},
 		[]error{proseAnswerError{}, nil},
 		clarifyOutcome(),
 	)
