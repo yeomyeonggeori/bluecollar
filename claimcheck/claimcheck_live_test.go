@@ -10,6 +10,7 @@ import (
 	"sort"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/evaltest"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -18,11 +19,12 @@ import (
 )
 
 const (
-	corpusVariable    = "BLUECOLLAR_CLAIM_CORPUS"
-	profileVariable   = "BLUECOLLAR_CLAIM_PROFILE"
-	writerVariable    = "BLUECOLLAR_CLAIM_WRITER_MODEL"
-	recomputeVariable = "BLUECOLLAR_CLAIM_RECOMPUTE"
-	writerEndpoint    = "https://openrouter.ai/api/v1"
+	corpusVariable       = "BLUECOLLAR_CLAIM_CORPUS"
+	profileVariable      = "BLUECOLLAR_CLAIM_PROFILE"
+	writerVariable       = "BLUECOLLAR_CLAIM_WRITER_MODEL"
+	writerEffortVariable = "BLUECOLLAR_CLAIM_WRITER_EFFORT"
+	recomputeVariable    = "BLUECOLLAR_CLAIM_RECOMPUTE"
+	writerEndpoint       = "https://openrouter.ai/api/v1"
 )
 
 type corpusDocument struct {
@@ -45,16 +47,17 @@ type corpusClaim struct {
 }
 
 type judgedDocument struct {
-	Document    string                        `json:"document"`
-	Path        string                        `json:"path"`
-	Probability map[string]map[string]float64 `json:"probabilities"`
-	Kind        map[string]string             `json:"kind"`
-	Defect      map[string]string             `json:"defect"`
-	PromptTotal int64                         `json:"promptTokens"`
-	CostUSD     float64                       `json:"costUSD"`
-	ExtraTokens int64                         `json:"recomputePromptTokens"`
-	ExtraCost   float64                       `json:"recomputeCostUSD"`
-	corpus      corpusDocument
+	Document     string                        `json:"document"`
+	Path         string                        `json:"path"`
+	Probability  map[string]map[string]float64 `json:"probabilities"`
+	Kind         map[string]string             `json:"kind"`
+	Defect       map[string]string             `json:"defect"`
+	PromptTotal  int64                         `json:"promptTokens"`
+	CostUSD      float64                       `json:"costUSD"`
+	ExtraTokens  int64                         `json:"recomputePromptTokens"`
+	ExtraCost    float64                       `json:"recomputeCostUSD"`
+	ExtraSeconds float64                       `json:"recomputeSeconds"`
+	corpus       corpusDocument
 }
 
 func TestLiveClaimKindsAgainstGradedDocuments(t *testing.T) {
@@ -131,10 +134,12 @@ func judgeCorpusDocument(t *testing.T, endpoint decisions.Endpoint, document cor
 		result.Defect[key] = verdict.Defect
 	}
 	if os.Getenv(recomputeVariable) == "1" {
+		recomputeStart := time.Now()
 		rechecked, errorValue := Recompute(context.Background(), profileFromEnvironment(t), writerFromEnvironment(t, endpoint), sources, judgment)
 		if errorValue != nil {
 			t.Errorf("%s: %v", document.Document, errorValue)
 		} else {
+			result.ExtraSeconds = time.Since(recomputeStart).Seconds()
 			markRecomputed(&result, judgment, rechecked)
 			result.ExtraTokens = rechecked.Usage.PromptTokens - judgment.Usage.PromptTokens
 			result.ExtraCost = rechecked.Usage.CostUSD - judgment.Usage.CostUSD
@@ -179,7 +184,11 @@ func writeResults(t *testing.T, output string, judged []judgedDocument) {
 func writerFromEnvironment(t *testing.T, endpoint decisions.Endpoint) model.LanguageModelProvider {
 	t.Helper()
 	name := evaltest.RequireInput(t, writerVariable, "name the language model that recomputes and rewrites, as OpenRouter spells it")
-	return openaicompatible.NewProvider(writerEndpoint, endpoint.APIKey, name)
+	provider, errorValue := openaicompatible.Endpoint{URL: writerEndpoint, ModelName: name, APIKey: endpoint.APIKey, ProviderSort: "throughput", ReasoningEffort: os.Getenv(writerEffortVariable)}.Provider()
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return provider
 }
 
 func markRecomputed(result *judgedDocument, before Judgment, after Judgment) {
