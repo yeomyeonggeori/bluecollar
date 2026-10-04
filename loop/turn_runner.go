@@ -1193,7 +1193,7 @@ func approvalObservationUserFacingMessage(observation turnObservation) string {
 
 func (agentTurnRunner *AgentTurnRunner) nextAction(ctx context.Context, taskRunID string, iterationRequest AgentTurnRequest, state agentTaskState, allowQualityCriteria bool) (turnActionDocument, error) {
 	actionState := agentTurnRunner.actionStateForIteration(iterationRequest, state, allowQualityCriteria)
-	actionState.Observations = agentTurnRunner.promptVisibleObservationsForAction(ctx, taskRunID, actionState)
+	actionState = agentTurnRunner.promptStateForAction(ctx, taskRunID, actionState)
 	return agentTurnRunner.decideActionPatiently(ctx, taskRunID, actionState)
 }
 

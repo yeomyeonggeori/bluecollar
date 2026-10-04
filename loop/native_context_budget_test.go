@@ -15,7 +15,7 @@ func TestNativeToolResultsTriggerExistingContextPruning(t *testing.T) {
 	services := newTurnRunnerTestServices(provider, options)
 	observations := numberedContextSummaryObservations(24, 18000, "catalog-row")
 	state := agentTaskState{Request: AgentTurnRequest{Prompt: "inspect the collection"}, Options: options, Observations: observations}
-	visible := services.runner.promptVisibleObservationsForAction(context.Background(), "run-1", state)
+	visible := services.runner.promptStateForAction(context.Background(), "run-1", state).Observations
 	if len(visible) != len(observations) {
 		t.Fatalf("expected the same observation IDs, got %d of %d", len(visible), len(observations))
 	}
@@ -55,7 +55,7 @@ func TestStructuredOnlyRequestsKeepTheirExistingContextBudget(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{}, options)
 	observations := numberedContextSummaryObservations(24, 18000, "catalog-row")
 	state := agentTaskState{Request: AgentTurnRequest{Prompt: "inspect the collection"}, Options: options, Observations: observations}
-	visible := services.runner.promptVisibleObservationsForAction(context.Background(), "run-1", state)
+	visible := services.runner.promptStateForAction(context.Background(), "run-1", state).Observations
 	for index, observation := range observations {
 		if visible[index].ContentText() != observation.ContentText() {
 			t.Fatal("structured-only requests were pruned despite carrying only summaries")
@@ -76,7 +76,7 @@ func TestNativeContextPruningPreservesActiveFailureEvidence(t *testing.T) {
 		t.Fatal("the fixture does not represent an unresolved tool failure")
 	}
 	state := agentTaskState{Request: AgentTurnRequest{Prompt: "inspect the collection"}, Options: options, Observations: observations}
-	visible := services.runner.promptVisibleObservationsForAction(context.Background(), "run-1", state)
+	visible := services.runner.promptStateForAction(context.Background(), "run-1", state).Observations
 	if len(visible[0].ContentText()) > taskContextPruneThresholdCharacters {
 		t.Fatal("older unpinned results were not pruned")
 	}
@@ -101,7 +101,7 @@ func TestNativeRequestsWithinBudgetKeepTheirToolResults(t *testing.T) {
 	services := newTurnRunnerTestServices(&nativeAgentActionLanguageModel{}, options)
 	observations := numberedContextSummaryObservations(12, 1000, "catalog-row")
 	state := agentTaskState{Request: AgentTurnRequest{Prompt: "inspect the collection"}, Options: options, Observations: observations}
-	visible := services.runner.promptVisibleObservationsForAction(context.Background(), "run-1", state)
+	visible := services.runner.promptStateForAction(context.Background(), "run-1", state).Observations
 	if len(visible) != len(observations) {
 		t.Fatal("a request within budget lost observations")
 	}

@@ -13,10 +13,10 @@ import (
 )
 
 func TestTaskContextCompactionTriggersOnlyOverBudget(t *testing.T) {
-	observations := numberedContextSummaryObservations(12, 2000, "history")
+	observations := numberedConversationSummaryObservations(12, 2000, "history")
 	summaryResponse := `{"goal":"ship","completedSteps":["rolled summary"],"artifacts":[],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":["finish"]}`
-	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	languageModel := &sequenceLanguageModel{contents: []string{completeSummaryResponseForTest(summaryResponse), finishMessageDocument("done")}}
+	services := newContextCompactionTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
 	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
@@ -31,7 +31,7 @@ func TestTaskContextCompactionTriggersOnlyOverBudget(t *testing.T) {
 	}
 
 	underBudgetModel := &sequenceLanguageModel{contents: []string{finishMessageDocument("done")}}
-	underBudgetServices := newTurnRunnerTestServices(underBudgetModel, TurnOptions{ContextWindowTokens: 1000000})
+	underBudgetServices := newContextCompactionTestServices(underBudgetModel, TurnOptions{ContextWindowTokens: 1000000})
 
 	_, errorValue = underBudgetServices.runner.nextAction(context.Background(), "task-2", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
@@ -47,10 +47,10 @@ func TestTaskContextCompactionTriggersOnlyOverBudget(t *testing.T) {
 }
 
 func TestTaskContextCompactionReplacesOldPromptObservationsOnly(t *testing.T) {
-	observations := numberedContextSummaryObservations(12, 2000, "OLD_MARKER")
+	observations := numberedConversationSummaryObservations(12, 2000, "OLD_MARKER")
 	summaryResponse := `{"goal":"ship","completedSteps":["rolled summary"],"artifacts":["/workspace/report/index.html"],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":["finish"]}`
-	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	languageModel := &sequenceLanguageModel{contents: []string{completeSummaryResponseForTest(summaryResponse), finishMessageDocument("done")}}
+	services := newContextCompactionTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
 	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
@@ -73,7 +73,7 @@ func TestTaskContextCompactionReplacesOldPromptObservationsOnly(t *testing.T) {
 }
 
 func TestTaskContextCompactionPinsActiveFailureDebt(t *testing.T) {
-	observations := numberedContextSummaryObservations(5, 2000, "OLD_MARKER")
+	observations := numberedConversationSummaryObservations(5, 2000, "OLD_MARKER")
 	failureObservation := newFailureObservation("obs-006", "continue", "bash", "ACTIVE_FAILURE_MARKER", toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, "bash")
 	failureObservation.ToolInputKey = "bash\x00failed"
 	observations = append(observations, failureObservation)
@@ -83,8 +83,8 @@ func TestTaskContextCompactionPinsActiveFailureDebt(t *testing.T) {
 		observations = append(observations, observation)
 	}
 	summaryResponse := `{"goal":"recover","completedSteps":["old work"],"artifacts":[],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":["ACTIVE_FAILURE_MARKER"],"nextPlan":["recover"]}`
-	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	languageModel := &sequenceLanguageModel{contents: []string{completeSummaryResponseForTest(summaryResponse), finishMessageDocument("done")}}
+	services := newContextCompactionTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
 	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "recover"}, agentTaskState{Observations: observations}, true)
 
@@ -101,9 +101,9 @@ func TestTaskContextCompactionPinsActiveFailureDebt(t *testing.T) {
 }
 
 func TestTaskContextSummaryTruncationIsNonFatal(t *testing.T) {
-	observations := numberedContextSummaryObservations(12, 2000, "OLD_MARKER")
+	observations := numberedConversationSummaryObservations(12, 2000, "OLD_MARKER")
 	languageModel := &truncatingSummaryLanguageModel{}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	services := newContextCompactionTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
 	_, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true)
 
@@ -158,14 +158,14 @@ func (languageModel *truncatingSummaryLanguageModel) GenerateStructuredResponse(
 }
 
 func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) {
-	observations := numberedContextSummaryObservations(40, 12, "SHORT_MARKER")
+	observations := numberedConversationSummaryObservations(40, 12, "SHORT_MARKER")
 	completedSteps := []string{}
 	for index := 0; index < 24; index++ {
 		completedSteps = append(completedSteps, `"`+strconv.Itoa(index)+" "+strings.Repeat("step ", 90)+`"`)
 	}
 	longSummary := `{"goal":"ship","completedSteps":[` + strings.Join(completedSteps, ",") + `],"artifacts":[],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":[]}`
-	languageModel := &sequenceLanguageModel{contents: []string{longSummary, finishMessageDocument("done"), finishMessageDocument("done")}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	languageModel := &sequenceLanguageModel{contents: []string{completeSummaryResponseForTest(longSummary), finishMessageDocument("done"), finishMessageDocument("done")}}
+	services := newContextCompactionTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 
 	if _, errorValue := services.runner.nextAction(context.Background(), "task-1", AgentTurnRequest{Prompt: "ship"}, agentTaskState{Observations: observations}, true); errorValue != nil {
 		t.Fatalf("expected action to succeed: %v", errorValue)
@@ -175,7 +175,7 @@ func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) 
 	if taskEventsContain(taskEvents, agentcontract.TaskEventAgentContextSummary, "step step") {
 		t.Fatal("a summary bigger than the observations it replaces is not compaction; recording it grows the prompt and calls the work done")
 	}
-	if !taskEventsContain(taskEvents, agentcontract.TaskEventAgentContextCompactionFreedNothing, "replacedCharacters") {
+	if !taskEventsContain(taskEvents, agentcontract.TaskEventAgentContextCompactionFreedNothing, "estimatedTokensBefore") {
 		t.Fatalf("a discarded pass has to say so, or the next reader sees a task that never tried: %d events", len(taskEvents))
 	}
 
@@ -194,10 +194,10 @@ func TestASummaryLongerThanWhatItReplacesIsDiscardedAndNotRetried(t *testing.T) 
 }
 
 func TestCompactedStepsAreSavedWhereTheAgentCanReadThemBack(t *testing.T) {
-	observations := numberedContextSummaryObservations(12, 2000, "OLD_MARKER")
+	observations := numberedConversationSummaryObservations(12, 2000, "OLD_MARKER")
 	summaryResponse := `{"goal":"ship","completedSteps":["rolled summary"],"artifacts":[],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":["finish"]}`
-	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	languageModel := &sequenceLanguageModel{contents: []string{completeSummaryResponseForTest(summaryResponse), finishMessageDocument("done")}}
+	services := newContextCompactionTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 	store := &recordingSpillStore{locator: "/workspace/private/people/p1/tmp/tasks/task-1/spill/compacted-steps.jsonl", bytes: 24000, hint: "Use grep or sed on that path."}
 	services.runner.UseToolResultSpillStore(store)
 
