@@ -30,7 +30,7 @@ type agent struct {
 	decisionPlanner  intake.DecisionPlanner
 	agentName        string
 	resolveTransport transportResolver
-	sessionUpdates   sessionUpdateSender
+	sessionUpdates   *deferredSessionUpdateSender
 
 	mutex             sync.Mutex
 	sessionsByID      map[acp.SessionId]*session
@@ -44,6 +44,7 @@ func newAgent(languageModel model.LanguageModelProvider, decisionModel model.Dec
 		decisionPlanner:  intake.NewDecisionPlanner(decisionModel, nil, nil),
 		agentName:        agentName,
 		resolveTransport: transportForServer,
+		sessionUpdates:   &deferredSessionUpdateSender{ready: make(chan struct{})},
 		sessionsByID:     map[acp.SessionId]*session{},
 	}
 }

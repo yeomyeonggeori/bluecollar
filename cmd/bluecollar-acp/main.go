@@ -29,7 +29,7 @@ func main() {
 	languageModel := openaicompatible.NewProvider(*endpointURL, *apiKey, *modelName)
 	runningAgent := newAgent(languageModel, decisions.ConfiguredDecisionModel(os.Stderr), *agentName)
 	connection := acp.NewAgentSideConnection(runningAgent, os.Stdout, os.Stdin)
-	runningAgent.sessionUpdates = connection
+	runningAgent.sessionUpdates.connect(connection)
 	<-connection.Done()
 }
 

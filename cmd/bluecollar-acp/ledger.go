@@ -13,6 +13,25 @@ type sessionUpdateSender interface {
 	SessionUpdate(context.Context, acp.SessionNotification) error
 }
 
+type deferredSessionUpdateSender struct {
+	ready  chan struct{}
+	sender sessionUpdateSender
+}
+
+func (sender *deferredSessionUpdateSender) connect(connection sessionUpdateSender) {
+	sender.sender = connection
+	close(sender.ready)
+}
+
+func (sender *deferredSessionUpdateSender) SessionUpdate(ctx context.Context, notification acp.SessionNotification) error {
+	select {
+	case <-sender.ready:
+		return sender.sender.SessionUpdate(ctx, notification)
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func sendLedgerEvent(ctx context.Context, sender sessionUpdateSender, sessionID acp.SessionId, rawTurnEvent taskstate.RawTurnEvent) {
 	if sender == nil {
 		return
