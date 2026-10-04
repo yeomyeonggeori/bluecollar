@@ -182,6 +182,9 @@ func TestAFinishWhoseOwnDeliveryReportsNotesRewritesTheReplyWithThem(t *testing.
 	if len(languageModel.rewritePrompts) != 1 || !strings.Contains(languageModel.rewritePrompts[0], quarterlyReviewDeliveryNotes[0]) || !strings.Contains(languageModel.rewritePrompts[0], quarterlyReviewDeliveryNotes[1]) || !strings.Contains(languageModel.rewritePrompts[0], quarterlyReviewReply) {
 		t.Fatalf("expected one rewrite told the reply and both notes its own delivery reported, got %q", languageModel.rewritePrompts)
 	}
+	if strings.Contains(languageModel.rewritePrompts[0], "ask the person to check it") {
+		t.Fatalf("expected no request to check the file when every asked change is met, got %q", languageModel.rewritePrompts[0])
+	}
 	if result.FinishMessage != "발표자료를 첨부했습니다. 표지 제목은 비워 두었습니다." || len(result.Attachments) != 1 {
 		t.Fatalf("expected the rewritten reply with its attachment, got %q %+v", result.FinishMessage, result.Attachments)
 	}

@@ -77,7 +77,7 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
 		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention tools, checks, evidence identifiers, prompts, or runtime details.",
-		finishReplyFilesFact(rewrite.carried),
+		finishReplyFilesFact(rewrite.carried, len(rewrite.unmet) > 0),
 		"Original request:\n"+completionReplyOriginalRequest(request),
 		"Reply:\n"+reply,
 	), "\n\n")
@@ -99,10 +99,14 @@ func bulletList(items []string) string {
 	return strings.Join(lines, "\n")
 }
 
-func finishReplyFilesFact(carried []toolcontract.FileAttachment) string {
+func finishReplyFilesFact(carried []toolcontract.FileAttachment, hasUnmetChanges bool) string {
 	filenames := failureReportAttachmentFilenames(carried)
 	if len(filenames) == 0 {
 		return "Files this reply carries: none. Do not say a file is attached."
 	}
-	return "Files this reply carries: " + strings.Join(filenames, ", ") + ". They were made and are attached to this reply, so never say they were not made, not attached or missing. Where an asked change is about one of these files, say the file is attached and ask the person to check it against those words, because the record does not show that it holds everything they ask for."
+	fact := "Files this reply carries: " + strings.Join(filenames, ", ") + ". They were made and are attached to this reply, so never say they were not made, not attached or missing."
+	if !hasUnmetChanges {
+		return fact
+	}
+	return fact + " Where an asked change is about one of these files, say the file is attached and ask the person to check it against those words, because the record does not show that it holds everything they ask for."
 }
