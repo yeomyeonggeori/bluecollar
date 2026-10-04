@@ -1091,10 +1091,12 @@ func TestRestoreAgentTaskStateRestoresTaskContextSummary(t *testing.T) {
 		Body: marshalEventBody(TaskContextSummary{
 			ObservationID:                 "context-summary-001",
 			CompactedThroughObservationID: "obs-007",
-			Goal:                          "finish the report",
-			CompletedSteps:                []string{"created the app"},
-			Artifacts:                     []string{"/workspace/report/index.html"},
-			NextPlan:                      []string{"run verification"},
+			TaskContextSummaryContent: TaskContextSummaryContent{
+				Goal:           "finish the report",
+				CompletedSteps: []string{"created the app"},
+				Artifacts:      []string{"/workspace/report/index.html"},
+				NextPlan:       []string{"run verification"},
+			},
 		}),
 	}}
 

@@ -43,7 +43,7 @@ func retainedContextCheckpoint() TaskContextSummary {
 		RetainedObservations:          []turnObservation{{ObservationID: "observation-4", Action: "continue", Tool: "note_write"}},
 		CompactedObservationCount:     3,
 		CompactedToolCallCount:        3,
-		Goal:                          "ship",
+		TaskContextSummaryContent:     TaskContextSummaryContent{Goal: "ship"},
 	}
 }
 
@@ -193,8 +193,8 @@ func TestRecompactingTheSameObservationDoesNotCountItTwice(t *testing.T) {
 func TestACompactedRunResumesToExactlyWhatTheModelWasLastShown(t *testing.T) {
 	observations := numberedContextSummaryObservations(14, 2000, "history")
 	summaryResponse := `{"goal":"ship","completedSteps":["rolled summary"],"artifacts":[],"keyDecisions":[],"exhaustedRecoveryRoutes":[],"activeFailureDebt":[],"nextPlan":["finish"]}`
-	languageModel := &sequenceLanguageModel{contents: []string{summaryResponse, finishMessageDocument("done")}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
+	languageModel := &sequenceLanguageModel{contents: []string{completeSummaryResponseForTest(summaryResponse), finishMessageDocument("done")}}
+	services := newContextCompactionTestServices(languageModel, TurnOptions{ContextWindowTokens: 1000})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "ship")
 	for _, observation := range observations {
 		services.taskEventService.AppendTaskEvent(taskRun.TaskRunID, "tool.note_write.result", marshalEventBody(observation))
@@ -205,7 +205,7 @@ func TestACompactedRunResumesToExactlyWhatTheModelWasLastShown(t *testing.T) {
 		Options:      services.runner.options,
 		Observations: observations,
 	}
-	promptObservations := services.runner.promptVisibleObservationsForAction(context.Background(), taskRun.TaskRunID, state)
+	promptObservations := services.runner.promptStateForAction(context.Background(), taskRun.TaskRunID, state).Observations
 
 	events := services.taskRunService.ListTaskEvent(taskRun.TaskRunID)
 	checkpoint := taskContextSummaryFromTaskEvents(events)

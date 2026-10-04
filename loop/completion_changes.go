@@ -51,6 +51,7 @@ func (agentTurnRunner *AgentTurnRunner) evaluateExpectedChanges(ctx context.Cont
 type observedDecisionModel struct {
 	decisionModel model.DecisionModel
 	observe       llmCallObserver
+	schemaName    string
 }
 
 func (observed observedDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
@@ -59,7 +60,7 @@ func (observed observedDecisionModel) Decide(ctx context.Context, request model.
 	record := agentcontract.LLMCallRecord{
 		Kind:             agentcontract.LLMCallKindDecision,
 		Transport:        "decisions",
-		SchemaName:       changeCheckSchemaName,
+		SchemaName:       firstNonEmptyString(observed.schemaName, changeCheckSchemaName),
 		Provider:         response.ProviderName,
 		UpstreamProvider: response.UpstreamProvider,
 		Model:            response.ModelName,
