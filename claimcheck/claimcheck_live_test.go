@@ -211,13 +211,17 @@ type treatedUnit struct {
 }
 
 type treatedDocument struct {
-	Document string        `json:"document"`
-	Form     string        `json:"form"`
-	Language string        `json:"language"`
-	Request  string        `json:"request"`
-	Original []string      `json:"original"`
-	After    []string      `json:"after"`
-	Changes  []treatedUnit `json:"changes"`
+	Document string         `json:"document"`
+	Form     string         `json:"form"`
+	Language string         `json:"language"`
+	Request  string         `json:"request"`
+	Original []string       `json:"original"`
+	After    []string       `json:"after"`
+	Changes  []treatedUnit  `json:"changes"`
+	Defects  map[string]int `json:"defects"`
+	Seconds  float64        `json:"treatSeconds"`
+	CostUSD  float64        `json:"treatCostUSD"`
+	Prompt   int64          `json:"treatPromptTokens"`
 }
 
 func TestLiveRewriteTreatmentOfFlaggedUnits(t *testing.T) {
@@ -271,11 +275,17 @@ func treatDocument(t *testing.T, profile Profile, endpoint decisions.Endpoint, w
 		t.Errorf("%s: %v", document.Document, errorValue)
 		return result
 	}
+	result.Defects = map[string]int{}
+	for _, verdict := range judgment.Flagged() {
+		result.Defects[verdict.Defect]++
+	}
+	treatStart := time.Now()
 	outcome, errorValue := Treat(context.Background(), profile, endpoint.DecisionModel(), writer, sources, judgment)
 	if errorValue != nil {
 		t.Errorf("%s: %v", document.Document, errorValue)
 		return result
 	}
+	result.Seconds, result.CostUSD, result.Prompt = time.Since(treatStart).Seconds(), outcome.Usage.CostUSD, outcome.Usage.PromptTokens
 	replaced := map[string]string{}
 	for _, claim := range outcome.Replaced {
 		replaced[claim.Path] = claim.Text

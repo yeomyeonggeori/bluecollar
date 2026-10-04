@@ -124,3 +124,35 @@ func TestTreatKeepsARequiredSlotWhoseRewriteIsFlagged(t *testing.T) {
 		t.Fatalf("expected the title kept, got %+v", outcome)
 	}
 }
+
+type proseWriter struct{ scriptedWriter }
+
+func (writer *proseWriter) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	writer.prompts = append(writer.prompts, request.Messages[0].Content)
+	return model.StructuredResponse{Content: "우리는 앞으로도 계속 함께해 주시기를 바랍니다.", Usage: model.Usage{PromptTokens: 7}}, nil
+}
+
+func TestAnUnreadableRewriteKeepsThatUnitAndNeverFailsTheDocument(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
+	writer := &proseWriter{}
+	sources := Sources{Request: []string{"Write a notice."}}
+	judgment, _ := Judge(context.Background(), decisionModel, sources, claimsOf("supercharge your day", "an invented fact", "Thank you"))
+	outcome, errorValue := Treat(context.Background(), CompactProfile, decisionModel, writer, sources, judgment)
+	if errorValue != nil {
+		t.Fatalf("expected the document to be treated, got %v", errorValue)
+	}
+	if len(outcome.Kept) != 1 || outcome.Kept[0].Path != "paragraphs[0]" || len(outcome.Blank) != 1 {
+		t.Fatalf("expected the unreadable hollow unit kept and the invented one blanked, got %+v", outcome)
+	}
+}
+
+func TestARewriteJudgedAnotherDefectKeepsTheOriginal(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
+	writer := &scriptedWriter{rewrite: func(string) string { return `{"text":"a wrong date"}` }}
+	sources := Sources{Request: []string{"Write a notice."}}
+	judgment, _ := Judge(context.Background(), decisionModel, sources, claimsOf("supercharge your day"))
+	outcome, _ := Treat(context.Background(), CompactProfile, decisionModel, writer, sources, judgment)
+	if len(outcome.Kept) != 1 || len(outcome.Replaced) != 0 {
+		t.Fatalf("expected the original kept, got %+v", outcome)
+	}
+}

@@ -9,8 +9,6 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-const TreatmentKeep Treatment = "keep"
-
 const rewriteSchema = `{"type":"object","properties":{"text":{"type":"string","description":"the rewritten unit, nothing else"}},"required":["text"],"additionalProperties":false}`
 
 type rewriteAnswer struct {
@@ -42,12 +40,9 @@ type Outcome struct {
 func Treat(ctx context.Context, profile Profile, decisionModel model.DecisionModel, writer model.LanguageModelProvider, sources Sources, judgment Judgment) (Outcome, error) {
 	outcome := Outcome{Blank: judgment.Treated(TreatmentBlank)}
 	toRewrite := judgment.Treated(TreatmentRewrite)
-	if len(toRewrite) == 0 {
+	rewrites, rewritten := outcome.rewritten(ctx, profile, writer, sources, toRewrite)
+	if len(rewrites) == 0 {
 		return outcome, nil
-	}
-	rewrites, errorValue := rewrittenClaims(ctx, profile, writer, sources, toRewrite, &outcome.Usage)
-	if errorValue != nil {
-		return Outcome{}, errorValue
 	}
 	rechecked, errorValue := JudgeWith(ctx, profile, decisionModel, sources, rewrites)
 	if errorValue != nil {
@@ -55,44 +50,38 @@ func Treat(ctx context.Context, profile Profile, decisionModel model.DecisionMod
 	}
 	outcome.Usage = addedUsage(outcome.Usage, rechecked.Usage)
 	for index, verdict := range rechecked.Verdicts {
-		outcome.place(profile, toRewrite[index], verdict)
+		outcome.place(rewritten[index], verdict)
 	}
 	return outcome, nil
 }
 
-func (outcome *Outcome) place(profile Profile, original Verdict, rewritten Verdict) {
+func (outcome *Outcome) place(original Verdict, rewrite Verdict) {
 	switch {
-	case strings.TrimSpace(rewritten.Text) == "" && original.IsFree:
-		outcome.Removed = append(outcome.Removed, original)
-	case strings.TrimSpace(rewritten.Text) == "":
-		outcome.fallBack(profile, original)
-	case rewritten.Defect == "":
-		outcome.Replaced = append(outcome.Replaced, rewritten.Claim)
-	default:
-		outcome.fallBack(profile, original)
-	}
-}
-
-func (outcome *Outcome) fallBack(profile Profile, original Verdict) {
-	if profile.Fallback[original.Defect] == TreatmentKeep {
+	case rewrite.Defect != "":
 		outcome.Kept = append(outcome.Kept, original)
-		return
+	case strings.TrimSpace(rewrite.Text) != "":
+		outcome.Replaced = append(outcome.Replaced, rewrite.Claim)
+	case original.IsFree:
+		outcome.Removed = append(outcome.Removed, original)
+	default:
+		outcome.Kept = append(outcome.Kept, original)
 	}
-	outcome.Blank = append(outcome.Blank, original)
 }
 
-func rewrittenClaims(ctx context.Context, profile Profile, writer model.LanguageModelProvider, sources Sources, verdicts []Verdict, spent *model.Usage) ([]Claim, error) {
-	rewrites := make([]Claim, 0, len(verdicts))
+func (outcome *Outcome) rewritten(ctx context.Context, profile Profile, writer model.LanguageModelProvider, sources Sources, verdicts []Verdict) ([]Claim, []Verdict) {
+	rewrites, rewritten := []Claim{}, []Verdict{}
 	for _, verdict := range verdicts {
 		var answer rewriteAnswer
 		usage, errorValue := askStructured(ctx, writer, rewriteSchema, rewritePrompt(profile, sources, verdict), &answer)
+		outcome.Usage = addedUsage(outcome.Usage, usage)
 		if errorValue != nil {
-			return nil, fmt.Errorf("rewrite %s: %w", verdict.Path, errorValue)
+			outcome.Kept = append(outcome.Kept, verdict)
+			continue
 		}
-		*spent = addedUsage(*spent, usage)
-		rewrites = append(rewrites, Claim{Path: verdict.Path, At: verdict.At, Text: strings.TrimSpace(answer.Text)})
+		rewrites = append(rewrites, Claim{Path: verdict.Path, At: verdict.At, Text: strings.TrimSpace(answer.Text), IsFree: verdict.IsFree})
+		rewritten = append(rewritten, verdict)
 	}
-	return rewrites, nil
+	return rewrites, rewritten
 }
 
 func rewritePrompt(profile Profile, sources Sources, verdict Verdict) string {
