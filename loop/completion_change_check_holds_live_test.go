@@ -4,7 +4,6 @@ package loop
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -16,18 +15,6 @@ import (
 )
 
 const holdsLiveAttempts = 3
-
-type deliveredOfficeFileCase struct {
-	Name         string          `json:"name"`
-	Prompt       string          `json:"prompt"`
-	Command      string          `json:"command"`
-	Output       string          `json:"output"`
-	Filename     string          `json:"filename"`
-	ContentType  string          `json:"contentType"`
-	SizeBytes    int64           `json:"sizeBytes"`
-	Holds        json.RawMessage `json:"holds"`
-	IsCarriedOut bool            `json:"isCarriedOut"`
-}
 
 type holdsVerdict struct {
 	carriedOut   float64
@@ -93,38 +80,6 @@ func liveDecisionEndpoint(t *testing.T) decisions.Endpoint {
 		t.Fatal("OPENROUTER_API_KEY is not set; this evaluation judges with the live decision model and has no offline answer")
 	}
 	return decisions.Endpoint{URL: decisions.DefaultEndpointURL, ModelName: firstNonEmptyString(os.Getenv("BLUECOLLAR_DECISION_MODEL"), "~typesafe/jev-latest"), APIKey: apiKey}
-}
-
-func deliveredOfficeFileCases(t *testing.T) []deliveredOfficeFileCase {
-	document, errorValue := os.ReadFile("testdata/change-check-delivered-office-files.json")
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	var cases []deliveredOfficeFileCase
-	if errorValue := json.Unmarshal(document, &cases); errorValue != nil || len(cases) == 0 {
-		t.Fatalf("no cases in testdata/change-check-delivered-office-files.json: %v", errorValue)
-	}
-	return cases
-}
-
-func deliveredOfficeFileTurn(liveCase deliveredOfficeFileCase) (AgentTurnRequest, []expectedChange, []turnObservation) {
-	devicePath := "/home/bc_person_sample/documents/" + liveCase.Filename
-	commandInput, _ := json.Marshal(map[string]string{"command": liveCase.Command})
-	commandData, _ := json.Marshal(map[string]any{"completed": true, "exitCode": 0, "output": liveCase.Output})
-	deliverInput, _ := json.Marshal(map[string]string{"path": "~/documents/" + liveCase.Filename})
-	deliverData, _ := json.Marshal(map[string]any{"deliveredPaths": []string{devicePath}, "attachmentCount": 1})
-	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: toolcontract.BashToolName, ToolInput: commandInput, Output: toolcontract.ToolOutput{Content: liveCase.Output, Data: commandData}},
-		{
-			ObservationID: "obs-002", Action: "continue", Tool: toolcontract.FileDeliverToolName, ToolInput: deliverInput,
-			Output:      toolcontract.ToolOutput{Content: "files delivered", Data: deliverData},
-			Effects:     []toolcontract.ResourceEffect{{ObjectType: "file", Effect: "attached", Path: devicePath}},
-			Attachments: []toolcontract.FileAttachment{{DevicePath: devicePath, Filename: liveCase.Filename, ContentType: liveCase.ContentType, SizeBytes: liveCase.SizeBytes, Holds: liveCase.Holds}},
-		},
-	}
-	request := AgentTurnRequest{Prompt: liveCase.Prompt, ToolSet: kernelFileToolSet(), EnvironmentNow: time.Date(2026, 10, 4, 15, 0, 0, 0, time.UTC)}
-	expected := []expectedChange{{Change: "file attached", Asked: strings.SplitN(liveCase.Prompt, "\n", 2)[0]}}
-	return request, expected, observations
 }
 
 func withoutHolds(observations []turnObservation) []turnObservation {
