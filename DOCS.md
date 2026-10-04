@@ -215,6 +215,7 @@ A harness that executes its own tools defeats the host's isolation boundary and 
 | `model/` | the language model and decision model ports; `openaicompatible`, `decisions` and `tape` implement them |
 | `loop/` | the agent loop, `AgentKernel` and `AgentTurnRunner` |
 | `intake/` | the turn router and the decision planner |
+| `claimcheck/` | asks the decision model whether each value a writer composed is supported by the request, its attachments and the runtime facts |
 | `taskstate/` | the in-memory services over task runs, steps, events and artifacts |
 | `turnstream/` | a view of a turn's ledger events as they are appended |
 | `trace/` | one run's ledger rendered as a single JSON or Markdown file |
@@ -381,6 +382,8 @@ type DecisionModel interface {
 ```
 
 A request carries a state document and a map of named questions. Each answer carries the chosen option with its probabilities, or a `noul` value between 0 and 1. `model/decisions` implements it against a decisions endpoint configured by `BLUECOLLAR_DECISION_ENDPOINT`, `BLUECOLLAR_DECISION_API_KEY` and `BLUECOLLAR_DECISION_MODEL`. Tool selection splits a catalog too large for one request into byte-balanced batches that never ask about a tool twice.
+
+`claimcheck.Judge` asks one choice question per composed value (`source`, `derived`, `expression` or `claim`), at most 60 to a call, with the kinds and the sources in the state once. A value found word for word in the request, an attachment or a runtime fact is not asked: that is an identifier-level match. `Unsupported` returns the values whose `claim` probability is at least 0.5. What to do with one is the host's decision; the package never edits a document. `go test -tags llmeval ./claimcheck` measures it against a labelled corpus named by `BLUECOLLAR_CLAIM_CORPUS` and fails without one.
 
 ## Ledger
 
