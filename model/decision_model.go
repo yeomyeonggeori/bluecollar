@@ -1,6 +1,7 @@
 package model
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -86,26 +87,47 @@ type decisionContentPartURL struct {
 }
 
 func (request DecisionRequest) WireState() (any, error) {
-	if len(request.Images) == 0 {
-		return request.State, nil
-	}
 	stateText, errorValue := request.stateText()
 	if errorValue != nil {
 		return nil, errorValue
 	}
-	parts := []decisionContentPart{{Type: "text", Text: stateText}}
-	for _, image := range request.Images {
-		parts = append(parts, decisionContentPart{Type: "image_url", ImageURL: &decisionContentPartURL{URL: image.dataURL()}})
+	if len(request.Images) > 0 {
+		return imageParts(stateText, request.Images), nil
 	}
-	return parts, nil
+	if _, isText := request.State.(string); isText {
+		return stateText, nil
+	}
+	return json.RawMessage(stateText), nil
 }
 
 func (request DecisionRequest) stateText() (string, error) {
 	if text, isText := request.State.(string); isText {
 		return text, nil
 	}
-	encoded, errorValue := json.Marshal(request.State)
+	encoded, errorValue := sortedKeyState(request.State)
 	return string(encoded), errorValue
+}
+
+func imageParts(stateText string, images []DecisionImage) []decisionContentPart {
+	parts := []decisionContentPart{{Type: "text", Text: stateText}}
+	for _, image := range images {
+		parts = append(parts, decisionContentPart{Type: "image_url", ImageURL: &decisionContentPartURL{URL: image.dataURL()}})
+	}
+	return parts
+}
+
+func sortedKeyState(state any) ([]byte, error) {
+	encoded, errorValue := json.Marshal(state)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	var generic any
+	if errorValue := decoder.Decode(&generic); errorValue != nil {
+		return nil, errorValue
+	}
+	return json.Marshal(generic)
 }
 
 func (image DecisionImage) dataURL() string {
