@@ -1,0 +1,1066 @@
+[
+ {
+  "name": "workbook: product sales",
+  "prompt": "[제품별 월 매출] 아래 데이터로 엑셀 파일을 만들어 주세요. 원본 시트, 제품별·월별 매출 집계표, 제품별 비중, 월별 매출 추이 막대 차트를 넣어 주세요.\n데이터 (2026년, 단위 만원):\n1월: 알파 1,240, 베타 860, 감마 410\n2월: 알파 1,310, 베타 820, 감마 455\n3월: 알파 1,185, 베타 905, 감마 470\n4월: 알파 1,420, 베타 940, 감마 430\n5월: 알파 1,505, 베타 990, 감마 515\n6월: 알파 1,460, 베타 1,015, 감마 540",
+  "command": "office create ~/documents/제품별_월_매출.xlsx ~/documents/제품별_월_매출.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/제품별_월_매출.xlsx; no blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/제품별_월_매출.xlsx\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [],\n    \"views\": [\n      {\n        \"title\": \"제품별·월별 매출 집계표\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"월\",\n            \"알파\",\n            \"베타\",\n            \"감마\",\n            \"합계\"\n          ],\n          [\n            \"1월\",\n            \"1,240\",\n            \"860\",\n            \"410\",\n            \"2,510\"\n          ],\n          [\n            \"2월\",\n            \"1,310\",\n            \"820\",\n            \"455\",\n            \"2,585\"\n          ],\n          [\n            \"3월\",\n            \"1,185\",\n            \"905\",\n            \"470\",\n            \"2,560\"\n          ],\n          [\n            \"4월\",\n            \"1,420\",\n            \"940\",\n            \"430\",\n            \"2,790\"\n          ],\n          [\n            \"5월\",\n            \"1,505\",\n            \"990\",\n            \"515\",\n            \"3,010\"\n          ],\n          [\n            \"6월\",\n            \"1,460\",\n            \"1,015\",\n            \"540\",\n            \"3,015\"\n          ],\n          [\n            \"합계\",\n            \"8,120\",\n            \"5,530\",\n            \"2,820\",\n            \"16,470\"\n          ]\n        ]\n      },\n      {\n        \"title\": \"제품별 비중\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"제품\",\n            \"매출액 (만원)\",\n            \"비중\"\n          ],\n          [\n            \"알파\",\n            \"8,120\",\n            \"49.3%\"\n          ],\n          [\n            \"베타\",\n            \"5,530\",\n            \"33.6%\"\n          ],\n          [\n            \"감마\",\n            \"2,820\",\n            \"17.1%\"\n          ],\n          [\n            \"합계\",\n            \"16,470\",\n            \"100.0%\"\n          ]\n        ]\n      }\n    ]\n  }\n}\n",
+  "filename": "제품별_월_매출.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 9420,
+  "holds": {
+   "tables": [
+    {
+     "name": "원본",
+     "columns": [
+      "월",
+      "제품",
+      "매출액"
+     ],
+     "rowCount": 18
+    }
+   ],
+   "views": [
+    {
+     "title": "제품별·월별 매출 집계표",
+     "sheet": "집계",
+     "rows": [
+      [
+       "월",
+       "알파",
+       "베타",
+       "감마",
+       "합계"
+      ],
+      [
+       "1월",
+       "1,240",
+       "860",
+       "410",
+       "2,510"
+      ],
+      [
+       "2월",
+       "1,310",
+       "820",
+       "455",
+       "2,585"
+      ],
+      [
+       "3월",
+       "1,185",
+       "905",
+       "470",
+       "2,560"
+      ],
+      [
+       "4월",
+       "1,420",
+       "940",
+       "430",
+       "2,790"
+      ],
+      [
+       "5월",
+       "1,505",
+       "990",
+       "515",
+       "3,010"
+      ],
+      [
+       "6월",
+       "1,460",
+       "1,015",
+       "540",
+       "3,015"
+      ],
+      [
+       "합계",
+       "8,120",
+       "5,530",
+       "2,820",
+       "16,470"
+      ]
+     ]
+    },
+    {
+     "title": "제품별 비중",
+     "sheet": "집계",
+     "rows": [
+      [
+       "제품",
+       "매출액 (만원)",
+       "비중"
+      ],
+      [
+       "알파",
+       "8,120",
+       "49.3%"
+      ],
+      [
+       "베타",
+       "5,530",
+       "33.6%"
+      ],
+      [
+       "감마",
+       "2,820",
+       "17.1%"
+      ],
+      [
+       "합계",
+       "16,470",
+       "100.0%"
+      ]
+     ]
+    }
+   ],
+   "charts": [
+    {
+     "view": "제품별·월별 매출 집계표",
+     "type": "column",
+     "title": "월별 매출 추이"
+    }
+   ],
+   "blanks": []
+  },
+  "isCarriedOut": true
+ },
+ {
+  "name": "workbook: product sales with a mistyped source value",
+  "prompt": "[제품별 월 매출] 아래 데이터로 엑셀 파일을 만들어 주세요. 원본 시트, 제품별·월별 매출 집계표, 제품별 비중, 월별 매출 추이 막대 차트를 넣어 주세요.\n데이터 (2026년, 단위 만원):\n1월: 알파 1,240, 베타 860, 감마 410\n2월: 알파 1,310, 베타 820, 감마 455\n3월: 알파 1,185, 베타 905, 감마 470\n4월: 알파 1,420, 베타 940, 감마 430\n5월: 알파 1,505, 베타 990, 감마 515\n6월: 알파 1,460, 베타 1,015, 감마 540",
+  "command": "office create ~/documents/제품별_월_매출.xlsx ~/documents/제품별_월_매출.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/제품별_월_매출.xlsx; no blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/제품별_월_매출.xlsx\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [],\n    \"views\": [\n      {\n        \"title\": \"제품별·월별 매출 집계표\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"월\",\n            \"알파\",\n            \"베타\",\n            \"감마\",\n            \"합계\"\n          ],\n          [\n            \"1월\",\n            \"1,420\",\n            \"860\",\n            \"410\",\n            \"2,690\"\n          ],\n          [\n            \"2월\",\n            \"1,310\",\n            \"820\",\n            \"455\",\n            \"2,585\"\n          ],\n          [\n            \"3월\",\n            \"1,185\",\n            \"905\",\n            \"470\",\n            \"2,560\"\n          ],\n          [\n            \"4월\",\n            \"1,420\",\n            \"940\",\n            \"430\",\n            \"2,790\"\n          ],\n          [\n            \"5월\",\n            \"1,505\",\n            \"990\",\n            \"515\",\n            \"3,010\"\n          ],\n          [\n            \"6월\",\n            \"1,460\",\n            \"1,015\",\n            \"540\",\n            \"3,015\"\n          ],\n          [\n            \"합계\",\n            \"8,300\",\n            \"5,530\",\n            \"2,820\",\n            \"16,650\"\n          ]\n        ]\n      },\n      {\n        \"title\": \"제품별 비중\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"제품\",\n            \"매출액 (만원)\",\n            \"비중\"\n          ],\n          [\n            \"알파\",\n            \"8,300\",\n            \"49.8%\"\n          ],\n          [\n            \"베타\",\n            \"5,530\",\n            \"33.2%\"\n          ],\n          [\n            \"감마\",\n            \"2,820\",\n            \"16.9%\"\n          ],\n          [\n            \"합계\",\n            \"16,650\",\n            \"100.0%\"\n          ]\n        ]\n      }\n    ]\n  }\n}\n",
+  "filename": "제품별_월_매출.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 9391,
+  "holds": {
+   "tables": [
+    {
+     "name": "원본",
+     "columns": [
+      "월",
+      "제품",
+      "매출액"
+     ],
+     "rowCount": 18
+    }
+   ],
+   "views": [
+    {
+     "title": "제품별·월별 매출 집계표",
+     "sheet": "집계",
+     "rows": [
+      [
+       "월",
+       "알파",
+       "베타",
+       "감마",
+       "합계"
+      ],
+      [
+       "1월",
+       "1,420",
+       "860",
+       "410",
+       "2,690"
+      ],
+      [
+       "2월",
+       "1,310",
+       "820",
+       "455",
+       "2,585"
+      ],
+      [
+       "3월",
+       "1,185",
+       "905",
+       "470",
+       "2,560"
+      ],
+      [
+       "4월",
+       "1,420",
+       "940",
+       "430",
+       "2,790"
+      ],
+      [
+       "5월",
+       "1,505",
+       "990",
+       "515",
+       "3,010"
+      ],
+      [
+       "6월",
+       "1,460",
+       "1,015",
+       "540",
+       "3,015"
+      ],
+      [
+       "합계",
+       "8,300",
+       "5,530",
+       "2,820",
+       "16,650"
+      ]
+     ]
+    },
+    {
+     "title": "제품별 비중",
+     "sheet": "집계",
+     "rows": [
+      [
+       "제품",
+       "매출액 (만원)",
+       "비중"
+      ],
+      [
+       "알파",
+       "8,300",
+       "49.8%"
+      ],
+      [
+       "베타",
+       "5,530",
+       "33.2%"
+      ],
+      [
+       "감마",
+       "2,820",
+       "16.9%"
+      ],
+      [
+       "합계",
+       "16,650",
+       "100.0%"
+      ]
+     ]
+    }
+   ],
+   "charts": [
+    {
+     "view": "제품별·월별 매출 집계표",
+     "type": "column",
+     "title": "월별 매출 추이"
+    }
+   ],
+   "blanks": []
+  },
+  "isCarriedOut": false
+ },
+ {
+  "name": "workbook: budget vs actual",
+  "prompt": "Build a spreadsheet of our Q3 budget against actual spend, in USD. Put the data on its own sheet, add a summary with the variance and variance % per category plus a total, and a column chart comparing budget and actual.\nCloud: budget 12,000, actual 13,850\nTravel: budget 4,000, actual 3,120\nTraining: budget 2,500, actual 2,980\nHardware: budget 8,000, actual 7,450",
+  "command": "office create ~/documents/q3-budget-vs-actual.xlsx ~/documents/q3-budget-vs-actual.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/q3-budget-vs-actual.xlsx; no blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/q3-budget-vs-actual.xlsx\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [],\n    \"views\": [\n      {\n        \"title\": \"Budget vs actual\",\n        \"sheet\": \"Summary\",\n        \"rows\": [\n          [\n            \"Category\",\n            \"Budget (USD)\",\n            \"Actual (USD)\",\n            \"Variance\",\n            \"Variance %\"\n          ],\n          [\n            \"Cloud\",\n            \"$12,000\",\n            \"$13,850\",\n            \"$1,850\",\n            \"15.4%\"\n          ],\n          [\n            \"Travel\",\n            \"$4,000\",\n            \"$3,120\",\n            \"-$880\",\n            \"-22.0%\"\n          ],\n          [\n            \"Training\",\n            \"$2,500\",\n            \"$2,980\",\n            \"$480\",\n            \"19.2%\"\n          ],\n          [\n            \"Hardware\",\n            \"$8,000\",\n            \"$7,450\",\n            \"-$550\",\n            \"-6.9%\"\n          ],\n          [\n            \"Total\",\n            \"$26,500\",\n            \"$27,400\",\n            \"$900\",\n            \"3.4%\"\n          ]\n        ]\n      }\n    ]\n  }\n}\n",
+  "filename": "q3-budget-vs-actual.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 8598,
+  "holds": {
+   "tables": [
+    {
+     "name": "Data",
+     "columns": [
+      "Category",
+      "Budget",
+      "Actual"
+     ],
+     "rowCount": 4
+    }
+   ],
+   "views": [
+    {
+     "title": "Budget vs actual",
+     "sheet": "Summary",
+     "rows": [
+      [
+       "Category",
+       "Budget (USD)",
+       "Actual (USD)",
+       "Variance",
+       "Variance %"
+      ],
+      [
+       "Cloud",
+       "$12,000",
+       "$13,850",
+       "$1,850",
+       "15.4%"
+      ],
+      [
+       "Travel",
+       "$4,000",
+       "$3,120",
+       "-$880",
+       "-22.0%"
+      ],
+      [
+       "Training",
+       "$2,500",
+       "$2,980",
+       "$480",
+       "19.2%"
+      ],
+      [
+       "Hardware",
+       "$8,000",
+       "$7,450",
+       "-$550",
+       "-6.9%"
+      ],
+      [
+       "Total",
+       "$26,500",
+       "$27,400",
+       "$900",
+       "3.4%"
+      ]
+     ]
+    }
+   ],
+   "charts": [
+    {
+     "view": "Budget vs actual",
+     "type": "column",
+     "title": "Budget vs actual"
+    }
+   ],
+   "blanks": []
+  },
+  "isCarriedOut": true
+ },
+ {
+  "name": "workbook: budget vs actual without the asked chart",
+  "prompt": "Build a spreadsheet of our Q3 budget against actual spend, in USD. Put the data on its own sheet, add a summary with the variance and variance % per category plus a total, and a column chart comparing budget and actual.\nCloud: budget 12,000, actual 13,850\nTravel: budget 4,000, actual 3,120\nTraining: budget 2,500, actual 2,980\nHardware: budget 8,000, actual 7,450",
+  "command": "office create ~/documents/q3-budget-vs-actual.xlsx ~/documents/q3-budget-vs-actual.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/q3-budget-vs-actual.xlsx; no blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/q3-budget-vs-actual.xlsx\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [],\n    \"views\": [\n      {\n        \"title\": \"Budget vs actual\",\n        \"sheet\": \"Summary\",\n        \"rows\": [\n          [\n            \"Category\",\n            \"Budget (USD)\",\n            \"Actual (USD)\",\n            \"Variance\",\n            \"Variance %\"\n          ],\n          [\n            \"Cloud\",\n            \"$12,000\",\n            \"$13,850\",\n            \"$1,850\",\n            \"15.4%\"\n          ],\n          [\n            \"Travel\",\n            \"$4,000\",\n            \"$3,120\",\n            \"-$880\",\n            \"-22.0%\"\n          ],\n          [\n            \"Training\",\n            \"$2,500\",\n            \"$2,980\",\n            \"$480\",\n            \"19.2%\"\n          ],\n          [\n            \"Hardware\",\n            \"$8,000\",\n            \"$7,450\",\n            \"-$550\",\n            \"-6.9%\"\n          ],\n          [\n            \"Total\",\n            \"$26,500\",\n            \"$27,400\",\n            \"$900\",\n            \"3.4%\"\n          ]\n        ]\n      }\n    ]\n  }\n}\n",
+  "filename": "q3-budget-vs-actual.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 6614,
+  "holds": {
+   "tables": [
+    {
+     "name": "Data",
+     "columns": [
+      "Category",
+      "Budget",
+      "Actual"
+     ],
+     "rowCount": 4
+    }
+   ],
+   "views": [
+    {
+     "title": "Budget vs actual",
+     "sheet": "Summary",
+     "rows": [
+      [
+       "Category",
+       "Budget (USD)",
+       "Actual (USD)",
+       "Variance",
+       "Variance %"
+      ],
+      [
+       "Cloud",
+       "$12,000",
+       "$13,850",
+       "$1,850",
+       "15.4%"
+      ],
+      [
+       "Travel",
+       "$4,000",
+       "$3,120",
+       "-$880",
+       "-22.0%"
+      ],
+      [
+       "Training",
+       "$2,500",
+       "$2,980",
+       "$480",
+       "19.2%"
+      ],
+      [
+       "Hardware",
+       "$8,000",
+       "$7,450",
+       "-$550",
+       "-6.9%"
+      ],
+      [
+       "Total",
+       "$26,500",
+       "$27,400",
+       "$900",
+       "3.4%"
+      ]
+     ]
+    }
+   ],
+   "charts": [],
+   "blanks": []
+  },
+  "isCarriedOut": false
+ },
+ {
+  "name": "workbook: headcount",
+  "prompt": "부서별 분기 인원 현황을 엑셀로 정리해 주세요. 원본 데이터 시트와, 연도·분기별 부서 인원 집계표, 분기별 전년 동기 대비 증감률 표, 분기 인원 추이 꺾은선 차트가 필요합니다.\n2025 1분기: 개발 42명, 영업 18명, 운영 25명\n2025 2분기: 개발 44명, 영업 19명, 운영 26명\n2025 3분기: 개발 47명, 영업 19명, 운영 28명\n2025 4분기: 개발 49명, 영업 21명, 운영 28명\n2026 1분기: 개발 51명, 영업 22명, 운영 30명\n2026 2분기: 개발 55명, 영업 22명, 운영 31명",
+  "command": "office create ~/documents/부서별_분기_인원.xlsx ~/documents/부서별_분기_인원.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/부서별_분기_인원.xlsx; no blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/부서별_분기_인원.xlsx\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [],\n    \"views\": [\n      {\n        \"title\": \"연도·분기별 부서 인원\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"연도\",\n            \"분기\",\n            \"개발\",\n            \"영업\",\n            \"운영\",\n            \"합계\"\n          ],\n          [\n            \"2025\",\n            \"1분기\",\n            \"42\",\n            \"18\",\n            \"25\",\n            \"85\"\n          ],\n          [\n            \"2025\",\n            \"2분기\",\n            \"44\",\n            \"19\",\n            \"26\",\n            \"89\"\n          ],\n          [\n            \"2025\",\n            \"3분기\",\n            \"47\",\n            \"19\",\n            \"28\",\n            \"94\"\n          ],\n          [\n            \"2025\",\n            \"4분기\",\n            \"49\",\n            \"21\",\n            \"28\",\n            \"98\"\n          ],\n          [\n            \"2026\",\n            \"1분기\",\n            \"51\",\n            \"22\",\n            \"30\",\n            \"103\"\n          ],\n          [\n            \"2026\",\n            \"2분기\",\n            \"55\",\n            \"22\",\n            \"31\",\n            \"108\"\n          ]\n        ]\n      },\n      {\n        \"title\": \"분기별 전년 동기 대비 증감률\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"분기\",\n            \"2025\",\n            \"2026\",\n            \"전년 동기 대비 증감률\"\n          ],\n          [\n            \"1분기\",\n            \"85\",\n            \"103\",\n            \"21.2%\"\n          ],\n          [\n            \"2분기\",\n            \"89\",\n            \"108\",\n            \"21.3%\"\n          ],\n          [\n            \"3분기\",\n            \"94\",\n            \"\",\n            \"\"\n          ],\n          [\n            \"4분기\",\n            \"98\",\n            \"\",\n            \"\"\n          ]\n        ],\n        \"notes\": [\n          \"범위가 다릅니다: 2026 (분기 4개 중 2개)\"\n        ]\n      }\n    ]\n  }\n}\n",
+  "filename": "부서별_분기_인원.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 9779,
+  "holds": {
+   "tables": [
+    {
+     "name": "원본",
+     "columns": [
+      "연도",
+      "분기",
+      "부서",
+      "인원"
+     ],
+     "rowCount": 18
+    }
+   ],
+   "views": [
+    {
+     "title": "연도·분기별 부서 인원",
+     "sheet": "집계",
+     "rows": [
+      [
+       "연도",
+       "분기",
+       "개발",
+       "영업",
+       "운영",
+       "합계"
+      ],
+      [
+       "2025",
+       "1분기",
+       "42",
+       "18",
+       "25",
+       "85"
+      ],
+      [
+       "2025",
+       "2분기",
+       "44",
+       "19",
+       "26",
+       "89"
+      ],
+      [
+       "2025",
+       "3분기",
+       "47",
+       "19",
+       "28",
+       "94"
+      ],
+      [
+       "2025",
+       "4분기",
+       "49",
+       "21",
+       "28",
+       "98"
+      ],
+      [
+       "2026",
+       "1분기",
+       "51",
+       "22",
+       "30",
+       "103"
+      ],
+      [
+       "2026",
+       "2분기",
+       "55",
+       "22",
+       "31",
+       "108"
+      ]
+     ]
+    },
+    {
+     "title": "분기별 전년 동기 대비 증감률",
+     "sheet": "집계",
+     "rows": [
+      [
+       "분기",
+       "2025",
+       "2026",
+       "전년 동기 대비 증감률"
+      ],
+      [
+       "1분기",
+       "85",
+       "103",
+       "21.2%"
+      ],
+      [
+       "2분기",
+       "89",
+       "108",
+       "21.3%"
+      ],
+      [
+       "3분기",
+       "94",
+       "",
+       ""
+      ],
+      [
+       "4분기",
+       "98",
+       "",
+       ""
+      ]
+     ],
+     "notes": [
+      "범위가 다릅니다: 2026 (분기 4개 중 2개)"
+     ]
+    }
+   ],
+   "charts": [
+    {
+     "view": "연도·분기별 부서 인원",
+     "type": "line",
+     "title": "분기 인원 추이"
+    }
+   ],
+   "blanks": []
+  },
+  "isCarriedOut": true
+ },
+ {
+  "name": "workbook: headcount without the year-over-year view",
+  "prompt": "부서별 분기 인원 현황을 엑셀로 정리해 주세요. 원본 데이터 시트와, 연도·분기별 부서 인원 집계표, 분기별 전년 동기 대비 증감률 표, 분기 인원 추이 꺾은선 차트가 필요합니다.\n2025 1분기: 개발 42명, 영업 18명, 운영 25명\n2025 2분기: 개발 44명, 영업 19명, 운영 26명\n2025 3분기: 개발 47명, 영업 19명, 운영 28명\n2025 4분기: 개발 49명, 영업 21명, 운영 28명\n2026 1분기: 개발 51명, 영업 22명, 운영 30명\n2026 2분기: 개발 55명, 영업 22명, 운영 31명",
+  "command": "office create ~/documents/부서별_분기_인원.xlsx ~/documents/부서별_분기_인원.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/부서별_분기_인원.xlsx; no blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/부서별_분기_인원.xlsx\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [],\n    \"views\": [\n      {\n        \"title\": \"연도·분기별 부서 인원\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"연도\",\n            \"분기\",\n            \"개발\",\n            \"영업\",\n            \"운영\",\n            \"합계\"\n          ],\n          [\n            \"2025\",\n            \"1분기\",\n            \"42\",\n            \"18\",\n            \"25\",\n            \"85\"\n          ],\n          [\n            \"2025\",\n            \"2분기\",\n            \"44\",\n            \"19\",\n            \"26\",\n            \"89\"\n          ],\n          [\n            \"2025\",\n            \"3분기\",\n            \"47\",\n            \"19\",\n            \"28\",\n            \"94\"\n          ],\n          [\n            \"2025\",\n            \"4분기\",\n            \"49\",\n            \"21\",\n            \"28\",\n            \"98\"\n          ],\n          [\n            \"2026\",\n            \"1분기\",\n            \"51\",\n            \"22\",\n            \"30\",\n            \"103\"\n          ],\n          [\n            \"2026\",\n            \"2분기\",\n            \"55\",\n            \"22\",\n            \"31\",\n            \"108\"\n          ]\n        ]\n      }\n    ]\n  }\n}\n",
+  "filename": "부서별_분기_인원.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 9239,
+  "holds": {
+   "tables": [
+    {
+     "name": "원본",
+     "columns": [
+      "연도",
+      "분기",
+      "부서",
+      "인원"
+     ],
+     "rowCount": 18
+    }
+   ],
+   "views": [
+    {
+     "title": "연도·분기별 부서 인원",
+     "sheet": "집계",
+     "rows": [
+      [
+       "연도",
+       "분기",
+       "개발",
+       "영업",
+       "운영",
+       "합계"
+      ],
+      [
+       "2025",
+       "1분기",
+       "42",
+       "18",
+       "25",
+       "85"
+      ],
+      [
+       "2025",
+       "2분기",
+       "44",
+       "19",
+       "26",
+       "89"
+      ],
+      [
+       "2025",
+       "3분기",
+       "47",
+       "19",
+       "28",
+       "94"
+      ],
+      [
+       "2025",
+       "4분기",
+       "49",
+       "21",
+       "28",
+       "98"
+      ],
+      [
+       "2026",
+       "1분기",
+       "51",
+       "22",
+       "30",
+       "103"
+      ],
+      [
+       "2026",
+       "2분기",
+       "55",
+       "22",
+       "31",
+       "108"
+      ]
+     ]
+    }
+   ],
+   "charts": [
+    {
+     "view": "연도·분기별 부서 인원",
+     "type": "line",
+     "title": "분기 인원 추이"
+    }
+   ],
+   "blanks": []
+  },
+  "isCarriedOut": false
+ },
+ {
+  "name": "workbook: headcount under the wrong years",
+  "prompt": "부서별 분기 인원 현황을 엑셀로 정리해 주세요. 원본 데이터 시트와, 연도·분기별 부서 인원 집계표, 분기별 전년 동기 대비 증감률 표, 분기 인원 추이 꺾은선 차트가 필요합니다.\n2025 1분기: 개발 42명, 영업 18명, 운영 25명\n2025 2분기: 개발 44명, 영업 19명, 운영 26명\n2025 3분기: 개발 47명, 영업 19명, 운영 28명\n2025 4분기: 개발 49명, 영업 21명, 운영 28명\n2026 1분기: 개발 51명, 영업 22명, 운영 30명\n2026 2분기: 개발 55명, 영업 22명, 운영 31명",
+  "command": "office create ~/documents/부서별_분기_인원.xlsx ~/documents/부서별_분기_인원.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/부서별_분기_인원.xlsx; no blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/부서별_분기_인원.xlsx\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [],\n    \"views\": [\n      {\n        \"title\": \"연도·분기별 부서 인원\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"연도\",\n            \"분기\",\n            \"개발\",\n            \"영업\",\n            \"운영\",\n            \"합계\"\n          ],\n          [\n            \"2023\",\n            \"1분기\",\n            \"42\",\n            \"18\",\n            \"25\",\n            \"85\"\n          ],\n          [\n            \"2023\",\n            \"2분기\",\n            \"44\",\n            \"19\",\n            \"26\",\n            \"89\"\n          ],\n          [\n            \"2023\",\n            \"3분기\",\n            \"47\",\n            \"19\",\n            \"28\",\n            \"94\"\n          ],\n          [\n            \"2023\",\n            \"4분기\",\n            \"49\",\n            \"21\",\n            \"28\",\n            \"98\"\n          ],\n          [\n            \"2024\",\n            \"1분기\",\n            \"51\",\n            \"22\",\n            \"30\",\n            \"103\"\n          ],\n          [\n            \"2024\",\n            \"2분기\",\n            \"55\",\n            \"22\",\n            \"31\",\n            \"108\"\n          ]\n        ]\n      },\n      {\n        \"title\": \"분기별 전년 동기 대비 증감률\",\n        \"sheet\": \"집계\",\n        \"rows\": [\n          [\n            \"분기\",\n            \"2023\",\n            \"2024\",\n            \"전년 동기 대비 증감률\"\n          ],\n          [\n            \"1분기\",\n            \"85\",\n            \"103\",\n            \"21.2%\"\n          ],\n          [\n            \"2분기\",\n            \"89\",\n            \"108\",\n            \"21.3%\"\n          ],\n          [\n            \"3분기\",\n            \"94\",\n            \"\",\n            \"\"\n          ],\n          [\n            \"4분기\",\n            \"98\",\n            \"\",\n            \"\"\n          ]\n        ],\n        \"notes\": [\n          \"범위가 다릅니다: 2024 (분기 4개 중 2개)\"\n        ]\n      }\n    ]\n  }\n}\n",
+  "filename": "부서별_분기_인원.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 9779,
+  "holds": {
+   "tables": [
+    {
+     "name": "원본",
+     "columns": [
+      "연도",
+      "분기",
+      "부서",
+      "인원"
+     ],
+     "rowCount": 18
+    }
+   ],
+   "views": [
+    {
+     "title": "연도·분기별 부서 인원",
+     "sheet": "집계",
+     "rows": [
+      [
+       "연도",
+       "분기",
+       "개발",
+       "영업",
+       "운영",
+       "합계"
+      ],
+      [
+       "2023",
+       "1분기",
+       "42",
+       "18",
+       "25",
+       "85"
+      ],
+      [
+       "2023",
+       "2분기",
+       "44",
+       "19",
+       "26",
+       "89"
+      ],
+      [
+       "2023",
+       "3분기",
+       "47",
+       "19",
+       "28",
+       "94"
+      ],
+      [
+       "2023",
+       "4분기",
+       "49",
+       "21",
+       "28",
+       "98"
+      ],
+      [
+       "2024",
+       "1분기",
+       "51",
+       "22",
+       "30",
+       "103"
+      ],
+      [
+       "2024",
+       "2분기",
+       "55",
+       "22",
+       "31",
+       "108"
+      ]
+     ]
+    },
+    {
+     "title": "분기별 전년 동기 대비 증감률",
+     "sheet": "집계",
+     "rows": [
+      [
+       "분기",
+       "2023",
+       "2024",
+       "전년 동기 대비 증감률"
+      ],
+      [
+       "1분기",
+       "85",
+       "103",
+       "21.2%"
+      ],
+      [
+       "2분기",
+       "89",
+       "108",
+       "21.3%"
+      ],
+      [
+       "3분기",
+       "94",
+       "",
+       ""
+      ],
+      [
+       "4분기",
+       "98",
+       "",
+       ""
+      ]
+     ],
+     "notes": [
+      "범위가 다릅니다: 2024 (분기 4개 중 2개)"
+     ]
+    }
+   ],
+   "charts": [
+    {
+     "view": "연도·분기별 부서 인원",
+     "type": "line",
+     "title": "분기 인원 추이"
+    }
+   ],
+   "blanks": []
+  },
+  "isCarriedOut": false
+ },
+ {
+  "name": "form: quote",
+  "prompt": "(주)예시상사 앞으로 견적서 만들어 주세요. 담당은 박예시 과장님입니다. 품목은 노트북 3대 대당 1,450,000원, 모니터 3대 대당 320,000원이고, 유효기간 30일, 납기는 계약 후 2주, 납품장소는 고객사 본사, 결제조건은 납품 후 30일 현금입니다.",
+  "command": "office merge kr/quote ~/documents/견적서_예시상사.values.json ~/documents/견적서_예시상사.pdf",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled kr/quote into /home/bc_person_sample/documents/견적서_예시상사.pdf; 1 blank fields for the person to fill by hand or send: number (document.number)\",\n  \"outputPath\": \"/home/bc_person_sample/documents/견적서_예시상사.pdf\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [\n      {\n        \"field\": \"number\",\n        \"label\": \"number (document.number)\"\n      }\n    ],\n    \"emptyOptional\": [\n      {\n        \"field\": \"recipientRegistrationNumber\",\n        \"label\": \"수신처 사업자등록번호\"\n      },\n      {\n        \"field\": \"items[].spec\",\n        \"label\": \"품목: 규격, empty in 2 of 2 rows\"\n      },\n      {\n        \"field\": \"items[].taxExempt\",\n        \"label\": \"품목: 면세, empty in 2 of 2 rows\"\n      }\n    ],\n    \"source\": \"/home/bc_person_sample/documents/견적서_예시상사.pdf.source.json\"\n  }\n}\n",
+  "filename": "견적서_예시상사.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 33510,
+  "holds": {
+   "schema": "kr/quote",
+   "given": {
+    "recipient": "(주)예시상사",
+    "contact": "박예시 과장",
+    "validDays": 30,
+    "delivery": "계약 후 2주",
+    "deliveryPlace": "고객사 본사",
+    "paymentTerms": "납품 후 30일 현금",
+    "items": [
+     {
+      "name": "노트북",
+      "quantity": 3,
+      "unit": "대",
+      "unitPrice": 1450000
+     },
+     {
+      "name": "모니터",
+      "quantity": 3,
+      "unit": "대",
+      "unitPrice": 320000
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "number",
+     "label": "number (document.number)"
+    }
+   ]
+  },
+  "isCarriedOut": true
+ },
+ {
+  "name": "form: quote with a wrong unit price",
+  "prompt": "(주)예시상사 앞으로 견적서 만들어 주세요. 담당은 박예시 과장님입니다. 품목은 노트북 3대 대당 1,450,000원, 모니터 3대 대당 320,000원이고, 유효기간 30일, 납기는 계약 후 2주, 납품장소는 고객사 본사, 결제조건은 납품 후 30일 현금입니다.",
+  "command": "office merge kr/quote ~/documents/견적서_예시상사.values.json ~/documents/견적서_예시상사.pdf",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled kr/quote into /home/bc_person_sample/documents/견적서_예시상사.pdf; 1 blank fields for the person to fill by hand or send: number (document.number)\",\n  \"outputPath\": \"/home/bc_person_sample/documents/견적서_예시상사.pdf\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [\n      {\n        \"field\": \"number\",\n        \"label\": \"number (document.number)\"\n      }\n    ],\n    \"emptyOptional\": [\n      {\n        \"field\": \"recipientRegistrationNumber\",\n        \"label\": \"수신처 사업자등록번호\"\n      },\n      {\n        \"field\": \"items[].spec\",\n        \"label\": \"품목: 규격, empty in 2 of 2 rows\"\n      },\n      {\n        \"field\": \"items[].taxExempt\",\n        \"label\": \"품목: 면세, empty in 2 of 2 rows\"\n      }\n    ],\n    \"source\": \"/home/bc_person_sample/documents/견적서_예시상사.pdf.source.json\"\n  }\n}\n",
+  "filename": "견적서_예시상사.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 33728,
+  "holds": {
+   "schema": "kr/quote",
+   "given": {
+    "recipient": "(주)예시상사",
+    "contact": "박예시 과장",
+    "validDays": 30,
+    "delivery": "계약 후 2주",
+    "deliveryPlace": "고객사 본사",
+    "paymentTerms": "납품 후 30일 현금",
+    "items": [
+     {
+      "name": "노트북",
+      "quantity": 3,
+      "unit": "대",
+      "unitPrice": 1540000
+     },
+     {
+      "name": "모니터",
+      "quantity": 3,
+      "unit": "대",
+      "unitPrice": 320000
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "number",
+     "label": "number (document.number)"
+    }
+   ]
+  },
+  "isCarriedOut": false
+ },
+ {
+  "name": "form: quote to another company",
+  "prompt": "(주)예시상사 앞으로 견적서 만들어 주세요. 담당은 박예시 과장님입니다. 품목은 노트북 3대 대당 1,450,000원, 모니터 3대 대당 320,000원이고, 유효기간 30일, 납기는 계약 후 2주, 납품장소는 고객사 본사, 결제조건은 납품 후 30일 현금입니다.",
+  "command": "office merge kr/quote ~/documents/견적서_예시상사.values.json ~/documents/견적서_예시상사.pdf",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled kr/quote into /home/bc_person_sample/documents/견적서_예시상사.pdf; 1 blank fields for the person to fill by hand or send: number (document.number)\",\n  \"outputPath\": \"/home/bc_person_sample/documents/견적서_예시상사.pdf\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [\n      {\n        \"field\": \"number\",\n        \"label\": \"number (document.number)\"\n      }\n    ],\n    \"emptyOptional\": [\n      {\n        \"field\": \"recipientRegistrationNumber\",\n        \"label\": \"수신처 사업자등록번호\"\n      },\n      {\n        \"field\": \"items[].spec\",\n        \"label\": \"품목: 규격, empty in 2 of 2 rows\"\n      },\n      {\n        \"field\": \"items[].taxExempt\",\n        \"label\": \"품목: 면세, empty in 2 of 2 rows\"\n      }\n    ],\n    \"source\": \"/home/bc_person_sample/documents/견적서_예시상사.pdf.source.json\"\n  }\n}\n",
+  "filename": "견적서_예시상사.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 33692,
+  "holds": {
+   "schema": "kr/quote",
+   "given": {
+    "recipient": "(주)누리무역",
+    "contact": "박예시 과장",
+    "validDays": 30,
+    "delivery": "계약 후 2주",
+    "deliveryPlace": "고객사 본사",
+    "paymentTerms": "납품 후 30일 현금",
+    "items": [
+     {
+      "name": "노트북",
+      "quantity": 3,
+      "unit": "대",
+      "unitPrice": 1450000
+     },
+     {
+      "name": "모니터",
+      "quantity": 3,
+      "unit": "대",
+      "unitPrice": 320000
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "number",
+     "label": "number (document.number)"
+    }
+   ]
+  },
+  "isCarriedOut": false
+ },
+ {
+  "name": "form: invoice",
+  "prompt": "Please invoice Example Trading Ltd. (attention: Finance team) for PO-2291: 40 hours of onboarding consulting at USD 150 per hour and 2 training workshops at USD 1,200 each. Tax rate 10%, payment due 30 days after the invoice date by bank transfer.",
+  "command": "office merge intl/invoice ~/documents/invoice-example-trading.values.json ~/documents/invoice-example-trading.pdf",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled intl/invoice into /home/bc_person_sample/documents/invoice-example-trading.pdf; 1 blank fields for the person to fill by hand or send: number (document.number)\",\n  \"outputPath\": \"/home/bc_person_sample/documents/invoice-example-trading.pdf\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [\n      {\n        \"field\": \"number\",\n        \"label\": \"number (document.number)\"\n      }\n    ],\n    \"emptyOptional\": [\n      {\n        \"field\": \"dueDate\",\n        \"label\": \"Due date\"\n      },\n      {\n        \"field\": \"items[].spec\",\n        \"label\": \"Line items: Spec, empty in 2 of 2 rows\"\n      }\n    ],\n    \"source\": \"/home/bc_person_sample/documents/invoice-example-trading.pdf.source.json\"\n  }\n}\n",
+  "filename": "invoice-example-trading.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 20692,
+  "holds": {
+   "schema": "intl/invoice",
+   "given": {
+    "billTo": "Example Trading Ltd.",
+    "attention": "Finance team",
+    "currency": "USD",
+    "paymentDays": 30,
+    "paymentMethod": "Bank transfer",
+    "poNumber": "PO-2291",
+    "taxRatePercent": 10,
+    "items": [
+     {
+      "description": "Onboarding consulting",
+      "quantity": 40,
+      "unitPrice": 150
+     },
+     {
+      "description": "Training workshop",
+      "quantity": 2,
+      "unitPrice": 1200
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "number",
+     "label": "number (document.number)"
+    }
+   ]
+  },
+  "isCarriedOut": true
+ },
+ {
+  "name": "form: invoice with a wrong quantity",
+  "prompt": "Please invoice Example Trading Ltd. (attention: Finance team) for PO-2291: 40 hours of onboarding consulting at USD 150 per hour and 2 training workshops at USD 1,200 each. Tax rate 10%, payment due 30 days after the invoice date by bank transfer.",
+  "command": "office merge intl/invoice ~/documents/invoice-example-trading.values.json ~/documents/invoice-example-trading.pdf",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled intl/invoice into /home/bc_person_sample/documents/invoice-example-trading.pdf; 1 blank fields for the person to fill by hand or send: number (document.number)\",\n  \"outputPath\": \"/home/bc_person_sample/documents/invoice-example-trading.pdf\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [\n      {\n        \"field\": \"number\",\n        \"label\": \"number (document.number)\"\n      }\n    ],\n    \"emptyOptional\": [\n      {\n        \"field\": \"dueDate\",\n        \"label\": \"Due date\"\n      },\n      {\n        \"field\": \"items[].spec\",\n        \"label\": \"Line items: Spec, empty in 2 of 2 rows\"\n      }\n    ],\n    \"source\": \"/home/bc_person_sample/documents/invoice-example-trading.pdf.source.json\"\n  }\n}\n",
+  "filename": "invoice-example-trading.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 20519,
+  "holds": {
+   "schema": "intl/invoice",
+   "given": {
+    "billTo": "Example Trading Ltd.",
+    "attention": "Finance team",
+    "currency": "USD",
+    "paymentDays": 30,
+    "paymentMethod": "Bank transfer",
+    "poNumber": "PO-2291",
+    "taxRatePercent": 10,
+    "items": [
+     {
+      "description": "Onboarding consulting",
+      "quantity": 4,
+      "unitPrice": 150
+     },
+     {
+      "description": "Training workshop",
+      "quantity": 2,
+      "unitPrice": 1200
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "number",
+     "label": "number (document.number)"
+    }
+   ]
+  },
+  "isCarriedOut": false
+ },
+ {
+  "name": "form: minutes",
+  "prompt": "오늘 오후 2시 3층 회의실에서 열린 신제품 출시 점검 회의 회의록 써 주세요. 참석자는 이샘플, 박예시, 최견본입니다. 안건은 출시 일정과 마케팅 예산이었고, 출시일을 11월 18일로 확정했고 마케팅 예산은 3천만 원으로 정했습니다. 박예시 님이 11월 1일까지 보도자료 초안을 준비하기로 했습니다.",
+  "command": "office merge kr/meeting-minutes ~/documents/신제품_출시_점검_회의록.values.json ~/documents/신제품_출시_점검_회의록.pdf",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled kr/meeting-minutes into /home/bc_person_sample/documents/신제품_출시_점검_회의록.pdf; 1 blank fields for the person to fill by hand or send: number (document.number)\",\n  \"outputPath\": \"/home/bc_person_sample/documents/신제품_출시_점검_회의록.pdf\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [\n      {\n        \"field\": \"number\",\n        \"label\": \"number (document.number)\"\n      }\n    ],\n    \"emptyOptional\": [\n      {\n        \"field\": \"endsAt\",\n        \"label\": \"종료 시각\"\n      },\n      {\n        \"field\": \"discussion\",\n        \"label\": \"논의 내용\"\n      }\n    ],\n    \"source\": \"/home/bc_person_sample/documents/신제품_출시_점검_회의록.pdf.source.json\"\n  }\n}\n",
+  "filename": "신제품_출시_점검_회의록.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 24569,
+  "holds": {
+   "schema": "kr/meeting-minutes",
+   "given": {
+    "meetingName": "신제품 출시 점검 회의",
+    "startsAt": "2026-10-04 14:00",
+    "place": "3층 회의실",
+    "attendees": [
+     "이샘플",
+     "박예시",
+     "최견본"
+    ],
+    "agenda": [
+     "출시 일정",
+     "마케팅 예산"
+    ],
+    "decisions": [
+     "출시일을 11월 18일로 확정",
+     "마케팅 예산 3천만 원"
+    ],
+    "actions": [
+     {
+      "task": "보도자료 초안 준비",
+      "owner": "박예시",
+      "due": "2026-11-01"
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "number",
+     "label": "number (document.number)"
+    }
+   ]
+  },
+  "isCarriedOut": true
+ },
+ {
+  "name": "form: minutes missing a decision",
+  "prompt": "오늘 오후 2시 3층 회의실에서 열린 신제품 출시 점검 회의 회의록 써 주세요. 참석자는 이샘플, 박예시, 최견본입니다. 안건은 출시 일정과 마케팅 예산이었고, 출시일을 11월 18일로 확정했고 마케팅 예산은 3천만 원으로 정했습니다. 박예시 님이 11월 1일까지 보도자료 초안을 준비하기로 했습니다.",
+  "command": "office merge kr/meeting-minutes ~/documents/신제품_출시_점검_회의록.values.json ~/documents/신제품_출시_점검_회의록.pdf",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled kr/meeting-minutes into /home/bc_person_sample/documents/신제품_출시_점검_회의록.pdf; 1 blank fields for the person to fill by hand or send: number (document.number)\",\n  \"outputPath\": \"/home/bc_person_sample/documents/신제품_출시_점검_회의록.pdf\",\n  \"issues\": [],\n  \"details\": {\n    \"blanks\": [\n      {\n        \"field\": \"number\",\n        \"label\": \"number (document.number)\"\n      }\n    ],\n    \"emptyOptional\": [\n      {\n        \"field\": \"endsAt\",\n        \"label\": \"종료 시각\"\n      },\n      {\n        \"field\": \"discussion\",\n        \"label\": \"논의 내용\"\n      }\n    ],\n    \"source\": \"/home/bc_person_sample/documents/신제품_출시_점검_회의록.pdf.source.json\"\n  }\n}\n",
+  "filename": "신제품_출시_점검_회의록.pdf",
+  "contentType": "application/pdf",
+  "sizeBytes": 24208,
+  "holds": {
+   "schema": "kr/meeting-minutes",
+   "given": {
+    "meetingName": "신제품 출시 점검 회의",
+    "startsAt": "2026-10-04 14:00",
+    "place": "3층 회의실",
+    "attendees": [
+     "이샘플",
+     "박예시",
+     "최견본"
+    ],
+    "agenda": [
+     "출시 일정",
+     "마케팅 예산"
+    ],
+    "decisions": [
+     "출시일을 11월 18일로 확정"
+    ],
+    "actions": [
+     {
+      "task": "보도자료 초안 준비",
+      "owner": "박예시",
+      "due": "2026-11-01"
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "number",
+     "label": "number (document.number)"
+    }
+   ]
+  },
+  "isCarriedOut": false
+ }
+]

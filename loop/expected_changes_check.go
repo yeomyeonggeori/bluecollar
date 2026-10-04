@@ -32,16 +32,18 @@ type changedRecord struct {
 }
 
 type changeStep struct {
-	Change string     `json:"change"`
-	Input  any        `json:"input,omitempty"`
-	Result any        `json:"result,omitempty"`
-	File   *fileFacts `json:"file,omitempty"`
+	Change     string     `json:"change"`
+	Input      any        `json:"input,omitempty"`
+	Result     any        `json:"result,omitempty"`
+	SameCallAs string     `json:"sameCallAs,omitempty"`
+	File       *fileFacts `json:"file,omitempty"`
 }
 
 type fileFacts struct {
-	Filename    string `json:"filename,omitempty"`
-	ContentType string `json:"contentType,omitempty"`
-	SizeBytes   int64  `json:"sizeBytes,omitempty"`
+	Filename    string          `json:"filename,omitempty"`
+	ContentType string          `json:"contentType,omitempty"`
+	SizeBytes   int64           `json:"sizeBytes,omitempty"`
+	Holds       json.RawMessage `json:"holds,omitempty"`
 }
 
 type unrecordedCall struct {
@@ -72,9 +74,10 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		return check, nil
 	}
 	location := companyLocation(request.Company.TimeZone)
+	records := changedRecords(observations, location)
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
-		State:     changeCheckState(request, location, expected, observations),
-		Questions: changeCheckQuestions(recordedIndexes),
+		State:     changeCheckState(request, location, expected, records, observations),
+		Questions: changeCheckQuestions(recordedIndexes, anyRecordHolds(records)),
 	})
 	if errorValue != nil {
 		return changeCheck{}, errorValue
@@ -90,17 +93,26 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 	return check, nil
 }
 
-func changeCheckQuestions(indexes []int) map[string]model.DecisionQuestion {
+func changeCheckQuestions(indexes []int, isAnyFileHeld bool) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	for _, index := range indexes {
+		instructions := []string{
+			fmt.Sprintf("Was expectedChanges[%d] carried out? asked is the user's own words asking for it; read them in request and conversationBefore, with relative words (now, tomorrow, by 6:30) read against now.", index),
+			"changedRecords lists every record a tool recorded changing, with its changes in order; judge a record by where its history ends. unrecordedWork lists calls that can change things but record no change of their own, such as commands: a record they made or changed shows in changedRecords only through a later recorded change, so read the two together.",
+			"It is carried out when the records asked about end up the way asked says, as changedRecords and unrecordedWork show together, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
+		}
+		if isAnyFileHeld {
+			instructions = append(instructions,
+				"A file's holds is what its writer recorded the file holds, such as its tables, its views as they display, its charts, the values it was given and the blanks it leaves. Judge that file by its holds: each part asked names must be there, and each value asked states, such as a name, an amount, a quantity or a date, must be the one its holds shows.",
+				"A blank left for a value the user has not given, a part or value asked does not mention, and the file's layout are never failures.",
+			)
+		}
+		instructions = append(instructions,
+			"A value counts as the same when it means the same in another format or spelling.",
+			"Do not require anything asked does not state; a value the task chose where the user said nothing is never a failure.",
+		)
 		questions[changeQuestionKey(index)] = model.NoulQuestion{
-			Instructions: strings.Join([]string{
-				fmt.Sprintf("Was expectedChanges[%d] carried out? asked is the user's own words asking for it; read them in request and conversationBefore, with relative words (now, tomorrow, by 6:30) read against now.", index),
-				"changedRecords lists every record a tool recorded changing, with its changes in order; judge a record by where its history ends. unrecordedWork lists calls that can change things but record no change of their own, such as commands: a record they made or changed shows in changedRecords only through a later recorded change, so read the two together.",
-				"It is carried out when the records asked about end up the way asked says, as changedRecords and unrecordedWork show together, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
-				"A value counts as the same when it means the same in another format or spelling.",
-				"Do not require anything asked does not state; a value the task chose where the user said nothing is never a failure.",
-			}, "\n"),
+			Instructions:     strings.Join(instructions, "\n"),
 			TrueDescription:  "carried out, or already so",
 			FalseDescription: "not carried out, done to a different record, or something asked states differs",
 		}.Question()
@@ -112,12 +124,12 @@ func changeQuestionKey(index int) string {
 	return fmt.Sprintf("expected%d", index)
 }
 
-func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, observations []turnObservation) map[string]any {
+func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, records []changedRecord, observations []turnObservation) map[string]any {
 	state := map[string]any{
 		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
 		"now":             environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST"),
 		"expectedChanges": expected,
-		"changedRecords":  changedRecords(observations, location),
+		"changedRecords":  records,
 	}
 	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
 		state["conversationBefore"] = conversation
@@ -162,6 +174,7 @@ func changedRecords(observations []turnObservation, location *time.Location) []c
 	records := []changedRecord{}
 	recordIndexes := map[string]int{}
 	for _, observation := range successfulToolObservations(observations) {
+		callShownAt := ""
 		for _, effect := range observation.Effects {
 			identity := firstNonEmptyString(effect.ID, effect.Path, effect.URL, effect.ObjectType)
 			key := effect.ObjectType + "\x00" + identity
@@ -171,12 +184,15 @@ func changedRecords(observations []turnObservation, location *time.Location) []c
 				recordIndexes[key] = index
 				records = append(records, changedRecord{Record: identity})
 			}
-			records[index].History = append(records[index].History, changeStep{
-				Change: changeKind(effect.ObjectType, effect.Effect),
-				Input:  boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location)),
-				Result: boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location)),
-				File:   attachedFileFacts(observation.Attachments, effect.Path),
-			})
+			step := changeStep{Change: changeKind(effect.ObjectType, effect.Effect), File: attachedFileFacts(observation.Attachments, effect.Path)}
+			if callShownAt == "" {
+				step.Input = boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location))
+				step.Result = boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location))
+				callShownAt = identity
+			} else if callShownAt != identity {
+				step.SameCallAs = callShownAt
+			}
+			records[index].History = append(records[index].History, step)
 		}
 	}
 	return records
@@ -185,10 +201,21 @@ func changedRecords(observations []turnObservation, location *time.Location) []c
 func attachedFileFacts(attachments []toolcontract.FileAttachment, path string) *fileFacts {
 	for _, attachment := range attachments {
 		if strings.TrimSpace(path) != "" && strings.TrimSpace(attachment.DevicePath) == strings.TrimSpace(path) {
-			return &fileFacts{Filename: strings.TrimSpace(attachment.Filename), ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes}
+			return &fileFacts{Filename: strings.TrimSpace(attachment.Filename), ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes, Holds: attachment.Holds}
 		}
 	}
 	return nil
+}
+
+func anyRecordHolds(records []changedRecord) bool {
+	for _, record := range records {
+		for _, step := range record.History {
+			if step.File != nil && len(step.File.Holds) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func unrecordedWork(toolSet *toolcontract.ToolSet, observations []turnObservation, location *time.Location) []unrecordedCall {
