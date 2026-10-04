@@ -28,6 +28,8 @@ type Report struct {
 	RoundsUsed  int           `json:"roundsUsed"`
 	Slides      []SlideReport `json:"slides"`
 	Fixed       []Fixed       `json:"fixed,omitempty"`
+	DeckFlagged []SlideReport `json:"deckFlagged,omitempty"`
+	DeckError   string        `json:"deckError,omitempty"`
 	GivenUp     []int         `json:"givenUp,omitempty"`
 	Leftovers   []int         `json:"leftovers,omitempty"`
 	TextChanged []int         `json:"textChanged,omitempty"`
@@ -46,6 +48,9 @@ type loopState struct {
 	givenUp       map[int]bool
 	roundsUsed    int
 	usage         Usage
+	deckSheet     model.DecisionImage
+	deckFlagged   []SlideReport
+	deckError     string
 }
 
 func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel model.LanguageModelProvider, deck Deck) (Report, error) {
@@ -69,6 +74,9 @@ func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel m
 		if errorValue := state.fixRound(ctx); errorValue != nil {
 			return state.report(), errorValue
 		}
+	}
+	if errorValue := state.deckPass(ctx); errorValue != nil {
+		return state.report(), errorValue
 	}
 	return state.report(), nil
 }
@@ -94,7 +102,7 @@ func (state *loopState) fixRound(ctx context.Context) error {
 	state.roundsUsed++
 	candidates := state.candidates()
 	attempts := inParallel(candidates, func(slide Slide) attempt {
-		return fixSlide(ctx, state.languageModel, state.deck, state.manifest.Fixer, slide, state.assessments[slide.Number])
+		return fixSlide(ctx, state.languageModel, state.deck, state.manifest.Fixer, slide, state.assessments[slide.Number], state.sheetFor(slide.Number))
 	})
 	replacements := state.acceptedReplacements(candidates, attempts)
 	if len(replacements) == 0 {
@@ -107,6 +115,9 @@ func (state *loopState) fixRound(ctx context.Context) error {
 	}
 	state.manifest = rebuilt
 	reviews := reviewSlides(ctx, state.decisionModel, state.deck, rebuilt, rebuilt.slidesNumbered(replacements))
+	if len(state.deckSheet.Data) > 0 {
+		reviews = state.reviewedAgainstDeck(ctx, rebuilt, reviews)
+	}
 	return state.settle(ctx, previous, attempts, candidates, reviews)
 }
 
@@ -196,7 +207,7 @@ func highestProbability(probabilities map[string]float64, kinds []string) float6
 }
 
 func (state *loopState) report() Report {
-	report := Report{RoundsUsed: state.roundsUsed, Usage: state.usage}
+	report := Report{RoundsUsed: state.roundsUsed, Usage: state.usage, DeckFlagged: state.deckFlagged, DeckError: state.deckError}
 	for _, slide := range state.manifest.Slides {
 		assessment := state.assessments[slide.Number]
 		report.Slides = append(report.Slides, slideReport(slide.Number, assessment, state.fixProblems[slide.Number]))
