@@ -81,7 +81,7 @@ func flaggedFindings(manifest Manifest, answer model.DecisionAnswer) []Finding {
 	findings := []Finding{}
 	for kind, meaning := range manifest.Question.Options {
 		probability := answer.ChoiceProbability(kind)
-		if kind != manifest.Question.CleanOption && probability >= manifest.Threshold {
+		if kind != manifest.Question.CleanOption && probability >= manifest.thresholdFor(kind) {
 			findings = append(findings, Finding{Kind: kind, Probability: probability, Meaning: meaning})
 		}
 	}

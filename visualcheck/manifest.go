@@ -31,12 +31,20 @@ type Slide struct {
 }
 
 type Manifest struct {
-	Question  Question `json:"question"`
-	Threshold float64  `json:"threshold"`
-	Rounds    int      `json:"rounds"`
-	Fixer     Fixer    `json:"fixer"`
-	Source    string   `json:"source"`
-	Slides    []Slide  `json:"slides"`
+	Question          Question           `json:"question"`
+	Threshold         float64            `json:"threshold"`
+	PatternThresholds map[string]float64 `json:"patternThresholds,omitempty"`
+	Rounds            int                `json:"rounds"`
+	Fixer             Fixer              `json:"fixer"`
+	Source            string             `json:"source"`
+	Slides            []Slide            `json:"slides"`
+}
+
+func (manifest Manifest) thresholdFor(option string) float64 {
+	if threshold, hasOwn := manifest.PatternThresholds[option]; hasOwn {
+		return threshold
+	}
+	return manifest.Threshold
 }
 
 func ParseManifest(content []byte) (Manifest, error) {
@@ -56,6 +64,14 @@ func (manifest Manifest) validate() error {
 	}
 	if manifest.Threshold <= 0 || manifest.Threshold >= 1 {
 		return fmt.Errorf("visual review manifest: threshold %v is not between 0 and 1", manifest.Threshold)
+	}
+	for option, threshold := range manifest.PatternThresholds {
+		if _, isOption := manifest.Question.Options[option]; !isOption || option == manifest.Question.CleanOption {
+			return fmt.Errorf("visual review manifest: patternThresholds names %q, which is not a defect option", option)
+		}
+		if threshold <= 0 || threshold >= 1 {
+			return fmt.Errorf("visual review manifest: patternThresholds[%q] %v is not between 0 and 1", option, threshold)
+		}
 	}
 	if manifest.Rounds < 0 {
 		return fmt.Errorf("visual review manifest: rounds %d is negative", manifest.Rounds)

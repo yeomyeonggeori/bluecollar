@@ -159,6 +159,42 @@ func TestFlagsOnAnyNonCleanOptionAtThresholdEvenWhenCleanIsTop(t *testing.T) {
 	}
 }
 
+func nearMissDistribution(section string) map[string]float64 {
+	return map[string]float64{cleanOption: 0.65, "unreadable_chart": 0.27, "crowded": 0.08}
+}
+
+func TestAPatternThresholdFlagsAPatternBelowTheGeneralOne(t *testing.T) {
+	manifest := sampleManifest(0, section("near"))
+	manifest.PatternThresholds = map[string]float64{"unreadable_chart": 0.2}
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: nearMissDistribution}, &fakeLanguageModel{}, newFakeDeck(manifest))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if got := report.Slides[0].Findings; len(got) != 1 || got[0].Kind != "unreadable_chart" || got[0].Probability != 0.27 {
+		t.Fatalf("findings %+v", got)
+	}
+}
+
+func TestAPatternWithoutItsOwnThresholdKeepsTheGeneralOne(t *testing.T) {
+	manifest := sampleManifest(0, section("near"))
+	manifest.PatternThresholds = map[string]float64{"crowded": 0.05}
+	report, _ := Run(context.Background(), &fakeDecisionModel{answer: nearMissDistribution}, &fakeLanguageModel{}, newFakeDeck(manifest))
+	for _, finding := range report.Slides[0].Findings {
+		if finding.Kind == "unreadable_chart" {
+			t.Fatalf("0.27 flagged against the general 0.3: %+v", report.Slides[0].Findings)
+		}
+	}
+}
+
+func TestAManifestWhosePatternThresholdNamesNoOptionIsRefused(t *testing.T) {
+	manifest := sampleManifest(0, section("near"))
+	manifest.PatternThresholds = map[string]float64{"not_an_option": 0.2}
+	content, _ := json.Marshal(manifest)
+	if _, errorValue := ParseManifest(content); errorValue == nil {
+		t.Fatal("a threshold for an unknown option was accepted")
+	}
+}
+
 func TestMeasuredDefectFlagsASlideTheReviewerCalledClean(t *testing.T) {
 	manifest := sampleManifest(0, section("fine"))
 	manifest.Slides[0].Measured = []MeasuredDefect{{Code: "text-overflow", Message: "overflows"}}
