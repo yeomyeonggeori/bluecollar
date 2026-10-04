@@ -21,8 +21,13 @@ type catalog struct {
 
 type transportResolver func(acp.McpServer) (mcp.Transport, error)
 
-func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTransport transportResolver) (*catalog, error) {
+func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTransport transportResolver) (openedCatalog *catalog, errorValue error) {
 	openedSessions := []*mcp.ClientSession{}
+	defer func() {
+		if errorValue != nil {
+			closeCatalogSessions(openedSessions)
+		}
+	}()
 	toolNames := []string{}
 	descriptors := map[string]toolcontract.ToolDescriptor{}
 	handlers := map[string]*mcp.ClientSession{}
@@ -59,7 +64,11 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 }
 
 func (openedCatalog *catalog) Close() {
-	for _, session := range openedCatalog.sessions {
+	closeCatalogSessions(openedCatalog.sessions)
+}
+
+func closeCatalogSessions(sessions []*mcp.ClientSession) {
+	for _, session := range sessions {
 		session.Close()
 	}
 }
@@ -105,6 +114,9 @@ func descriptorForTool(tool *mcp.Tool) toolcontract.ToolDescriptor {
 	}
 	readMetaString(tool.Meta, "blueclaw/sideEffectClass", &descriptor.SideEffectClass)
 	readMetaString(tool.Meta, "blueclaw/approvalScope", &descriptor.ApprovalScope)
+	if descriptor.SideEffectClass == "" && tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
+		descriptor.SideEffectClass = toolcontract.ToolSideEffectRead
+	}
 	return descriptor
 }
 
@@ -137,6 +149,9 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string) toolcontrac
 		}
 		summary := textOfResult(callResult)
 		if callResult.IsError {
+			if callResult.StructuredContent != nil {
+				return toolcontract.ToolFailureWithOutput(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, toolName, summary, structuredOfResult(callResult)), nil
+			}
 			return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, toolName, summary), nil
 		}
 		return toolcontract.ToolSuccessData(summary, structuredOfResult(callResult)), nil
