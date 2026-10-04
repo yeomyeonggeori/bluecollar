@@ -56,7 +56,7 @@ func (agentTurnRunner *AgentTurnRunner) promptVisibleObservationsForAction(ctx c
 	currentSummary := latestTaskContextSummary(state.ContextSummary, taskEvents)
 	pinnedObservationIDs := pinnedPromptObservationIDs(state.Observations, taskEvents)
 	promptObservations := promptVisibleObservations(state.Observations, currentSummary, pinnedObservationIDs)
-	estimatedTokenCount := estimatePromptTokenCount(BuildAgentActionRequest(withPromptObservations(state, promptObservations)).Messages)
+	estimatedTokenCount := agentTurnRunner.estimateActionPromptTokenCount(withPromptObservations(state, promptObservations))
 	if estimatedTokenCount <= compactionTriggerTokenThreshold(state.Options.ContextWindowTokens) {
 		return promptObservations
 	}
@@ -162,7 +162,7 @@ func (agentTurnRunner *AgentTurnRunner) promptObservationsWithLongToolResultsPru
 	if !didPrune {
 		return promptObservations, estimatedTokenCount
 	}
-	prunedTokenCount := estimatePromptTokenCount(BuildAgentActionRequest(withPromptObservations(state, prunedObservations)).Messages)
+	prunedTokenCount := agentTurnRunner.estimateActionPromptTokenCount(withPromptObservations(state, prunedObservations))
 	if prunedTokenCount >= estimatedTokenCount {
 		return promptObservations, estimatedTokenCount
 	}
@@ -495,6 +495,31 @@ func normalizeTaskContextSummaryList(values []string, limit int) []string {
 		}
 	}
 	return normalizedValues
+}
+
+func (agentTurnRunner *AgentTurnRunner) estimateActionPromptTokenCount(state agentTaskState) int {
+	if _, isAvailable := model.ResolveTextChatCompleter(agentTurnRunner.languageModel); isAvailable {
+		if request, isRepresentable := nativeAgentActionRequest(state); isRepresentable {
+			return estimateChatCompletionTokenCount(request)
+		}
+	}
+	return estimatePromptTokenCount(BuildAgentActionRequest(state).Messages)
+}
+
+func estimateChatCompletionTokenCount(request model.ChatCompletionRequest) int {
+	messages := make([]model.Message, 0, len(request.Messages))
+	metadataBytes := 0
+	for _, message := range request.Messages {
+		messages = append(messages, model.Message{Role: message.Role, Content: message.Content, Parts: message.Parts})
+		metadataBytes += len(message.ToolCallID) + len(message.Reasoning) + len(message.ReasoningField)
+		for _, call := range message.ToolCalls {
+			metadataBytes += len(call.ID) + len(call.Type) + len(call.Function.Name) + len(call.Function.Arguments)
+		}
+	}
+	for _, tool := range request.Tools {
+		metadataBytes += len(tool.Type) + len(tool.Function.Name) + len(tool.Function.Description) + len(tool.Function.Parameters)
+	}
+	return estimatePromptTokenCount(messages) + (metadataBytes+charactersPerToken-1)/charactersPerToken
 }
 
 func estimatePromptTokenCount(messages []model.Message) int {
