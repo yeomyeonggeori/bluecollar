@@ -47,6 +47,9 @@ func (agentTurnRunner *AgentTurnRunner) beginExpectedChanges(ctx context.Context
 
 func (agentTurnRunner *AgentTurnRunner) forgetExpectedChanges(taskRunID string) {
 	agentTurnRunner.expectedChanges.Delete(taskRunID)
+	if agentTurnRunner.claimLedgers != nil {
+		agentTurnRunner.claimLedgers.Delete(taskRunID)
+	}
 }
 
 func (agentTurnRunner *AgentTurnRunner) expectedChangesFor(ctx context.Context, taskRunID string, request AgentTurnRequest) ([]expectedChange, bool) {

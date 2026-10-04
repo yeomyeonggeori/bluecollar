@@ -203,7 +203,7 @@ func TestExpectedChangeIsUnmetWithoutAskingJevWhenNothingOfItsRecordTypeChanged(
 	decisionModel := &scriptedDecisionModel{}
 	expected := []expectedChange{{Change: "calendar created", Asked: "회의도 잡아줘"}}
 
-	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
+	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()}, claimEvidence{})
 
 	if errorValue != nil || len(check.Unmet) != 1 || len(check.Unrecorded) != 1 {
 		t.Fatalf("expected the unrecorded change to be unmet, got %+v error=%v", check, errorValue)
@@ -217,7 +217,7 @@ func TestJevJudgesAChangeRecordedUnderAnotherKindOfTheSameRecordType(t *testing.
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9}}
 	expected := []expectedChange{{Change: "task created", Asked: "오래된 작업을 삭제해줘"}}
 
-	check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
+	check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()}, claimEvidence{})
 
 	if len(decisionModel.requests) != 1 || len(check.Unmet) != 0 {
 		t.Fatalf("expected Jev to judge a task change the definition named as another kind, got %+v", check)
@@ -231,7 +231,7 @@ func TestRecordedExpectedChangeIsCarriedOutFromTheThresholdUp(t *testing.T) {
 	}{{changeCarriedOutThreshold, 0}, {changeCarriedOutThreshold - 0.01, 1}} {
 		decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": testCase.noul}}
 
-		check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()})
+		check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()}, claimEvidence{})
 
 		if len(check.Unmet) != testCase.unmetSize {
 			t.Fatalf("noul %v: expected %d unmet, got %+v", testCase.noul, testCase.unmetSize, check)
@@ -242,7 +242,7 @@ func TestRecordedExpectedChangeIsCarriedOutFromTheThresholdUp(t *testing.T) {
 func TestJevSeesEachChangedRecordWithItsInputAndResult(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
 
-	checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()})
+	checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()}, claimEvidence{})
 
 	state, _ := json.Marshal(decisionModel.requests[0].State)
 	if !strings.Contains(string(state), `"changedRecords":[{"record":"task-1","history":[{"change":"task deleted","input":{"taskID":"task-1"},"result":{"taskID":"task-1"}}]}]`) {
@@ -342,7 +342,7 @@ func TestJevSeesTheCommandThatMadeAFileAndTheFileItDelivered(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
 	request := AgentTurnRequest{Prompt: makeTheAskedPDF.Asked + ", and send me the PDF file itself.", ToolSet: kernelFileToolSet()}
 
-	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{makeTheAskedPDF}, fileMadeByCommandThenDelivered(pdfCommand, "native-install-rig.pdf", "application/pdf"))
+	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{makeTheAskedPDF}, fileMadeByCommandThenDelivered(pdfCommand, "native-install-rig.pdf", "application/pdf"), claimEvidence{})
 
 	state, _ := json.Marshal(decisionModel.requests[0].State)
 	commandInput, _ := json.Marshal(map[string]string{"command": pdfCommand})

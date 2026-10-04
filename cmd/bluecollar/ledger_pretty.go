@@ -135,10 +135,18 @@ func expectedChangesSummary(body map[string]any) string {
 
 func changeCheckSummary(body map[string]any) string {
 	unmet, _ := body["unmet"].([]any)
-	if len(unmet) == 0 {
+	unsupported, _ := body["unsupportedClaims"].([]any)
+	if len(unmet) == 0 && len(unsupported) == 0 {
 		return inkTool + "every asked change is done" + styleReset
 	}
-	return inkFault + strconv.Itoa(len(unmet)) + " asked change(s) not done" + styleReset
+	parts := []string{}
+	if len(unmet) > 0 {
+		parts = append(parts, strconv.Itoa(len(unmet))+" asked change(s) not done")
+	}
+	if len(unsupported) > 0 {
+		parts = append(parts, strconv.Itoa(len(unsupported))+" delivered value(s) the sources do not support")
+	}
+	return inkFault + strings.Join(parts, ", ") + styleReset
 }
 
 func toolRequestSummary(body map[string]any) string {

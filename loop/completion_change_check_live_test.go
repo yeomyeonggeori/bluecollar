@@ -91,7 +91,7 @@ func TestLiveDeliveredFileSatisfiesTheChangeCheck(t *testing.T) {
 		for attempt := 0; attempt < 3; attempt++ {
 			attempts++
 			expected, _ := services.runner.defineExpectedChanges(context.Background(), "live", request)
-			check, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, expected, fileMadeByCommandThenDelivered(liveCase.command, liveCase.filename, liveCase.contentType))
+			check, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, expected, fileMadeByCommandThenDelivered(liveCase.command, liveCase.filename, liveCase.contentType), claimEvidence{})
 			if errorValue != nil {
 				t.Fatal(errorValue)
 			}

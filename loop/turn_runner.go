@@ -35,6 +35,7 @@ type AgentTurnRunner struct {
 	toolResultImageSource  ToolResultImageSource
 	decisionModel          model.DecisionModel
 	expectedChanges        *sync.Map
+	claimLedgers           *sync.Map
 	options                TurnOptions
 }
 
@@ -261,6 +262,7 @@ func NewAgentTurnRunnerWithRecoveryModel(taskRunService taskstate.TaskRunStore, 
 		recoveryLanguageModel:  recoveryLanguageModel,
 		options:                normalizedOptions,
 		expectedChanges:        &sync.Map{},
+		claimLedgers:           &sync.Map{},
 	}
 }
 

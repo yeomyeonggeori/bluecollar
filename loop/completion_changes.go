@@ -32,13 +32,19 @@ func (agentTurnRunner *AgentTurnRunner) evaluateExpectedChanges(ctx context.Cont
 		return completionGateResult{IsSatisfied: true}
 	}
 	decisionModel := observedDecisionModel{decisionModel: agentTurnRunner.decisionModel, observe: agentTurnRunner.llmCallObserverForTaskRun(taskRunID)}
-	check, errorValue := checkExpectedChanges(ctx, decisionModel, request, expected, observations)
+	ledger := agentTurnRunner.claimLedgerFor(taskRunID)
+	evidence := deliveredClaims(request, observations)
+	delivered := evidence.Claims
+	evidence.Claims = ledger.unjudged(delivered)
+	check, errorValue := checkExpectedChanges(ctx, decisionModel, request, expected, observations, evidence)
 	if errorValue != nil {
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "change_check", "error": errorValue.Error()}))
 		return completionGateResult{IsSatisfied: true}
 	}
+	ledger.record(check.JudgedClaims)
+	check.Unsupported, check.Abandoned = ledger.refuse(delivered)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionChangeCheck, marshalEventBody(check))
-	if len(check.Unmet) == 0 {
+	if len(check.Unmet) == 0 && len(check.Unsupported) == 0 {
 		return completionGateResult{IsSatisfied: true, AreChangesConfirmed: true}
 	}
 	return completionGateResult{
@@ -81,6 +87,17 @@ func (observed observedDecisionModel) Decide(ctx context.Context, request model.
 }
 
 func unmetChangesMessage(check changeCheck) string {
+	sections := []string{}
+	if len(check.Unmet) > 0 {
+		sections = append(sections, "Requested changes not done yet:\n"+strings.Join(unmetChangeLines(check), "\n"))
+	}
+	if len(check.Unsupported) > 0 {
+		sections = append(sections, "Values in a delivered file that the sources do not support:\n"+strings.Join(unsupportedClaimLines(check.Unsupported), "\n"))
+	}
+	return strings.Join(sections, "\n\n")
+}
+
+func unmetChangeLines(check changeCheck) []string {
 	lines := []string{}
 	for _, change := range check.Unmet {
 		reason := "the recorded changes do not carry it out"
@@ -89,7 +106,7 @@ func unmetChangesMessage(check changeCheck) string {
 		}
 		lines = append(lines, "\""+change.Asked+"\" ("+change.Change+"): "+reason)
 	}
-	return "Requested changes not done yet:\n" + strings.Join(lines, "\n")
+	return lines
 }
 
 func containsExpectedChange(changes []expectedChange, wanted expectedChange) bool {

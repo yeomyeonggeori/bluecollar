@@ -24,6 +24,9 @@ type changeCheck struct {
 	CarriedOut      map[string]float64 `json:"carriedOut,omitempty"`
 	Unrecorded      []expectedChange   `json:"unrecorded,omitempty"`
 	Unmet           []expectedChange   `json:"unmet,omitempty"`
+	JudgedClaims    []judgedClaim      `json:"judgedClaims,omitempty"`
+	Unsupported     []unsupportedClaim `json:"unsupportedClaims,omitempty"`
+	Abandoned       []unsupportedClaim `json:"abandonedClaims,omitempty"`
 }
 
 type changedRecord struct {
@@ -55,7 +58,7 @@ type changeLookup struct {
 	Result any    `json:"result"`
 }
 
-func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []expectedChange, observations []turnObservation) (changeCheck, error) {
+func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []expectedChange, observations []turnObservation, evidence claimEvidence) (changeCheck, error) {
 	check := changeCheck{ExpectedChanges: expected}
 	changedObjectTypes := changedObjectTypes(observations)
 	objectTypeByKind := objectTypeByChangeKind(request.ToolSet)
@@ -72,13 +75,17 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		return check, nil
 	}
 	location := companyLocation(request.Company.TimeZone)
-	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
-		State:     changeCheckState(request, location, expected, observations),
-		Questions: changeCheckQuestions(recordedIndexes),
-	})
+	state := changeCheckState(request, location, expected, observations)
+	addClaimState(state, request, evidence)
+	questions := changeCheckQuestions(recordedIndexes)
+	for key, question := range claimQuestions(evidence.Claims) {
+		questions[key] = question
+	}
+	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{State: state, Questions: questions})
 	if errorValue != nil {
 		return changeCheck{}, errorValue
 	}
+	check.JudgedClaims = judgedClaims(response, evidence.Claims)
 	check.CarriedOut = map[string]float64{}
 	for _, index := range recordedIndexes {
 		answer := response.Answers[changeQuestionKey(index)]
