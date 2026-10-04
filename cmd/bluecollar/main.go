@@ -23,7 +23,7 @@ import (
 
 func main() {
 	endpointURL := flag.String("endpoint", envOrDefault("BLUECOLLAR_MODEL_ENDPOINT", "http://127.0.0.1:11434/v1"), "OpenAI-compatible base URL")
-	apiKey := flag.String("api-key", os.Getenv("BLUECOLLAR_MODEL_API_KEY"), "bearer token for the endpoint, when it needs one")
+	apiKey := flag.String("api-key", "", "bearer token for the endpoint, when it needs one; default $BLUECOLLAR_MODEL_API_KEY")
 	modelName := flag.String("model", os.Getenv("BLUECOLLAR_MODEL"), "model to ask")
 	agentName := flag.String("agent-name", "the assistant", "what the agent calls itself")
 	timeout := flag.Duration("timeout", 5*time.Minute, "how long one turn may run")
@@ -46,7 +46,7 @@ func main() {
 	prompt := strings.TrimSpace(strings.Join(flag.Args(), " "))
 	options := runOptions{
 		endpointURL:    *endpointURL,
-		apiKey:         *apiKey,
+		apiKey:         firstNonEmpty(*apiKey, os.Getenv("BLUECOLLAR_MODEL_API_KEY")),
 		modelName:      *modelName,
 		agentName:      *agentName,
 		prompt:         prompt,

@@ -17,7 +17,7 @@ const requesterPersonID = "bluecollar"
 
 func main() {
 	endpointURL := flag.String("endpoint", envOrDefault("BLUECOLLAR_LLM_ENDPOINT", "http://127.0.0.1:8080/v1"), "OpenAI-compatible endpoint the loop reasons through")
-	apiKey := flag.String("api-key", os.Getenv("BLUECOLLAR_LLM_API_KEY"), "API key for that endpoint")
+	apiKey := flag.String("api-key", "", "API key for that endpoint; default $BLUECOLLAR_LLM_API_KEY")
 	modelName := flag.String("model", os.Getenv("BLUECOLLAR_LLM_MODEL"), "model name to request")
 	agentName := flag.String("name", envOrDefault("BLUECOLLAR_AGENT_NAME", "bluecollar"), "the name this agent answers to")
 	flag.Parse()
@@ -26,7 +26,7 @@ func main() {
 		log.Fatal("bluecollar-acp: no model named; pass -model or set BLUECOLLAR_LLM_MODEL")
 	}
 
-	languageModel := openaicompatible.NewProvider(*endpointURL, *apiKey, *modelName)
+	languageModel := openaicompatible.NewProvider(*endpointURL, flagOrEnvironment(*apiKey, "BLUECOLLAR_LLM_API_KEY"), *modelName)
 	runningAgent := newAgent(languageModel, decisions.ConfiguredDecisionModel(os.Stderr), *agentName)
 	connection := acp.NewAgentSideConnection(runningAgent, os.Stdout, os.Stdin)
 	runningAgent.sessionUpdates.connect(connection)
@@ -38,6 +38,13 @@ func envOrDefault(environmentName string, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func flagOrEnvironment(value string, environmentName string) string {
+	if value != "" {
+		return value
+	}
+	return os.Getenv(environmentName)
 }
 
 func init() {
