@@ -7,17 +7,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"slices"
 	"sort"
-	"strings"
 	"sync"
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/evaltest"
+	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
+	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
 
-const corpusVariable = "BLUECOLLAR_CLAIM_CORPUS"
+const (
+	corpusVariable    = "BLUECOLLAR_CLAIM_CORPUS"
+	profileVariable   = "BLUECOLLAR_CLAIM_PROFILE"
+	writerVariable    = "BLUECOLLAR_CLAIM_WRITER_MODEL"
+	recomputeVariable = "BLUECOLLAR_CLAIM_RECOMPUTE"
+	writerEndpoint    = "https://openrouter.ai/api/v1"
+)
 
 type corpusDocument struct {
 	Document     string          `json:"document"`
@@ -32,15 +38,20 @@ type corpusClaim struct {
 	Claim
 	Label     string `json:"label"`
 	LabelName string `json:"labelName"`
+	Expected  string `json:"expected"`
+	Subkind   string `json:"subkind"`
 }
 
 type judgedDocument struct {
-	Document    string             `json:"document"`
-	Path        string             `json:"path"`
-	Probability map[string]float64 `json:"claimProbability"`
-	Kind        map[string]string  `json:"kind"`
-	PromptTotal int64              `json:"promptTokens"`
-	CostUSD     float64            `json:"costUSD"`
+	Document    string                        `json:"document"`
+	Path        string                        `json:"path"`
+	Probability map[string]map[string]float64 `json:"probabilities"`
+	Kind        map[string]string             `json:"kind"`
+	Defect      map[string]string             `json:"defect"`
+	PromptTotal int64                         `json:"promptTokens"`
+	CostUSD     float64                       `json:"costUSD"`
+	ExtraTokens int64                         `json:"recomputePromptTokens"`
+	ExtraCost   float64                       `json:"recomputeCostUSD"`
 	corpus      corpusDocument
 }
 
@@ -62,11 +73,6 @@ func TestLiveClaimKindsAgainstGradedDocuments(t *testing.T) {
 		}()
 	}
 	group.Wait()
-	for _, path := range corpusPaths(documents) {
-		for _, threshold := range []float64{0.4, ClaimThreshold, 0.6} {
-			t.Log(accuracyLine(judged, path, threshold))
-		}
-	}
 	t.Log(costLine(judged))
 	if output := os.Getenv("BLUECOLLAR_CLAIM_RESULTS"); output != "" {
 		writeResults(t, output, judged)
@@ -88,19 +94,23 @@ func readCorpus(t *testing.T, corpusPath string) []corpusDocument {
 	return corpus.Documents
 }
 
-func corpusPaths(documents []corpusDocument) []string {
-	paths := []string{}
-	for _, document := range documents {
-		if !slices.Contains(paths, document.Path) {
-			paths = append(paths, document.Path)
-		}
+func profileFromEnvironment(t *testing.T) Profile {
+	t.Helper()
+	switch name := os.Getenv(profileVariable); name {
+	case "", CompactProfile.Name:
+		return CompactProfile
+	case TodayProfile.Name:
+		return TodayProfile
+	case FineProfile.Name:
+		return FineProfile
+	default:
+		t.Fatalf("%s=%q names no profile; use today, compact or fine", profileVariable, name)
+		return Profile{}
 	}
-	sort.Strings(paths)
-	return paths
 }
 
 func judgeCorpusDocument(t *testing.T, endpoint decisions.Endpoint, document corpusDocument) judgedDocument {
-	result := judgedDocument{Document: document.Document, Path: document.Path, Probability: map[string]float64{}, Kind: map[string]string{}, corpus: document}
+	result := judgedDocument{Document: document.Document, Path: document.Path, Probability: map[string]map[string]float64{}, Kind: map[string]string{}, Defect: map[string]string{}, corpus: document}
 	claims := []Claim{}
 	for _, claim := range document.Claims {
 		claims = append(claims, claim.Claim)
@@ -109,15 +119,26 @@ func judgeCorpusDocument(t *testing.T, endpoint decisions.Endpoint, document cor
 		return result
 	}
 	sources := Sources{Request: []string{document.Request}, Attachments: document.Attachments, RuntimeFacts: document.RuntimeFacts}
-	judgment, errorValue := Judge(context.Background(), endpoint.DecisionModel(), sources, claims)
+	judgment, errorValue := JudgeWith(context.Background(), profileFromEnvironment(t), endpoint.DecisionModel(), sources, claims)
 	if errorValue != nil {
 		t.Errorf("%s: %v", document.Document, errorValue)
 		return result
 	}
 	for _, verdict := range judgment.Verdicts {
 		key := claimKey(verdict.Claim)
-		result.Probability[key] = verdict.ClaimProbability
+		result.Probability[key] = verdict.Probabilities
 		result.Kind[key] = verdict.Kind
+		result.Defect[key] = verdict.Defect
+	}
+	if os.Getenv(recomputeVariable) == "1" {
+		rechecked, errorValue := Recompute(context.Background(), profileFromEnvironment(t), writerFromEnvironment(t, endpoint), sources, judgment)
+		if errorValue != nil {
+			t.Errorf("%s: %v", document.Document, errorValue)
+		} else {
+			markRecomputed(&result, judgment, rechecked)
+			result.ExtraTokens = rechecked.Usage.PromptTokens - judgment.Usage.PromptTokens
+			result.ExtraCost = rechecked.Usage.CostUSD - judgment.Usage.CostUSD
+		}
 	}
 	result.PromptTotal = judgment.Usage.PromptTokens
 	result.CostUSD = judgment.Usage.CostUSD
@@ -126,55 +147,6 @@ func judgeCorpusDocument(t *testing.T, endpoint decisions.Endpoint, document cor
 
 func claimKey(claim Claim) string {
 	return claim.Path + "\x00" + claim.Text
-}
-
-func accuracyLine(judged []judgedDocument, path string, threshold float64) string {
-	graded, gradedCaught := map[string]bool{}, map[string]bool{}
-	seeds, seedsCaught, clean, falseFlags, cleanDocuments, cleanDocumentsFlagged := 0, 0, 0, 0, 0, 0
-	for _, document := range judged {
-		if document.Path != path {
-			continue
-		}
-		isClean, isFlagged := true, false
-		for _, claim := range document.corpus.Claims {
-			isHit := document.Probability[claimKey(claim.Claim)] >= threshold
-			switch claim.Label {
-			case "both":
-				name := document.Document + "/" + claim.LabelName
-				graded[name] = true
-				gradedCaught[name] = gradedCaught[name] || isHit
-				isClean = false
-			case "seed":
-				seeds++
-				if isHit {
-					seedsCaught++
-				}
-				isClean = false
-			case "clean":
-				clean++
-				if isHit {
-					falseFlags++
-					isFlagged = true
-				}
-			default:
-				isClean = false
-			}
-		}
-		if isClean && !strings.HasSuffix(document.Document, "-seeded") {
-			cleanDocuments++
-			if isFlagged {
-				cleanDocumentsFlagged++
-			}
-		}
-	}
-	caught := 0
-	for name := range graded {
-		if gradedCaught[name] {
-			caught++
-		}
-	}
-	return fmt.Sprintf("%s threshold %.2f: graded inventions caught %d/%d, seeded caught %d/%d, false flags %d/%d clean claims, clean documents flagged %d/%d",
-		path, threshold, caught, len(graded), seedsCaught, seeds, falseFlags, clean, cleanDocumentsFlagged, cleanDocuments)
 }
 
 func costLine(judged []judgedDocument) string {
@@ -202,4 +174,113 @@ func writeResults(t *testing.T, output string, judged []judgedDocument) {
 	if errorValue := os.WriteFile(output, content, 0o600); errorValue != nil {
 		t.Fatal(errorValue)
 	}
+}
+
+func writerFromEnvironment(t *testing.T, endpoint decisions.Endpoint) model.LanguageModelProvider {
+	t.Helper()
+	name := evaltest.RequireInput(t, writerVariable, "name the language model that recomputes and rewrites, as OpenRouter spells it")
+	return openaicompatible.NewProvider(writerEndpoint, endpoint.APIKey, name)
+}
+
+func markRecomputed(result *judgedDocument, before Judgment, after Judgment) {
+	for index, verdict := range after.Verdicts {
+		if verdict.Defect == KindError && before.Verdicts[index].Defect != KindError {
+			result.Probability[claimKey(verdict.Claim)] = map[string]float64{KindError: 1}
+			result.Defect[claimKey(verdict.Claim)] = KindError
+		}
+	}
+}
+
+type treatedUnit struct {
+	Document string `json:"document"`
+	Original string `json:"original"`
+	Expected string `json:"expected"`
+	Subkind  string `json:"subkind"`
+	Defect   string `json:"defect"`
+	Outcome  string `json:"outcome"`
+	Text     string `json:"text,omitempty"`
+}
+
+func TestLiveRewriteTreatmentOfFlaggedUnits(t *testing.T) {
+	corpusPath := evaltest.RequireInput(t, corpusVariable, "point it at the defect corpus")
+	endpoint, errorValue := decisions.EndpointFromEnvironment()
+	evaltest.RequireConfigured(t, "the decision model", errorValue)
+	profile := profileFromEnvironment(t)
+	writer := writerFromEnvironment(t, endpoint)
+	documents := readCorpus(t, corpusPath)
+	treated := make([][]treatedUnit, len(documents))
+	var group sync.WaitGroup
+	limiter := make(chan struct{}, 8)
+	for index, document := range documents {
+		group.Add(1)
+		go func() {
+			defer group.Done()
+			limiter <- struct{}{}
+			defer func() { <-limiter }()
+			treated[index] = treatDocument(t, profile, endpoint, writer, document)
+		}()
+	}
+	group.Wait()
+	counts := map[string]int{}
+	flat := []treatedUnit{}
+	for _, units := range treated {
+		for _, unit := range units {
+			counts[unit.Defect+"/"+unit.Expected+"/"+unit.Outcome]++
+			flat = append(flat, unit)
+		}
+	}
+	t.Logf("treatment outcomes (defect/expected/outcome): %v", counts)
+	if output := os.Getenv("BLUECOLLAR_CLAIM_RESULTS"); output != "" {
+		content, _ := json.MarshalIndent(flat, "", " ")
+		if errorValue := os.WriteFile(output, content, 0o600); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+}
+
+func treatDocument(t *testing.T, profile Profile, endpoint decisions.Endpoint, writer model.LanguageModelProvider, document corpusDocument) []treatedUnit {
+	claims := []Claim{}
+	expected := map[string]corpusClaim{}
+	for _, claim := range document.Claims {
+		claims = append(claims, claim.Claim)
+		expected[claim.Path] = claim
+	}
+	sources := Sources{Request: []string{document.Request}, Attachments: document.Attachments, RuntimeFacts: document.RuntimeFacts}
+	judgment, errorValue := JudgeWith(context.Background(), profile, endpoint.DecisionModel(), sources, claims)
+	if errorValue != nil {
+		t.Errorf("%s: %v", document.Document, errorValue)
+		return nil
+	}
+	outcome, errorValue := Treat(context.Background(), profile, endpoint.DecisionModel(), writer, sources, judgment)
+	if errorValue != nil {
+		t.Errorf("%s: %v", document.Document, errorValue)
+		return nil
+	}
+	units := []treatedUnit{}
+	for _, claim := range outcome.Replaced {
+		units = append(units, unitOf(document, expected[claim.Path], judgment, "replaced", claim.Text))
+	}
+	for _, verdict := range outcome.Kept {
+		units = append(units, unitOf(document, expected[verdict.Path], judgment, "kept", ""))
+	}
+	for _, verdict := range outcome.Blank {
+		if profile.Treatments[verdict.Defect] == TreatmentRewrite {
+			units = append(units, unitOf(document, expected[verdict.Path], judgment, "blanked-after-rewrite", ""))
+		}
+	}
+	return units
+}
+
+func unitOf(document corpusDocument, claim corpusClaim, judgment Judgment, outcome string, text string) treatedUnit {
+	defect := ""
+	for _, verdict := range judgment.Verdicts {
+		if verdict.Path == claim.Path && verdict.Text == claim.Text {
+			defect = verdict.Defect
+		}
+	}
+	expected := claim.Expected
+	if claim.Label != "seed" {
+		expected = "clean"
+	}
+	return treatedUnit{Document: document.Document, Original: claim.Text, Expected: expected, Subkind: claim.Subkind, Defect: defect, Outcome: outcome, Text: text}
 }

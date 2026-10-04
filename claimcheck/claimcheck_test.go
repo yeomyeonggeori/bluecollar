@@ -12,7 +12,7 @@ import (
 
 type scriptedDecisionModel struct {
 	requests []model.DecisionRequest
-	kindOf   func(text string) (string, float64)
+	kindOf   func(text string) (string, map[string]float64)
 }
 
 func (decisionModel *scriptedDecisionModel) Decide(_ context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
@@ -20,8 +20,8 @@ func (decisionModel *scriptedDecisionModel) Decide(_ context.Context, request mo
 	claims := request.State.(map[string]any)["claims"].(map[string]shownClaim)
 	answers := map[string]model.DecisionAnswer{}
 	for key := range request.Questions {
-		kind, probability := decisionModel.kindOf(claims[key].Text)
-		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: kind, Probabilities: map[string]float64{KindClaim: probability}}
+		kind, probabilities := decisionModel.kindOf(claims[key].Text)
+		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: kind, Probabilities: probabilities}
 	}
 	return model.DecisionResponse{Answers: answers, Usage: model.Usage{PromptTokens: 100, TotalTokens: 110}}, nil
 }
@@ -34,11 +34,18 @@ func claimsOf(texts ...string) []Claim {
 	return claims
 }
 
-func flaggingInventions(text string) (string, float64) {
-	if strings.Contains(text, "invented") {
-		return KindClaim, 0.9
+func flaggingInventions(text string) (string, map[string]float64) {
+	switch {
+	case strings.Contains(text, "invented"):
+		return KindUnsupported, map[string]float64{KindUnsupported: 0.9}
+	case strings.Contains(text, "wrong"):
+		return KindMistake, map[string]float64{KindMistake: 0.8, KindSource: 0.2}
+	case strings.Contains(text, "miscounted"):
+		return KindError, map[string]float64{KindError: 0.7}
+	case strings.Contains(text, "supercharge"):
+		return KindSlop, map[string]float64{KindSlop: 0.9}
 	}
-	return KindSource, 0.05
+	return KindSource, map[string]float64{KindSource: 0.95, KindUnsupported: 0.05}
 }
 
 func TestAClaimCopiedFromTheSourcesIsNotAsked(t *testing.T) {
@@ -72,8 +79,8 @@ func TestOnlyAClaimAtOrAboveTheThresholdIsUnsupported(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	unsupported := judgment.Unsupported()
-	if len(unsupported) != 1 || unsupported[0].Path != "paragraphs[1]" || unsupported[0].Kind != KindClaim {
+	unsupported := judgment.Flagged()
+	if len(unsupported) != 1 || unsupported[0].Path != "paragraphs[1]" || unsupported[0].Defect != KindUnsupported {
 		t.Fatalf("expected only the invented commitment, got %+v", unsupported)
 	}
 	if judgment.Usage.TotalTokens != 110 {
@@ -92,7 +99,7 @@ func TestEveryQuestionAsksTheSameKindsAndTheStateHoldsTheirMeaning(t *testing.T)
 		t.Fatal("expected the kinds to be defined once in the state")
 	}
 	for key, question := range request.Questions {
-		if question.Type != model.DecisionQuestionTypeChoice || len(question.Criteria.(map[string]string)) != len(kinds) {
+		if question.Type != model.DecisionQuestionTypeChoice || len(question.Criteria.(map[string]string)) != len(CompactProfile.Kinds) {
 			t.Fatalf("%s: expected a choice among every kind, got %+v", key, question)
 		}
 		if !strings.Contains(question.Instructions, "claims."+key) {
@@ -134,5 +141,46 @@ func TestAMissingAnswerIsAnError(t *testing.T) {
 	_, errorValue := Judge(context.Background(), silentDecisionModel{}, Sources{Request: []string{"Write a notice."}}, claimsOf("a value"))
 	if errorValue == nil {
 		t.Fatal("expected a missing answer to fail the check")
+	}
+}
+
+func TestEachDefectKindIsRoutedToItsTreatment(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
+	texts := []string{"an invented fact", "a wrong date", "a miscounted total", "supercharge your day", "Thank you"}
+	judgment, errorValue := Judge(context.Background(), decisionModel, Sources{Request: []string{"Write a notice."}}, claimsOf(texts...))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	blanked, rewritten := judgment.Treated(TreatmentBlank), judgment.Treated(TreatmentRewrite)
+	if len(blanked) != 3 || len(rewritten) != 1 || rewritten[0].Defect != KindSlop {
+		t.Fatalf("expected three blanked and the slop rewritten, got %+v and %+v", blanked, rewritten)
+	}
+}
+
+func TestADefectSplitAcrossKindsIsFlaggedAsTheStrongest(t *testing.T) {
+	probabilities := map[string]float64{KindMistake: 0.3, KindUnsupported: 0.4, KindSource: 0.3}
+	verdict := CompactProfile.VerdictFor(Claim{Text: "split"}, KindUnsupported, probabilities)
+	if verdict.Defect != KindUnsupported || verdict.Treatment != TreatmentBlank {
+		t.Fatalf("expected the strongest defect kind once the defects together reach the threshold, got %+v", verdict)
+	}
+	probabilities = map[string]float64{KindMistake: 0.2, KindUnsupported: 0.2, KindSource: 0.6}
+	if verdict := CompactProfile.VerdictFor(Claim{Text: "fine"}, KindSource, probabilities); verdict.Defect != "" {
+		t.Fatalf("expected a claim below the threshold to pass, got %+v", verdict)
+	}
+}
+
+func TestTodayProfileKnowsOnlyTheOldKinds(t *testing.T) {
+	if len(TodayProfile.Kinds) != 4 || len(TodayProfile.Treatments) != 1 {
+		t.Fatalf("expected the four old kinds and one blanking defect, got %+v", TodayProfile)
+	}
+}
+
+func TestEveryDefectKindIsDefinedInItsProfile(t *testing.T) {
+	for _, profile := range []Profile{TodayProfile, CompactProfile, FineProfile} {
+		for kind := range profile.Treatments {
+			if profile.Kinds[kind] == "" {
+				t.Fatalf("%s: defect kind %s has no definition", profile.Name, kind)
+			}
+		}
 	}
 }
