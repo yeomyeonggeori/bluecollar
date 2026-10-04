@@ -516,7 +516,9 @@ func BuildFailureNoticePrompt(report FailureReport) string {
 	if len(report.CarriedFilenames) > 0 {
 		sections = append(sections, "This notice itself carries the file(s) in carriedFilenames ("+strings.Join(report.CarriedFilenames, ", ")+"): the agent had handed them over for delivery before the run stopped. Say they are attached here as the latest version, and that the run stopped before the work was confirmed finished, so they may be incomplete or unchecked. Do not call them final or verified.")
 	}
-	if report.ArtifactRequired && len(report.AttachmentFilenames) > 0 {
+	if report.Phase == "delivery" {
+		sections = append(sections, "This is the outcome of the current delivery attempt. attachmentFilenames lists files that reached the person during this attempt; safeFailureSummary names those that failed. Acknowledge each outcome accurately. Do not describe newly delivered files as an older version, and do not invent interrupted shooting, refinement or polishing. This notice carries no files itself.")
+	} else if report.ArtifactRequired && len(report.AttachmentFilenames) > 0 {
 		sections = append(sections, "A requested file artifact was already sent to the user earlier in this task ("+strings.Join(report.AttachmentFilenames, ", ")+"); this notice itself carries no file. Acknowledge the file already sent as the current result, without saying it is attached here. Do not claim it was not created, not made, or not delivered. If the run stopped before further refinement, say only that the version already sent is the best result so far and further polishing was interrupted.")
 	}
 	if report.ArtifactRequired && len(report.AttachmentFilenames) == 0 && len(report.CarriedFilenames) == 0 {

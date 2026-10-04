@@ -115,31 +115,10 @@ func completionReplyOriginalRequest(request AgentTurnRequest) string {
 }
 
 func appendObservationAttachments(attachments []toolcontract.FileAttachment, observation turnObservation) []toolcontract.FileAttachment {
-	if observation.Failed() || len(observation.Attachments) == 0 {
+	if observation.Failed() || observation.Tool == "browser_screenshot" {
 		return attachments
 	}
-	nextAttachments := append([]toolcontract.FileAttachment{}, attachments...)
-	if observation.Tool == "browser_screenshot" {
-		nextAttachments = removeBrowserScreenshotAttachments(nextAttachments)
-	}
-	for _, attachment := range observation.Attachments {
-		if strings.TrimSpace(attachment.DevicePath) == "" || hasAttachmentDevicePath(nextAttachments, attachment.DevicePath) {
-			continue
-		}
-		nextAttachments = append(nextAttachments, attachment)
-	}
-	return nextAttachments
-}
-
-func removeBrowserScreenshotAttachments(attachments []toolcontract.FileAttachment) []toolcontract.FileAttachment {
-	filteredAttachments := []toolcontract.FileAttachment{}
-	for _, attachment := range attachments {
-		if strings.HasPrefix(strings.TrimSpace(attachment.Filename), "browser-screenshot-") {
-			continue
-		}
-		filteredAttachments = append(filteredAttachments, attachment)
-	}
-	return filteredAttachments
+	return appendUniqueAttachments(attachments, observation.Attachments)
 }
 
 func hasAttachmentDevicePath(attachments []toolcontract.FileAttachment, devicePath string) bool {
@@ -467,7 +446,7 @@ func collectReferenceDeliveryAttachments(observations []turnObservation, referen
 	attachments := []toolcontract.FileAttachment{}
 	for _, reference := range references {
 		observation, isFound := findSuccessfulObservation(observations, reference)
-		if !isFound || !toolProducesDeliveryAttachments(observation.Tool) {
+		if !isFound || !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
 			continue
 		}
 		attachments = appendUniqueAttachments(attachments, attachmentsForReference(observation, reference))
@@ -478,19 +457,12 @@ func collectReferenceDeliveryAttachments(observations []turnObservation, referen
 func deliveredAttachments(observations []turnObservation) []toolcontract.FileAttachment {
 	attachments := []toolcontract.FileAttachment{}
 	for _, observation := range observations {
-		if observation.Failed() || !toolProducesDeliveryAttachments(observation.Tool) {
+		if observation.Failed() || !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
 			continue
 		}
 		attachments = appendUniqueAttachments(attachments, observation.Attachments)
 	}
 	return attachments
-}
-
-func toolProducesDeliveryAttachments(toolName string) bool {
-	if toolcontract.IsArtifactDeliveryTool(toolName) {
-		return true
-	}
-	return strings.TrimSpace(toolName) == "browser_screenshot"
 }
 
 func attachmentsForReference(observation turnObservation, reference completionEvidenceReference) []toolcontract.FileAttachment {
