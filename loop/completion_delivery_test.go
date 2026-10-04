@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
@@ -94,7 +95,7 @@ func TestTheUnmetChangesReplyIsToldWhichFilesItCarries(t *testing.T) {
 	check := changeCheck{Unmet: []expectedChange{{Change: "file created", Asked: "견적서를 pdf로 만들어 주세요."}}}
 	carried := []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-1/documents/견적서.pdf", Filename: "견적서.pdf", ContentType: "application/pdf", SizeBytes: 34549}}
 
-	services.runner.replyStatingUnmetChanges(context.Background(), "task-run-1", request, quoteReply, check, carried)
+	services.runner.replyForFinish(context.Background(), "task-run-1", request, &agentTaskState{}, completionGateResult{IsSatisfied: true, Attachments: carried, ChangeCheck: &check}, quoteReply, nil)
 
 	if len(recorder.prompts) != 1 {
 		t.Fatalf("expected one rewrite, got %d", len(recorder.prompts))
@@ -106,7 +107,7 @@ func TestTheUnmetChangesReplyIsToldWhichFilesItCarries(t *testing.T) {
 }
 
 func TestTheUnmetChangesReplyWithNoFileIsToldItCarriesNone(t *testing.T) {
-	prompt := buildUnmetChangesReplyPrompt(AgentTurnRequest{Prompt: quoteRequest}, quoteReply, changeCheck{Unmet: []expectedChange{{Change: "file created", Asked: "견적서를 pdf로 만들어 주세요."}}}, nil)
+	prompt := buildFinishReplyRewritePrompt(AgentTurnRequest{Prompt: quoteRequest}, quoteReply, finishReplyRewrite{unmet: []expectedChange{{Change: "file created", Asked: "견적서를 pdf로 만들어 주세요."}}})
 
 	if !strings.Contains(prompt, "Files this reply carries: none.") {
 		t.Fatalf("expected the rewrite told the reply carries no file, got %q", prompt)
@@ -122,10 +123,74 @@ func TestAFinishWhoseCheckStaysUnmetRewritesTheReplyKnowingTheDeliveredFile(t *t
 	gate := completionGateResult{IsSatisfied: true, Attachments: []toolcontract.FileAttachment{attachment}, ChangeCheck: &check}
 	state := agentTaskState{}
 
-	services.runner.replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: delivery.Prompt}, &state, gate, "done")
+	services.runner.replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: delivery.Prompt}, &state, gate, "done", nil)
 
 	encoded, _ := json.Marshal(recorder.prompts)
 	if len(recorder.prompts) != 1 || !strings.Contains(recorder.prompts[0], "Files this reply carries: "+attachment.Filename+".") {
 		t.Fatalf("expected the finish's rewrite told the workbook it carries, got %s", encoded)
+	}
+}
+
+const quarterlyReviewReply = "사내 3분기 업무 리뷰 발표자료를 첨부했습니다.\n1. 표지 — \"3분기 매출 목표의 90%를 달성하고, 4분기에 재도전합니다\" · 발표자 이샘플"
+
+var quarterlyReviewDeliveryNotes = []string{
+	"q3-review-2026.pptx: left blank because nothing the person gave supports them, for the reply to offer to complete: 슬라이드 1 제목 (it said \"3분기 매출 목표의 90%를 달성하고, 4분기에 재도전합니다\")",
+	"q3-review-2026.pptx: slides that still show a defect after the visual review, for the reply to say what remains: slide 2 (imbalanced_layout)",
+}
+
+type deliveringFinishModel struct {
+	actionCount    int
+	rewritePrompts []string
+}
+
+func (languageModel *deliveringFinishModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (languageModel *deliveringFinishModel) GenerateStructuredResponse(context.Context, model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	return model.StructuredResponse{}, nil
+}
+
+func (languageModel *deliveringFinishModel) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	if request.SchemaName == deliveryNotesReplySchemaName {
+		languageModel.rewritePrompts = append(languageModel.rewritePrompts, request.Messages[0].Content)
+		return model.ChatCompletionResponse{FinishReason: "stop", Message: model.ChatCompletionMessage{Role: "assistant", Content: "발표자료를 첨부했습니다. 표지 제목은 비워 두었습니다."}}, nil
+	}
+	languageModel.actionCount++
+	finish, _ := json.Marshal(map[string]any{"final": true, "message": quarterlyReviewReply, "attachments": []map[string]string{{"path": "q3-review-2026/build/q3-review-2026.pptx"}}, "goalStatus": "satisfied", "goalSatisfied": true})
+	toolCall := nativeAgentActionToolCall("reply", string(finish))
+	return model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{Role: "assistant", ToolCalls: []model.ChatCompletionToolCall{toolCall}}}, nil
+}
+
+func TestAFinishWhoseOwnDeliveryReportsNotesRewritesTheReplyWithThem(t *testing.T) {
+	languageModel := &deliveringFinishModel{}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
+	toolRegistry := newTestToolSet([]string{toolcontract.BashToolName})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.FileDeliverToolName, Visibility: toolcontract.ToolVisibilityInternal}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return toolcontract.ToolResult{
+			Output:      toolcontract.ToolOutput{Content: "files staged"},
+			Attachments: []toolcontract.FileAttachment{{DevicePath: "/workspace/q3-review-2026.pptx", Filename: "q3-review-2026.pptx", ContentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", SizeBytes: 2590842}},
+			ReplyNotes:  quarterlyReviewDeliveryNotes,
+		}, nil
+	})
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterPersonID: "person-1", ConversationID: "conversation-1", Prompt: "사내 3분기 업무 리뷰 발표자료를 pptx로 만들어 주세요.", ToolSet: toolRegistry})
+
+	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
+		t.Fatalf("expected the finish to complete, got %v %+v", errorValue, result.TaskRun)
+	}
+	if len(languageModel.rewritePrompts) != 1 || !strings.Contains(languageModel.rewritePrompts[0], quarterlyReviewDeliveryNotes[0]) || !strings.Contains(languageModel.rewritePrompts[0], quarterlyReviewDeliveryNotes[1]) || !strings.Contains(languageModel.rewritePrompts[0], quarterlyReviewReply) {
+		t.Fatalf("expected one rewrite told the reply and both notes its own delivery reported, got %q", languageModel.rewritePrompts)
+	}
+	if result.FinishMessage != "발표자료를 첨부했습니다. 표지 제목은 비워 두었습니다." || len(result.Attachments) != 1 {
+		t.Fatalf("expected the rewritten reply with its attachment, got %q %+v", result.FinishMessage, result.Attachments)
+	}
+}
+
+func TestAFinishWithoutDeliveryNotesSendsItsReplyAsWritten(t *testing.T) {
+	reply, carried := (&AgentTurnRunner{}).replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: quoteRequest}, &agentTaskState{}, completionGateResult{IsSatisfied: true}, quoteReply, nil)
+
+	if reply != quoteReply || len(carried) != 0 {
+		t.Fatalf("expected the reply unchanged, got %q", reply)
 	}
 }

@@ -308,7 +308,9 @@ After the facts, an expected change is unmet without further judgment when nothi
 
 After two refusals with nothing done in between, the loop withdraws the final reply from the action schema; after three it offers both the reply and `fail`.
 
-A refusal records the SHA-256 digest of everything the check judged except the clock. When a later check would judge a state with the same digest, the decision model is not asked again. The ledger records the earlier verdict with `repeatsRefusalOf`, the run finishes, and the model rewrites the final reply to say which asked changes are still not done. The rewrite is told the files the reply carries, and that they were made and are attached, so it says an attached file is attached and asks the person to check it against the asked words. A stop at a limit does not count such a state as done.
+A refusal records the SHA-256 digest of everything the check judged except the clock. When a later check would judge a state with the same digest, the decision model is not asked again. The ledger records the earlier verdict with `repeatsRefusalOf`, the run finishes, and the model rewrites the final reply to say which asked changes are still not done. The rewrite is told the files the reply carries, and that they were made and are attached, so it says an attached file is attached and asks the person to check it against the asked words.
+
+A tool result can carry `replyNotes`: what the reply that carries it must tell the person, such as values a delivery left blank or defects it could not repair. A final reply that names its own attachments has them delivered with it, after the model wrote it, so when that delivery returns notes the reply is rewritten once (`bluecollar_delivery_notes_reply`) to state them and to stop describing what the delivery left blank. A delivery the model called before writing the reply needs no rewrite, because the model read its result. A stop at a limit does not count such a state as done.
 
 While budget remains, only the model ends a task. The runtime does not attach a file or write a final reply on its behalf; an undelivered file is an unmet `file attached`, and the model delivers it.
 

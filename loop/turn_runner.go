@@ -142,6 +142,7 @@ type turnObservation struct {
 	RecoveryPacket       *RecoveryPacket               `json:"recoveryPacket,omitempty"`
 	Attachments          []toolcontract.FileAttachment `json:"attachments,omitempty"`
 	RecoveryActions      []toolcontract.RecoveryAction `json:"recoveryActions,omitempty"`
+	ReplyNotes           []string                      `json:"replyNotes,omitempty"`
 	ChangeCheck          *changeCheck                  `json:"changeCheck,omitempty"`
 	DurationMS           int64                         `json:"durationMs"`
 }
@@ -651,7 +652,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			}
 			continue
 		case "finish":
-			deliveredDocument, _, isDelivered := agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
+			deliveredDocument, delivery, isDelivered := agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
 			if !isDelivered {
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "reply", lastObservationText(state.Observations))
 				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
@@ -693,7 +694,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "finish", "empty final reply message")
 				return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "empty final reply message", &state, iteration)
 			}
-			reply, carried := agentTurnRunner.replyForFinish(workContext, taskRun.TaskRunID, request, &state, completionGateResult, reply)
+			reply, carried := agentTurnRunner.replyForFinish(workContext, taskRun.TaskRunID, request, &state, completionGateResult, reply, delivery.ReplyNotes)
 			reply = agentTurnRunner.prepareFinishMessageForPlatform(workContext, request, reply)
 			if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
 				return cancelledResult, nil

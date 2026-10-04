@@ -59,6 +59,7 @@ const (
 	evidenceKindReference        = "evidence_reference_invalid"
 	completionReplySchemaName    = "bluecollar_completion_reply"
 	unmetChangesReplySchemaName  = "bluecollar_unmet_changes_reply"
+	deliveryNotesReplySchemaName = "bluecollar_delivery_notes_reply"
 	completionPersistenceTimeout = 5 * time.Second
 )
 
