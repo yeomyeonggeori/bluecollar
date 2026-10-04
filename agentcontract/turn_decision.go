@@ -119,13 +119,21 @@ type TurnDecision struct {
 	RoutingFallbackReason   string                `json:"routingFallbackReason,omitempty"`
 }
 
+type ClarificationDisposition string
+
+const (
+	ClarificationDispositionAsk       ClarificationDisposition = "ask"
+	ClarificationDispositionStartWork ClarificationDisposition = "start_work"
+)
+
 type TurnWords struct {
-	Reason                string                `json:"reason"`
-	UserFacingReply       string                `json:"userFacingReply"`
-	ClarificationQuestion string                `json:"clarificationQuestion"`
-	ClarificationOptions  []ClarificationOption `json:"clarificationOptions"`
-	BusyInstruction       string                `json:"busyInstruction"`
-	ExpectedResults       []ExpectedResult      `json:"expectedResults"`
+	Reason                   string                   `json:"reason"`
+	UserFacingReply          string                   `json:"userFacingReply"`
+	ClarificationDisposition ClarificationDisposition `json:"clarificationDisposition,omitempty"`
+	ClarificationQuestion    string                   `json:"clarificationQuestion"`
+	ClarificationOptions     []ClarificationOption    `json:"clarificationOptions"`
+	BusyInstruction          string                   `json:"busyInstruction"`
+	ExpectedResults          []ExpectedResult         `json:"expectedResults"`
 }
 
 func (turnDecision TurnDecision) WithTurnWords(turnWords TurnWords) TurnDecision {

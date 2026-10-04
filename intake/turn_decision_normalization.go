@@ -184,6 +184,15 @@ func normalizeTurnWords(decision agentcontract.TurnDecision) agentcontract.TurnD
 	return decision
 }
 
+func startClarifiedWork(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+	decision.Route = agentcontract.TurnRouteStartTask
+	decision.Classification = agentcontract.IntakeClassificationBoundedTask
+	decision.TaskShape = agentcontract.TaskShapeMaintenanceTask
+	decision.ClarificationQuestion = ""
+	decision.ClarificationOptions = nil
+	return decision
+}
+
 func removeFileDeliveryToolWithoutFileDeliverable(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
 	if hasFileDeliverable(decision) {
 		return decision

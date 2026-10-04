@@ -22,12 +22,17 @@ type TurnRouter struct {
 }
 
 const turnWordsSystemPrompt = "You write the words for one turn of a workplace assistant. Every decision about this turn is already made and handed to you under \"Decided for this turn\"; do not re-decide it, do not argue with it, and do not mention it. Fill only the fields the schema asks for." +
-	"\n\nclarify: ask in clarificationQuestion for exactly the one thing only the requester can supply, and offer 2-5 clarificationOptions when the request itself implies a finite choice. Do not invent options the message does not imply, and never ask for approval." +
 	"\n\nanswer_question and answer_meta: write the answer itself in userFacingReply, like a concise coworker. Answer jokes and casual addressed remarks in kind rather than ignoring them." +
 	"\n\ngive_up: say in userFacingReply that this cannot be done, and why, without blaming the requester." +
 	"\n\nbusyRoute steer: write busyInstruction as the correction to hand the task already running, in the requester's own terms." +
 	"\n\nreason is one short line for the log and is never shown to anybody. Leave every field a route does not need empty." +
 	"\n\nWhat this agent said earlier is its own, not the requester's. A subject it named, a title it guessed at, or a thing it reported failing to find is never what the latest message is about unless the requester's own words say so."
+
+const clarificationWordsSystemPrompt = "You decide whether the requester still needs to provide essential information before this work can start. The prior route and classification are proposals to review, not facts." +
+	"\n\nRead the latest request together with all visible conversation context and the active goal. The latest request is authoritative. Do not invent requirements, and do not ask for information already supplied by the requester." +
+	"\n\nIf essential information only the requester can provide is still missing, set clarificationDisposition to ask and ask one concise question for that information. Offer 2-5 clarificationOptions only when the request itself implies a finite choice." +
+	"\n\nIf the request and visible context provide enough information to start, set clarificationDisposition to start_work, leave clarificationQuestion empty and clarificationOptions empty, and write expectedResults for only the outcomes the requester asked to exist. Do not claim that work is complete or successful." +
+	"\n\nLeave userFacingReply empty. Put one short line for the log in reason."
 
 const expectedResultsSystemPrompt = "You write the acceptance contract for one task a workplace assistant is about to start. Every decision about this turn is already made and handed to you under \"Decided for this turn\"; do not re-decide it, and write nothing for the requester here." +
 	"\n\nList in expectedResults only what the request itself asks to exist when the work is done, each with the evidence that proves it: an id, a type, one sentence of description, whether it is required, and acceptanceHints naming the tool result, file, or link a reader would check." +
@@ -83,7 +88,11 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, fmt.Errorf("turn router words: %w", errorValue)
 	}
-	return normalizeTurnWords(decidedFields.WithTurnWords(turnWords)), nil
+	decision := decidedFields.WithTurnWords(turnWords)
+	if isClarificationReview(decidedFields) && turnWords.ClarificationDisposition == agentcontract.ClarificationDispositionStartWork {
+		decision = startClarifiedWork(decision)
+	}
+	return normalizeTurnWords(decision), nil
 }
 
 func isMalformedAnswer(ctx context.Context, errorValue error) bool {
@@ -137,6 +146,7 @@ func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontrac
 		}},
 		ConversationType:    request.ConversationType,
 		VisibleContext:      request.VisibleContext,
+		AgentIdentity:       request.AgentIdentity,
 		Company:             request.Company,
 		ActiveTask:          request.ActiveTask,
 		PendingConfirmation: request.PendingConfirmation,
@@ -158,6 +168,9 @@ type turnWordsShape struct {
 }
 
 func turnWordsShapeFor(decision agentcontract.TurnDecision) (turnWordsShape, bool) {
+	if isClarificationReview(decision) {
+		return turnWordsShape{systemPrompt: clarificationWordsSystemPromptFor(decision), schemaDocument: clarificationTurnWordsSchema()}, true
+	}
 	if turnRouteNeedsWords(decision) {
 		return turnWordsShape{systemPrompt: turnWordsSystemPrompt, schemaDocument: turnWordsSchema()}, true
 	}
@@ -165,6 +178,17 @@ func turnWordsShapeFor(decision agentcontract.TurnDecision) (turnWordsShape, boo
 		return turnWordsShape{systemPrompt: expectedResultsSystemPrompt, schemaDocument: expectedResultsOnlySchema()}, true
 	}
 	return turnWordsShape{}, false
+}
+
+func clarificationWordsSystemPromptFor(decision agentcontract.TurnDecision) string {
+	if decision.BusyRoute != agentcontract.BusyRouteSteer {
+		return clarificationWordsSystemPrompt
+	}
+	return clarificationWordsSystemPrompt + "\n\nThe message also steers the active task. Preserve that correction in busyInstruction using the requester's own terms."
+}
+
+func isClarificationReview(decision agentcontract.TurnDecision) bool {
+	return decision.Route == agentcontract.TurnRouteClarify || agentcontract.NormalizeIntakeClassification(decision.Classification) == agentcontract.IntakeClassificationNeedsConfirmation
 }
 
 func turnRouteNeedsWords(decision agentcontract.TurnDecision) bool {
@@ -248,13 +272,22 @@ func turnWordsRequest(messages []model.Message, wordsShape turnWordsShape) model
 }
 
 func validateClarificationQuestion(decidedFields agentcontract.TurnDecision, turnWords agentcontract.TurnWords) error {
-	if decidedFields.Route != agentcontract.TurnRouteClarify && agentcontract.NormalizeIntakeClassification(decidedFields.Classification) != agentcontract.IntakeClassificationNeedsConfirmation {
+	if !isClarificationReview(decidedFields) {
 		return nil
 	}
-	if strings.TrimSpace(turnWords.ClarificationQuestion) != "" {
-		return nil
+	switch turnWords.ClarificationDisposition {
+	case agentcontract.ClarificationDispositionAsk:
+		if strings.TrimSpace(turnWords.ClarificationQuestion) == "" {
+			return errors.New("an ask disposition requires a nonempty clarification question")
+		}
+	case agentcontract.ClarificationDispositionStartWork:
+		if strings.TrimSpace(turnWords.ClarificationQuestion) != "" || len(turnWords.ClarificationOptions) > 0 {
+			return errors.New("a start_work disposition requires no clarification question or options")
+		}
+	default:
+		return errors.New("a clarification turn requires a valid clarification disposition")
 	}
-	return errors.New("a clarify turn requires a clarificationQuestion naming the one thing only the requester can supply")
+	return nil
 }
 
 type turnRouterDecisionError struct {
@@ -310,7 +343,7 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	messages := []model.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(firstNonEmptyAddressingText(decidedFields.ResponseLanguage, request.ResponseLanguage))},
-		{Role: "system", Content: decidedTurnFactsDescription(decidedFields)},
+		{Role: "system", Content: turnWordsFactsDescription(decidedFields)},
 	}
 	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
@@ -331,6 +364,23 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 		messages = append(messages, model.Message{Role: "system", Content: temporalContext})
 	}
 	return append(messages, turnWordsUserMessage(request))
+}
+
+func turnWordsFactsDescription(decidedFields agentcontract.TurnDecision) string {
+	if !isClarificationReview(decidedFields) {
+		return decidedTurnFactsDescription(decidedFields)
+	}
+	lines := []string{
+		"Proposed decision for this turn. Review it against the request and visible context:",
+		"- proposed route: " + string(decidedFields.Route),
+		"- proposed classification: " + string(decidedFields.Classification),
+		"- proposed task shape: " + string(decidedFields.TaskShape),
+		"- proposed level: " + string(decidedFields.TaskLevel),
+	}
+	if decidedFields.BusyRoute != "" {
+		lines = append(lines, "- proposed busy route: "+string(decidedFields.BusyRoute))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func turnWordsUserMessage(request agentcontract.AgentRequest) model.Message {
@@ -402,20 +452,46 @@ func toolIsSelectableForTurn(toolSet *toolcontract.ToolSet, toolName string) boo
 }
 
 func turnWordsSchema() string {
+	return turnWordsSchemaWithClarificationDisposition(false)
+}
+
+func clarificationTurnWordsSchema() string {
+	return turnWordsSchemaWithClarificationDisposition(true)
+}
+
+func turnWordsSchemaWithClarificationDisposition(requiresClarificationDisposition bool) string {
+	clarificationQuestionSchema := map[string]any{"type": "string", "maxLength": 256}
+	if !requiresClarificationDisposition {
+		clarificationQuestionSchema = map[string]any{"anyOf": []any{
+			map[string]any{"type": "string", "maxLength": 256},
+			map[string]any{"type": "null"},
+		}}
+	}
+	properties := map[string]any{
+		"reason":          map[string]any{"type": "string", "maxLength": 512},
+		"userFacingReply": map[string]any{"type": "string", "maxLength": 512},
+		"clarificationQuestion": clarificationQuestionSchema,
+		"clarificationOptions": clarificationOptionsSchema(),
+		"busyInstruction":      map[string]any{"type": "string", "maxLength": 512},
+		"expectedResults":      expectedResultsSchema(),
+	}
+	if requiresClarificationDisposition {
+		properties["clarificationDisposition"] = map[string]any{
+			"type": "string",
+			"enum": []agentcontract.ClarificationDisposition{
+				agentcontract.ClarificationDispositionAsk,
+				agentcontract.ClarificationDispositionStartWork,
+			},
+		}
+	}
+	required := []string{"reason", "userFacingReply", "clarificationQuestion", "clarificationOptions", "busyInstruction", "expectedResults"}
+	if requiresClarificationDisposition {
+		required = append(required, "clarificationDisposition")
+	}
 	document, errorValue := json.Marshal(map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"reason":          map[string]any{"type": "string", "maxLength": 512},
-			"userFacingReply": map[string]any{"type": "string", "maxLength": 512},
-			"clarificationQuestion": map[string]any{"anyOf": []any{
-				map[string]any{"type": "string", "maxLength": 256},
-				map[string]any{"type": "null"},
-			}},
-			"clarificationOptions": clarificationOptionsSchema(),
-			"busyInstruction":      map[string]any{"type": "string", "maxLength": 512},
-			"expectedResults":      expectedResultsSchema(),
-		},
-		"required":             []string{"reason", "userFacingReply", "clarificationQuestion", "clarificationOptions", "busyInstruction", "expectedResults"},
+		"type":                 "object",
+		"properties":           properties,
+		"required":             required,
 		"additionalProperties": false,
 	})
 	if errorValue != nil {

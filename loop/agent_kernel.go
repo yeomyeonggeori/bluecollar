@@ -136,6 +136,7 @@ func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request
 	return agentKernel.RunAgentRequest(responseContext, AgentRequest{
 		RequesterPersonID:          request.RequesterPersonID,
 		RequesterName:              request.RequesterName,
+		AgentIdentity:              request.AgentIdentity,
 		RequesterCallingName:       request.RequesterCallingName,
 		RequesterHandle:            request.RequesterHandle,
 		RequesterCircles:           append([]string{}, request.RequesterCircles...),
@@ -374,6 +375,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		RequesterPersonID:          request.RequesterPersonID,
 		Company:                    agentKernel.companyContext(),
 		RequesterName:              request.RequesterName,
+		AgentIdentity:              request.AgentIdentity,
 		RequesterCallingName:       request.RequesterCallingName,
 		RequesterHandle:            request.RequesterHandle,
 		RequesterCircles:           append([]string{}, request.RequesterCircles...),
@@ -467,6 +469,7 @@ func requestStartsFreshTask(turnDecision TurnDecision, request AgentRequest) boo
 func launchFailureRequest(request AgentRequest) AgentTurnRequest {
 	return AgentTurnRequest{
 		RequesterPersonID:   request.RequesterPersonID,
+		AgentIdentity:       request.AgentIdentity,
 		SourceReference:     request.SourceReference,
 		ExistingTaskRunID:   request.ExistingTaskRunID,
 		OriginReplyTargetID: request.OriginReplyTargetID,

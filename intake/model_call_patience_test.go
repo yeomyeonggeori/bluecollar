@@ -27,7 +27,7 @@ func (languageModel *stallingThenAnsweringTurnWordsModel) GenerateStructuredResp
 	}
 	return model.StructuredResponse{
 		ModelName: "a-model",
-		Content:   `{"reason":"the deadline is missing","userFacingReply":"","clarificationQuestion":"언제까지 필요하세요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
+		Content:   `{"reason":"the deadline is missing","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"언제까지 필요하세요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
 	}, nil
 }
 
