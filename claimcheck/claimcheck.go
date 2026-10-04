@@ -39,7 +39,6 @@ type Profile struct {
 	Guard      string
 	Treatments map[string]Treatment
 	Rewrites   map[string]string
-	Fallback   map[string]Treatment
 }
 
 func (profile Profile) isDefect(kind string) bool {
@@ -105,7 +104,6 @@ var (
 			KindClaim: TreatmentBlank, KindMistake: TreatmentBlank, KindError: TreatmentBlank, KindHollow: TreatmentRewrite,
 		},
 		Rewrites: map[string]string{KindHollow: "Replace it with this document's own facts that the sources give, stated plainly, or answer with an empty text when none fits. Never add plausible-sounding new content: no number, name, date or specific the sources do not hold."},
-		Fallback: map[string]Treatment{KindHollow: TreatmentKeep},
 	}
 )
 
