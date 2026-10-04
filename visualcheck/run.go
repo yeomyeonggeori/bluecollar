@@ -48,6 +48,7 @@ type loopState struct {
 	fixProblems   map[int]string
 	changes       map[int]string
 	givenUp       map[int]bool
+	refusals      map[int]string
 	roundsUsed    int
 	usage         Usage
 	deckSheet     model.DecisionImage
@@ -70,6 +71,7 @@ func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel m
 		fixProblems:   map[int]string{},
 		changes:       map[int]string{},
 		givenUp:       map[int]bool{},
+		refusals:      map[int]string{},
 	}
 	state.recordReviews(reviewSlides(ctx, decisionModel, deck, manifest, manifest.Slides))
 	for state.roundsUsed < manifest.Rounds && len(state.candidates()) > 0 {
@@ -104,7 +106,7 @@ func (state *loopState) fixRound(ctx context.Context) error {
 	state.roundsUsed++
 	candidates := state.candidates()
 	attempts := inParallel(candidates, func(slide Slide) attempt {
-		return fixSlide(ctx, state.languageModel, state.deck, state.manifest.Fixer, slide, state.assessments[slide.Number], state.sheetFor(slide.Number))
+		return fixSlide(ctx, state.languageModel, state.deck, state.manifest.Fixer, slide, state.assessments[slide.Number], state.sheetFor(slide.Number), state.refusals[slide.Number])
 	})
 	replacements := state.acceptedReplacements(candidates, attempts)
 	if len(replacements) == 0 {
@@ -148,9 +150,18 @@ func (state *loopState) rebuiltWith(ctx context.Context, replacements map[int]st
 
 func (state *loopState) refuse(replacements map[int]string, errorValue error) {
 	for number := range replacements {
-		state.fixProblems[number] = fmt.Sprintf("the deck rebuild refused the rewrite: %v", errorValue)
-		state.givenUp[number] = true
+		refusal := truncatedRunes(errorValue.Error(), maximumRefusalRunes)
+		state.fixProblems[number] = "the deck rebuild refused the rewrite: " + refusal
+		state.refusals[number] = refusal
 	}
+}
+
+func truncatedRunes(text string, limit int) string {
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return string(runes[:limit])
 }
 
 func sortedNumbers(replacements map[int]string) []int {

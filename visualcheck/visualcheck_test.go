@@ -365,9 +365,9 @@ func TestVisibleTextIgnoresTagsAttributesAndNotes(t *testing.T) {
 	}
 }
 
-func TestARewriteTheBuildRefusesIsGivenUpWithTheRefusalAndTheRunGoesOn(t *testing.T) {
+func TestARewriteTheBuildRefusesIsRetriedWithTheRefusalInFrontOfTheFixer(t *testing.T) {
 	deck := newFakeDeck(sampleManifest(2, section("BAD")))
-	deck.failure = errors.New("office failed")
+	deck.failure = errors.New("office failed on slide 1")
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "x"}
 	}}
@@ -375,8 +375,28 @@ func TestARewriteTheBuildRefusesIsGivenUpWithTheRefusalAndTheRunGoesOn(t *testin
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if !slices.Equal(report.Leftovers, []int{1}) || !slices.Equal(report.GivenUp, []int{1}) || !strings.Contains(report.Slides[0].Error, "office failed") || len(languageModel.requests) != 1 {
+	if len(languageModel.requests) != 2 || !slices.Equal(report.Leftovers, []int{1}) || len(report.GivenUp) != 0 || !strings.Contains(report.Slides[0].Error, "office failed on slide 1") {
 		t.Fatalf("report %+v, %d fixer requests", report, len(languageModel.requests))
+	}
+	var first, second repairContext
+	json.Unmarshal([]byte(languageModel.requests[0].Messages[1].Parts[1].Text), &first)
+	json.Unmarshal([]byte(languageModel.requests[1].Messages[1].Parts[1].Text), &second)
+	if first.RefusedLastTime != "" || !strings.Contains(second.RefusedLastTime, "office failed on slide 1") {
+		t.Fatalf("refusals %q then %q", first.RefusedLastTime, second.RefusedLastTime)
+	}
+}
+
+func TestARefusalIsCutToALengthTheFixerCanRead(t *testing.T) {
+	deck := newFakeDeck(sampleManifest(2, section("BAD")))
+	deck.failure = errors.New(strings.Repeat("x", 5000))
+	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
+		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "x"}
+	}}
+	Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	var second repairContext
+	json.Unmarshal([]byte(languageModel.requests[1].Messages[1].Parts[1].Text), &second)
+	if len([]rune(second.RefusedLastTime)) > maximumRefusalRunes {
+		t.Fatalf("%d runes", len([]rune(second.RefusedLastTime)))
 	}
 }
 
@@ -390,7 +410,7 @@ func TestOneRefusedRewriteDoesNotDiscardTheOthersTheBuildAccepts(t *testing.T) {
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if len(report.Fixed) != 2 || report.Fixed[0].Number != 1 || report.Fixed[1].Number != 3 || !slices.Equal(report.GivenUp, []int{2}) || !slices.Equal(report.Leftovers, []int{2}) {
+	if len(report.Fixed) != 2 || report.Fixed[0].Number != 1 || report.Fixed[1].Number != 3 || len(report.GivenUp) != 0 || !slices.Equal(report.Leftovers, []int{2}) {
 		t.Fatalf("report %+v", report)
 	}
 	if !strings.Contains(report.Slides[1].Error, "the build refused") || deck.manifest.Slides[1].Section != section("BAD two") {
