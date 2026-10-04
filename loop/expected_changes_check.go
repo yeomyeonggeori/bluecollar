@@ -74,10 +74,10 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		return check, nil
 	}
 	location := companyLocation(request.Company.TimeZone)
-	records := changedRecords(observations, location)
+	heldObjectTypes := heldObjectTypes(observations)
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
-		State:     changeCheckState(request, location, expected, records, observations),
-		Questions: changeCheckQuestions(recordedIndexes, anyRecordHolds(records)),
+		State:     changeCheckState(request, location, expected, recordedIndexes, heldObjectTypes, observations),
+		Questions: changeCheckQuestions(recordedIndexes, len(heldObjectTypes) > 0),
 	})
 	if errorValue != nil {
 		return changeCheck{}, errorValue
@@ -103,7 +103,7 @@ func changeCheckQuestions(indexes []int, isAnyFileHeld bool) map[string]model.De
 		}
 		if isAnyFileHeld {
 			instructions = append(instructions,
-				"A file's holds is what its writer recorded the file holds, such as its tables, its views as they display, its charts, the values it was given and the blanks it leaves. Judge that file by its holds: each part asked names must be there, and each value asked states, such as a name, an amount, a quantity or a date, must be the one its holds shows.",
+				"A delivered file shows by a neutral reference such as file 1, never by its name. A file's holds is what its writer recorded the file holds, such as its tables, its views as they display, its charts, the values it was given and the blanks it leaves. Judge that file by its holds alone: each part asked names must be there, and each value asked states, such as a name, an amount, a quantity or a date, must be the one its holds shows.",
 				"A blank left for a value the user has not given, a part or value asked does not mention, and the file's layout are never failures.",
 			)
 		}
@@ -124,23 +124,38 @@ func changeQuestionKey(index int) string {
 	return fmt.Sprintf("expected%d", index)
 }
 
-func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, records []changedRecord, observations []turnObservation) map[string]any {
+func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, recordedIndexes []int, heldObjectTypes map[string]bool, observations []turnObservation) map[string]any {
 	state := map[string]any{
 		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
 		"now":             environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST"),
 		"expectedChanges": expected,
-		"changedRecords":  records,
+		"changedRecords":  append(changedRecords(observations, location, heldObjectTypes), heldFileRecords(observations, heldObjectTypes)...),
 	}
 	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
 		state["conversationBefore"] = conversation
 	}
-	if lookups := changeLookups(request.ToolSet, expected, observations, location); len(lookups) > 0 {
+	changesBeyondHolds := changesNotJudgedByHolds(request.ToolSet, expected, recordedIndexes, heldObjectTypes)
+	if lookups := changeLookups(request.ToolSet, changesBeyondHolds, observations, location); len(lookups) > 0 {
 		state["lookups"] = lookups
+	}
+	if len(changesBeyondHolds) == 0 {
+		return state
 	}
 	if work := unrecordedWork(request.ToolSet, observations, location); len(work) > 0 {
 		state["unrecordedWork"] = work
 	}
 	return state
+}
+
+func changesNotJudgedByHolds(toolSet *toolcontract.ToolSet, expected []expectedChange, recordedIndexes []int, heldObjectTypes map[string]bool) []expectedChange {
+	objectTypeByKind := objectTypeByChangeKind(toolSet)
+	changes := []expectedChange{}
+	for _, index := range recordedIndexes {
+		if !heldObjectTypes[objectTypeByKind[expected[index].Change]] {
+			changes = append(changes, expected[index])
+		}
+	}
+	return changes
 }
 
 func objectTypeByChangeKind(toolSet *toolcontract.ToolSet) map[string]string {
@@ -170,12 +185,15 @@ func changedObjectTypes(observations []turnObservation) map[string]bool {
 	return objectTypes
 }
 
-func changedRecords(observations []turnObservation, location *time.Location) []changedRecord {
+func changedRecords(observations []turnObservation, location *time.Location, heldObjectTypes map[string]bool) []changedRecord {
 	records := []changedRecord{}
 	recordIndexes := map[string]int{}
 	for _, observation := range successfulToolObservations(observations) {
 		callShownAt := ""
 		for _, effect := range observation.Effects {
+			if heldObjectTypes[strings.TrimSpace(effect.ObjectType)] {
+				continue
+			}
 			identity := firstNonEmptyString(effect.ID, effect.Path, effect.URL, effect.ObjectType)
 			key := effect.ObjectType + "\x00" + identity
 			index, isKnown := recordIndexes[key]
@@ -198,24 +216,59 @@ func changedRecords(observations []turnObservation, location *time.Location) []c
 	return records
 }
 
-func attachedFileFacts(attachments []toolcontract.FileAttachment, path string) *fileFacts {
-	for _, attachment := range attachments {
-		if strings.TrimSpace(path) != "" && strings.TrimSpace(attachment.DevicePath) == strings.TrimSpace(path) {
-			return &fileFacts{Filename: strings.TrimSpace(attachment.Filename), ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes, Holds: attachment.Holds}
-		}
-	}
-	return nil
-}
-
-func anyRecordHolds(records []changedRecord) bool {
-	for _, record := range records {
-		for _, step := range record.History {
-			if step.File != nil && len(step.File.Holds) > 0 {
-				return true
+func heldObjectTypes(observations []turnObservation) map[string]bool {
+	objectTypes := map[string]bool{}
+	for _, observation := range successfulToolObservations(observations) {
+		for _, effect := range observation.Effects {
+			if attachment, isAttached := attachmentAt(observation.Attachments, effect.Path); isAttached && len(attachment.Holds) > 0 {
+				objectTypes[strings.TrimSpace(effect.ObjectType)] = true
 			}
 		}
 	}
-	return false
+	return objectTypes
+}
+
+func heldFileRecords(observations []turnObservation, heldObjectTypes map[string]bool) []changedRecord {
+	paths := []string{}
+	latestSteps := map[string]changeStep{}
+	for _, observation := range successfulToolObservations(observations) {
+		for _, effect := range observation.Effects {
+			attachment, isAttached := attachmentAt(observation.Attachments, effect.Path)
+			if !isAttached || !heldObjectTypes[strings.TrimSpace(effect.ObjectType)] {
+				continue
+			}
+			path := strings.TrimSpace(effect.Path)
+			if _, isKnown := latestSteps[path]; !isKnown {
+				paths = append(paths, path)
+			}
+			latestSteps[path] = changeStep{Change: changeKind(effect.ObjectType, effect.Effect), File: &fileFacts{ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes, Holds: attachment.Holds}}
+		}
+	}
+	records := make([]changedRecord, 0, len(paths))
+	for index, path := range paths {
+		records = append(records, changedRecord{Record: fmt.Sprintf("file %d", index+1), History: []changeStep{latestSteps[path]}})
+	}
+	return records
+}
+
+func attachedFileFacts(attachments []toolcontract.FileAttachment, path string) *fileFacts {
+	attachment, isAttached := attachmentAt(attachments, path)
+	if !isAttached {
+		return nil
+	}
+	return &fileFacts{Filename: strings.TrimSpace(attachment.Filename), ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes}
+}
+
+func attachmentAt(attachments []toolcontract.FileAttachment, path string) (toolcontract.FileAttachment, bool) {
+	if strings.TrimSpace(path) == "" {
+		return toolcontract.FileAttachment{}, false
+	}
+	for _, attachment := range attachments {
+		if strings.TrimSpace(attachment.DevicePath) == strings.TrimSpace(path) {
+			return attachment, true
+		}
+	}
+	return toolcontract.FileAttachment{}, false
 }
 
 func unrecordedWork(toolSet *toolcontract.ToolSet, observations []turnObservation, location *time.Location) []unrecordedCall {
