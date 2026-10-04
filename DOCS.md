@@ -218,6 +218,7 @@ A harness that executes its own tools defeats the host's isolation boundary and 
 | `claimcheck/` | asks the decision model whether each value a writer composed is supported by the request, its attachments and the runtime facts |
 | `taskstate/` | the in-memory services over task runs, steps, events and artifacts |
 | `turnstream/` | a view of a turn's ledger events as they are appended |
+| `visualcheck/` | the host-side review loop that looks at rendered slides and has them repaired |
 | `trace/` | one run's ledger rendered as a single JSON or Markdown file |
 | `bench/` | run metrics and a runner that measures any `Harness` |
 | `cmd/bluecollar/` | the command-line runner |
@@ -486,6 +487,16 @@ type LanguageModelProvider interface {
 ```
 
 `model/openaicompatible` implements it against any `/chat/completions` endpoint. It retries a transient failure up to three times with an exponential delay starting at one second and capped at 30 seconds, honoring `Retry-After`, and replays `reasoning_content` in the field it arrived in. `model/tape` records and replays a run. Hosts that need routing or accounting bring their own provider.
+
+## Visual check
+
+A model that looks at its own renders and finds nothing wrong still ships decks with squashed charts and off-theme slides. `visualcheck` asks a separate model instead, one slide at a time.
+
+Each deck build writes `build/review/visual-review.json`. That file owns the question, its options, the flag threshold, the number of fix rounds, the fixer's instructions and, for every slide, its render, its state, its `<section>` source and the defects the kit measured. The package reads all of it and states none of it. The host implements `Deck` to read the manifest and renders, to splice replacement sections into `slides.html` and rebuild, so every file access happens there as the requester.
+
+`Run` puts one request per slide to the decision model, with the render attached and the manifest's question verbatim. A slide is flagged when any option other than the clean one reaches the threshold, however likely the clean option is, or when it has measured defects. Each flagged slide goes to a fixer call on the language model, which returns one rewritten `<section>`. The rewrite is accepted only if it keeps the same tables, images and charts as the original. The deck is rebuilt with the accepted rewrites and only the replaced slides are reviewed again. A slide that did not get better is put back and not tried again. Better means no more measured defects, no new flagged option, and a lower probability for the options that flagged it. The loop stops when nothing is flagged or the manifest's rounds are used.
+
+The `Report` carries the rounds used, each slide's flagged options with probabilities and measured codes, the slides that were fixed with the fixer's own sentence about the change, the slides given up, the slides still flagged, the slides whose visible text changed, and the usage of both models. Slides whose text changed should go back through the claim check.
 
 # Evaluation
 
