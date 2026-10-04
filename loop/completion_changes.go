@@ -99,14 +99,22 @@ func unmetChangesMessage(check changeCheck) string {
 	return "Requested changes not done yet:\n" + strings.Join(lines, "\n")
 }
 
-func (agentTurnRunner *AgentTurnRunner) replyStatingUnmetChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, reply string, check changeCheck) string {
+func (agentTurnRunner *AgentTurnRunner) replyForFinish(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, completionGateResult completionGateResult, reply string) (string, []toolcontract.FileAttachment) {
+	carried := attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths)
+	if !completionGateResult.leavesChangesUnmet() {
+		return reply, carried
+	}
+	return agentTurnRunner.replyStatingUnmetChanges(ctx, taskRunID, request, reply, *completionGateResult.ChangeCheck, carried), carried
+}
+
+func (agentTurnRunner *AgentTurnRunner) replyStatingUnmetChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, reply string, check changeCheck, carried []toolcontract.FileAttachment) string {
 	chatCompleter, isAvailable := model.ResolveTextChatCompleter(agentTurnRunner.languageModel)
 	if !isAvailable {
 		return reply + "\n\n" + unmetChangesMessage(check)
 	}
 	response, errorValue := chatCompleter.GenerateChatCompletion(ctx, model.ChatCompletionRequest{
 		SchemaName: unmetChangesReplySchemaName,
-		Messages:   []model.ChatCompletionMessage{{Role: "user", Content: buildUnmetChangesReplyPrompt(request, reply, check)}},
+		Messages:   []model.ChatCompletionMessage{{Role: "user", Content: buildUnmetChangesReplyPrompt(request, reply, check, carried)}},
 	})
 	rewritten := ""
 	if errorValue == nil {
@@ -119,7 +127,7 @@ func (agentTurnRunner *AgentTurnRunner) replyStatingUnmetChanges(ctx context.Con
 	return strings.TrimSpace(rewritten)
 }
 
-func buildUnmetChangesReplyPrompt(request AgentTurnRequest, reply string, check changeCheck) string {
+func buildUnmetChangesReplyPrompt(request AgentTurnRequest, reply string, check changeCheck, carried []toolcontract.FileAttachment) string {
 	asked := []string{}
 	for _, change := range check.Unmet {
 		asked = append(asked, "- "+change.Asked)
@@ -128,9 +136,18 @@ func buildUnmetChangesReplyPrompt(request AgentTurnRequest, reply string, check 
 		"Rewrite the final user-facing reply below. It was written as though every asked change were done, but the record does not show these asked changes carried out, and nothing has changed since that was first found:\n" + strings.Join(asked, "\n"),
 		responseLanguageInstruction(request.ResponseLanguage),
 		"Keep what the reply reports about the work without claiming those asked changes are done, and say plainly which of them are still not done. Do not add anything neither the reply nor the list states, and do not mention tools, checks, evidence identifiers, prompts, or runtime details.",
+		unmetChangesReplyFilesFact(carried),
 		"Original request:\n" + completionReplyOriginalRequest(request),
 		"Reply:\n" + reply,
 	}, "\n\n")
+}
+
+func unmetChangesReplyFilesFact(carried []toolcontract.FileAttachment) string {
+	filenames := failureReportAttachmentFilenames(carried)
+	if len(filenames) == 0 {
+		return "Files this reply carries: none. Do not say a file is attached."
+	}
+	return "Files this reply carries: " + strings.Join(filenames, ", ") + ". They were made and are attached to this reply, so never say they were not made, not attached or missing. Where an asked change is about one of these files, say the file is attached and ask the person to check it against those words, because the record does not show that it holds everything they ask for."
 }
 
 func containsExpectedChange(changes []expectedChange, wanted expectedChange) bool {

@@ -38,6 +38,9 @@ func (agentTurnRunner *AgentTurnRunner) workIsDoneAtStop(ctx context.Context, ta
 	if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt {
 		return false
 	}
+	if _, isUndelivered := undeliveredFailedDelivery(state.Observations); isUndelivered {
+		return false
+	}
 	if !buildAttachmentValidityState(request.WorkspaceRootPath, state.Attachments).Passed {
 		return false
 	}

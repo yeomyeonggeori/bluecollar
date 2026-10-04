@@ -162,6 +162,9 @@ func validateCompletionFacts(request AgentTurnRequest, observations []turnObserv
 	if len(attachments) == 0 {
 		attachments = deliveredAttachments(observations)
 	}
+	if failedDelivery, isUndelivered := undeliveredFailedDelivery(observations); isUndelivered {
+		return completionGateResult{Message: undeliveredFailedDeliveryMessage(failedDelivery), EvidenceKind: evidenceKindAttachment}
+	}
 	if message := missingObservedURLInReply(request.ToolSet, observations, finishActionMessage(actionDocument)); message != "" {
 		return completionGateResult{Message: message, EvidenceKind: evidenceKindExpectedResult}
 	}
@@ -174,6 +177,24 @@ func validateCompletionFacts(request AgentTurnRequest, observations []turnObserv
 		result.Attachments = nil
 	}
 	return result
+}
+
+func undeliveredFailedDelivery(observations []turnObservation) (turnObservation, bool) {
+	var failedDelivery turnObservation
+	isUndelivered := false
+	for _, observation := range observations {
+		if !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+			continue
+		}
+		isUndelivered = observation.Failed()
+		failedDelivery = observation
+	}
+	return failedDelivery, isUndelivered
+}
+
+func undeliveredFailedDeliveryMessage(failedDelivery turnObservation) string {
+	return "File delivery " + strings.TrimSpace(failedDelivery.ObservationID) + " failed (" + truncateForLedger(failedDelivery.ContentText(), 400) +
+		") and no file has been delivered since, so the person has not received it. Deliver the file from a path that exists, or use fail to say why it cannot be delivered."
 }
 
 func validateFinishClaim(actionDocument turnActionDocument) completionGateResult {

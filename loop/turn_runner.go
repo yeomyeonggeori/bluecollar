@@ -693,9 +693,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "finish", "empty final reply message")
 				return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "empty final reply message", &state, iteration)
 			}
-			if completionGateResult.leavesChangesUnmet() {
-				reply = agentTurnRunner.replyStatingUnmetChanges(workContext, taskRun.TaskRunID, request, reply, *completionGateResult.ChangeCheck)
-			}
+			reply, carried := agentTurnRunner.replyForFinish(workContext, taskRun.TaskRunID, request, &state, completionGateResult, reply)
 			reply = agentTurnRunner.prepareFinishMessageForPlatform(workContext, request, reply)
 			if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
 				return cancelledResult, nil
@@ -704,7 +702,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				return result, errorValue
 			}
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "finish", reply)
-			result := agentTurnRunner.finishedTurnResult(taskRun.TaskRunID, reply, attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths))
+			result := agentTurnRunner.finishedTurnResult(taskRun.TaskRunID, reply, carried)
 			result.RecoveryActions = recoveryActionsFromObservations(state.Observations)
 			return result, nil
 		case "continue":

@@ -300,7 +300,7 @@ A follow-up turn does not inherit the previous task's contract. The host supplie
 
 What a final reply has to pass before the task completes.
 
-The deterministic part checks facts only. A final reply must claim `goalSatisfied`, report no remaining work, and cite only successful observations of this task. A URL a tool published during the turn must appear in the reply exactly, and delivered attachments must exist and validate. The reply carries the attachments it cites, or every file this turn delivered when it cites none.
+The deterministic part checks facts only. A final reply must claim `goalSatisfied`, report no remaining work, and cite only successful observations of this task. A URL a tool published during the turn must appear in the reply exactly, and delivered attachments must exist and validate. When the last `file_deliver` call failed, the reply is refused until a later one succeeds or the model uses `fail`, and a stop at a limit does not count that state as done. A failed delivery is the model's own statement that the person should receive a file, so another successful call does not settle it. The reply carries the attachments it cites, or every file this turn delivered when it cites none.
 
 When the turn starts, and while the work runs, one model call lists the changes the request asks for. Each entry is a kind taken from the effects the offered tools declare, and the file a reply delivers (`task deleted`, `calendar created`, `file attached`), with the words that ask for it copied exactly from the request or from the latest message about it. A quote found in neither is asked for once more and then dropped, so a change the model invented has nothing to be checked against. A request that asks only for words expects no change and skips the check. The list is recorded as `completion.expected_changes`.
 
@@ -308,7 +308,7 @@ After the facts, an expected change is unmet without further judgment when nothi
 
 After two refusals with nothing done in between, the loop withdraws the final reply from the action schema; after three it offers both the reply and `fail`.
 
-A refusal records the SHA-256 digest of everything the check judged except the clock. When a later check would judge a state with the same digest, the decision model is not asked again. The ledger records the earlier verdict with `repeatsRefusalOf`, the run finishes, and the model rewrites the final reply to say which asked changes are still not done. A stop at a limit does not count such a state as done.
+A refusal records the SHA-256 digest of everything the check judged except the clock. When a later check would judge a state with the same digest, the decision model is not asked again. The ledger records the earlier verdict with `repeatsRefusalOf`, the run finishes, and the model rewrites the final reply to say which asked changes are still not done. The rewrite is told the files the reply carries, and that they were made and are attached, so it says an attached file is attached and asks the person to check it against the asked words. A stop at a limit does not count such a state as done.
 
 While budget remains, only the model ends a task. The runtime does not attach a file or write a final reply on its behalf; an undelivered file is an unmet `file attached`, and the model delivers it.
 
