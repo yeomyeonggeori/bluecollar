@@ -85,7 +85,19 @@ func normalizeDecidedWork(decision agentcontract.TurnDecision) (agentcontract.Tu
 	}
 	decision.RequestedOutputFormats = agentcontract.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)
 	decision = normalizeDeliverableTools(decision)
+	decision = liftFileDeliverableToBoundedTask(decision)
 	return liftBoundedImmediateReplyToMaintenance(decision), nil
+}
+
+func liftFileDeliverableToBoundedTask(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+	if decision.Classification != agentcontract.IntakeClassificationQuickReply {
+		return decision
+	}
+	if decision.DeliverableKind != agentcontract.DeliverableKindDocument && decision.DeliverableKind != agentcontract.DeliverableKindPresentation {
+		return decision
+	}
+	decision.Classification = agentcontract.IntakeClassificationBoundedTask
+	return decision
 }
 
 func normalizeDeliverableTools(decision agentcontract.TurnDecision) agentcontract.TurnDecision {

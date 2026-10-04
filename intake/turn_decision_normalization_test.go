@@ -503,3 +503,24 @@ func TestAnEmojiOutsideTheAcceptedSetIsNoReaction(t *testing.T) {
 		t.Fatalf("expected an accepted emoji to be normalized, got %q", normalizeAddressingReactionEmoji("  EYES  "))
 	}
 }
+
+func TestAQuickReplyWhoseDeliverableIsAFileBecomesATask(t *testing.T) {
+	for _, kind := range []agentcontract.DeliverableKind{agentcontract.DeliverableKindDocument, agentcontract.DeliverableKindPresentation} {
+		answered := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
+		answered.DeliverableKind = kind
+
+		decision := normalizedTurnDecision(t, answered, agentcontract.AgentRequest{})
+
+		if decision.Classification != agentcontract.IntakeClassificationBoundedTask || decision.TaskShape != agentcontract.TaskShapeMaintenanceTask || decision.Route != agentcontract.TurnRouteStartTask {
+			t.Fatalf("a quick reply whose deliverable is a %s was left as %q, %q, %q", kind, decision.Classification, decision.TaskShape, decision.Route)
+		}
+	}
+}
+
+func TestAQuickReplyWithNoDeliverableStaysAReply(t *testing.T) {
+	decision := normalizedTurnDecision(t, decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply), agentcontract.AgentRequest{})
+
+	if decision.Classification != agentcontract.IntakeClassificationQuickReply || decision.TaskShape != agentcontract.TaskShapeImmediateReply {
+		t.Fatalf("a quick reply with no deliverable became %q, %q", decision.Classification, decision.TaskShape)
+	}
+}
