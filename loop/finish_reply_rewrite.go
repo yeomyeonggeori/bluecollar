@@ -72,7 +72,7 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 		sections = append(sections, "It was written as though every asked change were done, but the record does not show these asked changes carried out, and nothing has changed since that was first found:\n"+bulletList(askedWordsOf(rewrite.unmet))+"\nSay plainly which of them are still not done, without claiming they are done.")
 	}
 	if len(rewrite.deliveryNotes) > 0 {
-		sections = append(sections, "It was written before its files were delivered, and the delivery reports what the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these, and do not describe as present anything the delivery left blank.")
+		sections = append(sections, "It was written before its files were delivered, and the delivery reports what the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these. A value the delivery left blank is gone from the file: never quote it, describe it as present or offer it back; offer to fill it in once the person gives it.")
 	}
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
