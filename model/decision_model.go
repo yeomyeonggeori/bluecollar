@@ -2,6 +2,8 @@ package model
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"sort"
 )
 
@@ -65,6 +67,49 @@ type DecisionRequest struct {
 	State     any                         `json:"state"`
 	Questions map[string]DecisionQuestion `json:"questions"`
 	SessionID string                      `json:"sessionID,omitempty"`
+	Images    []DecisionImage             `json:"images,omitempty"`
+}
+
+type DecisionImage struct {
+	MediaType string `json:"mediaType"`
+	Data      []byte `json:"data"`
+}
+
+type decisionContentPart struct {
+	Type     string                  `json:"type"`
+	Text     string                  `json:"text,omitempty"`
+	ImageURL *decisionContentPartURL `json:"image_url,omitempty"`
+}
+
+type decisionContentPartURL struct {
+	URL string `json:"url"`
+}
+
+func (request DecisionRequest) WireState() (any, error) {
+	if len(request.Images) == 0 {
+		return request.State, nil
+	}
+	stateText, errorValue := request.stateText()
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	parts := []decisionContentPart{{Type: "text", Text: stateText}}
+	for _, image := range request.Images {
+		parts = append(parts, decisionContentPart{Type: "image_url", ImageURL: &decisionContentPartURL{URL: image.dataURL()}})
+	}
+	return parts, nil
+}
+
+func (request DecisionRequest) stateText() (string, error) {
+	if text, isText := request.State.(string); isText {
+		return text, nil
+	}
+	encoded, errorValue := json.Marshal(request.State)
+	return string(encoded), errorValue
+}
+
+func (image DecisionImage) dataURL() string {
+	return "data:" + image.MediaType + ";base64," + base64.StdEncoding.EncodeToString(image.Data)
 }
 
 type DecisionAnswer struct {

@@ -96,9 +96,13 @@ func (decisionModel decisionModel) Decide(ctx context.Context, request model.Dec
 	if modelName == "" {
 		modelName = decisionModel.endpoint.ModelName
 	}
+	wireState, errorValue := request.WireState()
+	if errorValue != nil {
+		return model.DecisionResponse{}, errorValue
+	}
 	requestDocument, errorValue := json.Marshal(decisionRequestDocument{
 		Model:     modelName,
-		State:     request.State,
+		State:     wireState,
 		Questions: request.Questions,
 	})
 	if errorValue != nil {
