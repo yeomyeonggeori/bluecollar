@@ -12,6 +12,8 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
+const maximumRefusalRunes = 1500
+
 const repairSchemaDocument = `{"type":"object","additionalProperties":false,"required":["section","change"],"properties":{"section":{"type":"string"},"change":{"type":"string"}}}`
 
 var (
@@ -42,14 +44,15 @@ type repairContext struct {
 	ReviewerFindings []Finding        `json:"reviewerFindings"`
 	MeasuredDefects  []MeasuredDefect `json:"measuredDefects"`
 	Section          string           `json:"section"`
+	RefusedLastTime  string           `json:"refusedLastTime,omitempty"`
 }
 
-func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck Deck, fixer Fixer, slide Slide, assessment Assessment, sheet model.DecisionImage) attempt {
+func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck Deck, fixer Fixer, slide Slide, assessment Assessment, sheet model.DecisionImage, refusal string) attempt {
 	image, errorValue := deck.Image(ctx, slide.Image)
 	if errorValue != nil {
 		return attempt{problem: fmt.Sprintf("read the render: %v", errorValue)}
 	}
-	request, errorValue := repairRequest(fixer, slide, assessment, image, sheet)
+	request, errorValue := repairRequest(fixer, slide, assessment, image, sheet, refusal)
 	if errorValue != nil {
 		return attempt{problem: errorValue.Error()}
 	}
@@ -64,12 +67,13 @@ func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck De
 	return attempt{repair: repair, usage: response.Usage, problem: rejectionReason(slide.Section, repair.Section)}
 }
 
-func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte, sheet model.DecisionImage) (model.StructuredResponseRequest, error) {
+func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte, sheet model.DecisionImage, refusal string) (model.StructuredResponseRequest, error) {
 	payload, errorValue := json.Marshal(repairContext{
 		Theme:            slide.State["theme"],
 		ReviewerFindings: assessment.Findings,
 		MeasuredDefects:  assessment.Measured,
 		Section:          slide.Section,
+		RefusedLastTime:  refusal,
 	})
 	if errorValue != nil {
 		return model.StructuredResponseRequest{}, errorValue
