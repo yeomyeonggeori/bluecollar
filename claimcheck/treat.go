@@ -34,6 +34,7 @@ func askStructured(ctx context.Context, writer model.LanguageModelProvider, sche
 type Outcome struct {
 	Blank    []Verdict `json:"blank,omitempty"`
 	Replaced []Claim   `json:"replaced,omitempty"`
+	Removed  []Verdict `json:"removed,omitempty"`
 	Kept     []Verdict `json:"kept,omitempty"`
 	Usage    model.Usage
 }
@@ -61,6 +62,8 @@ func Treat(ctx context.Context, profile Profile, decisionModel model.DecisionMod
 
 func (outcome *Outcome) place(profile Profile, original Verdict, rewritten Verdict) {
 	switch {
+	case strings.TrimSpace(rewritten.Text) == "" && original.IsFree:
+		outcome.Removed = append(outcome.Removed, original)
 	case strings.TrimSpace(rewritten.Text) == "":
 		outcome.fallBack(profile, original)
 	case rewritten.Defect == "":

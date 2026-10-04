@@ -37,7 +37,7 @@ func claimsOf(texts ...string) []Claim {
 func flaggingInventions(text string) (string, map[string]float64) {
 	switch {
 	case strings.Contains(text, "invented"):
-		return KindUnsupported, map[string]float64{KindUnsupported: 0.9}
+		return KindClaim, map[string]float64{KindClaim: 0.9}
 	case strings.Contains(text, "wrong"):
 		return KindMistake, map[string]float64{KindMistake: 0.8, KindSource: 0.2}
 	case strings.Contains(text, "miscounted"):
@@ -45,7 +45,7 @@ func flaggingInventions(text string) (string, map[string]float64) {
 	case strings.Contains(text, "supercharge"):
 		return KindSlop, map[string]float64{KindSlop: 0.9}
 	}
-	return KindSource, map[string]float64{KindSource: 0.95, KindUnsupported: 0.05}
+	return KindSource, map[string]float64{KindSource: 0.95, KindClaim: 0.05}
 }
 
 func TestAClaimCopiedFromTheSourcesIsNotAsked(t *testing.T) {
@@ -80,7 +80,7 @@ func TestOnlyAClaimAtOrAboveTheThresholdIsUnsupported(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	unsupported := judgment.Flagged()
-	if len(unsupported) != 1 || unsupported[0].Path != "paragraphs[1]" || unsupported[0].Defect != KindUnsupported {
+	if len(unsupported) != 1 || unsupported[0].Path != "paragraphs[1]" || unsupported[0].Defect != KindClaim {
 		t.Fatalf("expected only the invented commitment, got %+v", unsupported)
 	}
 	if judgment.Usage.TotalTokens != 110 {
@@ -158,12 +158,12 @@ func TestEachDefectKindIsRoutedToItsTreatment(t *testing.T) {
 }
 
 func TestADefectSplitAcrossKindsIsFlaggedAsTheStrongest(t *testing.T) {
-	probabilities := map[string]float64{KindMistake: 0.3, KindUnsupported: 0.4, KindSource: 0.3}
-	verdict := CompactProfile.VerdictFor(Claim{Text: "split"}, KindUnsupported, probabilities)
-	if verdict.Defect != KindUnsupported || verdict.Treatment != TreatmentBlank {
+	probabilities := map[string]float64{KindMistake: 0.3, KindClaim: 0.4, KindSource: 0.3}
+	verdict := CompactProfile.VerdictFor(Claim{Text: "split"}, KindClaim, probabilities)
+	if verdict.Defect != KindClaim || verdict.Treatment != TreatmentBlank {
 		t.Fatalf("expected the strongest defect kind once the defects together reach the threshold, got %+v", verdict)
 	}
-	probabilities = map[string]float64{KindMistake: 0.2, KindUnsupported: 0.2, KindSource: 0.6}
+	probabilities = map[string]float64{KindMistake: 0.2, KindClaim: 0.2, KindSource: 0.6}
 	if verdict := CompactProfile.VerdictFor(Claim{Text: "fine"}, KindSource, probabilities); verdict.Defect != "" {
 		t.Fatalf("expected a claim below the threshold to pass, got %+v", verdict)
 	}
@@ -176,11 +176,20 @@ func TestTodayProfileKnowsOnlyTheOldKinds(t *testing.T) {
 }
 
 func TestEveryDefectKindIsDefinedInItsProfile(t *testing.T) {
-	for _, profile := range []Profile{TodayProfile, CompactProfile, FineProfile} {
+	for _, profile := range []Profile{TodayProfile, CompactProfile} {
 		for kind := range profile.Treatments {
 			if profile.Kinds[kind] == "" {
 				t.Fatalf("%s: defect kind %s has no definition", profile.Name, kind)
 			}
+		}
+	}
+}
+
+func TestTheSlopDefinitionNamesItsThreeCriteriaAndItsBoundaries(t *testing.T) {
+	definition := CompactProfile.Kinds[KindSlop]
+	for _, part := range []string{"interchangeable", "functionless", "uncheckable weight", "more trustworthy and faster", "colder or impolite", "expression", "claim", "mistake", "Never choose slop"} {
+		if !strings.Contains(definition, part) {
+			t.Fatalf("expected the slop definition to hold %q, got %q", part, definition)
 		}
 	}
 }

@@ -32,6 +32,8 @@ type corpusDocument struct {
 	Attachments  []Attachment    `json:"attachments"`
 	RuntimeFacts json.RawMessage `json:"runtimeFacts"`
 	Claims       []corpusClaim   `json:"claims"`
+	Form         string          `json:"form"`
+	Language     string          `json:"language"`
 }
 
 type corpusClaim struct {
@@ -101,10 +103,8 @@ func profileFromEnvironment(t *testing.T) Profile {
 		return CompactProfile
 	case TodayProfile.Name:
 		return TodayProfile
-	case FineProfile.Name:
-		return FineProfile
 	default:
-		t.Fatalf("%s=%q names no profile; use today, compact or fine", profileVariable, name)
+		t.Fatalf("%s=%q names no profile; use today or compact", profileVariable, name)
 		return Profile{}
 	}
 }
@@ -201,6 +201,16 @@ type treatedUnit struct {
 	Text     string `json:"text,omitempty"`
 }
 
+type treatedDocument struct {
+	Document string        `json:"document"`
+	Form     string        `json:"form"`
+	Language string        `json:"language"`
+	Request  string        `json:"request"`
+	Original []string      `json:"original"`
+	After    []string      `json:"after"`
+	Changes  []treatedUnit `json:"changes"`
+}
+
 func TestLiveRewriteTreatmentOfFlaggedUnits(t *testing.T) {
 	corpusPath := evaltest.RequireInput(t, corpusVariable, "point it at the defect corpus")
 	endpoint, errorValue := decisions.EndpointFromEnvironment()
@@ -208,7 +218,7 @@ func TestLiveRewriteTreatmentOfFlaggedUnits(t *testing.T) {
 	profile := profileFromEnvironment(t)
 	writer := writerFromEnvironment(t, endpoint)
 	documents := readCorpus(t, corpusPath)
-	treated := make([][]treatedUnit, len(documents))
+	treated := make([]treatedDocument, len(documents))
 	var group sync.WaitGroup
 	limiter := make(chan struct{}, 8)
 	for index, document := range documents {
@@ -222,56 +232,68 @@ func TestLiveRewriteTreatmentOfFlaggedUnits(t *testing.T) {
 	}
 	group.Wait()
 	counts := map[string]int{}
-	flat := []treatedUnit{}
-	for _, units := range treated {
-		for _, unit := range units {
+	for _, document := range treated {
+		for _, unit := range document.Changes {
 			counts[unit.Defect+"/"+unit.Expected+"/"+unit.Outcome]++
-			flat = append(flat, unit)
 		}
 	}
 	t.Logf("treatment outcomes (defect/expected/outcome): %v", counts)
 	if output := os.Getenv("BLUECOLLAR_CLAIM_RESULTS"); output != "" {
-		content, _ := json.MarshalIndent(flat, "", " ")
+		content, _ := json.MarshalIndent(treated, "", " ")
 		if errorValue := os.WriteFile(output, content, 0o600); errorValue != nil {
 			t.Fatal(errorValue)
 		}
 	}
 }
 
-func treatDocument(t *testing.T, profile Profile, endpoint decisions.Endpoint, writer model.LanguageModelProvider, document corpusDocument) []treatedUnit {
+func treatDocument(t *testing.T, profile Profile, endpoint decisions.Endpoint, writer model.LanguageModelProvider, document corpusDocument) treatedDocument {
+	result := treatedDocument{Document: document.Document, Form: document.Form, Language: document.Language, Request: document.Request}
 	claims := []Claim{}
 	expected := map[string]corpusClaim{}
 	for _, claim := range document.Claims {
+		claim.IsFree = os.Getenv("BLUECOLLAR_CLAIM_ALL_FREE") == "1"
 		claims = append(claims, claim.Claim)
 		expected[claim.Path] = claim
+		result.Original = append(result.Original, claim.Text)
 	}
 	sources := Sources{Request: []string{document.Request}, Attachments: document.Attachments, RuntimeFacts: document.RuntimeFacts}
 	judgment, errorValue := JudgeWith(context.Background(), profile, endpoint.DecisionModel(), sources, claims)
 	if errorValue != nil {
 		t.Errorf("%s: %v", document.Document, errorValue)
-		return nil
+		return result
 	}
 	outcome, errorValue := Treat(context.Background(), profile, endpoint.DecisionModel(), writer, sources, judgment)
 	if errorValue != nil {
 		t.Errorf("%s: %v", document.Document, errorValue)
-		return nil
+		return result
 	}
-	units := []treatedUnit{}
+	replaced := map[string]string{}
 	for _, claim := range outcome.Replaced {
-		units = append(units, unitOf(document, expected[claim.Path], judgment, "replaced", claim.Text))
+		replaced[claim.Path] = claim.Text
+		result.Changes = append(result.Changes, unitOf(expected[claim.Path], judgment, "replaced", claim.Text))
+	}
+	removed := map[string]bool{}
+	for _, verdict := range outcome.Removed {
+		removed[verdict.Path] = true
+		result.Changes = append(result.Changes, unitOf(expected[verdict.Path], judgment, "removed", ""))
 	}
 	for _, verdict := range outcome.Kept {
-		units = append(units, unitOf(document, expected[verdict.Path], judgment, "kept", ""))
+		result.Changes = append(result.Changes, unitOf(expected[verdict.Path], judgment, "kept", ""))
 	}
-	for _, verdict := range outcome.Blank {
-		if profile.Treatments[verdict.Defect] == TreatmentRewrite {
-			units = append(units, unitOf(document, expected[verdict.Path], judgment, "blanked-after-rewrite", ""))
+	for _, claim := range document.Claims {
+		if removed[claim.Path] {
+			continue
 		}
+		if text, isReplaced := replaced[claim.Path]; isReplaced {
+			result.After = append(result.After, text)
+			continue
+		}
+		result.After = append(result.After, claim.Text)
 	}
-	return units
+	return result
 }
 
-func unitOf(document corpusDocument, claim corpusClaim, judgment Judgment, outcome string, text string) treatedUnit {
+func unitOf(claim corpusClaim, judgment Judgment, outcome string, text string) treatedUnit {
 	defect := ""
 	for _, verdict := range judgment.Verdicts {
 		if verdict.Path == claim.Path && verdict.Text == claim.Text {
@@ -280,7 +302,7 @@ func unitOf(document corpusDocument, claim corpusClaim, judgment Judgment, outco
 	}
 	expected := claim.Expected
 	if claim.Label != "seed" {
-		expected = "clean"
+		expected = "clean:" + claim.Expected
 	}
-	return treatedUnit{Document: document.Document, Original: claim.Text, Expected: expected, Subkind: claim.Subkind, Defect: defect, Outcome: outcome, Text: text}
+	return treatedUnit{Original: claim.Text, Expected: expected, Subkind: claim.Subkind, Defect: defect, Outcome: outcome, Text: text}
 }

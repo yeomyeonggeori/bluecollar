@@ -102,15 +102,25 @@ func TestTreatKeepsSlopWhoseRewriteIsEmptyBecauseItHoldsNoFact(t *testing.T) {
 	}
 }
 
-func TestTreatBlanksAnOverstatedUnitWhoseRewriteIsStillFlagged(t *testing.T) {
-	decisionModel := &scriptedDecisionModel{kindOf: func(text string) (string, map[string]float64) {
-		return KindOverstated, map[string]float64{KindOverstated: 0.9}
-	}}
-	writer := &scriptedWriter{rewrite: func(string) string { return `{"text":"still too strong"}` }}
-	sources := Sources{Request: []string{"Write a report."}}
-	judgment, _ := JudgeWith(context.Background(), FineProfile, decisionModel, sources, claimsOf("profit is confirmed"))
-	outcome, _ := Treat(context.Background(), FineProfile, decisionModel, writer, sources, judgment)
-	if len(outcome.Blank) != 1 || len(outcome.Kept) != 0 {
-		t.Fatalf("expected an overstated unit that is still flagged to be blanked, got %+v", outcome)
+func TestTreatRemovesAFreeSentenceWhoseRewriteIsEmptyAndNeverARequiredSlot(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
+	writer := &scriptedWriter{rewrite: func(string) string { return `{"text":""}` }}
+	sources := Sources{Request: []string{"Write a notice."}}
+	claims := []Claim{{Path: "paragraphs[0]", Text: "supercharge your day", IsFree: true}, {Path: "title", Text: "supercharge your day"}}
+	judgment, _ := Judge(context.Background(), decisionModel, sources, claims)
+	outcome, _ := Treat(context.Background(), CompactProfile, decisionModel, writer, sources, judgment)
+	if len(outcome.Removed) != 1 || outcome.Removed[0].Path != "paragraphs[0]" || len(outcome.Kept) != 1 || outcome.Kept[0].Path != "title" {
+		t.Fatalf("expected the free sentence removed and the required slot kept, got %+v", outcome)
+	}
+}
+
+func TestTreatKeepsARequiredSlotWhoseRewriteIsFlagged(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
+	writer := &scriptedWriter{rewrite: func(string) string { return `{"text":"an invented fact"}` }}
+	sources := Sources{Request: []string{"Write a notice."}}
+	judgment, _ := Judge(context.Background(), decisionModel, sources, []Claim{{Path: "title", Text: "supercharge your day"}})
+	outcome, _ := Treat(context.Background(), CompactProfile, decisionModel, writer, sources, judgment)
+	if len(outcome.Kept) != 1 || len(outcome.Replaced) != 0 || len(outcome.Removed) != 0 || len(outcome.Blank) != 0 {
+		t.Fatalf("expected the title kept, got %+v", outcome)
 	}
 }

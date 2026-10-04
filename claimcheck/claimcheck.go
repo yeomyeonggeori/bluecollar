@@ -17,17 +17,13 @@ const (
 )
 
 const (
-	KindSource        = "source"
-	KindDerived       = "derived"
-	KindExpression    = "expression"
-	KindUnsupported   = "unsupported"
-	KindMistake       = "mistake"
-	KindError         = "error"
-	KindSlop          = "slop"
-	KindContradicted  = "contradicted"
-	KindOverstated    = "overstated"
-	KindMisattributed = "misattributed"
-	kindClaimToday    = "claim"
+	KindSource     = "source"
+	KindDerived    = "derived"
+	KindExpression = "expression"
+	KindClaim      = "claim"
+	KindMistake    = "mistake"
+	KindError      = "error"
+	KindSlop       = "slop"
 )
 
 type Treatment string
@@ -57,16 +53,25 @@ const about = "The sources are request (the requester's own words), attachments 
 
 const sourceKind = "says what the request, attachments or runtimeFacts say, in other words, shortened or merged, with the same values, owners and status"
 const derivedKind = "follows correctly from the sources by arithmetic or the calendar (a total, a share, a multiple, a duration, a weekday), is a heading or label naming what the sources hold, or summarizes them adding nothing"
-const expressionKind = "tone, courtesy, emphasis or an interpretation of facts the sources give, adding no fact of its own: a greeting, thanks, an invitation to get in touch, growth called fast when the sources give the figures, demand called proven when the sources show it"
+const expressionKind = "a unit with a relational role: a greeting, thanks, an apology, sympathy, an invitation to get in touch, a closing wish; a formulaic line that does a social or legal job (a business-letter greeting or closing, a contract recital, an agreement preamble, an offer-letter welcome, a proposal closing); or emphasis on, or an interpretation of, this document's own facts that adds no fact of its own (growth called fast when the sources give the figures, demand called proven when the sources show it). A line that does none of these jobs and only sounds weighty is slop"
 
 const guardToday = "Wording, tone, emphasis and formatting are never claim, and whether the tone suits the kind of document is not this question. " +
 	"Choose claim only for content the sources do not hold, or hold with a weaker status."
 
 const guardKinds = "Wording, tone, emphasis, formatting and where a value sits in a list are never a defect: choose source, derived or expression when the claim says what the sources say, however differently. " +
-	"Choose unsupported for content the sources do not hold, and do not require a claim to be wrong to be unsupported. " +
+	"Choose claim for content the sources do not hold, and do not require a unit to be wrong to be a claim. " +
 	"Choose mistake or error only when you can name the exact source value or other claim it conflicts with; do not add a requirement the sources do not state."
 
-const unsupportedKind = "a fact, number, name, customer, ranking, date, promise, condition, cause or availability that no source holds and that no source contradicts; a new obligation; an evaluation of a person or of a quality stated as attested fact"
+const claimKind = "a specific, checkable fact, number, name, customer, ranking, date, promise, condition, cause or availability that no source holds and that no source contradicts; a new obligation; an evaluation of a person or of a quality stated as attested fact"
+
+const slopKind = "a unit that spends the reader's attention and trust while giving nothing back: it conveys none of this document's facts, grounds for judgment, requests or relational gestures, and instead asserts a vague value or significance that cannot be checked, or manufactures weight through rhetorical form alone. " +
+	"Such text dilutes the real information, reads as machine-written so that the reader trusts even the true facts less, and signals that the writer did not think about this reader and situation. " +
+	"It is slop only if all three hold: (1) interchangeable: with only the names swapped it would fit any other document unchanged; " +
+	"(2) functionless: removing it loses the reader nothing; " +
+	"(3) uncheckable weight: it asserts an evaluation that cannot be verified, or its form is the message. " +
+	"For a borderline unit ask: without this unit, would the document read as more trustworthy and faster to the reader? If yes, it is slop. If removing it makes the document colder or impolite (greetings, thanks, a formal letter's conventions), it is expression, not slop. " +
+	"A specific checkable fact with no source is claim, and a real fact of this document restated wrongly or with its status changed is mistake. " +
+	"Never choose slop for tone, length, style or formality, or for any reason outside these criteria."
 
 var (
 	TodayProfile = Profile{
@@ -75,59 +80,40 @@ var (
 			KindSource:     sourceKind,
 			KindDerived:    derivedKind,
 			KindExpression: expressionKind,
-			kindClaimToday: "anything else: a fact, number, name, customer, ranking, date, promise, condition, cause or availability the sources lack; " +
+			KindClaim: "anything else: a fact, number, name, customer, ranking, date, promise, condition, cause or availability the sources lack; " +
 				"a source fact stated with a stronger status (a forecast or target as achieved or confirmed, some as all, planned as done, an estimate or average as exact or guaranteed); " +
 				"a new obligation; or an evaluation of a person or of a quality stated as attested fact",
 		},
 		Guard:      guardToday,
-		Treatments: map[string]Treatment{kindClaimToday: TreatmentBlank},
+		Treatments: map[string]Treatment{KindClaim: TreatmentBlank},
 	}
 	CompactProfile = Profile{
 		Name: "compact",
 		Kinds: map[string]string{
-			KindSource:      sourceKind,
-			KindDerived:     derivedKind,
-			KindExpression:  expressionKind,
-			KindUnsupported: unsupportedKind,
+			KindSource:     sourceKind,
+			KindDerived:    derivedKind,
+			KindExpression: expressionKind,
+			KindClaim:      claimKind,
 			KindMistake: "restates something the sources give but gets it wrong: a number, date, name, amount, owner or party that differs from the source, " +
 				"or a status or scope the source does not give (a forecast stated as fact, a plan as done, some as all, an estimate as exact)",
 			KindError: "derives or reasons from the sources and gets it wrong: a sum, share, date offset, unit conversion or conclusion that does not follow from the values the sources give, " +
 				"or a claim that cannot be true together with another claim of the same document",
-			KindSlop: "generic marketing or filler with no content of its own: superlatives and buzzwords (world-class, supercharge, seamless), a forced contrast slogan (Not a feature. A platform.), or a dismissive label such as theater",
+			KindSlop: slopKind,
 		},
 		Guard: guardKinds,
 		Treatments: map[string]Treatment{
-			KindUnsupported: TreatmentBlank, KindMistake: TreatmentBlank, KindError: TreatmentBlank, KindSlop: TreatmentRewrite,
+			KindClaim: TreatmentBlank, KindMistake: TreatmentBlank, KindError: TreatmentBlank, KindSlop: TreatmentRewrite,
 		},
-		Rewrites: map[string]string{KindSlop: "Say only the facts this unit holds, plainly: drop superlatives, buzzwords, forced contrast and dismissive labels, and add nothing the unit does not say. If the unit holds no fact, answer with an empty text."},
-		Fallback: map[string]Treatment{KindSlop: TreatmentKeep},
-	}
-	FineProfile = Profile{
-		Name: "fine",
-		Kinds: map[string]string{
-			KindSource:      sourceKind,
-			KindDerived:     derivedKind,
-			KindExpression:  expressionKind,
-			KindUnsupported: unsupportedKind,
-			KindContradicted: "states a value that conflicts with what the sources say: a number, date, name or amount that differs, a derived figure that is computed wrongly, " +
-				"or a claim that cannot be true together with another claim of the same document",
-			KindOverstated:    "a sourced fact with its status or scope changed: a forecast or plan stated as fact or as done, some as all, an estimate as exact",
-			KindMisattributed: "a sourced fact tied to the wrong person, party, item or date",
-			KindSlop:          "generic marketing or filler with no content of its own: superlatives and buzzwords (world-class, supercharge, seamless), a forced contrast slogan (Not a feature. A platform.), or a dismissive label such as theater",
-		},
-		Guard: guardKinds,
-		Treatments: map[string]Treatment{
-			KindUnsupported: TreatmentBlank, KindContradicted: TreatmentBlank, KindMisattributed: TreatmentBlank, KindOverstated: TreatmentRewrite, KindSlop: TreatmentRewrite,
-		},
-		Rewrites: map[string]string{KindSlop: "Say only the facts this unit holds, plainly: drop superlatives, buzzwords, forced contrast and dismissive labels, and add nothing the unit does not say. If the unit holds no fact, answer with an empty text.", KindOverstated: "Rewrite it so it states the status and scope the sources give: a forecast, plan or estimate as such, some as some."},
+		Rewrites: map[string]string{KindSlop: "Replace it with this document's own facts that the sources give, stated plainly, or answer with an empty text when none fits. Never add plausible-sounding new content: no number, name, date or specific the sources do not hold."},
 		Fallback: map[string]Treatment{KindSlop: TreatmentKeep},
 	}
 )
 
 type Claim struct {
-	Path string `json:"path"`
-	At   string `json:"at,omitempty"`
-	Text string `json:"text"`
+	Path   string `json:"path"`
+	At     string `json:"at,omitempty"`
+	Text   string `json:"text"`
+	IsFree bool   `json:"free,omitempty"`
 }
 
 type Attachment struct {
