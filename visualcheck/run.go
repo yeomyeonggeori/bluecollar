@@ -3,6 +3,8 @@ package visualcheck
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -109,16 +111,52 @@ func (state *loopState) fixRound(ctx context.Context) error {
 		return nil
 	}
 	previous := state.manifest
-	rebuilt, errorValue := state.deck.Rebuild(ctx, replacements)
-	if errorValue != nil {
-		return fmt.Errorf("rebuild the deck after fix round %d: %w", state.roundsUsed, errorValue)
+	rebuilt, applied := state.rebuiltWith(ctx, replacements)
+	if len(applied) == 0 {
+		return nil
 	}
 	state.manifest = rebuilt
-	reviews := reviewSlides(ctx, state.decisionModel, state.deck, rebuilt, rebuilt.slidesNumbered(replacements))
+	reviews := reviewSlides(ctx, state.decisionModel, state.deck, rebuilt, rebuilt.slidesNumbered(applied))
 	if len(state.deckSheet.Data) > 0 {
 		reviews = state.reviewedAgainstDeck(ctx, rebuilt, reviews)
 	}
 	return state.settle(ctx, previous, attempts, candidates, reviews)
+}
+
+func (state *loopState) rebuiltWith(ctx context.Context, replacements map[int]string) (Manifest, map[int]string) {
+	rebuilt, errorValue := state.deck.Rebuild(ctx, replacements)
+	if errorValue == nil {
+		return rebuilt, replacements
+	}
+	if len(replacements) == 1 {
+		state.refuse(replacements, errorValue)
+		return state.manifest, nil
+	}
+	applied := map[int]string{}
+	rebuilt = state.manifest
+	for _, number := range sortedNumbers(replacements) {
+		single := map[int]string{number: replacements[number]}
+		next, errorValue := state.deck.Rebuild(ctx, single)
+		if errorValue != nil {
+			state.refuse(single, errorValue)
+			continue
+		}
+		rebuilt, applied[number] = next, replacements[number]
+	}
+	return rebuilt, applied
+}
+
+func (state *loopState) refuse(replacements map[int]string, errorValue error) {
+	for number := range replacements {
+		state.fixProblems[number] = fmt.Sprintf("the deck rebuild refused the rewrite: %v", errorValue)
+		state.givenUp[number] = true
+	}
+}
+
+func sortedNumbers(replacements map[int]string) []int {
+	numbers := slices.Collect(maps.Keys(replacements))
+	slices.Sort(numbers)
+	return numbers
 }
 
 func (state *loopState) acceptedReplacements(candidates []Slide, attempts []attempt) map[int]string {

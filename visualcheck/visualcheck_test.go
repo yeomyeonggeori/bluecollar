@@ -42,6 +42,7 @@ type fakeDeck struct {
 	versions int
 	rebuilds []map[int]string
 	failure  error
+	refuses  func(section string) bool
 }
 
 func newFakeDeck(manifest Manifest) *fakeDeck {
@@ -72,6 +73,11 @@ func (deck *fakeDeck) Rebuild(_ context.Context, replacements map[int]string) (M
 	defer deck.mutex.Unlock()
 	if deck.failure != nil {
 		return Manifest{}, deck.failure
+	}
+	for _, replacement := range replacements {
+		if deck.refuses != nil && deck.refuses(replacement) {
+			return Manifest{}, errors.New("the build refused " + replacement)
+		}
 	}
 	deck.rebuilds = append(deck.rebuilds, replacements)
 	slides := slices.Clone(deck.manifest.Slides)
@@ -359,18 +365,54 @@ func TestVisibleTextIgnoresTagsAttributesAndNotes(t *testing.T) {
 	}
 }
 
-func TestRebuildFailureAbortsWithTheLastGoodReport(t *testing.T) {
+func TestARewriteTheBuildRefusesIsGivenUpWithTheRefusalAndTheRunGoesOn(t *testing.T) {
 	deck := newFakeDeck(sampleManifest(2, section("BAD")))
 	deck.failure = errors.New("office failed")
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "x"}
 	}}
 	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
-	if errorValue == nil || !strings.Contains(errorValue.Error(), "office failed") {
-		t.Fatalf("error %v", errorValue)
+	if errorValue != nil {
+		t.Fatal(errorValue)
 	}
-	if !slices.Equal(report.Leftovers, []int{1}) || len(report.Slides) != 1 {
+	if !slices.Equal(report.Leftovers, []int{1}) || !slices.Equal(report.GivenUp, []int{1}) || !strings.Contains(report.Slides[0].Error, "office failed") || len(languageModel.requests) != 1 {
+		t.Fatalf("report %+v, %d fixer requests", report, len(languageModel.requests))
+	}
+}
+
+func TestOneRefusedRewriteDoesNotDiscardTheOthersTheBuildAccepts(t *testing.T) {
+	deck := newFakeDeck(sampleManifest(1, section("BAD one"), section("BAD two"), section("BAD three")))
+	deck.refuses = func(section string) bool { return strings.Contains(section, "two") }
+	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
+		return Repair{Section: strings.Replace(original, "BAD", "good", 1), Change: "regrouped"}
+	}}
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(report.Fixed) != 2 || report.Fixed[0].Number != 1 || report.Fixed[1].Number != 3 || !slices.Equal(report.GivenUp, []int{2}) || !slices.Equal(report.Leftovers, []int{2}) {
 		t.Fatalf("report %+v", report)
+	}
+	if !strings.Contains(report.Slides[1].Error, "the build refused") || deck.manifest.Slides[1].Section != section("BAD two") {
+		t.Fatalf("slide 2 error %q, section %q", report.Slides[1].Error, deck.manifest.Slides[1].Section)
+	}
+}
+
+func TestADeckCallStillRunsWhenEveryRewriteWasRefused(t *testing.T) {
+	deck := &renderedDeck{fakeDeck: newFakeDeck(manifestWithDeckQuestion(1, section("BAD"))), t: t}
+	deck.refuses = func(string) bool { return true }
+	decisions := routedDecisions{
+		slide: &fakeDecisionModel{answer: func(string) map[string]float64 { return map[string]float64{cleanOption: 0.5, "crowded": 0.5} }},
+		deck:  &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)},
+	}
+	fixer := &fakeLanguageModel{rewrite: func(original string) Repair {
+		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "x"}
+	}}
+	if _, errorValue := Run(context.Background(), decisions, fixer, deck); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(decisions.deck.deckRequests) != 1 {
+		t.Fatalf("%d deck requests", len(decisions.deck.deckRequests))
 	}
 }
 
