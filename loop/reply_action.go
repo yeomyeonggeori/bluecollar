@@ -10,20 +10,20 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func (agentTurnRunner *AgentTurnRunner) deliverReplyAttachments(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation, actionDocument turnActionDocument) (turnActionDocument, []toolcontract.FileAttachment, bool) {
+func (agentTurnRunner *AgentTurnRunner) deliverReplyAttachments(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation, actionDocument turnActionDocument) (turnActionDocument, turnObservation, bool) {
 	if len(actionDocument.Attachments) == 0 {
-		return actionDocument, nil, true
+		return actionDocument, turnObservation{}, true
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
 	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.FileDeliverToolName), taskRunID, observationID, toolcontract.FileDeliverToolName, replyAttachmentToolInput(actionDocument.Attachments), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, "")
 	if observation.Failed() {
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentReplyFailed, marshalEventBody(replyReceipt{Status: replyStatusNotDelivered, Reason: "attachment_failed", Detail: observation.FailureSummary(), AttachmentCount: len(actionDocument.Attachments)}))
-		return actionDocument, nil, false
+		return actionDocument, observation, false
 	}
 	actionDocument.CompletionEvidenceIDs = appendUniqueStrings(actionDocument.CompletionEvidenceIDs, observation.ObservationID)
 	actionDocument.CompletionEvidence = evidenceReferencesFromIDs(actionDocument.CompletionEvidenceIDs)
-	return actionDocument, observation.Attachments, true
+	return actionDocument, observation, true
 }
 
 func replyAttachmentToolInput(attachments []replyAttachment) json.RawMessage {
@@ -42,7 +42,7 @@ func (agentTurnRunner *AgentTurnRunner) handleReplyAction(ctx context.Context, t
 	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, state.Attachments); isCancelled {
 		return cancelledResult, true
 	}
-	actionDocument, attachments, isDelivered := agentTurnRunner.deliverReplyAttachments(ctx, taskRunID, request, state, successfulToolCalls, actionDocument)
+	actionDocument, delivery, isDelivered := agentTurnRunner.deliverReplyAttachments(ctx, taskRunID, request, state, successfulToolCalls, actionDocument)
 	if !isDelivered {
 		agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusFailed, "reply", lastObservationText(state.Observations))
 		return AgentTurnResult{}, false
@@ -50,7 +50,7 @@ func (agentTurnRunner *AgentTurnRunner) handleReplyAction(ctx context.Context, t
 	if actionDocument.ExpectsAnswer {
 		return agentTurnRunner.askForReplyAnswer(ctx, taskRunID, stepID, request, state, successfulToolCalls, actionDocument)
 	}
-	receipt := agentTurnRunner.sendReply(ctx, taskRunID, request, state, actionDocument, attachments)
+	receipt := agentTurnRunner.sendReply(ctx, taskRunID, request, state, actionDocument, delivery.Attachments)
 	agentTurnRunner.saveStep(taskRunID, stepID, replyStepStatus(receipt), "reply", marshalEventBody(receipt))
 	return AgentTurnResult{}, false
 }

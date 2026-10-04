@@ -292,6 +292,7 @@ type ToolResult struct {
 	Failure         *ToolFailure     `json:"failure,omitempty"`
 	Attachments     []FileAttachment `json:"attachments,omitempty"`
 	RecoveryActions []RecoveryAction `json:"recoveryActions,omitempty"`
+	ReplyNotes      []string         `json:"replyNotes,omitempty"`
 }
 
 func ToolSuccess(content string) ToolResult {

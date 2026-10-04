@@ -1152,6 +1152,7 @@ func applyToolResult(state agentTaskState, invocation toolcontract.ToolInvocatio
 	}
 	if !result.Failed() {
 		observation.Attachments = append([]toolcontract.FileAttachment{}, result.Attachments...)
+		observation.ReplyNotes = append([]string{}, result.ReplyNotes...)
 		state.Attachments = appendObservationAttachments(state.Attachments, observation)
 	}
 	state.Observations = append(state.Observations, observation)

@@ -151,6 +151,9 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	observation.ModelReasoning = modelReasoning
 	observation.ModelReasoningField = modelReasoningField
 	observation.ImageRefs = toolResultImageRefs(observationID, attachments)
+	if !isError {
+		observation.ReplyNotes = append([]string{}, toolResult.ReplyNotes...)
+	}
 	observation.Summary = agentTurnRunner.buildToolResultSummary(ctx, taskRunID, toolName, originalContent, isError, attachments, elisionAdvice, toolResult)
 	observation.ToolInputKey = toolInputKey
 	observation.DurationMS = durationMS
