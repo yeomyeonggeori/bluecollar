@@ -2,8 +2,11 @@ package loop
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -20,10 +23,12 @@ const (
 )
 
 type changeCheck struct {
-	ExpectedChanges []expectedChange   `json:"expectedChanges"`
-	CarriedOut      map[string]float64 `json:"carriedOut,omitempty"`
-	Unrecorded      []expectedChange   `json:"unrecorded,omitempty"`
-	Unmet           []expectedChange   `json:"unmet,omitempty"`
+	ExpectedChanges  []expectedChange   `json:"expectedChanges"`
+	CarriedOut       map[string]float64 `json:"carriedOut,omitempty"`
+	Unrecorded       []expectedChange   `json:"unrecorded,omitempty"`
+	Unmet            []expectedChange   `json:"unmet,omitempty"`
+	StateDigest      string             `json:"stateDigest,omitempty"`
+	RepeatsRefusalOf string             `json:"repeatsRefusalOf,omitempty"`
 }
 
 type changedRecord struct {
@@ -75,8 +80,13 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 	}
 	location := companyLocation(request.Company.TimeZone)
 	heldObjectTypes := heldObjectTypes(observations)
+	state := changeCheckState(request, location, expected, recordedIndexes, heldObjectTypes, observations)
+	check.StateDigest = judgedStateDigest(state)
+	if refusal, isRefused := refusalOverState(observations, check.StateDigest); isRefused {
+		return refusal, nil
+	}
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
-		State:     changeCheckState(request, location, expected, recordedIndexes, heldObjectTypes, observations),
+		State:     state,
 		Questions: changeCheckQuestions(recordedIndexes, len(heldObjectTypes) > 0),
 	})
 	if errorValue != nil {
@@ -91,6 +101,31 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		}
 	}
 	return check, nil
+}
+
+func judgedStateDigest(state map[string]any) string {
+	judged := map[string]any{}
+	for key, value := range state {
+		if key != "now" {
+			judged[key] = value
+		}
+	}
+	document, _ := json.Marshal(judged)
+	digest := sha256.Sum256(document)
+	return hex.EncodeToString(digest[:])
+}
+
+func refusalOverState(observations []turnObservation, stateDigest string) (changeCheck, bool) {
+	for _, observation := range observations {
+		if observation.Action != "evidence_missing" || observation.ChangeCheck == nil || observation.ChangeCheck.StateDigest != stateDigest {
+			continue
+		}
+		refusal := *observation.ChangeCheck
+		refusal.CarriedOut = nil
+		refusal.RepeatsRefusalOf = observation.ObservationID
+		return refusal, true
+	}
+	return changeCheck{}, false
 }
 
 func changeCheckQuestions(indexes []int, isAnyFileHeld bool) map[string]model.DecisionQuestion {
@@ -213,7 +248,25 @@ func changedRecords(observations []turnObservation, location *time.Location, hel
 			records[index].History = append(records[index].History, step)
 		}
 	}
+	for index := range records {
+		records[index].History = withoutRepeatedSteps(records[index].History)
+	}
 	return records
+}
+
+func withoutRepeatedSteps(history []changeStep) []changeStep {
+	seen := map[string]bool{}
+	kept := []changeStep{}
+	for index := len(history) - 1; index >= 0; index-- {
+		document, _ := json.Marshal(history[index])
+		if seen[string(document)] {
+			continue
+		}
+		seen[string(document)] = true
+		kept = append(kept, history[index])
+	}
+	slices.Reverse(kept)
+	return kept
 }
 
 func heldObjectTypes(observations []turnObservation) map[string]bool {

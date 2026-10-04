@@ -42,7 +42,7 @@ func (agentTurnRunner *AgentTurnRunner) workIsDoneAtStop(ctx context.Context, ta
 		return false
 	}
 	changeResult := agentTurnRunner.evaluateExpectedChanges(ctx, taskRunID, request, state.Observations)
-	if !changeResult.IsSatisfied {
+	if !changeResult.IsSatisfied || changeResult.leavesChangesUnmet() {
 		return false
 	}
 	isDone := changeResult.AreChangesConfirmed || modelDeclaredCompletion(state)
