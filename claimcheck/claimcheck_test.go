@@ -43,7 +43,7 @@ func flaggingInventions(text string) (string, map[string]float64) {
 	case strings.Contains(text, "miscounted"):
 		return KindError, map[string]float64{KindError: 0.7}
 	case strings.Contains(text, "supercharge"):
-		return KindSlop, map[string]float64{KindSlop: 0.9}
+		return KindHollow, map[string]float64{KindHollow: 0.9}
 	}
 	return KindSource, map[string]float64{KindSource: 0.95, KindClaim: 0.05}
 }
@@ -152,8 +152,8 @@ func TestEachDefectKindIsRoutedToItsTreatment(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	blanked, rewritten := judgment.Treated(TreatmentBlank), judgment.Treated(TreatmentRewrite)
-	if len(blanked) != 3 || len(rewritten) != 1 || rewritten[0].Defect != KindSlop {
-		t.Fatalf("expected three blanked and the slop rewritten, got %+v and %+v", blanked, rewritten)
+	if len(blanked) != 3 || len(rewritten) != 1 || rewritten[0].Defect != KindHollow {
+		t.Fatalf("expected three blanked and the hollow rewritten, got %+v and %+v", blanked, rewritten)
 	}
 }
 
@@ -185,11 +185,11 @@ func TestEveryDefectKindIsDefinedInItsProfile(t *testing.T) {
 	}
 }
 
-func TestTheSlopDefinitionNamesItsThreeCriteriaAndItsBoundaries(t *testing.T) {
-	definition := CompactProfile.Kinds[KindSlop]
-	for _, part := range []string{"interchangeable", "functionless", "uncheckable weight", "more trustworthy and faster", "colder or impolite", "expression", "claim", "mistake", "Never choose slop"} {
+func TestTheHollowDefinitionNamesItsThreeCriteriaAndItsBoundaries(t *testing.T) {
+	definition := CompactProfile.Kinds[KindHollow]
+	for _, part := range []string{"interchangeable", "functionless", "uncheckable weight", "more trustworthy and faster", "colder or impolite", "expression", "claim", "mistake", "Never choose hollow"} {
 		if !strings.Contains(definition, part) {
-			t.Fatalf("expected the slop definition to hold %q, got %q", part, definition)
+			t.Fatalf("expected the hollow definition to hold %q, got %q", part, definition)
 		}
 	}
 }

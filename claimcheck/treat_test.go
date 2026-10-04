@@ -27,7 +27,7 @@ func treatedClaims() []Claim {
 	return claimsOf("an invented fact", "a wrong date", "supercharge your day", "Thank you")
 }
 
-func TestTreatBlanksWhatCannotBeRewrittenAndRewritesSlop(t *testing.T) {
+func TestTreatBlanksWhatCannotBeRewrittenAndRewritesHollow(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{kindOf: func(text string) (string, map[string]float64) {
 		if text == "Your day, planned" {
 			return KindSource, map[string]float64{KindSource: 0.9}
@@ -45,17 +45,17 @@ func TestTreatBlanksWhatCannotBeRewrittenAndRewritesSlop(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	if len(outcome.Blank) != 2 || len(outcome.Replaced) != 1 || len(outcome.Kept) != 0 {
-		t.Fatalf("expected two blanked and the slop replaced, got %+v", outcome)
+		t.Fatalf("expected two blanked and the hollow replaced, got %+v", outcome)
 	}
 	if outcome.Replaced[0].Path != "paragraphs[2]" || outcome.Replaced[0].Text != "Your day, planned" {
-		t.Fatalf("expected the slop unit replaced by its rewrite, got %+v", outcome.Replaced)
+		t.Fatalf("expected the hollow unit replaced by its rewrite, got %+v", outcome.Replaced)
 	}
 	if len(writer.prompts) != 1 || !strings.Contains(writer.prompts[0], "supercharge your day") || strings.Contains(writer.prompts[0], "a wrong date") {
 		t.Fatalf("expected one rewrite that sees only the flagged unit, got %q", writer.prompts)
 	}
 }
 
-func TestTreatKeepsSlopThatIsStillSlopAfterOneRewrite(t *testing.T) {
+func TestTreatKeepsHollowThatIsStillHollowAfterOneRewrite(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
 	writer := &scriptedWriter{rewrite: func(string) string { return `{"text":"supercharge it differently"}` }}
 	sources := Sources{Request: []string{"Write a notice."}}
@@ -69,14 +69,14 @@ func TestTreatKeepsSlopThatIsStillSlopAfterOneRewrite(t *testing.T) {
 	}
 }
 
-func TestTreatNeverBlanksSlopEvenWhenItsRewriteBecameAnotherDefect(t *testing.T) {
+func TestTreatNeverBlanksHollowEvenWhenItsRewriteBecameAnotherDefect(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
 	writer := &scriptedWriter{rewrite: func(string) string { return `{"text":"an invented guarantee"}` }}
 	sources := Sources{Request: []string{"Write a notice."}}
 	judgment, _ := Judge(context.Background(), decisionModel, sources, claimsOf("supercharge your day"))
 	outcome, _ := Treat(context.Background(), CompactProfile, decisionModel, writer, sources, judgment)
 	if len(outcome.Kept) != 1 || len(outcome.Blank) != 0 || len(outcome.Replaced) != 0 {
-		t.Fatalf("expected slop never to be blanked even when its rewrite became another defect, got %+v", outcome)
+		t.Fatalf("expected hollow never to be blanked even when its rewrite became another defect, got %+v", outcome)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestTreatAsksNothingWhenNothingIsFlagged(t *testing.T) {
 	}
 }
 
-func TestTreatKeepsSlopWhoseRewriteIsEmptyBecauseItHoldsNoFact(t *testing.T) {
+func TestTreatKeepsHollowWhoseRewriteIsEmptyBecauseItHoldsNoFact(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
 	writer := &scriptedWriter{rewrite: func(string) string { return `{"text":""}` }}
 	sources := Sources{Request: []string{"Write a notice."}}
