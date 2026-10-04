@@ -110,6 +110,7 @@ func newWorkspaceToolSet(runningShell shell, toolSelector agentcontract.ToolSele
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[shellInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/bash",
+			ProviderID:      toolcontract.BuiltInToolProviderID,
 			Name:            toolcontract.BashToolName,
 			Description:     "Run one shell command in the working directory and read back its combined output and exit code. This is a full machine you control: a missing package is something to install and try again, not a reason the work cannot be done.",
 			WhenToUse:       "anything the file tools do not cover: building, testing, searching, installing, inspecting the machine.",

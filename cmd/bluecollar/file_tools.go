@@ -92,6 +92,7 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[fileReadInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/file_read",
+			ProviderID:      toolcontract.BuiltInToolProviderID,
 			Name:            toolcontract.FileReadToolName,
 			SideEffectClass: toolcontract.ToolSideEffectRead,
 			OutputSchema:    fileReadOutputSchema,
@@ -117,6 +118,7 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[fileWriteInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/write",
+			ProviderID:      toolcontract.BuiltInToolProviderID,
 			Name:            toolcontract.WriteToolName,
 			SideEffectClass: toolcontract.ToolSideEffectStateChange,
 			OutputSchema:    fileToolOutputSchema,
@@ -140,6 +142,7 @@ func registerFileTools(toolSet *toolcontract.ToolSet, runningShell shell) {
 	toolcontract.RegisterToolFunction(toolSet, toolcontract.ToolFunction[fileEditInput, toolcontract.ToolResult]{
 		Definition: toolcontract.ToolDefinition{
 			ID:              "bluecollar/edit",
+			ProviderID:      toolcontract.BuiltInToolProviderID,
 			Name:            toolcontract.EditToolName,
 			SideEffectClass: toolcontract.ToolSideEffectStateChange,
 			OutputSchema:    fileToolOutputSchema,
