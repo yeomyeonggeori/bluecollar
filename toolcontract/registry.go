@@ -143,12 +143,13 @@ type ToolInvocation struct {
 }
 
 type FileAttachment struct {
-	DevicePath    string `json:"devicePath"`
-	Filename      string `json:"filename,omitempty"`
-	ContentType   string `json:"contentType,omitempty"`
-	SizeBytes     int64  `json:"sizeBytes,omitempty"`
-	Title         string `json:"title,omitempty"`
-	ContentBase64 string `json:"-"`
+	DevicePath    string          `json:"devicePath"`
+	Filename      string          `json:"filename,omitempty"`
+	ContentType   string          `json:"contentType,omitempty"`
+	SizeBytes     int64           `json:"sizeBytes,omitempty"`
+	Title         string          `json:"title,omitempty"`
+	Holds         json.RawMessage `json:"holds,omitempty"`
+	ContentBase64 string          `json:"-"`
 }
 
 type RecoveryAction struct {

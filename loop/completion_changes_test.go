@@ -1,8 +1,10 @@
 package loop
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -364,5 +366,92 @@ func TestUnrecordedWorkHoldsNeitherLookupsNorRecordedChanges(t *testing.T) {
 
 	if len(work) != 0 {
 		t.Fatalf("a lookup and a recorded change are not unrecorded work, got %+v", work)
+	}
+}
+
+type recordedDelivery struct {
+	Prompt       string            `json:"prompt"`
+	Observations []turnObservation `json:"observations"`
+	Holds        json.RawMessage   `json:"holds"`
+}
+
+func w1DeliveredWorkbook(t *testing.T) recordedDelivery {
+	document, errorValue := os.ReadFile("testdata/w1-run1-delivered-workbook.json")
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	var delivery recordedDelivery
+	if errorValue := json.Unmarshal(document, &delivery); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return delivery
+}
+
+func commandFileToolSet() *toolcontract.ToolSet {
+	definitions := []toolcontract.ToolDefinition{}
+	for _, name := range []string{"write", "edit", "file_delete", toolcontract.FileDeliverToolName} {
+		definition, _ := kernelFileToolSet().ToolDefinition(name)
+		definitions = append(definitions, definition)
+	}
+	bash := declaringPathToolDefinition(toolcontract.BashToolName, "Run a shell command as the requester.", "file", "changed")
+	bash.SideEffectClass = toolcontract.ToolSideEffectStateChange
+	return newTestToolSetWithDefinitions(append(definitions, bash))
+}
+
+func TestJevSeesWhatADeliveredWorkbookHoldsAsItsWriterRecordedIt(t *testing.T) {
+	delivery := w1DeliveredWorkbook(t)
+	delivered := &delivery.Observations[len(delivery.Observations)-1]
+	delivered.Attachments[0].Holds = delivery.Holds
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
+	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
+	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+
+	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{asked}, delivery.Observations)
+
+	state, _ := json.Marshal(decisionModel.requests[0].State)
+	if !strings.Contains(string(state), `"holds":`+string(compactJSON(t, delivery.Holds))) {
+		t.Fatalf("expected the delivered workbook's recorded holds in the change check state, got %s", state)
+	}
+	instructions := decisionModel.requests[0].Questions["expected0"].Instructions
+	if !strings.Contains(instructions, "holds") {
+		t.Fatalf("expected the question to say how to read holds, got %s", instructions)
+	}
+}
+
+func TestTheQuestionSaysNothingOfHoldsWhenNoFileRecordsThem(t *testing.T) {
+	delivery := w1DeliveredWorkbook(t)
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
+	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
+	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+
+	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{asked}, delivery.Observations)
+
+	if instructions := decisionModel.requests[0].Questions["expected0"].Instructions; strings.Contains(instructions, "holds") {
+		t.Fatalf("expected no word about holds when no file records them, got %s", instructions)
+	}
+}
+
+func compactJSON(t *testing.T, document json.RawMessage) []byte {
+	var buffer bytes.Buffer
+	if errorValue := json.Compact(&buffer, document); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	return buffer.Bytes()
+}
+
+func TestOneCallThatChangedSeveralRecordsShowsItsInputAndResultOnce(t *testing.T) {
+	delivery := w1DeliveredWorkbook(t)
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
+	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
+	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+
+	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{asked}, delivery.Observations)
+
+	state, _ := json.Marshal(decisionModel.requests[0].State)
+	if count := strings.Count(string(state), `office render documents/`); count != 1 {
+		t.Fatalf("expected the render command shown once for the seven previews it wrote, got %d times in %s", count, state)
+	}
+	if !strings.Contains(string(state), `{"record":"documents/지역별_분기_매출_집계.xlsx.source.json","history":[{"change":"file changed","sameCallAs":"documents/지역별_분기_매출_집계.xlsx"}]}`) {
+		t.Fatalf("expected the snapshot's step to point at the record showing the call, got %s", state)
 	}
 }
