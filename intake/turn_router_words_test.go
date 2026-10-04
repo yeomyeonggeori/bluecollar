@@ -260,3 +260,99 @@ func TestTurnRouterDecidesWithTheFilesAttachedToTheMessage(t *testing.T) {
 		t.Fatalf("expected the router to be told about the attached CSV, got %+v", attachments)
 	}
 }
+
+type answeringLanguageModel struct {
+	sequenceLanguageModel
+	answers []string
+	errors  []error
+}
+
+func (languageModel *answeringLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	languageModel.requests = append(languageModel.requests, request)
+	index := len(languageModel.requests) - 1
+	if languageModel.errors[index] != nil {
+		return model.StructuredResponse{}, languageModel.errors[index]
+	}
+	return model.StructuredResponse{Content: languageModel.answers[index]}, nil
+}
+
+type proseAnswerError struct{}
+
+func (proseAnswerError) Error() string {
+	return "model answered stop with prose instead of calling the schema it was given"
+}
+
+func (proseAnswerError) StructuredOutputCorrection() (model.StructuredOutputCorrection, bool) {
+	return model.StructuredOutputCorrection{Code: "provider_response_invalid", Diagnostic: model.StructuredOutputDiagnostic{Category: model.StructuredOutputDiagnosticToolCallContract}}, true
+}
+
+func routerWithAnswers(answers []string, errorValues []error, outcome intaketest.Outcome) (TurnRouter, *answeringLanguageModel) {
+	languageModel := &answeringLanguageModel{answers: answers, errors: errorValues}
+	decisionPlanner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil, func() float64 { return 1 })
+	return NewTurnRouter(languageModel, decisionPlanner, enabledIntakeOptions()), languageModel
+}
+
+func TestTurnRouterAsksOnceMoreWhenTheWordsAreNotTheSchemasObject(t *testing.T) {
+	turnRouter, languageModel := routerWithAnswers(
+		[]string{"", `{"reason":"r","userFacingReply":"","clarificationQuestion":"어느 분기인가요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`},
+		[]error{proseAnswerError{}, nil},
+		clarifyOutcome(),
+	)
+
+	decision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "매출 보고서 만들어줘", ResponseLanguage: "ko"})
+
+	if errorValue != nil {
+		t.Fatalf("expected the repaired words to route the turn: %v", errorValue)
+	}
+	if len(languageModel.requests) != 2 || decision.Route != agentcontract.TurnRouteClarify || decision.ClarificationQuestion == "" {
+		t.Fatalf("expected one repair to keep the clarify route, got %d calls and %+v", len(languageModel.requests), decision)
+	}
+	if decision.RoutingFallbackReason != "" {
+		t.Fatalf("a repaired answer is no fallback, got %q", decision.RoutingFallbackReason)
+	}
+}
+
+func TestTurnRouterHandsTheTurnToTheAgentLoopWhenTheWordsStayMalformed(t *testing.T) {
+	turnRouter, languageModel := routerWithAnswers([]string{"", ""}, []error{proseAnswerError{}, proseAnswerError{}}, clarifyOutcome())
+
+	decision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "매출 보고서 만들어줘", ResponseLanguage: "ko"})
+
+	if errorValue != nil {
+		t.Fatalf("a router formatting error must never fail the turn: %v", errorValue)
+	}
+	if len(languageModel.requests) != 2 {
+		t.Fatalf("expected the first call and exactly one repair, got %d", len(languageModel.requests))
+	}
+	if decision.Route != agentcontract.TurnRouteStartTask || decision.Classification != agentcontract.IntakeClassificationBoundedTask {
+		t.Fatalf("expected the default route that lets the agent loop answer in its own words, got %+v", decision)
+	}
+	if decision.UserFacingReply != "" || decision.ClarificationQuestion != "" {
+		t.Fatalf("the runtime must not write the requester's words, got %+v", decision)
+	}
+	if !strings.Contains(decision.RoutingFallbackReason, "prose") {
+		t.Fatalf("a fallback must stay loud and say why, got %q", decision.RoutingFallbackReason)
+	}
+}
+
+func TestTurnRouterStartsTheWorkWithoutAContractWhenTheContractStaysMalformed(t *testing.T) {
+	turnRouter, _ := routerWithAnswers([]string{"", ""}, []error{proseAnswerError{}, proseAnswerError{}}, startTaskOutcome())
+
+	decision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "다음 주 발표자료 초안 만들어줘", ResponseLanguage: "ko"})
+
+	if errorValue != nil {
+		t.Fatalf("a router formatting error must never fail the turn: %v", errorValue)
+	}
+	if decision.Route != agentcontract.TurnRouteStartTask || len(decision.ExpectedResults) != 0 || decision.RoutingFallbackReason == "" {
+		t.Fatalf("expected the work to start with no contract and a stated reason, got %+v", decision)
+	}
+}
+
+func TestTurnRouterStillFailsWhenTheWordsCallIsCancelled(t *testing.T) {
+	turnRouter, _ := routerWithAnswers([]string{""}, []error{context.Canceled}, clarifyOutcome())
+
+	_, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "매출 보고서 만들어줘", ResponseLanguage: "ko"})
+
+	if errorValue == nil {
+		t.Fatal("an unreachable model is not a formatting error and must still surface")
+	}
+}

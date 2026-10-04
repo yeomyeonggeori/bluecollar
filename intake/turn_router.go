@@ -77,10 +77,36 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 		ctx = agentcontract.WithLLMCallObserver(ctx, callLedger.Observe)
 	}
 	turnWords, errorValue := observedRouter.writeTurnWords(ctx, request, decidedFields, wordsShape)
+	if decidedFields.BusyRoute != agentcontract.BusyRouteSteer && isMalformedAnswer(ctx, errorValue) {
+		return handToAgentLoop(decidedFields, errorValue), nil
+	}
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, fmt.Errorf("turn router words: %w", errorValue)
 	}
 	return normalizeTurnWords(decidedFields.WithTurnWords(turnWords)), nil
+}
+
+func isMalformedAnswer(ctx context.Context, errorValue error) bool {
+	if errorValue == nil || ctx.Err() != nil {
+		return false
+	}
+	var decisionError turnRouterDecisionError
+	if errors.As(errorValue, &decisionError) {
+		return true
+	}
+	_, isCorrectable := model.StructuredOutputCorrectionFromError(errorValue)
+	return isCorrectable
+}
+
+func handToAgentLoop(decidedFields agentcontract.TurnDecision, malformedAnswer error) agentcontract.TurnDecision {
+	decidedFields.RoutingFallbackReason = malformedAnswer.Error()
+	if turnRouteStartsWork(decidedFields) {
+		return normalizeTurnWords(decidedFields)
+	}
+	decidedFields.Route = agentcontract.TurnRouteStartTask
+	decidedFields.Classification = agentcontract.IntakeClassificationBoundedTask
+	decidedFields.TaskShape = agentcontract.TaskShapeMaintenanceTask
+	return normalizeTurnWords(decidedFields)
 }
 
 func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {

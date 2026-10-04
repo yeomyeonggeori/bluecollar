@@ -385,7 +385,7 @@ func TestTheWordsCallForWorkAsksOnlyForItsAcceptance(t *testing.T) {
 	}
 }
 
-func TestTheWordsCallIsCorrectedOnceAndThenGivesUp(t *testing.T) {
+func TestTheWordsCallIsCorrectedOnceAndThenHandsTheTurnOver(t *testing.T) {
 	correctedModel := &sequenceLanguageModel{contents: []string{
 		`{"reason":"","userFacingReply":"","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
 		`{"reason":"물어본다","userFacingReply":"","clarificationQuestion":"어떤 형식으로 드릴까요?","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
@@ -410,8 +410,9 @@ func TestTheWordsCallIsCorrectedOnceAndThenGivesUp(t *testing.T) {
 	unrepentantModel := &sequenceLanguageModel{contents: []string{
 		`{"reason":"","userFacingReply":"","clarificationQuestion":"","clarificationOptions":[],"busyInstruction":"","expectedResults":[]}`,
 	}}
-	if _, errorValue := turnRouterWith(unrepentantModel, clarifyOutcome()).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "정리해줘"}); errorValue == nil {
-		t.Fatal("expected a second bad answer to fail rather than loop")
+	fallback, errorValue := turnRouterWith(unrepentantModel, clarifyOutcome()).Plan(context.Background(), agentcontract.AgentRequest{Prompt: "정리해줘"})
+	if errorValue != nil || fallback.Route != agentcontract.TurnRouteStartTask || fallback.RoutingFallbackReason == "" {
+		t.Fatalf("expected a second bad answer to hand the turn to the agent loop rather than loop or fail, got %+v, %v", fallback, errorValue)
 	}
 	if len(unrepentantModel.requests) != 2 {
 		t.Fatalf("expected the correction loop to stop after one retry, got %d calls", len(unrepentantModel.requests))

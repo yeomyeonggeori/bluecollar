@@ -458,11 +458,45 @@ func decodeCompletion(responseBody []byte, modelName string) (model.StructuredRe
 		return response, completionTruncatedError{}
 	}
 	arguments, hasToolCall := firstToolCallArguments(choice.Message.ToolCalls)
-	if !hasToolCall {
-		return response, errors.New("model answered " + choice.FinishReason + " with prose instead of calling the schema it was given: " + truncated(choice.Message.Content))
+	if hasToolCall {
+		response.Content = arguments
+		return response, nil
 	}
-	response.Content = arguments
-	return response, nil
+	if answer, isObject := jsonObjectContent(choice.Message.Content); isObject {
+		response.Content = answer
+		return response, nil
+	}
+	return response, proseInsteadOfSchemaError{finishReason: choice.FinishReason, content: choice.Message.Content}
+}
+
+func jsonObjectContent(content string) (string, bool) {
+	trimmed := strings.TrimSpace(content)
+	var object map[string]json.RawMessage
+	if json.Unmarshal([]byte(trimmed), &object) != nil || object == nil {
+		return "", false
+	}
+	return trimmed, true
+}
+
+type proseInsteadOfSchemaError struct {
+	finishReason string
+	content      string
+}
+
+func (errorValue proseInsteadOfSchemaError) Error() string {
+	return "model answered " + errorValue.finishReason + " with prose instead of calling the schema it was given: " + truncated(errorValue.content)
+}
+
+func (errorValue proseInsteadOfSchemaError) StructuredOutputCorrection() (model.StructuredOutputCorrection, bool) {
+	return model.StructuredOutputCorrection{Code: "provider_response_invalid", Diagnostic: errorValue.diagnostic()}, true
+}
+
+func (errorValue proseInsteadOfSchemaError) StructuredOutputDiagnostic() (model.StructuredOutputDiagnostic, bool) {
+	return errorValue.diagnostic(), true
+}
+
+func (errorValue proseInsteadOfSchemaError) diagnostic() model.StructuredOutputDiagnostic {
+	return model.StructuredOutputDiagnostic{Category: model.StructuredOutputDiagnosticToolCallContract}
 }
 
 type completionTruncatedError struct{}

@@ -116,6 +116,7 @@ type TurnDecision struct {
 	ReactionEmojiName       string                `json:"reactionEmojiName,omitempty"`
 	BusyRoute               BusyRoute             `json:"busyRoute,omitempty"`
 	BusyInstruction         string                `json:"busyInstruction,omitempty"`
+	RoutingFallbackReason   string                `json:"routingFallbackReason,omitempty"`
 }
 
 type TurnWords struct {

@@ -1,6 +1,7 @@
 package openaicompatible
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -131,4 +132,38 @@ func TestTheProviderThatActuallyServedTheRequestIsRecorded(t *testing.T) {
 	if structured.UpstreamProvider != "Modal" || structured.Usage.ReasoningTokens != 3 {
 		t.Fatalf("a structured answer records the same, got %q and %d", structured.UpstreamProvider, structured.Usage.ReasoningTokens)
 	}
+}
+
+func TestAnObjectAnsweredAsContentIsTheStructuredAnswer(t *testing.T) {
+	responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":"{\"route\": \"start_task\"}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":7,"completion_tokens":9,"total_tokens":16}}`)
+
+	response, errorValue := decodeCompletion(responseBody, "any/model")
+
+	if errorValue != nil {
+		t.Fatalf("a provider that carries the schema answer as message content has still answered the schema: %v", errorValue)
+	}
+	if response.Content != `{"route": "start_task"}` {
+		t.Fatalf("expected the object itself, got %q", response.Content)
+	}
+}
+
+func TestProseInsteadOfTheSchemaIsOneCorrectableAnswer(t *testing.T) {
+	for _, content := range []string{"Sure, here is the plan: start the task.", `["start_task"]`, "null", ""} {
+		responseBody := []byte(`{"choices":[{"message":{"role":"assistant","content":` + quoted(content) + `},"finish_reason":"stop"}]}`)
+
+		_, errorValue := decodeCompletion(responseBody, "any/model")
+
+		if errorValue == nil {
+			t.Fatalf("%q is not the schema's object and must not be read as one", content)
+		}
+		correction, isCorrectable := model.StructuredOutputCorrectionFromError(errorValue)
+		if !isCorrectable || correction.Diagnostic.Category != model.StructuredOutputDiagnosticToolCallContract {
+			t.Fatalf("expected a typed tool-call correction for %q, got %+v", content, correction)
+		}
+	}
+}
+
+func quoted(text string) string {
+	encoded, _ := json.Marshal(text)
+	return string(encoded)
 }
