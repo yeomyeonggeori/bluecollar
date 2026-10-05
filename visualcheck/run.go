@@ -83,6 +83,7 @@ func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel m
 			return state.report(), errorValue
 		}
 	}
+	state.clearGeometry(ctx)
 	if errorValue := state.deckPass(ctx); errorValue != nil {
 		return state.report(), errorValue
 	}
@@ -311,4 +312,56 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+var geometryCodes = []string{"OUT_OF_FRAME", "CONTENT_OVERFLOW", "CONTENT_OVERLAP"}
+
+func geometryDefects(slide Slide) int {
+	count := 0
+	for _, defect := range slide.Measured {
+		if slices.Contains(geometryCodes, defect.Code) {
+			count++
+		}
+	}
+	return count
+}
+
+func (manifest Manifest) slideNumbered(number int) (Slide, bool) {
+	for _, slide := range manifest.Slides {
+		if slide.Number == number {
+			return slide, true
+		}
+	}
+	return Slide{}, false
+}
+
+func (state *loopState) clearGeometry(ctx context.Context) {
+	for _, slide := range slices.Clone(state.manifest.Slides) {
+		if geometryDefects(slide) > 0 {
+			state.recomposeUntilClear(ctx, slide)
+		}
+	}
+}
+
+func (state *loopState) recomposeUntilClear(ctx context.Context, slide Slide) {
+	for _, edit := range state.withoutExcludedEdits(slide).Edits {
+		rebuilt, errorValue := state.deck.Rebuild(ctx, map[int]string{slide.Number: edit.Section})
+		if errorValue != nil {
+			state.excluded[slide.Number] = append(state.excluded[slide.Number], edit.ID)
+			continue
+		}
+		after, isFound := rebuilt.slideNumbered(slide.Number)
+		if isFound && geometryDefects(after) < geometryDefects(slide) {
+			state.manifest = rebuilt
+			state.changes[slide.Number] = edit.Description
+			assessment := state.assessments[slide.Number]
+			assessment.Measured = after.Measured
+			state.assessments[slide.Number] = assessment
+			return
+		}
+		restored, errorValue := state.deck.Rebuild(ctx, map[int]string{slide.Number: slide.Section})
+		if errorValue == nil {
+			state.manifest = restored
+		}
+	}
 }
