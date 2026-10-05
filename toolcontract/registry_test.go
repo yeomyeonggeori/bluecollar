@@ -126,6 +126,29 @@ func TestToolSetDescriptionsUseDescriptorDescription(t *testing.T) {
 	}
 }
 
+func TestAToolTheRuntimeGatesTellsTheModelTheRuntimeAsks(t *testing.T) {
+	gated := ToolDefinition{Name: "event_delete", Description: "Permanently delete a calendar event.", RequiresApproval: true}
+	ungated := ToolDefinition{Name: "event_list", Description: "List calendar events."}
+
+	if !strings.HasSuffix(gated.ModelFacingDescription(), ApprovalMarker) {
+		t.Fatalf("a model not told the runtime asks will ask in its own words first, got %q", gated.ModelFacingDescription())
+	}
+	if strings.Contains(ungated.ModelFacingDescription(), "approv") {
+		t.Fatalf("a tool nothing gates must not mention approval, got %q", ungated.ModelFacingDescription())
+	}
+}
+
+func TestTheCatalogMarksOnlyTheGatedTool(t *testing.T) {
+	toolSet := NewToolSet([]string{"event_delete", "event_list"})
+	handler := func(context.Context, ToolInvocation) (ToolResult, error) { return testToolSuccess("ok"), nil }
+	registerTestTool(toolSet, ToolDefinition{Name: "event_delete", Description: "Delete.", RequiresApproval: true, InputSchema: json.RawMessage(`{"type":"object"}`)}, handler)
+	registerTestTool(toolSet, ToolDefinition{Name: "event_list", Description: "List.", InputSchema: json.RawMessage(`{"type":"object"}`)}, handler)
+
+	if count := strings.Count(toolSet.Descriptions(), ApprovalMarker); count != 1 {
+		t.Fatalf("expected the marker on the one gated tool, found it %d times in %s", count, toolSet.Descriptions())
+	}
+}
+
 func TestToolSideEffectClassUsesOnlyDescriptorMetadata(t *testing.T) {
 	tests := []struct {
 		toolName           string

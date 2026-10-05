@@ -29,3 +29,21 @@ func TestAWorkspaceTaskIsNotToldAboutMessengersItHasNone(t *testing.T) {
 		t.Fatal("the failure loop is carried by recovery guidance at the moment a call fails and by the gate that refuses a finish over unresolved failures, not by standing prose")
 	}
 }
+
+func TestTheApprovalRuleIsStatedOnceAndOnlyWhereAGatedToolIsExposed(t *testing.T) {
+	gated := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
+		{Name: "event_delete", RequiresApproval: true},
+		{Name: "task_delete", RequiresApproval: true},
+	})
+	ungated := newTestToolSet([]string{"event_list"})
+
+	withGate := buildAgentSystemInstruction(AgentTurnRequest{ToolSet: gated}, TurnOptions{}).Text()
+	withoutGate := buildAgentSystemInstruction(AgentTurnRequest{ToolSet: ungated}, TurnOptions{}).Text()
+
+	if strings.Count(withGate, "Do not ask for that approval yourself") != 1 || !strings.Contains(withGate, toolcontract.ApprovalMarker) {
+		t.Fatalf("expected the rule once, naming the marker the descriptions carry, got %s", withGate)
+	}
+	if strings.Contains(withoutGate, "approval yourself") {
+		t.Fatalf("a task with no gated tool must not carry the approval rule, got %s", withoutGate)
+	}
+}

@@ -62,8 +62,13 @@ func (toolDescriptor ToolDescriptor) ModelFacingDescription() string {
 	if whenNotToUse := strings.TrimSpace(toolDescriptor.WhenNotToUse); whenNotToUse != "" {
 		sentences = append(sentences, "When not to use: "+whenNotToUse)
 	}
+	if toolDescriptor.RequiresApproval {
+		sentences = append(sentences, ApprovalMarker)
+	}
 	return strings.TrimSpace(strings.Join(sentences, " "))
 }
+
+const ApprovalMarker = "(requester approves before it runs)"
 
 type ToolCompletion struct {
 	Mode string `json:"mode,omitempty"`
@@ -638,6 +643,15 @@ func (toolSet *ToolSet) CanExpose(toolName string) bool {
 
 func toolDescriptorIsModelCallable(toolDescriptor ToolDefinition) bool {
 	return strings.TrimSpace(toolDescriptor.Visibility) == ToolVisibilityModel && toolDescriptor.ResultContract != nil
+}
+
+func (toolSet *ToolSet) ExposesApprovalGatedTool() bool {
+	for _, toolDefinition := range toolSet.ListRegisteredToolDefinitions() {
+		if toolDefinition.RequiresApproval && toolSet.CanExpose(toolDefinition.Name) {
+			return true
+		}
+	}
+	return false
 }
 
 func (toolSet *ToolSet) ToolDefinition(toolName string) (ToolDefinition, bool) {

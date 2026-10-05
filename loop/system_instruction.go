@@ -40,11 +40,19 @@ func buildAgentSystemInstruction(request AgentTurnRequest, options TurnOptions) 
 			" When the next piece of work needs several tools that do not depend on each other — reading the files a request names, checking several paths, running independent commands — request them together in one response: they run in order and stop at the first failure. Ask for a call on its own only when its input depends on what an earlier call returns."+
 			" When an image is in front of you, write what it shows into executionStateUpdate.knownFacts on that same call, in enough detail to work from later. The image is shown once; the note is what you will still have."+
 			" Never repeat an add or create operation for a record a successful observation in this task already created: one user request creates at most one record, and anything wrong or missing on it is fixed with the matching update operation, using the record's exact current title or ID as the hint.")
+	systemInstruction = systemInstruction.Append("approval", approvalInstructionBody(request))
 	systemInstruction = systemInstruction.Append("delegation", delegationInstructionBody(options))
 	systemInstruction = systemInstruction.Append("capabilities", capabilitiesInstructionBody(request))
 	systemInstruction = systemInstruction.Append("skills", skillsInstructionBody(request))
 	systemInstruction = systemInstruction.Append("required_artifacts", requiredArtifactsInstructionBody(request))
 	return systemInstruction.Append("host", request.HostInstruction)
+}
+
+func approvalInstructionBody(request AgentTurnRequest) string {
+	if !request.ToolSet.ExposesApprovalGatedTool() {
+		return ""
+	}
+	return "Approval: A tool whose description carries " + toolcontract.ApprovalMarker + " is put to the requester by the runtime when you call it. Do not ask for that approval yourself or add a confirmation of your own; ask only for a detail the request leaves open."
 }
 
 func delegationInstructionBody(options TurnOptions) string {
