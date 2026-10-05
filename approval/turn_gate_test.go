@@ -19,7 +19,7 @@ func TestAToolNeedingApprovalRunsOnlyOnceTheAskerApproves(t *testing.T) {
 	}
 }
 
-func TestACallTheAskerRejectsNeverRunsAndSaysItWasDeclined(t *testing.T) {
+func TestACallTheAskerRejectsNeverRunsAndSaysItWasRejected(t *testing.T) {
 	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Rejected})
 
 	executed, result := invokeThroughGate(t, withTaskRun(fixture), fixture.gate.TurnGate(Turn{}), "file_delete")
@@ -40,7 +40,7 @@ func TestACallNobodyAnswersNeverRunsAndIsNotLeftWaiting(t *testing.T) {
 	if !strings.Contains(result.UserSafeFailureSummary(), "did not answer") {
 		t.Fatalf("the model is told nobody answered, got %q", result.UserSafeFailureSummary())
 	}
-	if fixture.status() == agentcontract.TaskStatusWaitingApproval {
+	if fixture.taskStatus() == agentcontract.TaskStatusWaitingApproval {
 		t.Fatal("a run nothing can resume must not be parked")
 	}
 }

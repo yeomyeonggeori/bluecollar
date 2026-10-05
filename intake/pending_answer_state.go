@@ -7,10 +7,10 @@ import (
 )
 
 type pendingAnswerState struct {
-	Messages            []pendingAnswerMessage     `json:"messages"`
-	PendingConfirmation *pendingAnswerConfirmation `json:"pendingConfirmation,omitempty"`
-	PendingChoice       *pendingAnswerChoice       `json:"pendingChoice,omitempty"`
-	ResponseLanguage    string                     `json:"runtimeResponseLanguage,omitempty"`
+	Messages            []pendingAnswerMessage `json:"messages"`
+	PendingConfirmation *pendingAnswerApproval `json:"pendingConfirmation,omitempty"`
+	PendingChoice       *pendingAnswerChoice   `json:"pendingChoice,omitempty"`
+	ResponseLanguage    string                 `json:"runtimeResponseLanguage,omitempty"`
 }
 
 type pendingAnswerMessage struct {
@@ -18,7 +18,7 @@ type pendingAnswerMessage struct {
 	Text string `json:"text"`
 }
 
-type pendingAnswerConfirmation struct {
+type pendingAnswerApproval struct {
 	Prompt   string `json:"prompt,omitempty"`
 	Question string `json:"question"`
 }
@@ -35,8 +35,8 @@ func buildPendingAnswerState(request agentcontract.IntakeDecisionRequest) pendin
 		Messages:         []pendingAnswerMessage{{ID: decisionMessageKey(lastIndex), Text: strings.TrimSpace(request.Messages[lastIndex].Prompt)}},
 		ResponseLanguage: strings.TrimSpace(request.ResponseLanguage),
 	}
-	if hasPendingConfirmation(request) {
-		state.PendingConfirmation = &pendingAnswerConfirmation{Prompt: request.PendingConfirmation.Prompt, Question: request.PendingConfirmation.Question}
+	if hasPendingApproval(request) {
+		state.PendingConfirmation = &pendingAnswerApproval{Prompt: request.PendingConfirmation.Prompt, Question: request.PendingConfirmation.Question}
 		return state
 	}
 	state.PendingChoice = &pendingAnswerChoice{

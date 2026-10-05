@@ -86,7 +86,7 @@ func driveGatedTurn(t *testing.T, selectedOption acp.PermissionOptionId, calls *
 func TestAGatedCallAsksTheClientAndRunsOnceTheClientAllows(t *testing.T) {
 	hostCalls := []hostToolCall{}
 
-	host := driveGatedTurn(t, allowOptionID, &hostCalls)
+	host := driveGatedTurn(t, approveOptionID, &hostCalls)
 
 	if len(host.requests) != 1 {
 		t.Fatalf("a gated call is put to the client once, got %d requests", len(host.requests))
@@ -95,7 +95,7 @@ func TestAGatedCallAsksTheClientAndRunsOnceTheClientAllows(t *testing.T) {
 	if request.ToolCall.Title == nil || !strings.Contains(*request.ToolCall.Title, "노트를 남길까요?") {
 		t.Fatalf("the client is asked in the words the model wrote, got %+v", request.ToolCall.Title)
 	}
-	if len(request.Options) != 2 || request.Options[0].OptionId != allowOptionID || request.Options[1].OptionId != rejectOptionID {
+	if len(request.Options) != 2 || request.Options[0].OptionId != approveOptionID || request.Options[1].OptionId != rejectOptionID {
 		t.Fatalf("the client is offered allow and reject, got %+v", request.Options)
 	}
 	if len(hostCalls) != 1 {

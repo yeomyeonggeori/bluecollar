@@ -25,35 +25,35 @@ const (
 	Rejected Answer = "rejected"
 )
 
-func (answer Answer) isAnswer() bool {
+func (answer Answer) isGiven() bool {
 	return answer == Approved || answer == Rejected
 }
 
 type approvalRequest struct {
-	turn      Turn
-	taskRunID string
-	tool      toolcontract.ToolDefinition
-	input     json.RawMessage
+	turn           Turn
+	taskRunID      string
+	toolDefinition toolcontract.ToolDefinition
+	toolInput      json.RawMessage
 }
 
 func (request approvalRequest) toolName() string {
-	return strings.TrimSpace(request.tool.Name)
+	return strings.TrimSpace(request.toolDefinition.Name)
 }
 
 func (request approvalRequest) approvalScope() string {
-	return strings.TrimSpace(request.tool.ApprovalScope)
+	return strings.TrimSpace(request.toolDefinition.ApprovalScope)
 }
 
-type verdict string
+type outcomeKind string
 
 const (
-	verdictApproved     verdict = "approved"
-	verdictRejected     verdict = "rejected"
-	verdictUnanswered   verdict = "unanswered"
-	verdictUnanswerable verdict = "unanswerable"
+	outcomeApproved     outcomeKind = "approved"
+	outcomeRejected     outcomeKind = "rejected"
+	outcomeUnanswered   outcomeKind = "unanswered"
+	outcomeUnanswerable outcomeKind = "unanswerable"
 )
 
-type ruling struct {
-	verdict        verdict
-	approvedCallID string
+type outcome struct {
+	kind   outcomeKind
+	holdID string
 }

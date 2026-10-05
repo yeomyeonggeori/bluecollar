@@ -100,7 +100,7 @@ func readPendingAnswer(request agentcontract.IntakeDecisionRequest, reader answe
 	if callError != nil {
 		return PendingAnswer{}, nil
 	}
-	if hasPendingConfirmation(request) {
+	if hasPendingApproval(request) {
 		return readApprovalAnswer(reader)
 	}
 	if isMultipleChoiceSelection(request.PendingChoice) {

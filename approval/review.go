@@ -21,44 +21,44 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
 	if toolcontract.IsDelegatedTurn(ctx) {
-		return toolcontract.ToolCallReview{Result: delegatedTurnDeniedResult()}, nil
+		return toolcontract.ToolCallReview{Result: delegatedTurnUnanswerableResult()}, nil
 	}
-	return reviewForRuling(turnGate.gate.awaitApproval(ctx, approvalRequest{
-		turn:      turnGate.turn,
-		taskRunID: strings.TrimSpace(toolcontract.TaskRunIDFromContext(ctx)),
-		tool:      toolDefinition,
-		input:     toolInvocation.Input,
+	return reviewForOutcome(turnGate.gate.awaitApproval(ctx, approvalRequest{
+		turn:           turnGate.turn,
+		taskRunID:      strings.TrimSpace(toolcontract.TaskRunIDFromContext(ctx)),
+		toolDefinition: toolDefinition,
+		toolInput:      toolInvocation.Input,
 	})), nil
 }
 
-func reviewForRuling(decided ruling) toolcontract.ToolCallReview {
-	switch decided.verdict {
-	case verdictApproved:
-		return toolcontract.ToolCallReview{MayProceed: true, ApprovedCallID: decided.approvedCallID}
-	case verdictRejected:
+func reviewForOutcome(decided outcome) toolcontract.ToolCallReview {
+	switch decided.kind {
+	case outcomeApproved:
+		return toolcontract.ToolCallReview{MayProceed: true, ApprovedCallID: decided.holdID}
+	case outcomeRejected:
 		return toolcontract.ToolCallReview{Result: rejectedCallResult()}
-	case verdictUnanswered:
+	case outcomeUnanswered:
 		return toolcontract.ToolCallReview{Result: unansweredCallResult()}
 	}
 	return toolcontract.ToolCallReview{Result: unanswerableCallResult()}
 }
 
 func unansweredCallResult() toolcontract.ToolResult {
-	return refusedCallResult("The requester did not answer the approval question, so this call did not run. Do not retry it now; ask again later if it is still needed, or take another route.")
+	return approvalFailureResult("The requester did not answer the approval question, so this call did not run. Do not retry it now; ask again later if it is still needed, or take another route.")
 }
 
 func unanswerableCallResult() toolcontract.ToolResult {
-	return refusedCallResult("This call needs the requester's approval and there is no one to ask, so it cannot run. Do not wait for an approval; take another route or tell them what you could not do.")
+	return approvalFailureResult("This call needs the requester's approval and there is no one to ask, so it cannot run. Do not wait for an approval; take another route or tell them what you could not do.")
 }
 
-func delegatedTurnDeniedResult() toolcontract.ToolResult {
-	return refusedCallResult("This call needs the requester's approval, and a delegated turn has no one to ask: only the turn that was asked for the work can hold a call for approval. Do not wait for an approval; take another route, or report this back as the part you could not do.")
+func delegatedTurnUnanswerableResult() toolcontract.ToolResult {
+	return approvalFailureResult("This call needs the requester's approval, and a delegated turn has no one to ask: only the turn that was asked for the work can hold a call for approval. Do not wait for an approval; take another route, or report this back as the part you could not do.")
 }
 
 func rejectedCallResult() toolcontract.ToolResult {
-	return refusedCallResult("The requester declined this call. Do not retry it; choose another way or stop.")
+	return approvalFailureResult("The requester declined this call. Do not retry it; choose another way or stop.")
 }
 
-func refusedCallResult(notice string) toolcontract.ToolResult {
+func approvalFailureResult(notice string) toolcontract.ToolResult {
 	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", notice)
 }

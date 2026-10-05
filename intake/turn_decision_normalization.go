@@ -249,8 +249,8 @@ func normalizeTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
 	return ""
 }
 
-func normalizeApproval(signal *agentcontract.ApprovalSignal, hasPendingConfirmation bool) *agentcontract.ApprovalSignal {
-	if !hasPendingConfirmation || signal == nil {
+func normalizeApproval(signal *agentcontract.ApprovalSignal, hasPendingApproval bool) *agentcontract.ApprovalSignal {
+	if !hasPendingApproval || signal == nil {
 		return nil
 	}
 	normalizedSignal := agentcontract.ApprovalSignal(strings.TrimSpace(string(*signal)))

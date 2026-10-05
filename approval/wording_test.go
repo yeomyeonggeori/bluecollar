@@ -47,9 +47,9 @@ func TestTheWordingModelIsToldWhatAnApprovalScopeCovers(t *testing.T) {
 	languageModel := &wordingLanguageModel{question: "일정을 지울까요?"}
 	fixture := newFixtureWith(t, languageModel, &scriptedAsker{})
 	request := fixture.scopedRequest()
-	request.tool.ApprovalScopeSummary = "every change to the team calendar"
+	request.toolDefinition.ApprovalScopeSummary = "every change to the team calendar"
 
-	fixture.await(request)
+	fixture.awaitOutcome(request)
 
 	prompt := languageModel.promptSeen()
 	for _, expectedFragment := range []string{`"approvalScope":{"name":"calendar","covers":"every change to the team calendar"}`, "saying yes approves every action of that scope"} {
@@ -63,7 +63,7 @@ func TestAnUnscopedToolIsNotWordedAsGrantingAScope(t *testing.T) {
 	languageModel := &wordingLanguageModel{question: "일정을 지울까요?"}
 	fixture := newFixtureWith(t, languageModel, &scriptedAsker{})
 
-	fixture.await(fixture.request())
+	fixture.awaitOutcome(fixture.request())
 
 	if strings.Contains(languageModel.lastRequest.Messages[2].Content, "approvalScope") {
 		t.Fatalf("a call with no scope has none to describe, got %s", languageModel.lastRequest.Messages[2].Content)

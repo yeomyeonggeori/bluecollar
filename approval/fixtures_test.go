@@ -37,17 +37,17 @@ func (fixture fixture) request() approvalRequest {
 
 func (fixture fixture) scopedRequest() approvalRequest {
 	request := fixture.request()
-	request.tool.ApprovalScope = "calendar"
+	request.toolDefinition.ApprovalScope = "calendar"
 	return request
 }
 
 func (fixture fixture) requestWithInput(toolInput string) approvalRequest {
 	request := fixture.request()
-	request.input = json.RawMessage(toolInput)
+	request.toolInput = json.RawMessage(toolInput)
 	return request
 }
 
-func (fixture fixture) await(request approvalRequest) ruling {
+func (fixture fixture) awaitOutcome(request approvalRequest) outcome {
 	return fixture.gate.awaitApproval(context.Background(), request)
 }
 
@@ -61,7 +61,7 @@ func (fixture fixture) record(eventName string, body string) {
 
 func (fixture fixture) pendingHold(t *testing.T) Hold {
 	t.Helper()
-	holds := readLedger(fixture.events()).holds
+	holds := holdLedgerOf(fixture.events()).holds
 	if len(holds) == 0 {
 		t.Fatalf("expected a hold, got %v", fixture.eventNames())
 	}
@@ -72,12 +72,12 @@ func (fixture fixture) pendingHold(t *testing.T) Hold {
 	return hold
 }
 
-func (fixture fixture) answer(t *testing.T, answer Answer, source string) verdict {
+func (fixture fixture) answer(t *testing.T, answer Answer, source string) outcomeKind {
 	t.Helper()
 	return fixture.gate.settle(fixture.pendingHold(t), answer, source)
 }
 
-func (fixture fixture) status() agentcontract.TaskStatus {
+func (fixture fixture) taskStatus() agentcontract.TaskStatus {
 	taskRun, _ := fixture.store.FindTaskRun(fixture.taskRun.TaskRunID)
 	return taskRun.Status
 }
@@ -121,9 +121,9 @@ func (fixture fixture) hasEvent(eventName string) bool {
 
 func requestFixture(taskRunID string) approvalRequest {
 	return approvalRequest{
-		taskRunID: taskRunID,
-		tool:      toolcontract.ToolDefinition{Name: "event_delete", RequiresApproval: true},
-		input:     json.RawMessage(`{"eventID":"event-1"}`),
+		taskRunID:      taskRunID,
+		toolDefinition: toolcontract.ToolDefinition{Name: "event_delete", RequiresApproval: true},
+		toolInput:      json.RawMessage(`{"eventID":"event-1"}`),
 	}
 }
 
@@ -154,17 +154,17 @@ func (languageModel *wordingLanguageModel) promptSeen() string {
 }
 
 type scriptedAsker struct {
-	answer     Answer
-	askedCount int
-	holds      []Hold
-	inspect    func()
+	answer          Answer
+	askedCount      int
+	holds           []Hold
+	beforeAnswering func()
 }
 
 func (asker *scriptedAsker) Ask(_ context.Context, hold Hold) Answer {
 	asker.askedCount++
 	asker.holds = append(asker.holds, hold)
-	if asker.inspect != nil {
-		asker.inspect()
+	if asker.beforeAnswering != nil {
+		asker.beforeAnswering()
 	}
 	return asker.answer
 }

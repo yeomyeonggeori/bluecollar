@@ -23,7 +23,7 @@ func ToolCallForEvent(rawTurnEvent taskstate.RawTurnEvent) (acp.SessionUpdate, b
 	meta := ledgerMeta(rawTurnEvent)
 	if toolName, isRequest := agentcontract.ToolTaskEventToolName(rawTurnEvent.Name, agentcontract.ToolTaskEventRequestedSuffix); isRequest {
 		return acp.SessionUpdate{ToolCall: &acp.SessionUpdateToolCall{
-			ToolCallId: acp.ToolCallId(observationIDOfEvent(rawTurnEvent.Body)),
+			ToolCallId: acp.ToolCallId(toolCallIDOfEvent(rawTurnEvent.Body)),
 			Title:      ToolCallTitle(toolName, rawTurnEvent.Body),
 			Status:     acp.ToolCallStatusPending,
 			RawInput:   rawInputOfEvent(rawTurnEvent.Body),
@@ -36,7 +36,7 @@ func ToolCallForEvent(rawTurnEvent taskstate.RawTurnEvent) (acp.SessionUpdate, b
 			status = acp.ToolCallStatusFailed
 		}
 		return acp.SessionUpdate{ToolCallUpdate: &acp.SessionToolCallUpdate{
-			ToolCallId: acp.ToolCallId(observationIDOfEvent(rawTurnEvent.Body)),
+			ToolCallId: acp.ToolCallId(toolCallIDOfEvent(rawTurnEvent.Body)),
 			Status:     &status,
 			RawOutput:  json.RawMessage(rawTurnEvent.Body),
 			Meta:       meta,
@@ -56,7 +56,7 @@ func ledgerMeta(rawTurnEvent taskstate.RawTurnEvent) map[string]any {
 	return map[string]any{agentcontract.LedgerMetaKey: record}
 }
 
-func observationIDOfEvent(body string) string {
+func toolCallIDOfEvent(body string) string {
 	decoded := struct {
 		ObservationID string `json:"observationID"`
 	}{}

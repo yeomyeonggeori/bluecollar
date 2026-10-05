@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	allowOptionID  acp.PermissionOptionId = "allow"
-	rejectOptionID acp.PermissionOptionId = "reject"
+	approveOptionID acp.PermissionOptionId = "allow"
+	rejectOptionID  acp.PermissionOptionId = "reject"
 )
 
 type permissionAsker struct {
@@ -22,7 +22,7 @@ func (asker permissionAsker) Ask(ctx context.Context, hold approval.Hold) approv
 		SessionId: asker.sessionID,
 		ToolCall:  permissionToolCall(hold),
 		Options: []acp.PermissionOption{
-			{OptionId: allowOptionID, Name: "Allow", Kind: acp.PermissionOptionKindAllowOnce},
+			{OptionId: approveOptionID, Name: "Allow", Kind: acp.PermissionOptionKindAllowOnce},
 			{OptionId: rejectOptionID, Name: "Reject", Kind: acp.PermissionOptionKindRejectOnce},
 		},
 	})
@@ -39,7 +39,7 @@ func permissionToolCall(hold approval.Hold) acp.ToolCallUpdate {
 
 func answerForOption(optionID acp.PermissionOptionId) approval.Answer {
 	switch optionID {
-	case allowOptionID:
+	case approveOptionID:
 		return approval.Approved
 	case rejectOptionID:
 		return approval.Rejected
