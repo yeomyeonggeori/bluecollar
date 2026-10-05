@@ -579,3 +579,28 @@ func (provider diagnosticFailingProvider) GenerateStructuredResponse(context.Con
 func (provider diagnosticFailingProvider) GenerateChatCompletion(context.Context, model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
 	return model.ChatCompletionResponse{}, provider.errorValue
 }
+
+func TestADecisionCallRecordCarriesTheRequestTheAnswerAndTheFailure(t *testing.T) {
+	request := model.DecisionRequest{State: map[string]string{"reply": "ok"}, Questions: map[string]model.DecisionQuestion{"answer": {}}}
+	response := model.DecisionResponse{
+		ProviderName: "provider",
+		ModelName:    "model-name",
+		Usage:        model.Usage{PromptTokens: 7, CompletionTokens: 3, TotalTokens: 10, CostUSD: 0.5},
+		Answers:      map[string]model.DecisionAnswer{"answer": {Choice: "approve"}},
+	}
+
+	record := DecisionCallRecord(request, response, 1500*time.Millisecond, errors.New("model is down"))
+
+	if record.Kind != LLMCallKindDecision || record.Transport != "decisions" || record.Provider != "provider" || record.Model != "model-name" {
+		t.Fatalf("expected a decision call by the provider that answered, got %+v", record)
+	}
+	if record.LatencyMS != 1500 || record.QuestionCount != 1 || record.TotalTokens != 10 || record.CostUSD != 0.5 || record.DecisionAnswers["answer"].Choice != "approve" {
+		t.Fatalf("expected latency, question count, usage and answers, got %+v", record)
+	}
+	if record.PromptBytes != len(`{"reply":"ok"}`) || record.SchemaBytes == 0 {
+		t.Fatalf("expected the sizes of the state and the questions, got %+v", record)
+	}
+	if !record.IsError || record.Error != "model is down" {
+		t.Fatalf("expected the failure to be recorded, got %+v", record)
+	}
+}

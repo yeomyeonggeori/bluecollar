@@ -137,7 +137,7 @@ func verifyCatalogFailureCleanup(t *testing.T, failureStage string) {
 
 func TestStructuredCatalogFailureReachesTheHostsLedger(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	server.AddTool(&mcp.Tool{Name: "note_write", InputSchema: map[string]any{"type": "object"}, Meta: mcp.Meta{"blueclaw/sideEffectClass": "state_change"}},
+	server.AddTool(&mcp.Tool{Name: "note_write", InputSchema: map[string]any{"type": "object"}, Meta: mcp.Meta{"bluecollar/sideEffectClass": "state_change"}},
 		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return &mcp.CallToolResult{
 				IsError:           true,
@@ -183,5 +183,24 @@ func assertCatalogSessionClosed(t *testing.T, session *mcp.ServerSession) {
 	case <-closed:
 	case <-time.After(time.Second):
 		t.Fatal("failed catalog initialization left an MCP session open")
+	}
+}
+
+func TestADescriptorReadsWhatTheToolDeclaresAboutItsApproval(t *testing.T) {
+	tool := &mcp.Tool{Name: "event_delete", Meta: mcp.Meta{
+		"bluecollar/sideEffectClass":      "destructive",
+		"bluecollar/approvalScope":        "calendar",
+		"bluecollar/requiresApproval":     true,
+		"bluecollar/approvalScopeSummary": "every change to the team calendar",
+		"bluecollar/approvalInputFields":  []any{"eventHint", "reason"},
+	}}
+
+	descriptor := descriptorForTool(tool)
+
+	if descriptor.SideEffectClass != "destructive" || descriptor.ApprovalScope != "calendar" || descriptor.ApprovalScopeSummary != "every change to the team calendar" || !descriptor.RequiresApproval {
+		t.Fatalf("the approval facts the tool declared were not read: %+v", descriptor)
+	}
+	if !reflect.DeepEqual(descriptor.ApprovalInputFields, []string{"eventHint", "reason"}) {
+		t.Fatalf("the inputs that describe the action were not read: %v", descriptor.ApprovalInputFields)
 	}
 }

@@ -172,6 +172,7 @@ func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request
 		EnvironmentNow:             request.EnvironmentNow,
 		CarriedOutCalls:            request.CarriedOutCalls,
 		CheckpointSender:           request.CheckpointSender,
+		TaskRunChosen:              request.TaskRunChosen,
 	})
 }
 
@@ -421,6 +422,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		OriginalTurnStartedAt:      taskBudget.originalTurnStartedAt,
 		CarriedOutCalls:            request.CarriedOutCalls,
 		CheckpointSender:           request.CheckpointSender,
+		TaskRunChosen:              request.TaskRunChosen,
 	}
 	agentTurnRunner := NewAgentTurnRunnerWithRecoveryModel(
 		agentKernel.taskRunService,

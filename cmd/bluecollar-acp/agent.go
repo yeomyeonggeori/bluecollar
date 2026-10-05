@@ -9,6 +9,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/model"
@@ -22,6 +23,7 @@ type session struct {
 	kernel         *loop.AgentKernel
 	taskRuns       *taskstate.TaskRunService
 	taskEvents     *taskstate.TaskEventService
+	gate           *approval.Gate
 }
 
 type agent struct {
@@ -31,6 +33,7 @@ type agent struct {
 	agentName        string
 	resolveTransport transportResolver
 	sessionUpdates   *deferredSessionUpdateSender
+	permissions      *deferredPermissionRequester
 
 	mutex             sync.Mutex
 	sessionsByID      map[acp.SessionId]*session
@@ -45,8 +48,14 @@ func newAgent(languageModel model.LanguageModelProvider, decisionModel model.Dec
 		agentName:        agentName,
 		resolveTransport: transportForServer,
 		sessionUpdates:   &deferredSessionUpdateSender{ready: make(chan struct{})},
+		permissions:      &deferredPermissionRequester{ready: make(chan struct{})},
 		sessionsByID:     map[acp.SessionId]*session{},
 	}
+}
+
+func (runningAgent *agent) connect(connection *acp.AgentSideConnection) {
+	runningAgent.sessionUpdates.connect(connection)
+	runningAgent.permissions.connect(connection)
 }
 
 func (runningAgent *agent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
@@ -78,6 +87,7 @@ func (runningAgent *agent) NewSession(ctx context.Context, request acp.NewSessio
 		kernel:     kernel,
 		taskRuns:   taskRuns,
 		taskEvents: taskEvents,
+		gate:       approval.New(taskRuns, runningAgent.languageModel, permissionAsker{requester: runningAgent.permissions, sessionID: sessionID}),
 	}
 	return acp.NewSessionResponse{SessionId: sessionID}, nil
 }
@@ -110,6 +120,10 @@ func (runningAgent *agent) Prompt(ctx context.Context, request acp.PromptRequest
 		return acp.PromptResponse{}, errorValue
 	}
 	turnRequest.PrecomputedTurnDecision = &turnDecision
+	openSession.catalog.toolSet.UseToolCallGate(openSession.gate.TurnGate(approval.Turn{
+		ResponseLanguage: turnDecision.ResponseLanguage,
+		Prompt:           turnRequest.Prompt,
+	}))
 
 	turnResult, errorValue := openSession.kernel.RunTurn(ctx, turnRequest)
 	if errorValue != nil {

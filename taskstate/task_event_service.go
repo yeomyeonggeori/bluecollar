@@ -30,15 +30,16 @@ type TaskEventService struct {
 	llmCallRepository     LLMCallRepository
 	partedEventRepository PartedTaskEventRepository
 	observerMutex         sync.RWMutex
-	observers             map[string]func(RawTurnEvent)
+	observers             map[string]map[int]func(RawTurnEvent)
 	globalObservers       map[int]func(RawTurnEvent)
 	nextGlobalObserverID  int
+	nextObserverID        int
 }
 
 func NewTaskEventService() *TaskEventService {
 	return &TaskEventService{
 		taskEvents:      map[string][]agentcontract.TaskEvent{},
-		observers:       map[string]func(RawTurnEvent){},
+		observers:       map[string]map[int]func(RawTurnEvent){},
 		globalObservers: map[int]func(RawTurnEvent){},
 	}
 }
@@ -58,12 +59,20 @@ func (taskEventService *TaskEventService) RegisterTurnObserver(observer func(Raw
 
 func (taskEventService *TaskEventService) RegisterTaskRunObserver(taskRunID string, observer func(RawTurnEvent)) func() {
 	taskEventService.observerMutex.Lock()
-	taskEventService.observers[taskRunID] = observer
+	observerID := taskEventService.nextObserverID
+	taskEventService.nextObserverID++
+	if taskEventService.observers[taskRunID] == nil {
+		taskEventService.observers[taskRunID] = map[int]func(RawTurnEvent){}
+	}
+	taskEventService.observers[taskRunID][observerID] = observer
 	taskEventService.observerMutex.Unlock()
 	return func() {
 		taskEventService.observerMutex.Lock()
-		delete(taskEventService.observers, taskRunID)
-		taskEventService.observerMutex.Unlock()
+		defer taskEventService.observerMutex.Unlock()
+		delete(taskEventService.observers[taskRunID], observerID)
+		if len(taskEventService.observers[taskRunID]) == 0 {
+			delete(taskEventService.observers, taskRunID)
+		}
 	}
 }
 
@@ -77,7 +86,7 @@ func (taskEventService *TaskEventService) deliverToObservers(rawTurnEvent RawTur
 	taskEventService.observerMutex.RLock()
 	defer taskEventService.observerMutex.RUnlock()
 	observerFailures := []string{}
-	if observer := taskEventService.observers[rawTurnEvent.TaskRunID]; observer != nil {
+	for _, observer := range taskEventService.observers[rawTurnEvent.TaskRunID] {
 		if observerFailure := deliverTurnEvent(observer, rawTurnEvent); observerFailure != "" {
 			observerFailures = append(observerFailures, observerFailure)
 		}

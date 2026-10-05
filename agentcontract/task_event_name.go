@@ -101,6 +101,7 @@ const (
 	TaskEventApprovalPendingCall                   = "approval.pending_call"
 	TaskEventApprovalScopeGranted                  = "approval.scope_granted"
 	TaskEventApprovalUnheldCallCarriedOut          = "approval.unheld_call_carried_out"
+	TaskEventApprovalWordingFailed                 = "approval.wording_failed"
 	TaskEventAskReplyClassified                    = "ask.reply_classified"
 	TaskEventAskRequested                          = "ask.requested"
 	TaskEventAskResolved                           = "ask.resolved"

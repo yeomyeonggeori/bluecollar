@@ -213,29 +213,31 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	if hasPriorTask(builder.request) {
 		questions[agentcontract.IntakeQuestionPriorTaskReference] = builder.priorTaskReferenceQuestion(messageKey)
 	}
-	if strings.TrimSpace(builder.request.PendingConfirmation.TaskRunID) != "" {
-		questions[agentcontract.IntakeQuestionApproval] = builder.approvalQuestion(messageKey)
-	}
 	if strings.TrimSpace(builder.request.ActiveTask.TaskRunID) != "" {
 		questions[agentcontract.IntakeQuestionBusyRoute] = builder.busyRouteQuestion(messageKey)
 	}
 	for _, formatName := range agentcontract.RequestedOutputFormatNames {
 		questions[agentcontract.IntakeQuestionPrefixFormat+formatName] = builder.outputFormatQuestion(messageKey, formatName)
 	}
-	for name, question := range builder.pendingChoiceQuestions(messageKey) {
-		questions[name] = question
-	}
 	return questions
 }
 
-func (builder questionBuilder) pendingChoiceQuestions(messageKey string) map[string]model.DecisionQuestion {
-	if len(builder.choiceKeys) == 0 {
-		return nil
+func hasPendingConfirmation(request agentcontract.IntakeDecisionRequest) bool {
+	return strings.TrimSpace(request.PendingConfirmation.TaskRunID) != ""
+}
+
+func hasPendingAnswerQuestion(request agentcontract.IntakeDecisionRequest) bool {
+	return hasPendingConfirmation(request) || len(decisionChoiceKeys(request.PendingChoice)) > 0
+}
+
+func (builder questionBuilder) pendingAnswerQuestions(messageKey string) map[string]model.DecisionQuestion {
+	if hasPendingConfirmation(builder.request) {
+		return map[string]model.DecisionQuestion{agentcontract.IntakeQuestionApproval: builder.approvalQuestion(messageKey)}
 	}
 	if !isMultipleChoiceSelection(builder.request.PendingChoice) {
 		return map[string]model.DecisionQuestion{agentcontract.IntakeQuestionChoice: builder.singleChoiceSelectionQuestion(messageKey)}
 	}
-	questions := map[string]model.DecisionQuestion{}
+	questions := map[string]model.DecisionQuestion{agentcontract.IntakeQuestionPendingAnswer: builder.multipleChoiceAnswerQuestion(messageKey)}
 	for index, choiceKey := range builder.choiceKeys {
 		questions[agentcontract.IntakeQuestionPrefixChoice+choiceKey] = builder.choiceSelectionQuestion(messageKey, index)
 	}
@@ -337,13 +339,12 @@ func (builder questionBuilder) priorTaskReferenceQuestion(messageKey string) mod
 
 func (builder questionBuilder) approvalQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "A confirmation is pending (pendingConfirmation in the state). How does the message answer it? Redirecting the work is not approving it. When pendingConfirmation.exchangesSince is above zero, a bare yes, no, or option number no longer names the pending action, and only a message naming this action or this question answers it.",
-		OptionDescriptions: optionDescriptions(agentcontract.ApprovalSignalNames, map[string]string{
-			string(agentcontract.ApprovalSignalApprove):     "it clearly authorizes this exact pending action, this once",
-			string(agentcontract.ApprovalSignalApproveTask): "it authorizes this action and the rest of this task's work of the same kind, without asking again",
-			string(agentcontract.ApprovalSignalReject):      "it declines the pending action or says to stop",
-			string(agentcontract.ApprovalSignalUnclear):     "it does not answer the pending confirmation, or it changes the target, scope, conditions, or asks for a different action",
-		}),
+		Instructions: builder.about(messageKey) + "A confirmation is pending (pendingConfirmation in the state). Read the message as a reply to that question, by what the person means, in any language and any script. A reply to a yes-or-no question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose other only when the message is not a decision about the pending action.",
+		OptionDescriptions: map[string]string{
+			string(agentcontract.ApprovalSignalApprove): "the person agrees to the pending action as asked, however briefly or informally, alone or with thanks, politeness or a remark that does not change what would be done",
+			string(agentcontract.ApprovalSignalReject):  "the person declines, cancels or halts the pending action, with or without a reason",
+			agentcontract.IntakePendingOptionOther:      "the message is not a decision about the pending action: it asks something, leaves the decision open, changes what would be done (target, scope, time or conditions), or is an unrelated request",
+		},
 	}.Question()
 }
 
@@ -388,14 +389,24 @@ func (builder questionBuilder) choiceSelectionQuestion(messageKey string, option
 
 func (builder questionBuilder) singleChoiceSelectionQuestion(messageKey string) model.DecisionQuestion {
 	optionDescriptions := map[string]string{
-		agentcontract.IntakeChoiceOptionNone: "it selects none of the listed options: it gives a custom answer, it selects several, or it is not an answer to the pending question at all",
+		agentcontract.IntakePendingOptionOther: "it does not select one listed option: it gives a custom answer, it selects several, or it is not an answer to the pending question at all",
 	}
 	for index, choiceKey := range builder.choiceKeys {
 		optionDescriptions[choiceKey] = "it selects option " + strconv.Itoa(index+1) + ", named by its number, its label, or a paraphrase of it, in any language and any script"
 	}
 	return model.ChoiceQuestion{
-		Instructions:       builder.about(messageKey) + "A choice is pending (pendingChoice in the state), and it takes exactly one option. Which option does the message select?",
+		Instructions:       builder.about(messageKey) + "A choice is pending (pendingChoice in the state), and it takes exactly one option. Which option does the message select? Read the message by what the person means: a short reply, a bit of shorthand, or a single character can be a full answer.",
 		OptionDescriptions: optionDescriptions,
+	}.Question()
+}
+
+func (builder questionBuilder) multipleChoiceAnswerQuestion(messageKey string) model.DecisionQuestion {
+	return model.ChoiceQuestion{
+		Instructions: builder.about(messageKey) + "A choice is pending (pendingChoice in the state), and it takes several options at once. Does the message answer it? Read the message by what the person means, in any language and any script: a short reply, a bit of shorthand, or a single character can be a full answer.",
+		OptionDescriptions: map[string]string{
+			agentcontract.IntakePendingOptionAnswer: "it answers the pending question by selecting from its options",
+			agentcontract.IntakePendingOptionOther:  "it does not answer the pending question: a new or different request, a custom answer, or something unrelated",
+		},
 	}.Question()
 }
 

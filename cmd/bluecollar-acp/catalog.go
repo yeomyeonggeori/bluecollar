@@ -13,6 +13,14 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
+const (
+	sideEffectClassMetaKey      = "bluecollar/sideEffectClass"
+	requiresApprovalMetaKey     = "bluecollar/requiresApproval"
+	approvalScopeMetaKey        = "bluecollar/approvalScope"
+	approvalScopeSummaryMetaKey = "bluecollar/approvalScopeSummary"
+	approvalInputFieldsMetaKey  = "bluecollar/approvalInputFields"
+)
+
 type catalog struct {
 	sessions  []*mcp.ClientSession
 	toolSet   *toolcontract.ToolSet
@@ -112,8 +120,11 @@ func descriptorForTool(tool *mcp.Tool) toolcontract.ToolDescriptor {
 			Schema: json.RawMessage(`{"type":"object","additionalProperties":true}`),
 		},
 	}
-	readMetaString(tool.Meta, "blueclaw/sideEffectClass", &descriptor.SideEffectClass)
-	readMetaString(tool.Meta, "blueclaw/approvalScope", &descriptor.ApprovalScope)
+	readMetaString(tool.Meta, &descriptor.SideEffectClass, sideEffectClassMetaKey)
+	readMetaBool(tool.Meta, &descriptor.RequiresApproval, requiresApprovalMetaKey)
+	readMetaString(tool.Meta, &descriptor.ApprovalScope, approvalScopeMetaKey)
+	readMetaString(tool.Meta, &descriptor.ApprovalScopeSummary, approvalScopeSummaryMetaKey)
+	readMetaStrings(tool.Meta, &descriptor.ApprovalInputFields, approvalInputFieldsMetaKey)
 	if descriptor.SideEffectClass == "" && tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
 		descriptor.SideEffectClass = toolcontract.ToolSideEffectRead
 	}
@@ -131,9 +142,27 @@ func encodedSchema(schema any) json.RawMessage {
 	return encoded
 }
 
-func readMetaString(meta mcp.Meta, key string, target *string) {
+func readMetaString(meta mcp.Meta, target *string, key string) {
 	if value, isPresent := meta[key].(string); isPresent && strings.TrimSpace(value) != "" {
 		*target = value
+	}
+}
+
+func readMetaBool(meta mcp.Meta, target *bool, key string) {
+	if value, isPresent := meta[key].(bool); isPresent {
+		*target = value
+	}
+}
+
+func readMetaStrings(meta mcp.Meta, target *[]string, key string) {
+	values, isList := meta[key].([]any)
+	if !isList {
+		return
+	}
+	for _, value := range values {
+		if text, isText := value.(string); isText && strings.TrimSpace(text) != "" {
+			*target = append(*target, text)
+		}
 	}
 }
 

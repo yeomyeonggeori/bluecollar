@@ -46,10 +46,8 @@ const (
 	PriorTaskReferenceNone            PriorTaskReference = "none"
 	PriorTaskReferenceOutcomeRecovery PriorTaskReference = "outcome_recovery"
 
-	ApprovalSignalApprove     ApprovalSignal = "approve"
-	ApprovalSignalApproveTask ApprovalSignal = "approve_task"
-	ApprovalSignalReject      ApprovalSignal = "reject"
-	ApprovalSignalUnclear     ApprovalSignal = "unclear"
+	ApprovalSignalApprove ApprovalSignal = "approve"
+	ApprovalSignalReject  ApprovalSignal = "reject"
 
 	DeliverableKindPresentation DeliverableKind = "presentation"
 	DeliverableKindDocument     DeliverableKind = "document"
@@ -185,10 +183,6 @@ func (turnDecision TurnDecision) WithRestoredIntakeState(intakeDecision IntakeDe
 	return turnDecision
 }
 
-func IsApprovingSignal(signal ApprovalSignal) bool {
-	return signal == ApprovalSignalApprove || signal == ApprovalSignalApproveTask
-}
-
 func NormalizeIntakeClassification(classification IntakeClassification) IntakeClassification {
 	if IsIntakeClassificationName(string(classification)) {
 		return classification
@@ -223,7 +217,7 @@ var DeliverableKindNames = []string{
 }
 
 var ApprovalSignalNames = []string{
-	string(ApprovalSignalApprove), string(ApprovalSignalApproveTask), string(ApprovalSignalReject), string(ApprovalSignalUnclear),
+	string(ApprovalSignalApprove), string(ApprovalSignalReject),
 }
 
 var BusyRouteNames = []string{

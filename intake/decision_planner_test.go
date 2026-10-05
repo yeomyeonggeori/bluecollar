@@ -209,34 +209,6 @@ func TestDecisionPlannerAsksTheFollowUpQuestionForARunningTask(t *testing.T) {
 	}
 }
 
-func TestDecisionPlannerReadsAPendingChoiceSelection(t *testing.T) {
-	outcome := startTaskOutcome()
-	outcome.PendingChoiceKeys = []string{"1", "2"}
-	outcome.TurnDecision.Choices = []string{"2"}
-	decisionModel := intaketest.NewDecisionModel(outcome)
-	request := addressedDecisionRequest("두 번째로 해줘")
-	request.PendingChoice = agentcontract.PendingChoiceContext{
-		TaskRunID: "task-run-1",
-		Question:  "어떤 형식으로 드릴까요?",
-		Options:   []agentcontract.ChoiceReplyOption{{Key: "1", Label: "표"}, {Key: "2", Label: "그래프"}},
-	}
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
-
-	decision := decideOnce(t, planner, request)
-
-	if !containsString(decision.TurnFields.Choices, "2") {
-		t.Fatalf("expected the selected choice key, got %+v", decision.TurnFields.Choices)
-	}
-	if containsString(decision.TurnFields.Choices, "1") {
-		t.Fatalf("expected only the selected option, got %+v", decision.TurnFields.Choices)
-	}
-
-	plainPlanner := NewDecisionPlanner(intaketest.NewDecisionModel(startTaskOutcome()), nil, func() float64 { return 1 })
-	if plainDecision := decideOnce(t, plainPlanner, addressedDecisionRequest("두 번째로 해줘")); len(plainDecision.TurnFields.Choices) != 0 {
-		t.Fatalf("expected no selection without a pending choice, got %+v", plainDecision.TurnFields.Choices)
-	}
-}
-
 func reactionScript(reactProbability float64) *model.ScriptedDecisionModel {
 	return &model.ScriptedDecisionModel{
 		AnswerFor: func(questionName string, question model.DecisionQuestion) (model.DecisionAnswer, bool) {
@@ -482,45 +454,6 @@ func (decisionModel answerDroppingDecisionModel) Decide(_ context.Context, reque
 	answers := intaketest.Answers(request.Questions, func(string) intaketest.Outcome { return decisionModel.outcome })
 	delete(answers, decisionModel.droppedQuestionKey)
 	return model.DecisionResponse{Answers: answers, ModelName: "answer-dropping"}, nil
-}
-
-func TestDecisionPlannerReadsNoneOfTheseAsNoSelection(t *testing.T) {
-	outcome := startTaskOutcome()
-	outcome.PendingChoiceKeys = []string{"1", "2"}
-	decisionModel := intaketest.NewDecisionModel(outcome)
-	request := addressedDecisionRequest("둘 다 아니에요")
-	request.PendingChoice = agentcontract.PendingChoiceContext{
-		TaskRunID: "task-run-1",
-		Question:  "어떤 형식으로 드릴까요?",
-		Options:   []agentcontract.ChoiceReplyOption{{Key: "1", Label: "표"}, {Key: "2", Label: "그래프"}},
-	}
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
-
-	decision := decideOnce(t, planner, request)
-
-	if len(decision.TurnFields.Choices) != 0 {
-		t.Fatalf("expected none_of_these to select nothing, got %+v", decision.TurnFields.Choices)
-	}
-}
-
-func TestDecisionPlannerReadsAMultipleChoiceReplyWithoutAYesAsNoSelection(t *testing.T) {
-	outcome := startTaskOutcome()
-	outcome.PendingChoiceKeys = []string{"1", "2"}
-	decisionModel := intaketest.NewDecisionModel(outcome)
-	request := addressedDecisionRequest("둘 다 아니에요")
-	request.PendingChoice = agentcontract.PendingChoiceContext{
-		TaskRunID:     "task-run-1",
-		Question:      "어떤 형식으로 드릴까요?",
-		SelectionMode: "multiple",
-		Options:       []agentcontract.ChoiceReplyOption{{Key: "1", Label: "표"}, {Key: "2", Label: "그래프"}},
-	}
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
-
-	decision := decideOnce(t, planner, request)
-
-	if len(decision.TurnFields.Choices) != 0 {
-		t.Fatalf("expected no selection when every option is answered no, got %+v", decision.TurnFields.Choices)
-	}
 }
 
 func TestDecisionPlannerAsksTheLanguageOnlyWhenTheHostNamesNone(t *testing.T) {

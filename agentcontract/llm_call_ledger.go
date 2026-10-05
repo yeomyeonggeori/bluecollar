@@ -144,6 +144,38 @@ func WithLLMCallObserver(ctx context.Context, observe LLMCallObserver) context.C
 	return context.WithValue(ctx, llmCallObserverContextKey{}, observe)
 }
 
+func DecisionCallRecord(request model.DecisionRequest, response model.DecisionResponse, latency time.Duration, errorValue error) LLMCallRecord {
+	record := LLMCallRecord{
+		Kind:             LLMCallKindDecision,
+		Transport:        "decisions",
+		Provider:         response.ProviderName,
+		UpstreamProvider: response.UpstreamProvider,
+		Model:            response.ModelName,
+		LatencyMS:        latency.Milliseconds(),
+		PromptBytes:      marshaledByteCount(request.State),
+		SchemaBytes:      marshaledByteCount(request.Questions),
+		QuestionCount:    len(request.Questions),
+		PromptTokens:     response.Usage.PromptTokens,
+		CompletionTokens: response.Usage.CompletionTokens,
+		TotalTokens:      response.Usage.TotalTokens,
+		CostUSD:          response.Usage.CostUSD,
+		DecisionAnswers:  response.Answers,
+	}
+	if errorValue != nil {
+		record.IsError = true
+		record.Error = errorValue.Error()
+	}
+	return record
+}
+
+func marshaledByteCount(value any) int {
+	document, errorValue := json.Marshal(value)
+	if errorValue != nil {
+		return 0
+	}
+	return len(document)
+}
+
 func (record LLMCallRecord) WithWireExchange(exchange *model.WireExchange) LLMCallRecord {
 	record.Exchange = exchange
 	if exchange != nil {

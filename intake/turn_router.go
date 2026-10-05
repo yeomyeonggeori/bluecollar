@@ -122,7 +122,48 @@ func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agent
 	if request.DecidedTurnFields != nil {
 		return *request.DecidedTurnFields, nil
 	}
-	decisions, errorValue := turnRouter.decisionPlanner.Decide(ctx, TurnRequestDecisionRequest(request), callLedger)
+	if awaitsFreeText(request) {
+		return pendingAnswerFields(PendingAnswer{IsAnswered: true}), nil
+	}
+	decisionRequest := TurnRequestDecisionRequest(request)
+	if !hasPendingAnswerQuestion(decisionRequest) {
+		return turnRouter.decideGeneralTurnFields(ctx, decisionRequest, callLedger)
+	}
+	pendingAnswer, errorValue := turnRouter.decisionPlanner.DecidePendingAnswer(ctx, decisionRequest, callLedger)
+	if errorValue != nil {
+		return agentcontract.TurnDecision{}, fmt.Errorf("turn router: %w", errorValue)
+	}
+	if pendingAnswer.IsAnswered {
+		return pendingAnswerFields(pendingAnswer), nil
+	}
+	return turnRouter.decideGeneralTurnFields(ctx, TurnRequestDecisionRequest(withoutPendingInteraction(request)), callLedger)
+}
+
+func awaitsFreeText(request agentcontract.AgentRequest) bool {
+	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" || len(decisionChoiceKeys(pendingChoiceContext(request))) > 0 {
+		return false
+	}
+	return strings.TrimSpace(request.PendingChoice.TaskRunID) != "" || strings.TrimSpace(request.PendingInput.TaskRunID) != ""
+}
+
+func withoutPendingInteraction(request agentcontract.AgentRequest) agentcontract.AgentRequest {
+	request.PendingConfirmation = agentcontract.PendingConfirmationContext{}
+	request.PendingChoice = agentcontract.PendingChoiceContext{}
+	request.PendingInput = agentcontract.PendingInputContext{}
+	return request
+}
+
+func pendingAnswerFields(pendingAnswer PendingAnswer) agentcontract.TurnDecision {
+	return agentcontract.TurnDecision{
+		Route:            agentcontract.TurnRouteContinueTask,
+		RawDecisionRoute: agentcontract.TurnRouteContinueTask,
+		Approval:         pendingAnswer.Approval,
+		Choices:          pendingAnswer.Choices,
+	}
+}
+
+func (turnRouter TurnRouter) decideGeneralTurnFields(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
+	decisions, errorValue := turnRouter.decisionPlanner.Decide(ctx, decisionRequest, callLedger)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, fmt.Errorf("turn router: %w", errorValue)
 	}
@@ -468,12 +509,12 @@ func turnWordsSchemaWithClarificationDisposition(requiresClarificationDispositio
 		}}
 	}
 	properties := map[string]any{
-		"reason":          map[string]any{"type": "string", "maxLength": 512},
-		"userFacingReply": map[string]any{"type": "string", "maxLength": 512},
+		"reason":                map[string]any{"type": "string", "maxLength": 512},
+		"userFacingReply":       map[string]any{"type": "string", "maxLength": 512},
 		"clarificationQuestion": clarificationQuestionSchema,
-		"clarificationOptions": clarificationOptionsSchema(),
-		"busyInstruction":      map[string]any{"type": "string", "maxLength": 512},
-		"expectedResults":      expectedResultsSchema(),
+		"clarificationOptions":  clarificationOptionsSchema(),
+		"busyInstruction":       map[string]any{"type": "string", "maxLength": 512},
+		"expectedResults":       expectedResultsSchema(),
 	}
 	if requiresClarificationDisposition {
 		properties["clarificationDisposition"] = map[string]any{

@@ -84,3 +84,19 @@ func TestACrashingObserverDoesNotTakeTheAppendDownWithIt(t *testing.T) {
 		t.Fatalf("expected the recorded crash to carry what the observer panicked with, got %q", stored[1].Body)
 	}
 }
+
+func TestTwoObserversOnOneTaskRunBothReceiveItsEventsUntilTheirOwnUnregister(t *testing.T) {
+	taskEventService := NewTaskEventService()
+	firstReceived, secondReceived := 0, 0
+	unregisterFirst := taskEventService.RegisterTaskRunObserver("run-1", func(RawTurnEvent) { firstReceived++ })
+	unregisterSecond := taskEventService.RegisterTaskRunObserver("run-1", func(RawTurnEvent) { secondReceived++ })
+	defer unregisterSecond()
+
+	taskEventService.AppendTaskEvent("run-1", "tool.x.requested", "{}")
+	unregisterFirst()
+	taskEventService.AppendTaskEvent("run-1", "tool.x.result", "{}")
+
+	if firstReceived != 1 || secondReceived != 2 {
+		t.Fatalf("the first observer heard %d events and the second %d, expected 1 and 2", firstReceived, secondReceived)
+	}
+}

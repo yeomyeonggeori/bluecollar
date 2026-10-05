@@ -152,9 +152,9 @@ func TestTurnRouterClarificationSchemaAddsOnlyTheDispositionField(t *testing.T) 
 
 func TestSteeringKeepsItsExistingWordsShape(t *testing.T) {
 	decision := agentcontract.TurnDecision{
-		Route:           agentcontract.TurnRouteContinueTask,
-		Classification:  agentcontract.IntakeClassificationBoundedTask,
-		BusyRoute:       agentcontract.BusyRouteSteer,
+		Route:          agentcontract.TurnRouteContinueTask,
+		Classification: agentcontract.IntakeClassificationBoundedTask,
+		BusyRoute:      agentcontract.BusyRouteSteer,
 	}
 	wordsShape, needsWords := turnWordsShapeFor(decision)
 	if !needsWords || wordsShape.systemPrompt != turnWordsSystemPrompt {

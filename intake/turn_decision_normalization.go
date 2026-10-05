@@ -42,13 +42,15 @@ func normalizeDecidedRoute(decision agentcontract.TurnDecision, request agentcon
 }
 
 func answerPendingInteraction(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) agentcontract.TurnDecision {
-	hasPendingConfirmation := strings.TrimSpace(request.PendingConfirmation.TaskRunID) != ""
-	decision.Approval = normalizeApprovalSignal(decision.Approval, hasPendingConfirmation)
+	decision.Approval = normalizeApproval(decision.Approval, strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "")
 	decision.Choices = normalizeChoiceSelections(decision.Choices, pendingChoiceContext(request))
 	if !pendingInteractionIsAnswered(decision) {
 		return decision
 	}
 	decision.Route = agentcontract.TurnRouteContinueTask
+	if isBareContinuation(decision) {
+		return decision
+	}
 	decision.Classification = agentcontract.IntakeClassificationBoundedTask
 	if decision.TaskShape == agentcontract.TaskShapeApprovalGatedTask {
 		decision.TaskShape = agentcontract.TaskShapeMaintenanceTask
@@ -56,8 +58,15 @@ func answerPendingInteraction(decision agentcontract.TurnDecision, request agent
 	return decision
 }
 
+func isBareContinuation(decision agentcontract.TurnDecision) bool {
+	if decision.Route != agentcontract.TurnRouteContinueTask {
+		return false
+	}
+	return decision.Classification == "" && decision.TaskShape == "" && decision.TaskLevel == ""
+}
+
 func pendingInteractionIsAnswered(decision agentcontract.TurnDecision) bool {
-	if decision.Approval != nil && agentcontract.IsApprovingSignal(*decision.Approval) {
+	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApprove {
 		return true
 	}
 	return len(decision.Choices) > 0
@@ -68,6 +77,9 @@ func normalizeBusyRoute(decision agentcontract.TurnDecision, activeTask agentcon
 		decision.BusyRoute = ""
 		return decision, nil
 	}
+	if isBareContinuation(decision) && decision.BusyRoute == "" {
+		return decision, nil
+	}
 	if !agentcontract.IsBusyRouteName(string(decision.BusyRoute)) {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid busy route")
 	}
@@ -75,6 +87,9 @@ func normalizeBusyRoute(decision agentcontract.TurnDecision, activeTask agentcon
 }
 
 func normalizeDecidedWork(decision agentcontract.TurnDecision) (agentcontract.TurnDecision, error) {
+	if isBareContinuation(decision) {
+		return decision, nil
+	}
 	decision.Classification = agentcontract.NormalizeIntakeClassification(decision.Classification)
 	if decision.Classification == "" {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid classification")
@@ -117,14 +132,21 @@ func normalizeDecidedExecution(decision agentcontract.TurnDecision, request agen
 	if decision.Route == agentcontract.TurnRouteConsume {
 		decision.InitialToolNames = nil
 	}
+	if isBareContinuation(decision) {
+		return normalizeDecidedLanguage(decision, request), nil
+	}
 	decision.TaskLevel = agentcontract.NormalizeTaskLevel(string(decision.TaskLevel))
 	if decision.TaskLevel == "" {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid task level")
 	}
 	decision.InitialToolNames = agentcontract.RegisteredToolNamesOnly(request.ToolSet, toolcontract.AppendUniqueStrings(decision.InitialToolNames))
-	decision.ResponseLanguage = toolcontract.ResolveResponseLanguage(request.ResponseLanguage, decision.ResponseLanguage)
 	decision.PriorTaskReference = agentcontract.NormalizePriorTaskReference(decision.PriorTaskReference)
-	return decision, nil
+	return normalizeDecidedLanguage(decision, request), nil
+}
+
+func normalizeDecidedLanguage(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) agentcontract.TurnDecision {
+	decision.ResponseLanguage = toolcontract.ResolveResponseLanguage(request.ResponseLanguage, decision.ResponseLanguage)
+	return decision
 }
 
 func canonicalizeTurnDecision(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
@@ -227,20 +249,15 @@ func normalizeTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
 	return ""
 }
 
-func normalizeApprovalSignal(signal *agentcontract.ApprovalSignal, hasPendingConfirmation bool) *agentcontract.ApprovalSignal {
-	if !hasPendingConfirmation {
+func normalizeApproval(signal *agentcontract.ApprovalSignal, hasPendingConfirmation bool) *agentcontract.ApprovalSignal {
+	if !hasPendingConfirmation || signal == nil {
 		return nil
 	}
-	if signal == nil {
-		unclear := agentcontract.ApprovalSignalUnclear
-		return &unclear
-	}
 	normalizedSignal := agentcontract.ApprovalSignal(strings.TrimSpace(string(*signal)))
-	if agentcontract.IsApprovalSignalName(string(normalizedSignal)) {
-		return &normalizedSignal
+	if !agentcontract.IsApprovalSignalName(string(normalizedSignal)) {
+		return nil
 	}
-	unclear := agentcontract.ApprovalSignalUnclear
-	return &unclear
+	return &normalizedSignal
 }
 
 func normalizeChoiceSelections(selections []string, pendingChoice agentcontract.PendingChoiceContext) []string {

@@ -16,6 +16,11 @@ func questionsFor(request agentcontract.IntakeDecisionRequest) map[string]model.
 	for questionName, question := range toolQuestionsFor(request, resolveCallableToolNames(request)) {
 		questions[questionName] = question
 	}
+	if hasPendingAnswerQuestion(request) {
+		for questionName, question := range buildPendingAnswerRequest(request, decisionMessageKey(0)).Questions {
+			questions[questionName] = question
+		}
+	}
 	return questions
 }
 
@@ -166,9 +171,9 @@ func TestASingleSelectPendingChoiceIsOneQuestionWithANoneOption(t *testing.T) {
 		t.Fatalf("expected one choice question, got %+v", questions["m1."+agentcontract.IntakeQuestionChoice])
 	}
 	if len(options) != 3 {
-		t.Fatalf("expected the two distinct options plus none, got %+v", options)
+		t.Fatalf("expected the two distinct options plus other, got %+v", options)
 	}
-	for _, optionName := range []string{"table", "graph", agentcontract.IntakeChoiceOptionNone} {
+	for _, optionName := range []string{"table", "graph", agentcontract.IntakePendingOptionOther} {
 		if _, isOffered := options[optionName]; !isOffered {
 			t.Fatalf("expected %s to be offered, got %+v", optionName, options)
 		}
@@ -242,9 +247,6 @@ func TestTheStateShowsHowStaleAPendingQuestionIs(t *testing.T) {
 	}
 	if state.PendingConfirmation.ExchangesSince != 3 {
 		t.Fatalf("expected the exchanges since, got %d", state.PendingConfirmation.ExchangesSince)
-	}
-	if !strings.Contains(criteriaText(t, questionsFor(request)["m1."+agentcontract.IntakeQuestionApproval]), "exchangesSince") {
-		t.Fatal("expected the approval question to read the staleness from the state")
 	}
 }
 

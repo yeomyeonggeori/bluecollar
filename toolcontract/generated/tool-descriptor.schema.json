@@ -150,6 +150,18 @@
     "approvalScope": {
       "type": "string"
     },
+    "approvalScopeSummary": {
+      "type": "string"
+    },
+    "approvalInputFields": {
+      "type": [
+        "null",
+        "array"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
     "completion": {
       "type": "object",
       "properties": {
