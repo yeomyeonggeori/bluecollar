@@ -215,10 +215,8 @@ A harness that executes its own tools defeats the host's isolation boundary and 
 | `model/` | the language model and decision model ports; `openaicompatible`, `decisions` and `tape` implement them |
 | `loop/` | the agent loop, `AgentKernel` and `AgentTurnRunner` |
 | `intake/` | the turn router and the decision planner |
-| `claimcheck/` | asks the decision model what kind of value each one a writer composed is (supported, unsupported, wrong, miscalculated or filler) against the request, its attachments and the runtime facts |
 | `taskstate/` | the in-memory services over task runs, steps, events and artifacts |
 | `turnstream/` | a view of a turn's ledger events as they are appended |
-| `visualcheck/` | the host-side review loop that looks at rendered slides and has them repaired |
 | `trace/` | one run's ledger rendered as a single JSON or Markdown file |
 | `bench/` | run metrics and a runner that measures any `Harness` |
 | `cmd/bluecollar/` | the command-line runner |
@@ -237,6 +235,8 @@ These pages follow one request through the loop. The names match the code, so ea
 Decides what an inbound message means before a turn runs.
 
 `intake.DecisionPlanner` asks every closed question about a message in one call to a decision model. Each question is a `choice` among named options or a `noul`, a probability that a statement is true. The questions cover the route, the difficulty level, the expected number of tools, whether independent work is present, whether an external send is requested, the task shape, the deliverable kind, the language the message is mainly written in (asked only when the host names none), requested output formats and, when relevant, addressing, the reply to a pending choice or confirmation, and whether the message continues a running task. The chat model is asked only for words.
+
+A host that batches several messages into one decision asks `DecisionPlanner.FitsBurstBudget` whether the batched request stays within the planner's own byte budget, so the ceiling is written once, next to the request layout it measures.
 
 `intake.TurnRouter` turns those answers into a `TurnDecision`. The route is one of:
 
@@ -388,8 +388,6 @@ type DecisionModel interface {
 
 A request carries a state document and a map of named questions. Each answer carries the chosen option with its probabilities, or a `noul` value between 0 and 1. `model/decisions` implements it against a decisions endpoint configured by `BLUECOLLAR_DECISION_ENDPOINT`, `BLUECOLLAR_DECISION_API_KEY` and `BLUECOLLAR_DECISION_MODEL`. A request may also carry `Images`, each a media type and its bytes. When it does, `model/decisions` sends `state` as a list of content parts, the state as one text part followed by one `image_url` data URL per image, because the endpoint ignores an image placed inside a JSON state. Tool selection splits a catalog too large for one request into byte-balanced batches that never ask about a tool twice.
 
-`claimcheck.Judge` asks one choice question per composed value, at most 60 to a call, with the kinds and the sources in the state once. The kinds are `source`, `derived`, `expression` and four defects: `claim` (a checkable fact no source holds), `mistake` (a source fact restated wrongly, status and scope included), `error` (a wrong derivation, or a contradiction of another value in the document) and `hollow` (a unit that is interchangeable, functionless and asserts weight that cannot be checked). A value found word for word in the request, an attachment or a runtime fact is not asked: that is an identifier-level match. A value is flagged when its defect probabilities sum to at least 0.5, as the strongest of them, and `Treated` returns the flagged values whose kind is blanked or rewritten. `Treat` rewrites each `hollow` value once with the language model from the document's own facts and asks again for every kind: the value is replaced only if the rewrite is judged clean, and otherwise it stays as it was. An unreadable answer is not clean, and an empty rewrite is clean only for a value marked free (`Claim.IsFree`), a sentence or list item that may be dropped; a title or field is never emptied. A hollow value is never blanked. A derivation is beyond a choice call: `Recompute` asks a language model to work each `derived` value out and flag the ones whose result differs, in one call per document. `TodayProfile` keeps the earlier four-kind definition for comparison. The package never edits a document; what to do with a value is the host's decision. `go test -tags llmeval ./claimcheck` measures a profile (`BLUECOLLAR_CLAIM_PROFILE`) against a labelled corpus named by `BLUECOLLAR_CLAIM_CORPUS` and fails without one; `BLUECOLLAR_CLAIM_RECOMPUTE=1` adds the recomputation, with `BLUECOLLAR_CLAIM_WRITER_MODEL` naming its model (one InternKim can run, from `internal/modelladder`) and `BLUECOLLAR_CLAIM_WRITER_EFFORT` its reasoning effort.
-
 ## Ledger
 
 The append-only record every other mechanism reads.
@@ -489,18 +487,6 @@ type LanguageModelProvider interface {
 ```
 
 `model/openaicompatible` implements it against any `/chat/completions` endpoint. It retries a transient failure up to three times with an exponential delay starting at one second and capped at 30 seconds, honoring `Retry-After`, and replays `reasoning_content` in the field it arrived in. `model/tape` records and replays a run. Hosts that need routing or accounting bring their own provider.
-
-## Visual check
-
-A model that looks at its own renders and finds nothing wrong still ships decks with squashed charts and off-theme slides. `visualcheck` asks a separate model instead, one slide at a time.
-
-Each deck build writes `build/review/visual-review.json`. That file owns the question, its options, the flag threshold, the number of fix rounds, the fixer's instructions and, for every slide, its render, its state, its `<section>`, the page file it is written from (`source`) and the defects the kit measured. The package reads all of it and states none of it. The host implements `Deck` to read the manifest and renders, to write replacement sections into their page files and rebuild, so every file access happens there as the requester.
-
-`Run` puts one request per slide to the decision model, with the render attached and the manifest's question verbatim. A slide is flagged when any option other than the clean one reaches the threshold, however likely the clean option is, or when it has measured defects. Each flagged slide goes to a fixer call on the language model, with the slide's state as `facts`, which returns one rewritten `<section>`. A slide marked `recompose`, one the claim check took text out of, goes to the fixer once even when the reviewer calls it clean, and its rewrite is kept when it is no worse. The rewrite is accepted only if it keeps the same tables, images and charts as the original. The deck is rebuilt with the accepted rewrites and only the replaced slides are reviewed again. A slide that did not get better is put back and not tried again. Better means no more measured defects, no new flagged option, and a lower probability for the options that flagged it. The loop stops when nothing is flagged or the manifest's rounds are used.
-
-Every render goes to the decision model shrunk to fit 200,000 bytes, as a JPEG when the PNG is larger, because the endpoint refuses a request whose estimated tokens pass its context window. A manifest that carries a `deck` question adds one more call after the slide rounds: a contact sheet of every render, each tile numbered, with one choice question per slide, so a repeated arrangement that no single slide shows is seen. A rebuild the build refuses is retried one slide at a time, so one bad rewrite does not discard the others; the refused slide stays flagged and the next round's fixer request carries the refusal, cut to 1,500 characters, as `refusedLastTime`. Slides the deck call flags go to one more fix round with the sheet beside the slide, and the sheet is asked again before a rewrite is kept. A failed deck call is reported as `deckError` and does not stop the run.
-
-The `Report` carries the rounds used, each slide's flagged options with probabilities and measured codes, the slides the deck call flagged, the slides that were fixed with the fixer's own sentence about the change, the slides given up, the slides still flagged, the slides whose visible text changed, and the usage of both models. Slides whose text changed should go back through the claim check.
 
 # Evaluation
 
