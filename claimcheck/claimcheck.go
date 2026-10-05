@@ -48,7 +48,8 @@ func (profile Profile) isDefect(kind string) bool {
 
 const about = "The sources are request (the requester's own words), attachments (the text of the files they attached) " +
 	"and runtimeFacts (what the system knew when it made the document: today, the requester, the document number and the company profile). " +
-	"Each claim is one value the writer put into a delivered document; at says where it sits. All claims belong to one document, so a claim can be checked against the others."
+	"Each claim is one value the writer put into a delivered document; at says where it sits. All claims belong to one document, so a claim can be checked against the others. " +
+	"removed, when present, lists values that were taken out of the document because the sources did not support them; the document no longer holds them."
 
 const sourceKind = "says what the request, attachments or runtimeFacts say, in other words, shortened or merged, with the same values, owners and status"
 const derivedKind = "follows correctly from the sources by arithmetic or the calendar (a total, a share, a multiple, a duration, a weekday), is a heading or label naming what the sources hold, or summarizes them adding nothing"
@@ -61,7 +62,9 @@ const guardKinds = "Wording, tone, emphasis, formatting and where a value sits i
 	"Choose claim for content the sources do not hold, and do not require a unit to be wrong to be a claim. " +
 	"Choose mistake or error only when you can name the exact source value or other claim it conflicts with; do not add a requirement the sources do not state."
 
-const claimKind = "a specific, checkable fact, number, name, customer, ranking, date, promise, condition, cause or availability that no source holds and that no source contradicts; a new obligation; an evaluation of a person or of a quality stated as attested fact"
+const removedReference = "a count, total, ordinal or reference that includes or names a value listed under removed, since the document no longer holds that value"
+
+const claimKind = "a specific, checkable fact, number, name, customer, ranking, date, promise, condition, cause or availability that no source holds and that no source contradicts; a new obligation; an evaluation of a person or of a quality stated as attested fact; or " + removedReference
 
 const hollowKind = "a unit that spends the reader's attention and trust while giving nothing back: it conveys none of this document's facts, grounds for judgment, requests or relational gestures, and instead asserts a vague value or significance that cannot be checked, or manufactures weight through rhetorical form alone. " +
 	"Such text dilutes the real information, reads as machine-written so that the reader trusts even the true facts less, and signals that the writer did not think about this reader and situation. " +
@@ -81,7 +84,7 @@ var (
 			KindExpression: expressionKind,
 			KindClaim: "anything else: a fact, number, name, customer, ranking, date, promise, condition, cause or availability the sources lack; " +
 				"a source fact stated with a stronger status (a forecast or target as achieved or confirmed, some as all, planned as done, an estimate or average as exact or guaranteed); " +
-				"a new obligation; or an evaluation of a person or of a quality stated as attested fact",
+				"a new obligation; an evaluation of a person or of a quality stated as attested fact; or " + removedReference,
 		},
 		Guard:      guardToday,
 		Treatments: map[string]Treatment{KindClaim: TreatmentBlank},
@@ -123,6 +126,7 @@ type Sources struct {
 	Request      []string
 	Attachments  []Attachment
 	RuntimeFacts json.RawMessage
+	Removed      []Claim
 }
 
 type Verdict struct {
@@ -249,6 +253,9 @@ func batchState(profile Profile, sources Sources, claims []Claim) map[string]any
 		"request": strings.Join(sources.Request, "\n\n"),
 		"claims":  shown,
 	}
+	if len(sources.Removed) > 0 {
+		state["removed"] = shownClaims(sources.Removed)
+	}
 	if len(sources.RuntimeFacts) > 0 {
 		state["runtimeFacts"] = json.RawMessage(sources.RuntimeFacts)
 	}
@@ -256,6 +263,14 @@ func batchState(profile Profile, sources Sources, claims []Claim) map[string]any
 		state["attachments"] = attachments
 	}
 	return state
+}
+
+func shownClaims(claims []Claim) []shownClaim {
+	shown := make([]shownClaim, 0, len(claims))
+	for _, claim := range claims {
+		shown = append(shown, shownClaim{At: claim.At, Text: claim.Text})
+	}
+	return shown
 }
 
 func batchQuestions(profile Profile, count int) map[string]model.DecisionQuestion {

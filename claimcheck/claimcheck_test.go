@@ -193,3 +193,32 @@ func TestTheHollowDefinitionNamesItsThreeCriteriaAndItsBoundaries(t *testing.T) 
 		}
 	}
 }
+
+func TestWithdrawnValuesAreShownToTheJudgeAsRemovedAndOnlyWhenThereAreSome(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{kindOf: flaggingInventions}
+	if _, errorValue := Judge(context.Background(), decisionModel, Sources{Request: []string{"Write a notice."}}, claimsOf("first")); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if _, hasRemoved := decisionModel.requests[0].State.(map[string]any)["removed"]; hasRemoved {
+		t.Fatal("a judgment with nothing removed showed a removed list")
+	}
+	sources := Sources{Request: []string{"Write a notice."}, Removed: []Claim{{Path: "slides[0].units[1]", At: "slide 1", Text: "Sign the lease"}}}
+	if _, errorValue := Judge(context.Background(), decisionModel, sources, claimsOf("Two decisions today")); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	removed, isShown := decisionModel.requests[1].State.(map[string]any)["removed"].([]shownClaim)
+	if !isShown || len(removed) != 1 || removed[0].Text != "Sign the lease" || removed[0].At != "slide 1" {
+		t.Fatalf("removed shown as %+v", decisionModel.requests[1].State.(map[string]any)["removed"])
+	}
+}
+
+func TestAStatementThatCountsOrNamesRemovedValuesIsDefinedAsAClaim(t *testing.T) {
+	for _, profile := range []Profile{TodayProfile, CompactProfile} {
+		if !strings.Contains(profile.Kinds[KindClaim], "removed") {
+			t.Fatalf("%s: the claim kind does not mention removed values: %q", profile.Name, profile.Kinds[KindClaim])
+		}
+	}
+	if !strings.Contains(about, "removed") {
+		t.Fatalf("the preface does not explain removed: %q", about)
+	}
+}
