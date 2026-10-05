@@ -76,13 +76,11 @@ func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel m
 		recompose:     manifest.slidesToRecompose(),
 	}
 	state.recordReviews(reviewSlides(ctx, decisionModel, deck, manifest, manifest.Slides))
+	state.reviewDeck(ctx)
 	for state.roundsUsed < manifest.Rounds && len(state.candidates()) > 0 {
 		if errorValue := state.fixRound(ctx); errorValue != nil {
 			return state.report(), errorValue
 		}
-	}
-	if errorValue := state.deckPass(ctx); errorValue != nil {
-		return state.report(), errorValue
 	}
 	return state.report(), nil
 }

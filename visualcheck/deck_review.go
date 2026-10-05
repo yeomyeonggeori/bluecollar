@@ -126,25 +126,21 @@ func deckFindingsOf(manifest Manifest, assessment Assessment) []Finding {
 	return findings
 }
 
-func (state *loopState) deckPass(ctx context.Context) error {
+func (state *loopState) reviewDeck(ctx context.Context) {
 	if !state.manifest.asksAboutTheDeck() {
-		return nil
+		return
 	}
 	review, errorValue := reviewDeckAsAWhole(ctx, state.decisionModel, state.deck, state.manifest)
 	state.usage.Decision = addedUsage(state.usage.Decision, review.usage)
 	if errorValue != nil {
 		state.deckError = errorValue.Error()
-		return nil
+		return
 	}
 	state.deckSheet = review.sheet
 	state.deckFlagged = state.manifest.deckFlaggedSlides(review.assessments)
 	for _, flagged := range state.deckFlagged {
 		state.assessments[flagged.Number] = withDeckAssessment(state.assessments[flagged.Number], review.assessments[flagged.Number])
 	}
-	if state.manifest.Rounds == 0 || len(state.deckFlagged) == 0 {
-		return nil
-	}
-	return state.fixRound(ctx)
 }
 
 func (state *loopState) reviewedAgainstDeck(ctx context.Context, rebuilt Manifest, reviews map[int]Assessment) map[int]Assessment {

@@ -265,3 +265,30 @@ func TestAManifestsDeckQuestionIsValidated(t *testing.T) {
 		t.Errorf("a threshold for a deck option was refused: %v", errorValue)
 	}
 }
+
+func TestTheDeckCallSharesTheManifestsFixRoundsWithTheSlideReview(t *testing.T) {
+	deck := &renderedDeck{fakeDeck: newFakeDeck(manifestWithDeckQuestion(2, section("SAME start"))), t: t}
+	reviews := 0
+	decisions := routedDecisions{
+		slide: &fakeDecisionModel{answer: func(string) map[string]float64 {
+			reviews++
+			return map[string]float64{cleanOption: 0.5, "crowded": 1 - 0.1*float64(reviews)}
+		}},
+		deck: &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)},
+	}
+	fixer := &fakeLanguageModel{rewrite: func(original string) Repair {
+		return Repair{Section: appendedBody(original, "+"), Change: "step"}
+	}}
+	report, errorValue := Run(context.Background(), decisions, fixer, deck)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if report.RoundsUsed != 2 || len(fixer.requests) != 2 {
+		t.Fatalf("rounds %d, %d fixer requests, report %+v", report.RoundsUsed, len(fixer.requests), report)
+	}
+	payload := repairContext{}
+	json.Unmarshal([]byte(fixer.requests[0].Messages[1].Parts[0].Text), &payload)
+	if !slices.ContainsFunc(payload.ReviewerFindings, func(finding Finding) bool { return finding.Kind == repetitiveOption }) {
+		t.Fatalf("the first round did not carry the deck finding: %+v", payload.ReviewerFindings)
+	}
+}
