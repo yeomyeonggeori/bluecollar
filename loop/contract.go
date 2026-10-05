@@ -99,10 +99,8 @@ const (
 	AgentPartTypeImage = agentcontract.AgentPartTypeImage
 	AgentPartTypeText  = agentcontract.AgentPartTypeText
 
-	ApprovalSignalApprove     = agentcontract.ApprovalSignalApprove
-	ApprovalSignalApproveTask = agentcontract.ApprovalSignalApproveTask
-	ApprovalSignalReject      = agentcontract.ApprovalSignalReject
-	ApprovalSignalUnclear     = agentcontract.ApprovalSignalUnclear
+	ApprovalSignalApprove = agentcontract.ApprovalSignalApprove
+	ApprovalSignalReject  = agentcontract.ApprovalSignalReject
 
 	ArtifactRequirementNone      = agentcontract.ArtifactRequirementNone
 	ArtifactRequirementPreferred = agentcontract.ArtifactRequirementPreferred
@@ -171,7 +169,6 @@ var (
 	buildFailureNoticePrompt             = agentcontract.BuildFailureNoticePrompt
 	failureReportAttachmentFilenames     = agentcontract.FailureReportAttachmentFilenames
 	redactRawFailureNotice               = agentcontract.RedactRawFailureNotice
-	IsApprovingSignal                    = agentcontract.IsApprovingSignal
 	LargerTaskLevel                      = agentcontract.LargerTaskLevel
 	NormalizeResponseLanguage            = toolcontract.NormalizeResponseLanguage
 	NormalizeTaskLevel                   = agentcontract.NormalizeTaskLevel

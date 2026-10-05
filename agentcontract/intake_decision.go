@@ -166,6 +166,7 @@ const (
 	IntakeQuestionApproval                = "approval"
 	IntakeQuestionBusyRoute               = "busyRoute"
 	IntakeQuestionChoice                  = "choice"
+	IntakeQuestionPendingAnswer           = "pendingAnswer"
 
 	IntakeQuestionPrefixFormat = "format."
 	IntakeQuestionPrefixTool   = "tool."
@@ -175,6 +176,8 @@ const (
 	IntakeReactionOptionReact = "react"
 	IntakeDutyOptionNone      = "none"
 	IntakeChoiceOptionNone    = "none_of_these"
+	IntakePendingOptionOther  = "other"
+	IntakePendingOptionAnswer = "answers_it"
 )
 
 type ToolSelectionNeed struct {

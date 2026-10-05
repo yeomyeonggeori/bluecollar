@@ -235,19 +235,19 @@ func TestASelectedChoiceIsNeverReopenedByItsOwnTurn(t *testing.T) {
 	}
 }
 
-func TestAnUnclearApprovalLeavesTheRouteToTheDecision(t *testing.T) {
+func TestARejectedApprovalLeavesTheRouteToTheDecision(t *testing.T) {
 	request := agentcontract.AgentRequest{PendingConfirmation: agentcontract.PendingConfirmationContext{TaskRunID: "task-run-1", Question: "정정할까요?"}}
-	unclear := agentcontract.ApprovalSignalUnclear
+	reject := agentcontract.ApprovalSignalReject
 	decidedFields := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation)
-	decidedFields.Approval = &unclear
+	decidedFields.Approval = &reject
 
 	decision := normalizedTurnDecision(t, decidedFields, request)
 
 	if decision.Route != agentcontract.TurnRouteClarify {
-		t.Fatalf("expected an unclear approval to leave the route alone, got %q", decision.Route)
+		t.Fatalf("expected a rejected approval to leave the route alone, got %q", decision.Route)
 	}
 	if decision.Classification != agentcontract.IntakeClassificationNeedsConfirmation {
-		t.Fatalf("expected an unclear approval to leave the classification alone, got %q", decision.Classification)
+		t.Fatalf("expected a rejected approval to leave the classification alone, got %q", decision.Classification)
 	}
 }
 

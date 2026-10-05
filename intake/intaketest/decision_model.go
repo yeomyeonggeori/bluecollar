@@ -142,6 +142,8 @@ func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool)
 		return choiceAnswer(approvalName(outcome)), true
 	case agentcontract.IntakeQuestionBusyRoute:
 		return choiceAnswer(string(outcome.TurnDecision.BusyRoute)), true
+	case agentcontract.IntakeQuestionPendingAnswer:
+		return choiceAnswer(pendingAnswerName(outcome)), true
 	case agentcontract.IntakeQuestionChoice:
 		return choiceAnswer(selectedChoiceKey(outcome)), true
 	}
@@ -161,7 +163,7 @@ func orDefault(value string, defaultValue string) string {
 
 func approvalName(outcome Outcome) string {
 	if outcome.TurnDecision.Approval == nil {
-		return string(agentcontract.ApprovalSignalUnclear)
+		return agentcontract.IntakePendingOptionOther
 	}
 	return string(*outcome.TurnDecision.Approval)
 }
@@ -207,7 +209,14 @@ func selectedChoiceKey(outcome Outcome) string {
 			return choiceKey
 		}
 	}
-	return agentcontract.IntakeChoiceOptionNone
+	return agentcontract.IntakePendingOptionOther
+}
+
+func pendingAnswerName(outcome Outcome) string {
+	if len(outcome.TurnDecision.Choices) > 0 {
+		return agentcontract.IntakePendingOptionAnswer
+	}
+	return agentcontract.IntakePendingOptionOther
 }
 
 func choiceAnswer(choice string) model.DecisionAnswer {

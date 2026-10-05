@@ -63,6 +63,92 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 	return planner.withLikelyTools(ctx, describedRequest, decisions, callLedger), nil
 }
 
+type PendingAnswer struct {
+	IsAnswered bool
+	Approval   *agentcontract.ApprovalSignal
+	Choices    []string
+}
+
+func (planner DecisionPlanner) DecidePendingAnswer(ctx context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (PendingAnswer, error) {
+	if planner.decisionModel == nil {
+		return PendingAnswer{}, ErrDecisionModelUnavailable
+	}
+	if len(request.Messages) == 0 {
+		return PendingAnswer{}, errors.New("intake decision request carries no message")
+	}
+	messageKey := decisionMessageKey(len(request.Messages) - 1)
+	calls := planner.decideEveryRequest(ctx, []model.DecisionRequest{buildPendingAnswerRequest(request, messageKey)})
+	callError := firstCallError(calls)
+	pendingAnswer, readError := readPendingAnswer(request, answerReader{answers: mergedDecisionAnswers(calls), messageKey: messageKey}, callError)
+	recordDecisionCalls(callLedger, calls, decisionCallContext{
+		errorValue: firstError(callError, readError),
+		messageIDs: decidedMessageIDs(request.Messages),
+		input:      decisionInput(request),
+	})
+	return pendingAnswer, firstError(callError, readError)
+}
+
+func buildPendingAnswerRequest(request agentcontract.IntakeDecisionRequest, messageKey string) model.DecisionRequest {
+	questions := map[string]model.DecisionQuestion{}
+	for name, question := range newQuestionBuilder(request).pendingAnswerQuestions(messageKey) {
+		questions[messageKey+"."+name] = question
+	}
+	return model.DecisionRequest{State: buildDecisionState(request, nil), Questions: questions}
+}
+
+func readPendingAnswer(request agentcontract.IntakeDecisionRequest, reader answerReader, callError error) (PendingAnswer, error) {
+	if callError != nil {
+		return PendingAnswer{}, nil
+	}
+	if hasPendingConfirmation(request) {
+		return readApprovalAnswer(reader)
+	}
+	if isMultipleChoiceSelection(request.PendingChoice) {
+		return readMultipleChoiceAnswer(request, reader)
+	}
+	return readSingleChoiceAnswer(request, reader)
+}
+
+func readApprovalAnswer(reader answerReader) (PendingAnswer, error) {
+	choice, errorValue := reader.choice(agentcontract.IntakeQuestionApproval)
+	if errorValue != nil {
+		return PendingAnswer{}, errorValue
+	}
+	if !agentcontract.IsApprovalSignalName(choice) {
+		return PendingAnswer{}, nil
+	}
+	approval := agentcontract.ApprovalSignal(choice)
+	return PendingAnswer{IsAnswered: true, Approval: &approval}, nil
+}
+
+func readSingleChoiceAnswer(request agentcontract.IntakeDecisionRequest, reader answerReader) (PendingAnswer, error) {
+	selectedKey, errorValue := reader.choice(agentcontract.IntakeQuestionChoice)
+	if errorValue != nil {
+		return PendingAnswer{}, errorValue
+	}
+	for _, choiceKey := range decisionChoiceKeys(request.PendingChoice) {
+		if choiceKey == selectedKey {
+			return PendingAnswer{IsAnswered: true, Choices: []string{choiceKey}}, nil
+		}
+	}
+	return PendingAnswer{}, nil
+}
+
+func readMultipleChoiceAnswer(request agentcontract.IntakeDecisionRequest, reader answerReader) (PendingAnswer, error) {
+	answer, errorValue := reader.choice(agentcontract.IntakeQuestionPendingAnswer)
+	if errorValue != nil {
+		return PendingAnswer{}, errorValue
+	}
+	if answer != agentcontract.IntakePendingOptionAnswer {
+		return PendingAnswer{}, nil
+	}
+	selections, errorValue := reader.yesMembers(agentcontract.IntakeQuestionPrefixChoice, decisionChoiceKeys(request.PendingChoice))
+	if errorValue != nil {
+		return PendingAnswer{}, errorValue
+	}
+	return PendingAnswer{IsAnswered: len(selections) > 0, Choices: selections}, nil
+}
+
 type decisionCall struct {
 	request      model.DecisionRequest
 	response     model.DecisionResponse
@@ -322,9 +408,6 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if hasPriorTask(request) {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionPriorTaskReference)
 	}
-	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
-		choiceNames = append(choiceNames, agentcontract.IntakeQuestionApproval)
-	}
 	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionBusyRoute)
 	}
@@ -367,39 +450,10 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
-	if approvalChoice, isAsked := choices[agentcontract.IntakeQuestionApproval]; isAsked {
-		approval := agentcontract.ApprovalSignal(approvalChoice)
-		turnFields.Approval = &approval
-	}
 	if busyRouteChoice, isAsked := choices[agentcontract.IntakeQuestionBusyRoute]; isAsked {
 		turnFields.BusyRoute = agentcontract.BusyRoute(busyRouteChoice)
 	}
-	selections, errorValue := readChoiceSelections(request, reader)
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
-	}
-	turnFields.Choices = selections
 	return turnFields, nil
-}
-
-func readChoiceSelections(request agentcontract.IntakeDecisionRequest, reader answerReader) ([]string, error) {
-	choiceKeys := decisionChoiceKeys(request.PendingChoice)
-	if len(choiceKeys) == 0 {
-		return nil, nil
-	}
-	if isMultipleChoiceSelection(request.PendingChoice) {
-		return reader.yesMembers(agentcontract.IntakeQuestionPrefixChoice, choiceKeys)
-	}
-	selectedKey, errorValue := reader.choice(agentcontract.IntakeQuestionChoice)
-	if errorValue != nil {
-		return nil, errorValue
-	}
-	for _, choiceKey := range choiceKeys {
-		if choiceKey == selectedKey {
-			return []string{choiceKey}, nil
-		}
-	}
-	return nil, nil
 }
 
 type answerReader struct {
