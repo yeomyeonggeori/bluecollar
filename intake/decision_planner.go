@@ -93,7 +93,7 @@ func buildPendingAnswerRequest(request agentcontract.IntakeDecisionRequest, mess
 	for name, question := range newQuestionBuilder(request).pendingAnswerQuestions(messageKey) {
 		questions[messageKey+"."+name] = question
 	}
-	return model.DecisionRequest{State: buildDecisionState(request, nil), Questions: questions}
+	return model.DecisionRequest{State: buildPendingAnswerState(request), Questions: questions}
 }
 
 func readPendingAnswer(request agentcontract.IntakeDecisionRequest, reader answerReader, callError error) (PendingAnswer, error) {

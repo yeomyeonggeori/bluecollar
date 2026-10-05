@@ -339,11 +339,11 @@ func (builder questionBuilder) priorTaskReferenceQuestion(messageKey string) mod
 
 func (builder questionBuilder) approvalQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "A confirmation is pending (pendingConfirmation in the state). Does the message answer it? Read the message by what the person means, in any language and any script: a short reply, a bit of shorthand, or a single character can be a full answer.",
+		Instructions: builder.about(messageKey) + "A confirmation is pending (pendingConfirmation in the state). Read the message as a reply to that question, by what the person means, in any language and any script. A reply to a yes-or-no question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose other only when the message is not a decision about the pending action.",
 		OptionDescriptions: map[string]string{
-			string(agentcontract.ApprovalSignalApprove): "it authorizes the pending action",
-			string(agentcontract.ApprovalSignalReject):  "it declines the pending action or says to stop",
-			agentcontract.IntakePendingOptionOther:      "it does not answer the pending question: a new or different request, a change of target, scope or conditions, or something unrelated",
+			string(agentcontract.ApprovalSignalApprove): "the person agrees to the pending action as asked, however briefly or informally, alone or with thanks, politeness or a remark that does not change what would be done",
+			string(agentcontract.ApprovalSignalReject):  "the person declines, cancels or halts the pending action, with or without a reason",
+			agentcontract.IntakePendingOptionOther:      "the message is not a decision about the pending action: it asks something, leaves the decision open, changes what would be done (target, scope, time or conditions), or is an unrelated request",
 		},
 	}.Question()
 }
