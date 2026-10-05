@@ -434,6 +434,9 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	})
 
 	taskRun := agentTurnRunner.taskRunForRequest(request)
+	if request.TaskRunChosen != nil {
+		request.TaskRunChosen(taskRun.TaskRunID)
+	}
 	isPausedTaskResume := taskRun.Status == agentcontract.TaskStatusWaitingApproval || taskRun.Status == agentcontract.TaskStatusWaitingUserInput
 	if request.TurnAnchorClamped {
 		agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentTurnAnchorClamped, marshalEventBody(map[string]any{
@@ -1559,6 +1562,7 @@ func agentRequestFromTurnRequest(request AgentTurnRequest) AgentRequest {
 		TaskShape:              request.TaskShape,
 		TurnStartedAt:          request.TurnStartedAt,
 		CheckpointSender:       request.CheckpointSender,
+		TaskRunChosen:          request.TaskRunChosen,
 	}
 }
 

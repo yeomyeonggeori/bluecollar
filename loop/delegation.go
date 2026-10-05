@@ -39,6 +39,7 @@ func childTurnRequest(request AgentTurnRequest, actionDocument turnActionDocumen
 	childRequest.ActiveGoal = ActiveGoal{OriginalInstruction: strings.TrimSpace(actionDocument.Instruction)}
 	childRequest.OutcomeContract = OutcomeContract{}
 	childRequest.CheckpointSender = nil
+	childRequest.TaskRunChosen = nil
 	return childRequest
 }
 

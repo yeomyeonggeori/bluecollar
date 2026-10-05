@@ -58,6 +58,7 @@ type AgentRequest struct {
 	Company                    CompanyContext
 	CarriedOutCalls            []CarriedOutCall
 	CheckpointSender           AgentCheckpointSender
+	TaskRunChosen              func(taskRunID string)
 }
 
 type ActiveTaskContext struct {
@@ -179,7 +180,8 @@ type AgentTurnRequest struct {
 	TurnAnchorClamped            bool
 	OriginalTurnStartedAt        time.Time
 	CarriedOutCalls              []CarriedOutCall
-	CheckpointSender             AgentCheckpointSender `json:"-"`
+	CheckpointSender             AgentCheckpointSender  `json:"-"`
+	TaskRunChosen                func(taskRunID string) `json:"-"`
 	StepBudgetContext            string
 	ArtifactManifest             []ArtifactManifestEntry
 	RestrictActionToTerminalOnly bool
