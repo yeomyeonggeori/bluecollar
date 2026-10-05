@@ -179,7 +179,7 @@ func driveOneTurnWithMeta(t *testing.T, catalogTransport mcp.Transport, language
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)
-		runningAgent.sessionUpdates.connect(agentConnection)
+		runningAgent.connect(agentConnection)
 		<-agentConnection.Done()
 	}()
 
@@ -298,7 +298,7 @@ func TestACancelledTurnStopsCallingTools(t *testing.T) {
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogClientTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)
-		runningAgent.sessionUpdates.connect(agentConnection)
+		runningAgent.connect(agentConnection)
 		<-agentConnection.Done()
 	}()
 

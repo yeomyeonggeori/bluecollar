@@ -14,6 +14,29 @@ type sessionUpdateSender interface {
 	SessionUpdate(context.Context, acp.SessionNotification) error
 }
 
+type permissionRequester interface {
+	RequestPermission(context.Context, acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error)
+}
+
+type deferredPermissionRequester struct {
+	ready     chan struct{}
+	requester permissionRequester
+}
+
+func (requester *deferredPermissionRequester) connect(connection permissionRequester) {
+	requester.requester = connection
+	close(requester.ready)
+}
+
+func (requester *deferredPermissionRequester) RequestPermission(ctx context.Context, request acp.RequestPermissionRequest) (acp.RequestPermissionResponse, error) {
+	select {
+	case <-requester.ready:
+		return requester.requester.RequestPermission(ctx, request)
+	case <-ctx.Done():
+		return acp.RequestPermissionResponse{}, ctx.Err()
+	}
+}
+
 type deferredSessionUpdateSender struct {
 	ready  chan struct{}
 	sender sessionUpdateSender

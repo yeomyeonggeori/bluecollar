@@ -29,7 +29,7 @@ func main() {
 	languageModel := openaicompatible.NewProvider(*endpointURL, flagOrEnvironment(*apiKey, "BLUECOLLAR_LLM_API_KEY"), *modelName)
 	runningAgent := newAgent(languageModel, decisions.ConfiguredDecisionModel(os.Stderr), *agentName)
 	connection := acp.NewAgentSideConnection(runningAgent, os.Stdout, os.Stdin)
-	runningAgent.sessionUpdates.connect(connection)
+	runningAgent.connect(connection)
 	<-connection.Done()
 }
 
