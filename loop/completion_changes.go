@@ -63,25 +63,8 @@ type observedDecisionModel struct {
 func (observed observedDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
 	startedAt := time.Now()
 	response, errorValue := observed.decisionModel.Decide(ctx, request)
-	record := agentcontract.LLMCallRecord{
-		Kind:             agentcontract.LLMCallKindDecision,
-		Transport:        "decisions",
-		SchemaName:       firstNonEmptyString(observed.schemaName, changeCheckSchemaName),
-		Provider:         response.ProviderName,
-		UpstreamProvider: response.UpstreamProvider,
-		Model:            response.ModelName,
-		LatencyMS:        time.Since(startedAt).Milliseconds(),
-		QuestionCount:    len(request.Questions),
-		PromptTokens:     response.Usage.PromptTokens,
-		CompletionTokens: response.Usage.CompletionTokens,
-		TotalTokens:      response.Usage.TotalTokens,
-		CostUSD:          response.Usage.CostUSD,
-		DecisionAnswers:  response.Answers,
-	}
-	if errorValue != nil {
-		record.IsError = true
-		record.Error = errorValue.Error()
-	}
+	record := agentcontract.DecisionCallRecord(request, response, time.Since(startedAt), errorValue)
+	record.SchemaName = firstNonEmptyString(observed.schemaName, changeCheckSchemaName)
 	observed.observe(record)
 	return response, errorValue
 }

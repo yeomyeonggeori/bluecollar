@@ -167,7 +167,7 @@ func TestThePerToolQuestionStaysSmallEnoughToRepeatPerMessage(t *testing.T) {
 	request.ToolSet = newTestToolSet(measurementToolNames())
 	candidateToolNames := resolveCallableToolNames(request)
 
-	questionBytes := decisionQuestionsByteCount(toolQuestionsFor(request, candidateToolNames))
+	questionBytes := agentcontract.DecisionCallRecord(model.DecisionRequest{Questions: toolQuestionsFor(request, candidateToolNames)}, model.DecisionResponse{}, 0, nil).SchemaBytes
 
 	if averageBytes := questionBytes / len(candidateToolNames); averageBytes > perToolQuestionByteBudget {
 		t.Fatalf("expected a tool question to stay within %d bytes, got %d; the long-form rules belong in the state", perToolQuestionByteBudget, averageBytes)

@@ -33,37 +33,18 @@ func decidedCallContext(callContext decisionCallContext, index int) decisionCall
 }
 
 func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) agentcontract.LLMCallRecord {
-	record := agentcontract.LLMCallRecord{
-		Kind:                   agentcontract.LLMCallKindDecision,
-		Transport:              "decisions",
-		Provider:               call.response.ProviderName,
-		UpstreamProvider:       call.response.UpstreamProvider,
-		Model:                  call.response.ModelName,
-		LatencyMS:              call.latency.Milliseconds(),
-		PromptBytes:            decisionStateByteCount(call.request.State),
-		SchemaBytes:            decisionQuestionsByteCount(call.request.Questions),
-		QuestionCount:          len(call.request.Questions),
-		PromptTokens:           call.response.Usage.PromptTokens,
-		CompletionTokens:       call.response.Usage.CompletionTokens,
-		TotalTokens:            call.response.Usage.TotalTokens,
-		CostUSD:                call.response.Usage.CostUSD,
-		DecisionAnswers:        call.response.Answers,
-		DecisionDraws:          reactionDrawsOf(callContext.decisions),
-		ToolSelection:          callContext.toolSelection,
-		DecidedMessageIDs:      callContext.messageIDs,
-		AttachmentsDescribed:   callContext.attachmentsDescribed,
-		AttachmentDescriptions: attachmentDescriptionsOf(callContext.decisions),
-		Input:                  callContext.input,
-	}.WithWireExchange(call.wireExchange)
+	record := agentcontract.DecisionCallRecord(call.request, call.response, call.latency, callContext.errorValue)
+	record.DecisionDraws = reactionDrawsOf(callContext.decisions)
+	record.ToolSelection = callContext.toolSelection
+	record.DecidedMessageIDs = callContext.messageIDs
+	record.AttachmentsDescribed = callContext.attachmentsDescribed
+	record.AttachmentDescriptions = attachmentDescriptionsOf(callContext.decisions)
+	record.Input = callContext.input
 	if call.wasCut {
 		record.UsedFallback = true
 		record.FallbackReason = "the first ask was cut at the measured patience and asked again"
 	}
-	if callContext.errorValue != nil {
-		record.IsError = true
-		record.Error = callContext.errorValue.Error()
-	}
-	return record
+	return record.WithWireExchange(call.wireExchange)
 }
 
 func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers map[string]model.DecisionAnswer, selectionError error, countLimit int) *agentcontract.ToolSelectionRecord {
@@ -114,22 +95,6 @@ func attachmentDescriptionsOf(decisions agentcontract.IntakeDecisions) []string 
 		return nil
 	}
 	return descriptions
-}
-
-func decisionStateByteCount(state any) int {
-	document, errorValue := json.Marshal(state)
-	if errorValue != nil {
-		return 0
-	}
-	return len(document)
-}
-
-func decisionQuestionsByteCount(questions map[string]model.DecisionQuestion) int {
-	document, errorValue := json.Marshal(questions)
-	if errorValue != nil {
-		return 0
-	}
-	return len(document)
 }
 
 func decidedMessageIDs(messages []agentcontract.IntakeDecisionMessage) []string {
