@@ -92,7 +92,7 @@ func varyingFixer() *fakeLanguageModel {
 func TestADeckQuestionIsAskedOnceWithOneSheetAndOneQuestionPerSlide(t *testing.T) {
 	deck := &renderedDeck{fakeDeck: newFakeDeck(manifestWithDeckQuestion(0, section("a"), section("b"), section("c"))), t: t}
 	decisions := &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}
-	report, errorValue := Run(context.Background(), decisions, &fakeLanguageModel{}, deck)
+	report, errorValue := runLoop(context.Background(), decisions, &fakeLanguageModel{}, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -118,7 +118,7 @@ func TestASlideTheDeckCallFlagsIsRecomposedWithTheSheetBesideIt(t *testing.T) {
 	deck := &renderedDeck{fakeDeck: newFakeDeck(manifestWithDeckQuestion(1, section("one"), section("SAME two"), section("three"))), t: t}
 	decisions := &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}
 	fixer := varyingFixer()
-	report, errorValue := Run(context.Background(), decisions, fixer, deck)
+	report, errorValue := runLoop(context.Background(), decisions, fixer, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -126,11 +126,11 @@ func TestASlideTheDeckCallFlagsIsRecomposedWithTheSheetBesideIt(t *testing.T) {
 		t.Fatalf("%d fixer requests", len(fixer.requests))
 	}
 	parts := fixer.requests[0].Messages[1].Parts
-	if len(parts) != 4 || parts[3].Type != "image" {
+	if len(parts) != 3 || parts[2].Type != "image" {
 		t.Fatalf("parts %+v", parts)
 	}
 	var payload repairContext
-	json.Unmarshal([]byte(parts[1].Text), &payload)
+	json.Unmarshal([]byte(parts[0].Text), &payload)
 	if len(payload.ReviewerFindings) != 1 || payload.ReviewerFindings[0].Kind != repetitiveOption || payload.ReviewerFindings[0].Meaning != "same composition as another slide" {
 		t.Fatalf("findings %+v", payload.ReviewerFindings)
 	}
@@ -152,10 +152,10 @@ func TestASlideWithNoSheetBesideItIsFixedWithoutOne(t *testing.T) {
 	fixer := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: strings.Replace(original, "BAD", "good", 1), Change: "regrouped"}
 	}}
-	if _, errorValue := Run(context.Background(), routed, fixer, deck); errorValue != nil {
+	if _, errorValue := runLoop(context.Background(), routed, fixer, deck); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if got := len(fixer.requests[0].Messages[1].Parts); got != 3 {
+	if got := len(fixer.requests[0].Messages[1].Parts); got != 2 {
 		t.Fatalf("%d parts in a per-slide repair", got)
 	}
 }
@@ -175,7 +175,7 @@ func (routed routedDecisions) Decide(ctx context.Context, request model.Decision
 func TestADeckFlagWithNoRoundsIsReportedAndNothingIsRewritten(t *testing.T) {
 	deck := &renderedDeck{fakeDeck: newFakeDeck(manifestWithDeckQuestion(0, section("SAME one"), section("two"))), t: t}
 	fixer := varyingFixer()
-	report, errorValue := Run(context.Background(), &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}, fixer, deck)
+	report, errorValue := runLoop(context.Background(), &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}, fixer, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -189,7 +189,7 @@ func TestARecompositionTheDeckCallStillFlagsIsRestored(t *testing.T) {
 	fixer := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>shuffled</p>"), Change: "shuffled"}
 	}}
-	report, errorValue := Run(context.Background(), &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}, fixer, deck)
+	report, errorValue := runLoop(context.Background(), &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}, fixer, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -201,7 +201,7 @@ func TestARecompositionTheDeckCallStillFlagsIsRestored(t *testing.T) {
 func TestADeckCallThatFailsIsReportedAndTheRunStillFinishes(t *testing.T) {
 	deck := &renderedDeck{fakeDeck: newFakeDeck(manifestWithDeckQuestion(1, section("a"))), t: t}
 	decisions := &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck), deckFailure: errors.New("decisions endpoint answered 500")}
-	report, errorValue := Run(context.Background(), decisions, &fakeLanguageModel{}, deck)
+	report, errorValue := runLoop(context.Background(), decisions, &fakeLanguageModel{}, deck)
 	if errorValue != nil || !strings.Contains(report.DeckError, "500") || len(report.Leftovers) != 0 {
 		t.Fatalf("error %v, report %+v", errorValue, report)
 	}
@@ -210,7 +210,7 @@ func TestADeckCallThatFailsIsReportedAndTheRunStillFinishes(t *testing.T) {
 func TestAManifestWithoutADeckQuestionNeverBuildsASheet(t *testing.T) {
 	deck := &renderedDeck{fakeDeck: newFakeDeck(sampleManifest(1, section("a"))), t: t}
 	decisions := &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}
-	if _, errorValue := Run(context.Background(), decisions, &fakeLanguageModel{}, deck); errorValue != nil {
+	if _, errorValue := runLoop(context.Background(), decisions, &fakeLanguageModel{}, deck); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if len(decisions.deckRequests) != 0 {
@@ -221,7 +221,7 @@ func TestAManifestWithoutADeckQuestionNeverBuildsASheet(t *testing.T) {
 func TestEverySlideRenderIsShrunkToFitBeforeItIsSentToTheDecisionModel(t *testing.T) {
 	deck := &renderedDeck{fakeDeck: newFakeDeck(manifestWithDeckQuestion(0, section("a"), section("b"))), t: t, large: true}
 	decisions := &pairedDecisionModel{deckProbs: repetitionOf(deck.fakeDeck)}
-	report, errorValue := Run(context.Background(), decisions, &fakeLanguageModel{}, deck)
+	report, errorValue := runLoop(context.Background(), decisions, &fakeLanguageModel{}, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

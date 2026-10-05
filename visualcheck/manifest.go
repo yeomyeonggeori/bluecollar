@@ -13,7 +13,6 @@ type Question struct {
 
 type Fixer struct {
 	Instructions string `json:"instructions"`
-	KitGuide     string `json:"kitGuide"`
 }
 
 type MeasuredDefect struct {
@@ -22,12 +21,37 @@ type MeasuredDefect struct {
 	Suggestion string `json:"suggestion"`
 }
 
+type Edit struct {
+	ID          string `json:"id"`
+	Operation   string `json:"operation"`
+	Description string `json:"description"`
+	Section     string `json:"section"`
+}
+
 type Slide struct {
 	Number   int              `json:"number"`
 	Image    string           `json:"image"`
 	State    map[string]any   `json:"state"`
 	Section  string           `json:"section"`
 	Measured []MeasuredDefect `json:"measured"`
+	Edits    []Edit           `json:"edits,omitempty"`
+}
+
+func (slide Slide) edit(identifier string) (Edit, bool) {
+	for _, edit := range slide.Edits {
+		if edit.ID == identifier {
+			return edit, true
+		}
+	}
+	return Edit{}, false
+}
+
+func (slide Slide) editChoices() []editChoice {
+	choices := make([]editChoice, 0, len(slide.Edits))
+	for _, edit := range slide.Edits {
+		choices = append(choices, editChoice{ID: edit.ID, Operation: edit.Operation, Description: edit.Description})
+	}
+	return choices
 }
 
 type Manifest struct {
