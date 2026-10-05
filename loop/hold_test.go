@@ -11,8 +11,8 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func TestAHeldCallIsSettledOnlyByTheTokenTheLoopMintedForIt(t *testing.T) {
-	heldCalls := []HeldCall{{
+func TestAHoldIsSettledOnlyByTheIDTheLoopMintedForIt(t *testing.T) {
+	holds := []HeldCall{{
 		ApprovalToken: "token-1",
 		ToolName:      "message_send",
 		ToolInput:     json.RawMessage(`{"to":["alice"],"message":"회의록"}`),
@@ -20,22 +20,22 @@ func TestAHeldCallIsSettledOnlyByTheTokenTheLoopMintedForIt(t *testing.T) {
 	}}
 
 	sameCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"message":"회의록","to":["alice"]}`), ApprovalToken: "token-1"}
-	if _, isMatched := heldCallForCarriedOutCall(heldCalls, sameCall); !isMatched {
+	if _, isMatched := holdForCarriedOutCall(holds, sameCall); !isMatched {
 		t.Fatal("the same call with its own token is the call that was approved, whatever order its fields arrive in")
 	}
 
 	widerCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"to":["everyone"],"message":"회의록"}`), ApprovalToken: "token-1"}
-	if _, isMatched := heldCallForCarriedOutCall(heldCalls, widerCall); isMatched {
+	if _, isMatched := holdForCarriedOutCall(holds, widerCall); isMatched {
 		t.Fatal("a token is bound to the exact call it was minted for; carrying a wider one back under it is how an approval for one thing becomes an approval for another")
 	}
 
 	untokenedCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"to":["alice"],"message":"회의록"}`)}
-	if _, isMatched := heldCallForCarriedOutCall(heldCalls, untokenedCall); isMatched {
+	if _, isMatched := holdForCarriedOutCall(holds, untokenedCall); isMatched {
 		t.Fatal("without the token the loop minted, a carried-out call is a claim about what was approved rather than proof of it")
 	}
 }
 
-func TestARestoredFormerKernelHeldCallMatchesOnlyItsCurrentEquivalent(t *testing.T) {
+func TestARestoredFormerKernelHoldMatchesOnlyItsCurrentEquivalent(t *testing.T) {
 	services := newTurnRunnerTestServices(nil, TurnOptions{})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "run the command")
 	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHeldCall,
@@ -45,19 +45,19 @@ func TestARestoredFormerKernelHeldCallMatchesOnlyItsCurrentEquivalent(t *testing
 			ToolInput:     json.RawMessage(`{"command":"pwd"}`),
 			ObservationID: "obs-legacy-shell",
 		}))
-	heldCalls := services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)
+	holds := services.runner.unspentHolds(taskRun.TaskRunID)
 	carriedOutCall := CarriedOutCall{
 		ApprovalToken: "token-legacy-shell",
 		ToolName:      toolcontract.BashToolName,
 		ToolInput:     json.RawMessage(`{"command":"pwd"}`),
 	}
 
-	if _, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall); !isMatched {
+	if _, isMatched := holdForCarriedOutCall(holds, carriedOutCall); !isMatched {
 		t.Fatal("a held shell call must match its equivalent bash call after restart")
 	}
 
 	carriedOutCall.ToolInput = json.RawMessage(`{"command":"ls"}`)
-	if _, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall); isMatched {
+	if _, isMatched := holdForCarriedOutCall(holds, carriedOutCall); isMatched {
 		t.Fatal("a legacy hold must reject a changed command even when it carries the same token")
 	}
 }
@@ -94,14 +94,14 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{modelTier: "xlow", contents: []string{finishMessageDocument("보냈습니다")}},
 		TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "회의록 보내줘")
-	services.runner.mintHeldCallApproval(taskRun.TaskRunID, turnObservation{
+	services.runner.recordHold(taskRun.TaskRunID, turnObservation{
 		ObservationID: "obs-1",
 		Tool:          "message_send",
 		ToolInput:     json.RawMessage(`{"to":["alice"]}`),
 	})
-	heldCalls := services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)
-	if len(heldCalls) != 1 {
-		t.Fatalf("a held call is minted once and waits in the ledger: %v", heldCalls)
+	holds := services.runner.unspentHolds(taskRun.TaskRunID)
+	if len(holds) != 1 {
+		t.Fatalf("a held call is minted once and waits in the ledger: %v", holds)
 	}
 
 	state := &agentTaskState{}
@@ -109,7 +109,7 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 		CarriedOutCalls: []CarriedOutCall{{
 			ToolName:      "message_send",
 			ToolInput:     json.RawMessage(`{"to":["everyone"]}`),
-			ApprovalToken: heldCalls[0].ApprovalToken,
+			ApprovalToken: holds[0].ApprovalToken,
 			Result:        toolcontract.ToolSuccessData(`{"messageID":"m-1"}`, json.RawMessage(`{"messageID":"m-1"}`)),
 		}},
 	}, state, map[string]turnObservation{})
@@ -125,13 +125,13 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 	if !strings.Contains(observation.Summary, approvalUnmatchedObservationNote) {
 		t.Fatalf("the loop's own sentence about the observation is where the note goes: %q", observation.Summary)
 	}
-	if len(services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)) != 1 {
+	if len(services.runner.unspentHolds(taskRun.TaskRunID)) != 1 {
 		t.Fatal("a call nobody approved does not spend the approval that is still waiting")
 	}
 
 	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalExecuted,
-		`{"approvalToken":"`+heldCalls[0].ApprovalToken+`","toolName":"message_send","toolInput":{"to":["alice"]}}`)
-	if len(services.runner.heldCallsAwaitingApproval(taskRun.TaskRunID)) != 0 {
+		`{"approvalToken":"`+holds[0].ApprovalToken+`","toolName":"message_send","toolInput":{"to":["alice"]}}`)
+	if len(services.runner.unspentHolds(taskRun.TaskRunID)) != 0 {
 		t.Fatal("the host that released the approval records the call it let run, and that record is what spends the hold")
 	}
 }

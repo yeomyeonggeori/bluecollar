@@ -16,44 +16,44 @@ func marshalEventBody(value any) string {
 	return string(document)
 }
 
-func (gate *Gate) recordHold(request approvalRequest, text string) Hold {
+func (gate *Gate) recordHold(request approvalRequest, question string) Hold {
 	call := agentcontract.HeldCall{
 		ApprovalToken: taskstate.NewIdentifier(),
-		ToolName:      request.tool.Name,
-		ToolInput:     request.input,
+		ToolName:      request.toolDefinition.Name,
+		ToolInput:     request.toolInput,
 		ApprovalScope: request.approvalScope(),
-		Confirmation:  text,
+		Confirmation:  question,
 	}
 	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventApprovalPendingCall, marshalEventBody(call))
-	gate.recordQuestion(request, text)
+	gate.recordApprovalQuestion(request, question)
 	return Hold{ID: call.ApprovalToken, Call: call, taskRunID: request.taskRunID, state: holdPending}
 }
 
-func (gate *Gate) recordQuestion(request approvalRequest, text string) {
+func (gate *Gate) recordApprovalQuestion(request approvalRequest, question string) {
 	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventConfirmationRequested, marshalEventBody(map[string]string{
-		"userFacingMessage": text,
-		"message":           text,
+		"userFacingMessage": question,
+		"message":           question,
 		"reasonCode":        approvalReasonCode(request),
-		"reasonDetail":      "approval gate for " + request.tool.Name,
+		"reasonDetail":      "approval gate for " + request.toolDefinition.Name,
 		"responseLanguage":  request.turn.ResponseLanguage,
 		"source":            "tool_catalog",
 	}))
-	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(askRecord(request, text)))
+	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(askRecord(request, question)))
 }
 
 func approvalReasonCode(request approvalRequest) string {
-	if sideEffectClass := strings.TrimSpace(request.tool.SideEffectClass); sideEffectClass != "" {
+	if sideEffectClass := strings.TrimSpace(request.toolDefinition.SideEffectClass); sideEffectClass != "" {
 		return sideEffectClass
 	}
 	return "approval_required"
 }
 
-func askRecord(request approvalRequest, text string) map[string]any {
+func askRecord(request approvalRequest, question string) map[string]any {
 	record := map[string]any{
 		"kind":             "ask_confirm",
-		"message":          text,
+		"message":          question,
 		"reasonCode":       approvalReasonCode(request),
-		"reasonDetail":     "approval gate for " + request.tool.Name,
+		"reasonDetail":     "approval gate for " + request.toolDefinition.Name,
 		"responseLanguage": request.turn.ResponseLanguage,
 	}
 	if approvalScope := request.approvalScope(); approvalScope != "" {
@@ -65,21 +65,21 @@ func askRecord(request approvalRequest, text string) map[string]any {
 
 func recordDecision(taskRunStore taskstate.TaskRunStore, hold Hold, decision string, source string) {
 	taskRunStore.AppendTaskEvent(hold.taskRunID, agentcontract.TaskEventApprovalDecided, marshalEventBody(decidedBody{
-		ApprovalToken: hold.ID,
-		Decision:      decision,
-		Source:        source,
+		HoldID:   hold.ID,
+		Decision: decision,
+		Source:   source,
 	}))
 }
 
 func recordSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) {
 	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, marshalEventBody(spentBody{
-		ApprovalToken: holdID,
-		ToolName:      strings.TrimSpace(toolName),
-		ToolInput:     toolInput,
+		HoldID:    holdID,
+		ToolName:  strings.TrimSpace(toolName),
+		ToolInput: toolInput,
 	}))
 }
 
-func grantScope(taskRunStore taskstate.TaskRunStore, hold Hold) {
+func grantApprovalScope(taskRunStore taskstate.TaskRunStore, hold Hold) {
 	approvalScope := strings.TrimSpace(hold.Call.ApprovalScope)
 	if approvalScope == "" {
 		return

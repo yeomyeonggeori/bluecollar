@@ -122,7 +122,7 @@ func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agent
 	if request.DecidedTurnFields != nil {
 		return *request.DecidedTurnFields, nil
 	}
-	if awaitsFreeText(request) {
+	if awaitsTypedReply(request) {
 		return pendingAnswerFields(PendingAnswer{IsAnswered: true}), nil
 	}
 	decisionRequest := TurnRequestDecisionRequest(request)
@@ -139,7 +139,7 @@ func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agent
 	return turnRouter.decideGeneralTurnFields(ctx, TurnRequestDecisionRequest(withoutPendingInteraction(request)), callLedger)
 }
 
-func awaitsFreeText(request agentcontract.AgentRequest) bool {
+func awaitsTypedReply(request agentcontract.AgentRequest) bool {
 	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" || len(decisionChoiceKeys(pendingChoiceContext(request))) > 0 {
 		return false
 	}

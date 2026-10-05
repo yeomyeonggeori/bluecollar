@@ -106,8 +106,8 @@ func newQuestionContext(request approvalRequest) questionContext {
 		ResponseLanguage: strings.TrimSpace(request.turn.ResponseLanguage),
 		OriginalRequest:  strings.TrimSpace(request.turn.Prompt),
 		Operation:        request.toolName(),
-		ApprovalScope:    scopeCoverage(request.tool),
-		ActionDetails:    actionDetails(request.tool, request.input),
+		ApprovalScope:    scopeCoverage(request.toolDefinition),
+		ActionDetails:    actionDetails(request.toolDefinition, request.toolInput),
 	}
 }
 
@@ -146,7 +146,7 @@ func describingInputs(fieldNames []string, toolInput json.RawMessage) map[string
 
 func rawApprovalSummary(request approvalRequest) string {
 	summary := request.toolName()
-	if toolInput := strings.TrimSpace(string(request.input)); toolInput != "" && toolInput != "{}" {
+	if toolInput := strings.TrimSpace(string(request.toolInput)); toolInput != "" && toolInput != "{}" {
 		summary += " " + toolInput
 	}
 	return summary

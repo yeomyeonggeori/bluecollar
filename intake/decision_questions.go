@@ -222,16 +222,16 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	return questions
 }
 
-func hasPendingConfirmation(request agentcontract.IntakeDecisionRequest) bool {
+func hasPendingApproval(request agentcontract.IntakeDecisionRequest) bool {
 	return strings.TrimSpace(request.PendingConfirmation.TaskRunID) != ""
 }
 
 func hasPendingAnswerQuestion(request agentcontract.IntakeDecisionRequest) bool {
-	return hasPendingConfirmation(request) || len(decisionChoiceKeys(request.PendingChoice)) > 0
+	return hasPendingApproval(request) || len(decisionChoiceKeys(request.PendingChoice)) > 0
 }
 
 func (builder questionBuilder) pendingAnswerQuestions(messageKey string) map[string]model.DecisionQuestion {
-	if hasPendingConfirmation(builder.request) {
+	if hasPendingApproval(builder.request) {
 		return map[string]model.DecisionQuestion{agentcontract.IntakeQuestionApproval: builder.approvalQuestion(messageKey)}
 	}
 	if !isMultipleChoiceSelection(builder.request.PendingChoice) {

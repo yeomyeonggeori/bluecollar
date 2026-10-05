@@ -19,43 +19,43 @@ func New(taskRuns taskstate.TaskRunStore, languageModel model.LanguageModelProvi
 	return &Gate{taskRuns: taskRuns, languageModel: languageModel, asker: asker}
 }
 
-func (gate *Gate) awaitApproval(ctx context.Context, request approvalRequest) ruling {
+func (gate *Gate) awaitApproval(ctx context.Context, request approvalRequest) outcome {
 	if gate.asker == nil || request.taskRunID == "" {
-		return ruling{verdict: verdictUnanswerable}
+		return outcome{kind: outcomeUnanswerable}
 	}
-	state := readLedger(gate.taskRuns.ListTaskEvent(request.taskRunID))
+	state := holdLedgerOf(gate.taskRuns.ListTaskEvent(request.taskRunID))
 	if state.grantsScope(request.approvalScope()) {
 		return gate.spend(request, "")
 	}
-	if hold, isApproved := state.approvedHoldForCall(request.toolName(), request.input); isApproved {
+	if hold, isApproved := state.approvedHoldForCall(request.toolName(), request.toolInput); isApproved {
 		return gate.spend(request, hold.ID)
 	}
 	return gate.holdAndAsk(ctx, request)
 }
 
-func (gate *Gate) holdAndAsk(ctx context.Context, request approvalRequest) ruling {
+func (gate *Gate) holdAndAsk(ctx context.Context, request approvalRequest) outcome {
 	hold := gate.recordHold(request, gate.wordQuestion(ctx, request))
 	answer := gate.asker.Ask(ctx, hold)
-	if !answer.isAnswer() {
-		return ruling{verdict: verdictUnanswered}
+	if !answer.isGiven() {
+		return outcome{kind: outcomeUnanswered}
 	}
-	if gate.settle(hold, answer, askerSource) == verdictApproved {
+	if gate.settle(hold, answer, askerSource) == outcomeApproved {
 		return gate.spend(request, hold.ID)
 	}
-	return ruling{verdict: verdictRejected}
+	return outcome{kind: outcomeRejected}
 }
 
-func (gate *Gate) settle(hold Hold, answer Answer, source string) verdict {
+func (gate *Gate) settle(hold Hold, answer Answer, source string) outcomeKind {
 	if answer == Rejected {
 		recordDecision(gate.taskRuns, hold, decisionCancel, source)
-		return verdictRejected
+		return outcomeRejected
 	}
 	recordDecision(gate.taskRuns, hold, decisionConfirm, source)
-	grantScope(gate.taskRuns, hold)
-	return verdictApproved
+	grantApprovalScope(gate.taskRuns, hold)
+	return outcomeApproved
 }
 
-func (gate *Gate) spend(request approvalRequest, holdID string) ruling {
-	recordSpent(gate.taskRuns, request.taskRunID, holdID, request.tool.Name, request.input)
-	return ruling{verdict: verdictApproved, approvedCallID: holdID}
+func (gate *Gate) spend(request approvalRequest, holdID string) outcome {
+	recordSpent(gate.taskRuns, request.taskRunID, holdID, request.toolDefinition.Name, request.toolInput)
+	return outcome{kind: outcomeApproved, holdID: holdID}
 }

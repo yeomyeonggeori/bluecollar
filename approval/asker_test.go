@@ -11,10 +11,10 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 	asker := &scriptedAsker{answer: Approved}
 	fixture := newFixtureWith(t, nil, asker)
 
-	outcome := fixture.await(fixture.request())
+	outcome := fixture.awaitOutcome(fixture.request())
 
-	if outcome.verdict != verdictApproved {
-		t.Fatalf("the answered call decided %q, expected approved", outcome.verdict)
+	if outcome.kind != outcomeApproved {
+		t.Fatalf("the answered call decided %q, expected approved", outcome.kind)
 	}
 	if asker.askedCount != 1 {
 		t.Fatalf("the person was asked %d times, expected once", asker.askedCount)
@@ -29,18 +29,18 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 			t.Fatalf("the ledger carries %v and not %s, so a live-answered turn reads differently from a later-answered one", fixture.eventNames(), wanted)
 		}
 	}
-	if fixture.status() == agentcontract.TaskStatusWaitingApproval {
+	if fixture.taskStatus() == agentcontract.TaskStatusWaitingApproval {
 		t.Fatal("the run was paused for an approval that had already been answered")
 	}
 }
 
-func TestADeclinedCallIsRejectedAndNotRecordedAsExecuted(t *testing.T) {
+func TestARejectedCallIsNotRecordedAsExecuted(t *testing.T) {
 	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Rejected})
 
-	outcome := fixture.await(fixture.request())
+	outcome := fixture.awaitOutcome(fixture.request())
 
-	if outcome.verdict != verdictRejected {
-		t.Fatalf("the declined call decided %q, expected rejected", outcome.verdict)
+	if outcome.kind != outcomeRejected {
+		t.Fatalf("the declined call decided %q, expected rejected", outcome.kind)
 	}
 	if fixture.hasEvent(agentcontract.TaskEventApprovalExecuted) {
 		t.Fatal("a declined call was recorded as executed")
@@ -51,7 +51,7 @@ func TestAnAskerIsHandedTheHoldWithTheWordedQuestion(t *testing.T) {
 	asker := &scriptedAsker{}
 	fixture := newFixtureWith(t, &wordingLanguageModel{question: "일정을 지울까요?"}, asker)
 
-	fixture.await(fixture.request())
+	fixture.awaitOutcome(fixture.request())
 
 	if len(asker.holds) != 1 || asker.holds[0].Call.Confirmation != "일정을 지울까요?" || asker.holds[0].Call.ToolName != "event_delete" || asker.holds[0].state != holdPending {
 		t.Fatalf("the asker was handed %+v", asker.holds)
@@ -61,16 +61,16 @@ func TestAnAskerIsHandedTheHoldWithTheWordedQuestion(t *testing.T) {
 func TestApprovingAScopedCallGrantsItsScopeForTheRestOfTheTask(t *testing.T) {
 	asker := &scriptedAsker{answer: Approved}
 	fixture := newFixtureWith(t, nil, asker)
-	fixture.await(fixture.scopedRequest())
+	fixture.awaitOutcome(fixture.scopedRequest())
 	nextCall := fixture.scopedRequest()
-	nextCall.input = []byte(`{"eventID":"event-2"}`)
+	nextCall.toolInput = []byte(`{"eventID":"event-2"}`)
 
-	nextOutcome := fixture.await(nextCall)
+	nextOutcome := fixture.awaitOutcome(nextCall)
 
 	if !strings.Contains(fixture.eventBody(t, agentcontract.TaskEventApprovalScopeGranted), `"scope":"calendar"`) {
 		t.Fatal("approving a call that declares an approval scope approves that scope")
 	}
-	if nextOutcome.verdict != verdictApproved || asker.askedCount != 1 {
+	if nextOutcome.kind != outcomeApproved || asker.askedCount != 1 {
 		t.Fatalf("a call inside the granted scope runs without a second question, got %+v after %d questions", nextOutcome, asker.askedCount)
 	}
 }
@@ -78,7 +78,7 @@ func TestApprovingAScopedCallGrantsItsScopeForTheRestOfTheTask(t *testing.T) {
 func TestApprovingAnUnscopedCallGrantsNothing(t *testing.T) {
 	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Approved})
 
-	fixture.await(fixture.request())
+	fixture.awaitOutcome(fixture.request())
 
 	if fixture.hasEvent(agentcontract.TaskEventApprovalScopeGranted) {
 		t.Fatal("a call with no approval scope has no scope to grant")
@@ -88,9 +88,9 @@ func TestApprovingAnUnscopedCallGrantsNothing(t *testing.T) {
 func TestAnAnswerThatIsNoAnswerDecidesNothing(t *testing.T) {
 	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: NoAnswer})
 
-	outcome := fixture.await(fixture.request())
+	outcome := fixture.awaitOutcome(fixture.request())
 
-	if outcome.verdict != verdictUnanswered || fixture.hasEvent(agentcontract.TaskEventApprovalDecided) {
+	if outcome.kind != outcomeUnanswered || fixture.hasEvent(agentcontract.TaskEventApprovalDecided) {
 		t.Fatalf("an unread reply is not an answer, got %+v with %v", outcome, fixture.eventNames())
 	}
 }

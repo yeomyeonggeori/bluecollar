@@ -833,7 +833,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}
 	}
 	if isApprovalRequiredObservation(observation) {
-		agentTurnRunner.mintHeldCallApproval(taskRunID, observation)
+		agentTurnRunner.recordHold(taskRunID, observation)
 		if pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments); isPaused {
 			agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "approval "+actionDocument.ToolName, observation.ContentText())
 			return toolCallActionOutcome{Result: pausedResult, ShouldReturn: true, WasHandled: true}
@@ -2457,13 +2457,13 @@ func firstNonEmptyString(values ...string) string {
 }
 
 func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation) {
-	heldCalls := agentTurnRunner.heldCallsAwaitingApproval(taskRunID)
+	holds := agentTurnRunner.unspentHolds(taskRunID)
 	for _, carriedOutCall := range request.CarriedOutCalls {
 		toolName := strings.TrimSpace(carriedOutCall.ToolName)
 		if toolName == "" {
 			continue
 		}
-		didDriftFromItsHold := agentTurnRunner.noteDriftFromHeldCall(taskRunID, heldCalls, carriedOutCall)
+		didDriftFromItsHold := agentTurnRunner.noteDriftFromHold(taskRunID, holds, carriedOutCall)
 		observationID := agentTurnRunner.nextUnusedObservationID(taskRunID, state.Observations)
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
 			"observationID": observationID,

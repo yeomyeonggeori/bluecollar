@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	allowChoice  = "1"
-	rejectChoice = "2"
+	approveChoice = "1"
+	rejectChoice  = "2"
 )
 
 type terminalAsker struct {
@@ -25,7 +25,7 @@ func (asker terminalAsker) Ask(_ context.Context, hold approval.Hold) approval.A
 		return approval.NoAnswer
 	}
 	switch choice {
-	case allowChoice:
+	case approveChoice:
 		return approval.Approved
 	case rejectChoice:
 		return approval.Rejected

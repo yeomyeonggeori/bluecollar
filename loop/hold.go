@@ -12,7 +12,7 @@ import (
 
 const approvalUnmatchedObservationNote = "This is not the call that was held for approval. The held call is still waiting, and what ran here was recorded as its own effect."
 
-func newApprovalToken() string {
+func newHoldID() string {
 	buffer := make([]byte, 16)
 	if _, errorValue := rand.Read(buffer); errorValue != nil {
 		return ""
@@ -20,82 +20,82 @@ func newApprovalToken() string {
 	return hex.EncodeToString(buffer)
 }
 
-func (agentTurnRunner *AgentTurnRunner) mintHeldCallApproval(taskRunID string, observation turnObservation) {
-	heldCall := HeldCall{
-		ApprovalToken: newApprovalToken(),
+func (agentTurnRunner *AgentTurnRunner) recordHold(taskRunID string, observation turnObservation) {
+	hold := HeldCall{
+		ApprovalToken: newHoldID(),
 		ToolName:      strings.TrimSpace(observation.Tool),
 		ToolInput:     observation.ToolInput,
 		ObservationID: observation.ObservationID,
 	}
-	if heldCall.ApprovalToken == "" {
+	if hold.ApprovalToken == "" {
 		return
 	}
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventApprovalHeldCall, marshalEventBody(heldCall))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventApprovalHeldCall, marshalEventBody(hold))
 }
 
-func (agentTurnRunner *AgentTurnRunner) heldCallsAwaitingApproval(taskRunID string) []HeldCall {
-	heldCalls := []HeldCall{}
-	spentTokens := map[string]bool{}
+func (agentTurnRunner *AgentTurnRunner) unspentHolds(taskRunID string) []HeldCall {
+	holds := []HeldCall{}
+	spentHoldIDs := map[string]bool{}
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
 		switch taskEvent.Name {
 		case agentcontract.TaskEventApprovalHeldCall:
-			heldCall := HeldCall{}
-			if json.Unmarshal([]byte(taskEvent.Body), &heldCall) == nil && heldCall.ApprovalToken != "" {
-				heldCall.ToolName = toolcontract.CanonicalToolName(heldCall.ToolName)
-				heldCalls = append(heldCalls, heldCall)
+			hold := HeldCall{}
+			if json.Unmarshal([]byte(taskEvent.Body), &hold) == nil && hold.ApprovalToken != "" {
+				hold.ToolName = toolcontract.CanonicalToolName(hold.ToolName)
+				holds = append(holds, hold)
 			}
 		case agentcontract.TaskEventApprovalExecuted:
 			executed := HeldCall{}
 			if json.Unmarshal([]byte(taskEvent.Body), &executed) == nil {
-				spentTokens[executed.ApprovalToken] = true
+				spentHoldIDs[executed.ApprovalToken] = true
 			}
 		}
 	}
 	awaiting := []HeldCall{}
-	for _, heldCall := range heldCalls {
-		if !spentTokens[heldCall.ApprovalToken] {
-			awaiting = append(awaiting, heldCall)
+	for _, hold := range holds {
+		if !spentHoldIDs[hold.ApprovalToken] {
+			awaiting = append(awaiting, hold)
 		}
 	}
 	return awaiting
 }
 
-func toolWasHeldForApproval(heldCalls []HeldCall, toolName string) bool {
+func isToolHeld(holds []HeldCall, toolName string) bool {
 	trimmedToolName := strings.TrimSpace(toolName)
-	for _, heldCall := range heldCalls {
-		if heldCall.ToolName == trimmedToolName {
+	for _, hold := range holds {
+		if hold.ToolName == trimmedToolName {
 			return true
 		}
 	}
 	return false
 }
 
-func heldCallForCarriedOutCall(heldCalls []HeldCall, carriedOutCall CarriedOutCall) (HeldCall, bool) {
-	approvalToken := strings.TrimSpace(carriedOutCall.ApprovalToken)
-	if approvalToken == "" {
+func holdForCarriedOutCall(holds []HeldCall, carriedOutCall CarriedOutCall) (HeldCall, bool) {
+	holdID := strings.TrimSpace(carriedOutCall.ApprovalToken)
+	if holdID == "" {
 		return HeldCall{}, false
 	}
 	toolInputKey := canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput)
-	for _, heldCall := range heldCalls {
-		if heldCall.ApprovalToken == approvalToken && heldCall.CanonicalCallKey() == toolInputKey {
-			return heldCall, true
+	for _, hold := range holds {
+		if hold.ApprovalToken == holdID && hold.CanonicalCallKey() == toolInputKey {
+			return hold, true
 		}
 	}
 	return HeldCall{}, false
 }
 
-func (agentTurnRunner *AgentTurnRunner) noteDriftFromHeldCall(taskRunID string, heldCalls []HeldCall, carriedOutCall CarriedOutCall) (didDriftFromItsHold bool) {
-	if !toolWasHeldForApproval(heldCalls, carriedOutCall.ToolName) {
+func (agentTurnRunner *AgentTurnRunner) noteDriftFromHold(taskRunID string, holds []HeldCall, carriedOutCall CarriedOutCall) (didDriftFromItsHold bool) {
+	if !isToolHeld(holds, carriedOutCall.ToolName) {
 		return false
 	}
-	if _, isMatched := heldCallForCarriedOutCall(heldCalls, carriedOutCall); isMatched {
+	if _, isMatched := holdForCarriedOutCall(holds, carriedOutCall); isMatched {
 		return false
 	}
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventApprovalUnheldCallCarriedOut, marshalEventBody(map[string]any{
 		"toolName":            strings.TrimSpace(carriedOutCall.ToolName),
 		"toolInputKey":        canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput),
 		"presentedToken":      strings.TrimSpace(carriedOutCall.ApprovalToken),
-		"awaitingHeldCallIDs": heldCallObservationIDs(heldCalls),
+		"awaitingHeldCallIDs": holdObservationIDs(holds),
 	}))
 	return true
 }
@@ -107,10 +107,10 @@ func observationNotingApprovalDrift(observation turnObservation) turnObservation
 	return observation
 }
 
-func heldCallObservationIDs(heldCalls []HeldCall) []string {
-	observationIDs := make([]string, 0, len(heldCalls))
-	for _, heldCall := range heldCalls {
-		observationIDs = append(observationIDs, heldCall.ObservationID)
+func holdObservationIDs(holds []HeldCall) []string {
+	observationIDs := make([]string, 0, len(holds))
+	for _, hold := range holds {
+		observationIDs = append(observationIDs, hold.ObservationID)
 	}
 	return observationIDs
 }
