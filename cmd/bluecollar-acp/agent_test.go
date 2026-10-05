@@ -57,7 +57,7 @@ func publishedCatalog(t *testing.T, calls *[]hostToolCall) *mcp.Server {
 		Name:        "note_write",
 		Description: "write a note",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}}},
-		Meta:        mcp.Meta{"blueclaw/sideEffectClass": "state_change"},
+		Meta:        mcp.Meta{"bluecollar/sideEffectClass": "state_change"},
 	}, func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		*calls = append(*calls, hostToolCall{toolName: "note_write"})
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "note written"}}}, nil
