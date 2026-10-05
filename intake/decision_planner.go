@@ -233,8 +233,10 @@ const largestDecisionRequestByteCountTheModelAccepted = 198185
 const decisionRequestByteBudgetTenthsOfThatCount = 9
 const decisionRequestByteBudget = largestDecisionRequestByteCountTheModelAccepted * decisionRequestByteBudgetTenthsOfThatCount / 10
 
-func DecisionRequestByteCount(request agentcontract.IntakeDecisionRequest) int {
-	return decisionRequestByteCount(buildIntakeDecisionRequest(request))
+const burstDecisionRequestByteBudget = 80000
+
+func (planner DecisionPlanner) FitsBurstBudget(request agentcontract.IntakeDecisionRequest) bool {
+	return decisionRequestByteCount(buildIntakeDecisionRequest(request)) <= burstDecisionRequestByteBudget
 }
 
 func decisionRequestByteCount(request model.DecisionRequest) int {

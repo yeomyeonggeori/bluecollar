@@ -236,6 +236,8 @@ Decides what an inbound message means before a turn runs.
 
 `intake.DecisionPlanner` asks every closed question about a message in one call to a decision model. Each question is a `choice` among named options or a `noul`, a probability that a statement is true. The questions cover the route, the difficulty level, the expected number of tools, whether independent work is present, whether an external send is requested, the task shape, the deliverable kind, the language the message is mainly written in (asked only when the host names none), requested output formats and, when relevant, addressing, the reply to a pending choice or confirmation, and whether the message continues a running task. The chat model is asked only for words.
 
+A host that batches several messages into one decision asks `DecisionPlanner.FitsBurstBudget` whether the batched request stays within the planner's own byte budget, so the ceiling is written once, next to the request layout it measures.
+
 `intake.TurnRouter` turns those answers into a `TurnDecision`. The route is one of:
 
 | route | meaning |
