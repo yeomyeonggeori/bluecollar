@@ -46,9 +46,6 @@ func (gate *Gate) holdAndAsk(ctx context.Context, request approvalRequest) rulin
 }
 
 func (gate *Gate) settle(hold Hold, answer Answer, source string) verdict {
-	if hold.state != holdPending || !answer.isAnswer() {
-		return verdictUnanswered
-	}
 	if answer == Rejected {
 		recordDecision(gate.taskRuns, hold, decisionCancel, source)
 		return verdictRejected

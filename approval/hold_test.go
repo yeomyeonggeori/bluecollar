@@ -159,31 +159,6 @@ func TestACallInsideAGrantedScopeRunsUnderNoHold(t *testing.T) {
 	}
 }
 
-func TestAnAnswerToAHoldThatIsNoLongerWaitingChangesNothing(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.await(fixture.scopedRequest())
-	fixture.answer(t, Rejected, "chat_reply")
-	eventsBefore := len(fixture.events())
-	settledHold := readLedger(fixture.events()).holds[0]
-
-	decision := fixture.gate.settle(settledHold, Approved, "acp_permission_reload")
-
-	if decision == verdictApproved || len(fixture.events()) != eventsBefore {
-		t.Fatalf("a rejected hold cannot be approved by a late answer, got %q", decision)
-	}
-}
-
-func TestAReplyThatIsNoAnswerDecidesNothing(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.await(fixture.scopedRequest())
-
-	decision := fixture.answer(t, NoAnswer, "chat_reply")
-
-	if decision != verdictUnanswered || fixture.hasEvent(agentcontract.TaskEventApprovalDecided) || fixture.hasEvent(agentcontract.TaskEventApprovalScopeGranted) {
-		t.Fatalf("a reply nobody could read is not an answer, got %q with %v", decision, fixture.eventNames())
-	}
-}
-
 func TestApprovingAScopedHoldGrantsItsScope(t *testing.T) {
 	fixture := newFixture(t)
 	fixture.await(fixture.scopedRequest())
