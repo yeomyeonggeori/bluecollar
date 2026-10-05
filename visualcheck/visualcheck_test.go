@@ -49,6 +49,7 @@ type fakeDeck struct {
 	refuses  func(section string) bool
 	proposes func(section string) string
 	editsPer int
+	measures func(section string) []MeasuredDefect
 }
 
 func newFakeDeck(manifest Manifest) *fakeDeck {
@@ -61,6 +62,9 @@ func (deck *fakeDeck) render() {
 	deck.versions++
 	for index := range deck.manifest.Slides {
 		slide := &deck.manifest.Slides[index]
+		if deck.measures != nil {
+			slide.Measured = deck.measures(slide.Section)
+		}
 		slide.Image = slide.Section + "#" + string(rune('a'+deck.versions))
 		deck.renders[slide.Image] = slide.Section
 	}
@@ -548,5 +552,42 @@ func TestASlideWithNoEditIsGivenUpWithoutAskingTheFixer(t *testing.T) {
 	}
 	if len(languageModel.requests) != 0 || !slices.Equal(report.GivenUp, []int{1}) || !slices.Equal(report.Leftovers, []int{1}) || report.RoundsUsed != 1 {
 		t.Fatalf("%d fixer requests, report %+v", len(languageModel.requests), report)
+	}
+}
+
+func TestASlideThatStillSpillsIsRecomposedWithAVerifiedEditWithoutAskingTheFixer(t *testing.T) {
+	deck := newFakeDeck(sampleManifest(0, section("fine"), section("SPILL")))
+	deck.measures = func(section string) []MeasuredDefect {
+		if strings.Contains(section, "SPILL") {
+			return []MeasuredDefect{{Code: "CONTENT_OVERFLOW", Message: "past the box"}}
+		}
+		return nil
+	}
+	deck.proposes = func(section string) string { return strings.Replace(section, "SPILL", "fits", 1) }
+	deck.refreshEdits()
+	decisions := &fakeDecisionModel{answer: distributionBySuffix}
+	languageModel := &fakeLanguageModel{}
+	deck.manifest.Slides[1].Measured = deck.measures(deck.manifest.Slides[1].Section)
+	report, errorValue := Run(context.Background(), decisions, languageModel, deck)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if len(languageModel.requests) != 0 || len(report.Leftovers) != 0 || !strings.Contains(deck.manifest.Slides[1].Section, "fits") {
+		t.Fatalf("fixer requests %d, report %+v, section %q", len(languageModel.requests), report, deck.manifest.Slides[1].Section)
+	}
+}
+
+func TestASlideWhoseEditsDoNotClearTheSpillStaysNamedAsALeftover(t *testing.T) {
+	deck := newFakeDeck(sampleManifest(0, section("SPILL")))
+	deck.measures = func(string) []MeasuredDefect { return []MeasuredDefect{{Code: "OUT_OF_FRAME", Message: "cut off"}} }
+	deck.proposes = func(section string) string { return section + "<p>x</p>" }
+	deck.refreshEdits()
+	deck.manifest.Slides[0].Measured = deck.measures("")
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, &fakeLanguageModel{}, deck)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !slices.Equal(report.Leftovers, []int{1}) || deck.manifest.Slides[0].Section != section("SPILL") {
+		t.Fatalf("report %+v, section %q", report, deck.manifest.Slides[0].Section)
 	}
 }
