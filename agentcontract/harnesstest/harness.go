@@ -94,6 +94,10 @@ func (harness *Harness) Decide(_ context.Context, request agentcontract.IntakeDe
 	return decisions, nil
 }
 
+func (harness *Harness) FitsBurstBudget(agentcontract.IntakeDecisionRequest) bool {
+	return true
+}
+
 func (harness *Harness) LastTurnRequest() agentcontract.AgentTurnRequest {
 	return harness.lastTurnRequest
 }
