@@ -73,7 +73,7 @@ func countTaskEvent(metrics *RunMetrics, taskEvent agentcontract.TaskEvent) {
 	switch {
 	case taskEvent.Name == agentcontract.TaskEventAgentAction:
 		metrics.Turns++
-	case taskEvent.Name == agentcontract.TaskEventApprovalPendingCall:
+	case taskEvent.Name == agentcontract.TaskEventApprovalHoldOpened:
 		metrics.ApprovalHolds++
 	case taskEvent.Name == agentcontract.TaskEventAgentRecoveryAttempt:
 		metrics.RecoveryAttempts++

@@ -48,7 +48,7 @@ func TestAnyHarnessThatWritesTheLedgerIsStreamedWithoutImplementingAStreamingPor
 	streamer := streamerFixture(t, func(taskRunStore taskstate.TaskRunStore, taskRunID string) {
 		taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentCheckpointSent, `{"message":"작업 시작합니다"}`)
 		taskRunStore.AppendTaskEvent(taskRunID, "tool.file_read.result", `{"tool":"file_read"}`)
-		taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalPendingCall, `{"toolName":"calendar_delete","confirmation":"지울까요?"}`)
+		taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldOpened, `{"toolName":"calendar_delete","confirmation":"지울까요?"}`)
 	})
 
 	stream := streamer.StreamTurn(context.Background(), agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", Prompt: "해줘"})

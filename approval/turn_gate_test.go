@@ -63,7 +63,7 @@ func TestAToolNeedingApprovalWithNoAskerCannotRun(t *testing.T) {
 
 	executed, result := invokeThroughGate(t, withTaskRun(fixture), fixture.gate.TurnGate(Turn{}), "file_delete")
 
-	if len(*executed) != 0 || !result.Failed() || fixture.hasEvent(agentcontract.TaskEventApprovalPendingCall) {
+	if len(*executed) != 0 || !result.Failed() || fixture.hasEvent(agentcontract.TaskEventApprovalHoldOpened) {
 		t.Fatalf("with no one to ask the call is refused and nothing is held, got executed=%+v events=%v", *executed, fixture.eventNames())
 	}
 }
@@ -73,7 +73,7 @@ func TestACallWithNoTaskRunCannotRun(t *testing.T) {
 
 	executed, result := invokeThroughGate(t, context.Background(), fixture.gate.TurnGate(Turn{}), "file_delete")
 
-	if len(*executed) != 0 || !result.Failed() || fixture.hasEvent(agentcontract.TaskEventApprovalPendingCall) {
+	if len(*executed) != 0 || !result.Failed() || fixture.hasEvent(agentcontract.TaskEventApprovalHoldOpened) {
 		t.Fatalf("a call with nowhere to record its hold never runs, got executed=%+v", *executed)
 	}
 }
@@ -96,7 +96,7 @@ func TestADelegatedTurnIsDeniedRatherThanAsked(t *testing.T) {
 
 	executed, result := invokeThroughGate(t, delegatedContext, fixture.gate.TurnGate(Turn{}), "file_delete")
 
-	if len(*executed) != 0 || !result.Failed() || asker.askedCount != 0 || fixture.hasEvent(agentcontract.TaskEventApprovalPendingCall) {
+	if len(*executed) != 0 || !result.Failed() || asker.askedCount != 0 || fixture.hasEvent(agentcontract.TaskEventApprovalHoldOpened) {
 		t.Fatalf("a delegated turn has no one to ask, got executed=%+v asked=%d", *executed, asker.askedCount)
 	}
 }
@@ -107,7 +107,7 @@ func TestAToolWithNoApprovalMetadataIsNotGatedEvenWhenItsSchemaMentionsApproval(
 
 	review, errorValue := fixture.gate.TurnGate(Turn{}).ReviewToolCall(context.Background(), toolcontract.ToolInvocation{ToolName: "shell", Input: []byte(`{"approvalRequired":true}`)}, tool)
 
-	if errorValue != nil || !review.MayProceed || fixture.hasEvent(agentcontract.TaskEventApprovalPendingCall) {
+	if errorValue != nil || !review.MayProceed || fixture.hasEvent(agentcontract.TaskEventApprovalHoldOpened) {
 		t.Fatalf("a host that gates its own tools has already asked, so bluecollar does not ask again: %+v %v", review, errorValue)
 	}
 }

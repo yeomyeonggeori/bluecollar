@@ -17,7 +17,7 @@ func TestAHoldIsRecordedWithTheCallItWasHeldFor(t *testing.T) {
 		t.Fatalf("expected the call to be held, got %+v", outcome)
 	}
 
-	body := fixture.eventBody(t, agentcontract.TaskEventApprovalPendingCall)
+	body := fixture.eventBody(t, agentcontract.TaskEventApprovalHoldOpened)
 	for _, expectedFragment := range []string{"event_delete", "event-1"} {
 		if !strings.Contains(body, expectedFragment) {
 			t.Fatalf("expected the held call to carry %q so it can be resumed, got %s", expectedFragment, body)
@@ -192,7 +192,7 @@ func TestAHoldIsRecordedOnTheTaskRunTheCallIsRunningIn(t *testing.T) {
 	invokeThroughGate(t, toolcontract.WithTaskRunID(context.Background(), runningTaskRun.TaskRunID), turnGate, "file_delete")
 
 	runningEvents := namesOf(fixture.store.ListTaskEvent(runningTaskRun.TaskRunID))
-	for _, expectedEventName := range []string{agentcontract.TaskEventApprovalPendingCall, agentcontract.TaskEventConfirmationRequested, agentcontract.TaskEventAskRequested} {
+	for _, expectedEventName := range []string{agentcontract.TaskEventApprovalHoldOpened, agentcontract.TaskEventConfirmationRequested, agentcontract.TaskEventAskRequested} {
 		if !contains(runningEvents, expectedEventName) {
 			t.Fatalf("expected %q on the run the call is executing in, got %v", expectedEventName, runningEvents)
 		}

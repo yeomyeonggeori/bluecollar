@@ -20,10 +20,10 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 		t.Fatalf("the person was asked %d times, expected once", asker.askedCount)
 	}
 	for _, wanted := range []string{
-		agentcontract.TaskEventApprovalPendingCall,
+		agentcontract.TaskEventApprovalHoldOpened,
 		agentcontract.TaskEventConfirmationRequested,
 		agentcontract.TaskEventApprovalDecided,
-		agentcontract.TaskEventApprovalExecuted,
+		agentcontract.TaskEventApprovalHoldSpent,
 	} {
 		if !fixture.hasEvent(wanted) {
 			t.Fatalf("the ledger carries %v and not %s, so a live-answered turn reads differently from a later-answered one", fixture.eventNames(), wanted)
@@ -42,7 +42,7 @@ func TestARejectedCallIsNotRecordedAsExecuted(t *testing.T) {
 	if outcome.kind != outcomeRejected {
 		t.Fatalf("the declined call decided %q, expected rejected", outcome.kind)
 	}
-	if fixture.hasEvent(agentcontract.TaskEventApprovalExecuted) {
+	if fixture.hasEvent(agentcontract.TaskEventApprovalHoldSpent) {
 		t.Fatal("a declined call was recorded as executed")
 	}
 }

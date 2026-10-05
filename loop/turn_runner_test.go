@@ -1118,14 +1118,21 @@ type holdingToolCallGate struct {
 	denialNotice   string
 }
 
-func (gate holdingToolCallGate) ReviewToolCall(ctx context.Context, _ toolcontract.ToolInvocation, toolDefinition toolcontract.ToolDefinition) (toolcontract.ToolCallReview, error) {
+func (gate holdingToolCallGate) ReviewToolCall(ctx context.Context, invocation toolcontract.ToolInvocation, toolDefinition toolcontract.ToolDefinition) (toolcontract.ToolCallReview, error) {
 	if !toolDefinition.RequiresApproval {
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
 	if toolcontract.IsDelegatedTurn(ctx) {
 		return toolcontract.ToolCallReview{Result: toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", gate.denialNotice)}, nil
 	}
-	gate.taskRunService.PauseTaskRun(toolcontract.TaskRunIDFromContext(ctx), agentcontract.TaskStatusWaitingApproval, gate.confirmation)
+	taskRunID := toolcontract.TaskRunIDFromContext(ctx)
+	gate.taskRunService.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldOpened, marshalEventBody(agentcontract.HeldCall{
+		HoldID:       taskstate.NewIdentifier(),
+		ToolName:     toolDefinition.Name,
+		ToolInput:    invocation.Input,
+		Confirmation: gate.confirmation,
+	}))
+	gate.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusWaitingApproval, gate.confirmation)
 	heldResult := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.InteractionRequired, "approval", gate.confirmation)
 	heldResult.Failure.RequiresApproval = true
 	return toolcontract.ToolCallReview{Result: heldResult}, nil

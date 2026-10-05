@@ -18,15 +18,15 @@ func marshalEventBody(value any) string {
 
 func (gate *Gate) recordHold(request approvalRequest, question string) Hold {
 	call := agentcontract.HeldCall{
-		ApprovalToken: taskstate.NewIdentifier(),
+		HoldID:        taskstate.NewIdentifier(),
 		ToolName:      request.toolDefinition.Name,
 		ToolInput:     request.toolInput,
 		ApprovalScope: request.approvalScope(),
 		Confirmation:  question,
 	}
-	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventApprovalPendingCall, marshalEventBody(call))
+	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventApprovalHoldOpened, marshalEventBody(call))
 	gate.recordApprovalQuestion(request, question)
-	return Hold{ID: call.ApprovalToken, Call: call, taskRunID: request.taskRunID, state: holdPending}
+	return Hold{ID: call.HoldID, Call: call, taskRunID: request.taskRunID, state: holdPending}
 }
 
 func (gate *Gate) recordApprovalQuestion(request approvalRequest, question string) {
@@ -72,7 +72,7 @@ func recordDecision(taskRunStore taskstate.TaskRunStore, hold Hold, decision str
 }
 
 func recordSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) {
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, marshalEventBody(spentBody{
+	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldSpent, marshalEventBody(spentBody{
 		HoldID:    holdID,
 		ToolName:  strings.TrimSpace(toolName),
 		ToolInput: toolInput,

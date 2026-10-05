@@ -47,10 +47,10 @@ func (gate *Gate) holdAndAsk(ctx context.Context, request approvalRequest) outco
 
 func (gate *Gate) settle(hold Hold, answer Answer, source string) outcomeKind {
 	if answer == Rejected {
-		recordDecision(gate.taskRuns, hold, decisionCancel, source)
+		recordDecision(gate.taskRuns, hold, decisionReject, source)
 		return outcomeRejected
 	}
-	recordDecision(gate.taskRuns, hold, decisionConfirm, source)
+	recordDecision(gate.taskRuns, hold, decisionApprove, source)
 	grantApprovalScope(gate.taskRuns, hold)
 	return outcomeApproved
 }

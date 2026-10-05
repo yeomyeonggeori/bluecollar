@@ -392,7 +392,7 @@ A request carries a state document and a map of named questions. Each answer car
 
 The append-only record every other mechanism reads.
 
-Each model call, tool call, decision, grant, rejection and failure is a `TaskEvent` with a name and its full body. Tool events follow `tool.<name>.requested` and `tool.<name>.result`; approvals use `approval.pending_call` and `approval.executed`. The completion gate and change check read the ledger, `bench` measures from it, `--trace` renders it, `turnstream` mirrors it, and a restart resumes from it. A task that waits days for an approval continues by re-driving a turn from what the ledger says.
+Each model call, tool call, decision, grant, rejection and failure is a `TaskEvent` with a name and its full body. Tool events follow `tool.<name>.requested` and `tool.<name>.result`; approvals use `approval.hold_opened` and `approval.hold_spent`. The completion gate and change check read the ledger, `bench` measures from it, `--trace` renders it, `turnstream` mirrors it, and a restart resumes from it. A task that waits days for an approval continues by re-driving a turn from what the ledger says.
 
 # Contract
 

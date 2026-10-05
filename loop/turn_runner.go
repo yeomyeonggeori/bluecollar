@@ -833,7 +833,6 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}
 	}
 	if isApprovalRequiredObservation(observation) {
-		agentTurnRunner.recordHold(taskRunID, observation)
 		if pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments); isPaused {
 			agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "approval "+actionDocument.ToolName, observation.ContentText())
 			return toolCallActionOutcome{Result: pausedResult, ShouldReturn: true, WasHandled: true}

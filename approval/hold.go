@@ -18,14 +18,9 @@ const (
 )
 
 const (
-	decisionConfirm = "confirm"
-	decisionCancel  = "cancel"
+	decisionApprove = "approve"
+	decisionReject  = "reject"
 )
-
-var stateAfterDecision = map[string]holdState{
-	decisionConfirm: holdApproved,
-	decisionCancel:  holdRejected,
-}
 
 type Hold struct {
 	ID        string
@@ -35,13 +30,13 @@ type Hold struct {
 }
 
 type decidedBody struct {
-	HoldID   string `json:"approvalToken"`
+	HoldID   string `json:"holdID"`
 	Decision string `json:"decision"`
 	Source   string `json:"source"`
 }
 
 type spentBody struct {
-	HoldID    string          `json:"approvalToken,omitempty"`
+	HoldID    string          `json:"holdID,omitempty"`
 	ToolName  string          `json:"toolName"`
 	ToolInput json.RawMessage `json:"toolInput,omitempty"`
 }
@@ -59,12 +54,12 @@ func holdLedgerOf(taskEvents []agentcontract.TaskEvent) holdLedger {
 	state := holdLedger{grantedScopes: map[string]bool{}}
 	for _, taskEvent := range taskEvents {
 		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalPendingCall:
+		case agentcontract.TaskEventApprovalHoldOpened:
 			state.holds = append(state.holds, holdFromEvent(taskEvent))
 		case agentcontract.TaskEventApprovalDecided:
 			decided := decodeEventBody[decidedBody](taskEvent.Body)
 			state.update(decided.HoldID, func(hold *Hold) { hold.decide(decided.Decision) })
-		case agentcontract.TaskEventApprovalExecuted:
+		case agentcontract.TaskEventApprovalHoldSpent:
 			state.update(decodeEventBody[spentBody](taskEvent.Body).HoldID, func(hold *Hold) { hold.spend() })
 		case agentcontract.TaskEventApprovalScopeGranted:
 			state.grantedScopes[strings.TrimSpace(decodeEventBody[scopeGrantedBody](taskEvent.Body).Scope)] = true
@@ -76,10 +71,7 @@ func holdLedgerOf(taskEvents []agentcontract.TaskEvent) holdLedger {
 func holdFromEvent(taskEvent agentcontract.TaskEvent) Hold {
 	call := decodeEventBody[agentcontract.HeldCall](taskEvent.Body)
 	call.ToolName = toolcontract.CanonicalToolName(call.ToolName)
-	if call.ApprovalToken == "" {
-		call.ApprovalToken = taskEvent.TaskEventID
-	}
-	return Hold{ID: call.ApprovalToken, Call: call, taskRunID: taskEvent.TaskRunID, state: holdPending}
+	return Hold{ID: call.HoldID, Call: call, taskRunID: taskEvent.TaskRunID, state: holdPending}
 }
 
 func (state holdLedger) update(holdID string, update func(*Hold)) {
@@ -105,8 +97,14 @@ func (state holdLedger) approvedHoldForCall(toolName string, toolInput json.RawM
 }
 
 func (hold *Hold) decide(decision string) {
-	if state, isKnown := stateAfterDecision[decision]; isKnown && hold.state == holdPending {
-		hold.state = state
+	if hold.state != holdPending {
+		return
+	}
+	switch decision {
+	case decisionApprove:
+		hold.state = holdApproved
+	case decisionReject:
+		hold.state = holdRejected
 	}
 }
 

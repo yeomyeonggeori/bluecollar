@@ -12,13 +12,12 @@ type HarnessSession struct {
 }
 
 type HeldCall struct {
-	ApprovalToken     string          `json:"approvalToken,omitempty"`
+	HoldID            string          `json:"holdID,omitempty"`
 	ToolName          string          `json:"toolName"`
 	ToolInput         json.RawMessage `json:"toolInput,omitempty"`
 	ApprovedToolInput json.RawMessage `json:"approvedToolInput,omitempty"`
 	ApprovalScope     string          `json:"approvalScope,omitempty"`
 	Confirmation      string          `json:"confirmation"`
-	ObservationID     string          `json:"observationID,omitempty"`
 	HarnessSession    HarnessSession  `json:"harnessSession"`
 }
 
