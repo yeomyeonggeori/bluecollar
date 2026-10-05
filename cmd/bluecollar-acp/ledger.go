@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/bluecollar/acpupdate"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
@@ -38,73 +39,8 @@ func sendLedgerEvent(ctx context.Context, sender sessionUpdateSender, sessionID 
 	}
 	sender.SessionUpdate(ctx, acp.SessionNotification{
 		SessionId: sessionID,
-		Update:    sessionUpdateForEvent(rawTurnEvent),
+		Update:    acpupdate.ForEvent(rawTurnEvent),
 	})
-}
-
-func sessionUpdateForEvent(rawTurnEvent taskstate.RawTurnEvent) acp.SessionUpdate {
-	meta := ledgerMeta(rawTurnEvent)
-	if toolName, isRequest := agentcontract.ToolTaskEventToolName(rawTurnEvent.Name, ".requested"); isRequest {
-		return acp.SessionUpdate{ToolCall: &acp.SessionUpdateToolCall{
-			ToolCallId: acp.ToolCallId(observationIDOfEvent(rawTurnEvent.Body)),
-			Title:      toolName,
-			Status:     acp.ToolCallStatusPending,
-			RawInput:   rawInputOfEvent(rawTurnEvent.Body),
-			Meta:       meta,
-		}}
-	}
-	if _, isResult := agentcontract.ToolTaskEventToolName(rawTurnEvent.Name, ".result"); isResult {
-		status := acp.ToolCallStatusCompleted
-		if isFailureEvent(rawTurnEvent.Body) {
-			status = acp.ToolCallStatusFailed
-		}
-		return acp.SessionUpdate{ToolCallUpdate: &acp.SessionToolCallUpdate{
-			ToolCallId: acp.ToolCallId(observationIDOfEvent(rawTurnEvent.Body)),
-			Status:     &status,
-			RawOutput:  json.RawMessage(rawTurnEvent.Body),
-			Meta:       meta,
-		}}
-	}
-	return acp.SessionUpdate{AgentThoughtChunk: &acp.SessionUpdateAgentThoughtChunk{
-		Content: acp.TextBlock(rawTurnEvent.Name),
-		Meta:    meta,
-	}}
-}
-
-func ledgerMeta(rawTurnEvent taskstate.RawTurnEvent) map[string]any {
-	record := agentcontract.LedgerRecord{Name: rawTurnEvent.Name}
-	if json.Valid([]byte(rawTurnEvent.Body)) {
-		record.Body = json.RawMessage(rawTurnEvent.Body)
-	} else {
-		quoted, _ := json.Marshal(rawTurnEvent.Body)
-		record.Body = quoted
-	}
-	return map[string]any{agentcontract.LedgerMetaKey: record}
-}
-
-func observationIDOfEvent(body string) string {
-	decoded := struct {
-		ObservationID string `json:"observationID"`
-	}{}
-	json.Unmarshal([]byte(body), &decoded)
-	return decoded.ObservationID
-}
-
-func rawInputOfEvent(body string) any {
-	decoded := struct {
-		Input json.RawMessage `json:"input"`
-	}{}
-	if json.Unmarshal([]byte(body), &decoded) != nil || len(decoded.Input) == 0 {
-		return nil
-	}
-	return decoded.Input
-}
-
-func isFailureEvent(body string) bool {
-	decoded := struct {
-		Failure *json.RawMessage `json:"failure"`
-	}{}
-	return json.Unmarshal([]byte(body), &decoded) == nil && decoded.Failure != nil
 }
 
 func replayLedger(openSession *session, promptMeta map[string]any) bool {
