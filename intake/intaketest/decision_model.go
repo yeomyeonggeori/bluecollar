@@ -12,12 +12,13 @@ import (
 )
 
 type Outcome struct {
-	Addressing          agentcontract.AddressingDecision
-	ReactionProbability float64
-	TurnDecision        agentcontract.TurnDecision
-	ToolProbabilities   map[string]float64
-	RelatesToActiveTask bool
-	PendingChoiceKeys   []string
+	Addressing                           agentcontract.AddressingDecision
+	ReactionProbability                  float64
+	TurnDecision                         agentcontract.TurnDecision
+	ToolProbabilities                    map[string]float64
+	RelatesToActiveTask                  bool
+	PendingChoiceKeys                    []string
+	AnswersPendingChoiceWithoutSelecting bool
 }
 
 type DecisionModel struct {
@@ -213,7 +214,7 @@ func selectedChoiceKey(outcome Outcome) string {
 }
 
 func pendingAnswerName(outcome Outcome) string {
-	if len(outcome.TurnDecision.Choices) > 0 {
+	if len(outcome.TurnDecision.Choices) > 0 || outcome.AnswersPendingChoiceWithoutSelecting {
 		return agentcontract.IntakePendingOptionAnswer
 	}
 	return agentcontract.IntakePendingOptionOther

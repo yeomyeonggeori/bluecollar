@@ -225,6 +225,24 @@ func TestAMultipleChoiceMessageThatDoesNotAnswerGoesThroughTheGeneralQuestionnai
 	}
 }
 
+func TestAMultipleChoiceReplyThatAnswersWithoutSelectingAnOptionGoesThroughTheGeneralQuestionnaire(t *testing.T) {
+	outcome := startTaskOutcome()
+	outcome.PendingChoiceKeys = []string{"table", "graph"}
+	outcome.AnswersPendingChoiceWithoutSelecting = true
+	decisionModel := intaketest.NewDecisionModel(outcome)
+
+	decision := planWith(t, decisionModel, pendingChoiceRequest("둘 다 싫어요", "multiple"), nil)
+
+	requests := decisionModel.Requests()
+	if len(requests) < 2 {
+		t.Fatalf("expected the narrow call and then the general one, got %d calls", len(requests))
+	}
+	assertNoPendingInteraction(t, requests[1])
+	if len(decision.Choices) != 0 {
+		t.Fatalf("expected no selection, got %+v", decision.Choices)
+	}
+}
+
 func TestAPendingFreeTextInputContinuesTheTaskWithoutAskingTheDecisionModel(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	request := agentcontract.AgentRequest{
