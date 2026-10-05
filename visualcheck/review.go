@@ -3,7 +3,6 @@ package visualcheck
 import (
 	"context"
 	"fmt"
-	"sort"
 
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
@@ -43,9 +42,9 @@ func reviewSlides(ctx context.Context, decisionModel model.DecisionModel, deck D
 }
 
 func reviewSlide(ctx context.Context, decisionModel model.DecisionModel, deck Deck, manifest Manifest, slide Slide) Assessment {
-	image, errorValue := deck.Image(ctx, slide.Image)
+	image, errorValue := fittedRender(ctx, deck, slide.Image)
 	if errorValue != nil {
-		return failedAssessment(slide, fmt.Errorf("read the render: %w", errorValue))
+		return failedAssessment(slide, errorValue)
 	}
 	response, errorValue := decisionModel.Decide(ctx, reviewRequest(manifest.Question, slide, image))
 	if errorValue != nil {
@@ -57,7 +56,7 @@ func reviewSlide(ctx context.Context, decisionModel model.DecisionModel, deck De
 	}
 	return Assessment{
 		Probabilities: answer.Probabilities,
-		Findings:      flaggedFindings(manifest, answer),
+		Findings:      flaggedFindings(manifest, manifest.Question, answer),
 		Measured:      slide.Measured,
 		usage:         response.Usage,
 	}
@@ -67,29 +66,35 @@ func failedAssessment(slide Slide, errorValue error) Assessment {
 	return Assessment{Measured: slide.Measured, Error: errorValue.Error()}
 }
 
-func reviewRequest(question Question, slide Slide, image []byte) model.DecisionRequest {
+func fittedRender(ctx context.Context, deck Deck, path string) (model.DecisionImage, error) {
+	render, errorValue := deck.Image(ctx, path)
+	if errorValue != nil {
+		return model.DecisionImage{}, fmt.Errorf("read the render: %w", errorValue)
+	}
+	fitted, errorValue := fitImage(render)
+	if errorValue != nil {
+		return model.DecisionImage{}, fmt.Errorf("fit the render: %w", errorValue)
+	}
+	return fitted, nil
+}
+
+func reviewRequest(question Question, slide Slide, image model.DecisionImage) model.DecisionRequest {
 	return model.DecisionRequest{
 		State: slide.State,
 		Questions: map[string]model.DecisionQuestion{
 			questionKey: model.ChoiceQuestion{Instructions: question.Instructions, OptionDescriptions: question.Options}.Question(),
 		},
-		Images: []model.DecisionImage{{MediaType: imageMediaType, Data: image}},
+		Images: []model.DecisionImage{image},
 	}
 }
 
-func flaggedFindings(manifest Manifest, answer model.DecisionAnswer) []Finding {
+func flaggedFindings(manifest Manifest, question Question, answer model.DecisionAnswer) []Finding {
 	findings := []Finding{}
-	for kind, meaning := range manifest.Question.Options {
+	for kind, meaning := range question.Options {
 		probability := answer.ChoiceProbability(kind)
-		if kind != manifest.Question.CleanOption && probability >= manifest.Threshold {
+		if kind != question.CleanOption && probability >= manifest.thresholdFor(kind) {
 			findings = append(findings, Finding{Kind: kind, Probability: probability, Meaning: meaning})
 		}
 	}
-	sort.Slice(findings, func(left, right int) bool {
-		if findings[left].Probability != findings[right].Probability {
-			return findings[left].Probability > findings[right].Probability
-		}
-		return findings[left].Kind < findings[right].Kind
-	})
-	return findings
+	return sortedByProbability(findings)
 }

@@ -12,6 +12,8 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
+const maximumRefusalRunes = 1500
+
 const repairSchemaDocument = `{"type":"object","additionalProperties":false,"required":["section","change"],"properties":{"section":{"type":"string"},"change":{"type":"string"}}}`
 
 var (
@@ -38,18 +40,20 @@ func (attempt attempt) isAccepted() bool {
 }
 
 type repairContext struct {
-	Theme            any              `json:"theme"`
+	Facts            map[string]any   `json:"facts"`
+	Recompose        bool             `json:"recompose,omitempty"`
 	ReviewerFindings []Finding        `json:"reviewerFindings"`
 	MeasuredDefects  []MeasuredDefect `json:"measuredDefects"`
 	Section          string           `json:"section"`
+	RefusedLastTime  string           `json:"refusedLastTime,omitempty"`
 }
 
-func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck Deck, fixer Fixer, slide Slide, assessment Assessment) attempt {
+func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck Deck, fixer Fixer, slide Slide, assessment Assessment, sheet model.DecisionImage, refusal string) attempt {
 	image, errorValue := deck.Image(ctx, slide.Image)
 	if errorValue != nil {
 		return attempt{problem: fmt.Sprintf("read the render: %v", errorValue)}
 	}
-	request, errorValue := repairRequest(fixer, slide, assessment, image)
+	request, errorValue := repairRequest(fixer, slide, assessment, image, sheet, refusal)
 	if errorValue != nil {
 		return attempt{problem: errorValue.Error()}
 	}
@@ -64,24 +68,29 @@ func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck De
 	return attempt{repair: repair, usage: response.Usage, problem: rejectionReason(slide.Section, repair.Section)}
 }
 
-func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte) (model.StructuredResponseRequest, error) {
+func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte, sheet model.DecisionImage, refusal string) (model.StructuredResponseRequest, error) {
 	payload, errorValue := json.Marshal(repairContext{
-		Theme:            slide.State["theme"],
+		Facts:            slide.State,
+		Recompose:        slide.Recompose,
 		ReviewerFindings: assessment.Findings,
 		MeasuredDefects:  assessment.Measured,
 		Section:          slide.Section,
+		RefusedLastTime:  refusal,
 	})
 	if errorValue != nil {
 		return model.StructuredResponseRequest{}, errorValue
 	}
+	parts := []model.MessagePart{
+		{Type: "text", Text: string(payload)},
+		{Type: "image", MimeType: imageMediaType, DataBase64: base64.StdEncoding.EncodeToString(image)},
+	}
+	if len(sheet.Data) > 0 {
+		parts = append(parts, model.MessagePart{Type: "image", MimeType: sheet.MediaType, DataBase64: base64.StdEncoding.EncodeToString(sheet.Data)})
+	}
 	return model.StructuredResponseRequest{
 		Messages: []model.Message{
 			{Role: "system", Content: fixer.Instructions},
-			{Role: "user", Parts: []model.MessagePart{
-				{Type: "text", Text: "Kit guide:\n" + fixer.KitGuide},
-				{Type: "text", Text: string(payload)},
-				{Type: "image", MimeType: imageMediaType, DataBase64: base64.StdEncoding.EncodeToString(image)},
-			}},
+			{Role: "user", Parts: parts},
 		},
 		StructuredOutputSchema: model.StructuredOutputSchema{Name: "slide_repair", Document: repairSchemaDocument, IsStrictlyEnforced: true},
 	}, nil

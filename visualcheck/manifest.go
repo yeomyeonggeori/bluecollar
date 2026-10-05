@@ -13,7 +13,6 @@ type Question struct {
 
 type Fixer struct {
 	Instructions string `json:"instructions"`
-	KitGuide     string `json:"kitGuide"`
 }
 
 type MeasuredDefect struct {
@@ -23,20 +22,44 @@ type MeasuredDefect struct {
 }
 
 type Slide struct {
-	Number   int              `json:"number"`
-	Image    string           `json:"image"`
-	State    map[string]any   `json:"state"`
-	Section  string           `json:"section"`
-	Measured []MeasuredDefect `json:"measured"`
+	Number    int              `json:"number"`
+	Image     string           `json:"image"`
+	State     map[string]any   `json:"state"`
+	Section   string           `json:"section"`
+	Source    string           `json:"source,omitempty"`
+	Recompose bool             `json:"recompose,omitempty"`
+	Measured  []MeasuredDefect `json:"measured"`
 }
 
 type Manifest struct {
-	Question  Question `json:"question"`
-	Threshold float64  `json:"threshold"`
-	Rounds    int      `json:"rounds"`
-	Fixer     Fixer    `json:"fixer"`
-	Source    string   `json:"source"`
-	Slides    []Slide  `json:"slides"`
+	Question          Question           `json:"question"`
+	Deck              Question           `json:"deck,omitempty"`
+	Threshold         float64            `json:"threshold"`
+	PatternThresholds map[string]float64 `json:"patternThresholds,omitempty"`
+	Rounds            int                `json:"rounds"`
+	Fixer             Fixer              `json:"fixer"`
+	Source            string             `json:"source"`
+	Slides            []Slide            `json:"slides"`
+}
+
+func (manifest Manifest) thresholdFor(option string) float64 {
+	if threshold, hasOwn := manifest.PatternThresholds[option]; hasOwn {
+		return threshold
+	}
+	return manifest.Threshold
+}
+
+func (manifest Manifest) asksAboutTheDeck() bool {
+	return len(manifest.Deck.Options) > 0
+}
+
+func (manifest Manifest) isDefectOption(option string) bool {
+	return isDefectOf(manifest.Question, option) || isDefectOf(manifest.Deck, option)
+}
+
+func isDefectOf(question Question, option string) bool {
+	_, isOption := question.Options[option]
+	return isOption && option != question.CleanOption
 }
 
 func ParseManifest(content []byte) (Manifest, error) {
@@ -57,8 +80,34 @@ func (manifest Manifest) validate() error {
 	if manifest.Threshold <= 0 || manifest.Threshold >= 1 {
 		return fmt.Errorf("visual review manifest: threshold %v is not between 0 and 1", manifest.Threshold)
 	}
+	if errorValue := manifest.validateDeckQuestion(); errorValue != nil {
+		return errorValue
+	}
+	for option, threshold := range manifest.PatternThresholds {
+		if !manifest.isDefectOption(option) {
+			return fmt.Errorf("visual review manifest: patternThresholds names %q, which is not a defect option", option)
+		}
+		if threshold <= 0 || threshold >= 1 {
+			return fmt.Errorf("visual review manifest: patternThresholds[%q] %v is not between 0 and 1", option, threshold)
+		}
+	}
 	if manifest.Rounds < 0 {
 		return fmt.Errorf("visual review manifest: rounds %d is negative", manifest.Rounds)
+	}
+	return nil
+}
+
+func (manifest Manifest) validateDeckQuestion() error {
+	if !manifest.asksAboutTheDeck() {
+		return nil
+	}
+	if _, hasCleanOption := manifest.Deck.Options[manifest.Deck.CleanOption]; !hasCleanOption {
+		return fmt.Errorf("visual review manifest: the deck question's cleanOption %q is not one of its options", manifest.Deck.CleanOption)
+	}
+	for option := range manifest.Deck.Options {
+		if option != manifest.Deck.CleanOption && isDefectOf(manifest.Question, option) {
+			return fmt.Errorf("visual review manifest: option %q is a defect of both the slide question and the deck question", option)
+		}
 	}
 	return nil
 }
@@ -79,4 +128,31 @@ func (manifest Manifest) sectionsByNumber() map[int]string {
 		sections[slide.Number] = slide.Section
 	}
 	return sections
+}
+
+func (manifest Manifest) PageSource(number int) string {
+	slide, isFound := manifest.slideNumbered(number)
+	if !isFound {
+		return ""
+	}
+	return slide.Source
+}
+
+func (manifest Manifest) slidesToRecompose() map[int]bool {
+	numbers := map[int]bool{}
+	for _, slide := range manifest.Slides {
+		if slide.Recompose {
+			numbers[slide.Number] = true
+		}
+	}
+	return numbers
+}
+
+func (manifest Manifest) slideNumbered(number int) (Slide, bool) {
+	for _, slide := range manifest.Slides {
+		if slide.Number == number {
+			return slide, true
+		}
+	}
+	return Slide{}, false
 }
