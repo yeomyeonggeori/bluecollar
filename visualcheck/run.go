@@ -49,6 +49,7 @@ type loopState struct {
 	changes       map[int]string
 	givenUp       map[int]bool
 	refusals      map[int]string
+	recompose     map[int]bool
 	roundsUsed    int
 	usage         Usage
 	deckSheet     model.DecisionImage
@@ -72,6 +73,7 @@ func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel m
 		changes:       map[int]string{},
 		givenUp:       map[int]bool{},
 		refusals:      map[int]string{},
+		recompose:     manifest.slidesToRecompose(),
 	}
 	state.recordReviews(reviewSlides(ctx, decisionModel, deck, manifest, manifest.Slides))
 	for state.roundsUsed < manifest.Rounds && len(state.candidates()) > 0 {
@@ -95,7 +97,7 @@ func (state *loopState) recordReviews(reviews map[int]Assessment) {
 func (state *loopState) candidates() []Slide {
 	candidates := []Slide{}
 	for _, slide := range state.manifest.Slides {
-		if state.assessments[slide.Number].IsFlagged() && !state.givenUp[slide.Number] {
+		if (state.assessments[slide.Number].IsFlagged() || state.recompose[slide.Number]) && !state.givenUp[slide.Number] {
 			candidates = append(candidates, slide)
 		}
 	}
@@ -191,7 +193,9 @@ func (state *loopState) settle(ctx context.Context, previous Manifest, attempts 
 	previousSections := previous.sectionsByNumber()
 	for number, review := range reviews {
 		state.usage.Decision = addedUsage(state.usage.Decision, review.usage)
-		if isImproved(state.assessments[number], review) {
+		isRecomposed := state.recompose[number] && isNoWorse(state.assessments[number], review)
+		delete(state.recompose, number)
+		if isRecomposed || isImproved(state.assessments[number], review) {
 			state.assessments[number] = review
 			state.changes[number] = changes[number]
 			continue
@@ -218,6 +222,10 @@ func isImproved(before Assessment, after Assessment) bool {
 		return len(after.Measured) < len(before.Measured)
 	}
 	return !hasNewKind(before, after) && highestProbability(after.Probabilities, kindsOf(before)) < highestProbability(before.Probabilities, kindsOf(before))
+}
+
+func isNoWorse(before Assessment, after Assessment) bool {
+	return after.Error == "" && len(after.Measured) <= len(before.Measured) && !hasNewKind(before, after)
 }
 
 func hasNewKind(before Assessment, after Assessment) bool {

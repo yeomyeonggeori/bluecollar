@@ -126,11 +126,11 @@ func TestASlideTheDeckCallFlagsIsRecomposedWithTheSheetBesideIt(t *testing.T) {
 		t.Fatalf("%d fixer requests", len(fixer.requests))
 	}
 	parts := fixer.requests[0].Messages[1].Parts
-	if len(parts) != 4 || parts[3].Type != "image" {
+	if len(parts) != 3 || parts[2].Type != "image" {
 		t.Fatalf("parts %+v", parts)
 	}
 	var payload repairContext
-	json.Unmarshal([]byte(parts[1].Text), &payload)
+	json.Unmarshal([]byte(parts[0].Text), &payload)
 	if len(payload.ReviewerFindings) != 1 || payload.ReviewerFindings[0].Kind != repetitiveOption || payload.ReviewerFindings[0].Meaning != "same composition as another slide" {
 		t.Fatalf("findings %+v", payload.ReviewerFindings)
 	}
@@ -155,7 +155,7 @@ func TestASlideWithNoSheetBesideItIsFixedWithoutOne(t *testing.T) {
 	if _, errorValue := Run(context.Background(), routed, fixer, deck); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	if got := len(fixer.requests[0].Messages[1].Parts); got != 3 {
+	if got := len(fixer.requests[0].Messages[1].Parts); got != 2 {
 		t.Fatalf("%d parts in a per-slide repair", got)
 	}
 }

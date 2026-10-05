@@ -13,7 +13,6 @@ type Question struct {
 
 type Fixer struct {
 	Instructions string `json:"instructions"`
-	KitGuide     string `json:"kitGuide"`
 }
 
 type MeasuredDefect struct {
@@ -23,11 +22,13 @@ type MeasuredDefect struct {
 }
 
 type Slide struct {
-	Number   int              `json:"number"`
-	Image    string           `json:"image"`
-	State    map[string]any   `json:"state"`
-	Section  string           `json:"section"`
-	Measured []MeasuredDefect `json:"measured"`
+	Number    int              `json:"number"`
+	Image     string           `json:"image"`
+	State     map[string]any   `json:"state"`
+	Section   string           `json:"section"`
+	Source    string           `json:"source,omitempty"`
+	Recompose bool             `json:"recompose,omitempty"`
+	Measured  []MeasuredDefect `json:"measured"`
 }
 
 type Manifest struct {
@@ -127,4 +128,31 @@ func (manifest Manifest) sectionsByNumber() map[int]string {
 		sections[slide.Number] = slide.Section
 	}
 	return sections
+}
+
+func (manifest Manifest) PageSource(number int) string {
+	slide, isFound := manifest.slideNumbered(number)
+	if !isFound {
+		return ""
+	}
+	return slide.Source
+}
+
+func (manifest Manifest) slidesToRecompose() map[int]bool {
+	numbers := map[int]bool{}
+	for _, slide := range manifest.Slides {
+		if slide.Recompose {
+			numbers[slide.Number] = true
+		}
+	}
+	return numbers
+}
+
+func (manifest Manifest) slideNumbered(number int) (Slide, bool) {
+	for _, slide := range manifest.Slides {
+		if slide.Number == number {
+			return slide, true
+		}
+	}
+	return Slide{}, false
 }

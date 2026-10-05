@@ -40,7 +40,8 @@ func (attempt attempt) isAccepted() bool {
 }
 
 type repairContext struct {
-	Theme            any              `json:"theme"`
+	Facts            map[string]any   `json:"facts"`
+	Recompose        bool             `json:"recompose,omitempty"`
 	ReviewerFindings []Finding        `json:"reviewerFindings"`
 	MeasuredDefects  []MeasuredDefect `json:"measuredDefects"`
 	Section          string           `json:"section"`
@@ -69,7 +70,8 @@ func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck De
 
 func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte, sheet model.DecisionImage, refusal string) (model.StructuredResponseRequest, error) {
 	payload, errorValue := json.Marshal(repairContext{
-		Theme:            slide.State["theme"],
+		Facts:            slide.State,
+		Recompose:        slide.Recompose,
 		ReviewerFindings: assessment.Findings,
 		MeasuredDefects:  assessment.Measured,
 		Section:          slide.Section,
@@ -79,7 +81,6 @@ func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte
 		return model.StructuredResponseRequest{}, errorValue
 	}
 	parts := []model.MessagePart{
-		{Type: "text", Text: "Kit guide:\n" + fixer.KitGuide},
 		{Type: "text", Text: string(payload)},
 		{Type: "image", MimeType: imageMediaType, DataBase64: base64.StdEncoding.EncodeToString(image)},
 	}
