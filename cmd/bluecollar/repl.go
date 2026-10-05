@@ -10,6 +10,7 @@ import (
 	"github.com/ergochat/readline"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/approval"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
@@ -29,6 +30,7 @@ type conversationSession struct {
 	runningShell   shell
 	workspacePath  string
 	history        []agentcontract.VisibleContextMessage
+	asker          approval.Asker
 }
 
 func newConversationSession(ctx context.Context, options runOptions) (*conversationSession, error) {
@@ -79,6 +81,10 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 
 	turnDecision := decideTurn(ctx, session.languageModel, request, session.options)
 	request.PrecomputedTurnDecision = &turnDecision
+	request.ToolSet.UseToolCallGate(approval.New(session.taskRunService, session.languageModel, session.asker).TurnGate(approval.Turn{
+		ResponseLanguage: turnDecision.ResponseLanguage,
+		Prompt:           prompt,
+	}))
 
 	taskRun := session.taskRunService.CreateTaskRunWithOrigin(request.RequesterPersonID, taskstate.TaskRunOrigin{
 		ConversationID: request.ConversationID,
@@ -127,6 +133,7 @@ func runInteractive(options runOptions) error {
 		return readerError
 	}
 	defer reader.Close()
+	session.asker = terminalAsker{output: os.Stderr, readLine: func(prompt string) (string, error) { return readPrompted(reader, prompt) }}
 	for {
 		fmt.Fprintln(os.Stderr)
 		line, lineError := reader.ReadLine()
@@ -153,4 +160,11 @@ func runInteractive(options runOptions) error {
 		}
 		printResult(result)
 	}
+}
+
+func readPrompted(reader *readline.Instance, prompt string) (string, error) {
+	reader.SetPrompt(prompt)
+	defer reader.SetPrompt(styleBold + "❯ " + styleReset)
+	line, lineError := reader.ReadLine()
+	return strings.TrimSpace(line), lineError
 }
