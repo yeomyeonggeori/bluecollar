@@ -24,7 +24,8 @@ const (
 
 const about = "The sources are request (the requester's own words), attachments (the text of the files they attached) " +
 	"and runtimeFacts (what the system knew when it made the document: today, the requester, the document number and the company profile). " +
-	"Each claim is one value the writer put into a delivered document; at says where it sits."
+	"Each claim is one value the writer put into a delivered document; at says where it sits. " +
+	"removed, when present, lists values that were taken out of the document because the sources did not support them; the document no longer holds them."
 
 const guard = "Wording, tone, emphasis and formatting are never claim, and whether the tone suits the kind of document is not this question. " +
 	"Choose claim only for content the sources do not hold, or hold with a weaker status."
@@ -35,7 +36,8 @@ var kinds = map[string]string{
 	KindExpression: "tone, courtesy, emphasis or an interpretation of facts the sources give, adding no fact of its own: a greeting, thanks, an invitation to get in touch, growth called fast when the sources give the figures, demand called proven when the sources show it",
 	KindClaim: "anything else: a fact, number, name, customer, ranking, date, promise, condition, cause or availability the sources lack; " +
 		"a source fact stated with a stronger status (a forecast or target as achieved or confirmed, some as all, planned as done, an estimate or average as exact or guaranteed); " +
-		"a new obligation; or an evaluation of a person or of a quality stated as attested fact",
+		"a new obligation; an evaluation of a person or of a quality stated as attested fact; " +
+		"or a count, total, ordinal or reference that includes or names a value listed under removed, since the document no longer holds that value",
 }
 
 type Claim struct {
@@ -53,6 +55,7 @@ type Sources struct {
 	Request      []string
 	Attachments  []Attachment
 	RuntimeFacts json.RawMessage
+	Removed      []Claim
 }
 
 type Verdict struct {
@@ -132,6 +135,9 @@ func batchState(sources Sources, claims []Claim) map[string]any {
 		"request": strings.Join(sources.Request, "\n\n"),
 		"claims":  shown,
 	}
+	if len(sources.Removed) > 0 {
+		state["removed"] = shownClaims(sources.Removed)
+	}
 	if len(sources.RuntimeFacts) > 0 {
 		state["runtimeFacts"] = json.RawMessage(sources.RuntimeFacts)
 	}
@@ -139,6 +145,14 @@ func batchState(sources Sources, claims []Claim) map[string]any {
 		state["attachments"] = attachments
 	}
 	return state
+}
+
+func shownClaims(claims []Claim) []shownClaim {
+	shown := make([]shownClaim, 0, len(claims))
+	for _, claim := range claims {
+		shown = append(shown, shownClaim{At: claim.At, Text: claim.Text})
+	}
+	return shown
 }
 
 func batchQuestions(count int) map[string]model.DecisionQuestion {
