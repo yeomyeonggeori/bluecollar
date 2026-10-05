@@ -7,7 +7,7 @@ type ToolCallReview struct {
 	Result     ToolResult
 	// Names the held call this approval spends, for a tool whose backend has to
 	// be told which approval it is running under.
-	ApprovedCallID string
+	HoldID string
 }
 
 type ToolCallGate interface {
@@ -30,7 +30,7 @@ func (toolSet *ToolSet) reviewToolCall(ctx context.Context, toolInvocation ToolI
 		return ctx, ToolFailureResult(FailureUnknown, FailureCodes.OperationFailed, "tool_call_gate", errorValue.Error()), true
 	}
 	if review.MayProceed {
-		return WithApprovedCallID(ctx, review.ApprovedCallID), ToolResult{}, false
+		return WithHoldID(ctx, review.HoldID), ToolResult{}, false
 	}
 	return ctx, review.Result, true
 }
