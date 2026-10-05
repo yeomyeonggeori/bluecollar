@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -13,10 +12,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/model"
 )
 
-const (
-	cleanOption  = "none"
-	proposedEdit = "edit"
-)
+const cleanOption = "none"
 
 func sampleOptions() map[string]string {
 	return map[string]string{
@@ -31,7 +27,7 @@ func sampleManifest(rounds int, sections ...string) Manifest {
 		Question:  Question{Instructions: "Which defect?", Options: sampleOptions(), CleanOption: cleanOption},
 		Threshold: 0.3,
 		Rounds:    rounds,
-		Fixer:     Fixer{Instructions: "Repair the slide."},
+		Fixer:     Fixer{Instructions: "Repair the slide.", KitGuide: "layouts: split"},
 	}
 	for index, section := range sections {
 		manifest.Slides = append(manifest.Slides, Slide{Number: index + 1, Section: section, State: map[string]any{"theme": "corporate"}})
@@ -47,9 +43,6 @@ type fakeDeck struct {
 	rebuilds []map[int]string
 	failure  error
 	refuses  func(section string) bool
-	proposes func(section string) string
-	editsPer int
-	measures func(section string) []MeasuredDefect
 }
 
 func newFakeDeck(manifest Manifest) *fakeDeck {
@@ -62,47 +55,9 @@ func (deck *fakeDeck) render() {
 	deck.versions++
 	for index := range deck.manifest.Slides {
 		slide := &deck.manifest.Slides[index]
-		if deck.measures != nil {
-			slide.Measured = deck.measures(slide.Section)
-		}
 		slide.Image = slide.Section + "#" + string(rune('a'+deck.versions))
 		deck.renders[slide.Image] = slide.Section
 	}
-	deck.refreshEdits()
-}
-
-func (deck *fakeDeck) refreshEdits() {
-	for index := range deck.manifest.Slides {
-		slide := &deck.manifest.Slides[index]
-		slide.Edits = nil
-		for number := 1; deck.proposes != nil && number <= max(deck.editsPer, 1); number++ {
-			identifier, section := proposedEdit, deck.proposes(slide.Section)
-			if number > 1 {
-				identifier = fmt.Sprintf("%s%d", proposedEdit, number)
-				section = strings.Replace(section, "</section>", fmt.Sprintf("<!--%d--></section>", number), 1)
-			}
-			slide.Edits = append(slide.Edits, Edit{ID: identifier, Operation: "recompose", Description: "the proposed rewrite", Section: section})
-		}
-	}
-}
-
-func (deck *fakeDeck) proposeFrom(languageModel *fakeLanguageModel) {
-	if languageModel.rewrite == nil {
-		return
-	}
-	deck.proposes = func(section string) string { return languageModel.rewrite(section).Section }
-	deck.refreshEdits()
-}
-
-type proposer interface {
-	proposeFrom(*fakeLanguageModel)
-}
-
-func runLoop(ctx context.Context, decisions model.DecisionModel, languageModel *fakeLanguageModel, deck Deck) (Report, error) {
-	if candidate, canPropose := deck.(proposer); canPropose {
-		candidate.proposeFrom(languageModel)
-	}
-	return Run(ctx, decisions, languageModel, deck)
 }
 
 func (deck *fakeDeck) Manifest(context.Context) (Manifest, error) { return deck.manifest, nil }
@@ -157,7 +112,6 @@ type fakeLanguageModel struct {
 	mutex    sync.Mutex
 	requests []model.StructuredResponseRequest
 	rewrite  func(section string) Repair
-	editName string
 }
 
 func (fake *fakeLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -169,15 +123,10 @@ func (fake *fakeLanguageModel) GenerateStructuredResponse(_ context.Context, req
 	fake.requests = append(fake.requests, request)
 	fake.mutex.Unlock()
 	var payload repairContext
-	if errorValue := json.Unmarshal([]byte(request.Messages[1].Parts[0].Text), &payload); errorValue != nil {
+	if errorValue := json.Unmarshal([]byte(request.Messages[1].Parts[1].Text), &payload); errorValue != nil {
 		return model.StructuredResponse{}, errorValue
 	}
-	repair := fake.rewrite(payload.Section)
-	chosen := fake.editName
-	if chosen == "" && len(payload.Edits) > 0 {
-		chosen = payload.Edits[0].ID
-	}
-	content, errorValue := json.Marshal(Repair{Edit: chosen, Change: repair.Change})
+	content, errorValue := json.Marshal(fake.rewrite(payload.Section))
 	return model.StructuredResponse{Content: string(content), Usage: model.Usage{TotalTokens: 10}}, errorValue
 }
 
@@ -201,7 +150,7 @@ func appendedBody(original string, addition string) string {
 func TestFlagsOnAnyNonCleanOptionAtThresholdEvenWhenCleanIsTop(t *testing.T) {
 	deck := newFakeDeck(sampleManifest(0, section("BAD"), section("fine")))
 	decisions := &fakeDecisionModel{answer: distributionBySuffix}
-	report, errorValue := runLoop(context.Background(), decisions, &fakeLanguageModel{}, deck)
+	report, errorValue := Run(context.Background(), decisions, &fakeLanguageModel{}, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -223,7 +172,7 @@ func nearMissDistribution(section string) map[string]float64 {
 func TestAPatternThresholdFlagsAPatternBelowTheGeneralOne(t *testing.T) {
 	manifest := sampleManifest(0, section("near"))
 	manifest.PatternThresholds = map[string]float64{"unreadable_chart": 0.2}
-	report, errorValue := runLoop(context.Background(), &fakeDecisionModel{answer: nearMissDistribution}, &fakeLanguageModel{}, newFakeDeck(manifest))
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: nearMissDistribution}, &fakeLanguageModel{}, newFakeDeck(manifest))
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -235,7 +184,7 @@ func TestAPatternThresholdFlagsAPatternBelowTheGeneralOne(t *testing.T) {
 func TestAPatternWithoutItsOwnThresholdKeepsTheGeneralOne(t *testing.T) {
 	manifest := sampleManifest(0, section("near"))
 	manifest.PatternThresholds = map[string]float64{"crowded": 0.05}
-	report, _ := runLoop(context.Background(), &fakeDecisionModel{answer: nearMissDistribution}, &fakeLanguageModel{}, newFakeDeck(manifest))
+	report, _ := Run(context.Background(), &fakeDecisionModel{answer: nearMissDistribution}, &fakeLanguageModel{}, newFakeDeck(manifest))
 	for _, finding := range report.Slides[0].Findings {
 		if finding.Kind == "unreadable_chart" {
 			t.Fatalf("0.27 flagged against the general 0.3: %+v", report.Slides[0].Findings)
@@ -255,7 +204,7 @@ func TestAManifestWhosePatternThresholdNamesNoOptionIsRefused(t *testing.T) {
 func TestMeasuredDefectFlagsASlideTheReviewerCalledClean(t *testing.T) {
 	manifest := sampleManifest(0, section("fine"))
 	manifest.Slides[0].Measured = []MeasuredDefect{{Code: "text-overflow", Message: "overflows"}}
-	report, _ := runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, &fakeLanguageModel{}, newFakeDeck(manifest))
+	report, _ := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, &fakeLanguageModel{}, newFakeDeck(manifest))
 	if !slices.Equal(report.Leftovers, []int{1}) || report.Slides[0].Measured[0] != "text-overflow" {
 		t.Fatalf("report %+v", report)
 	}
@@ -264,7 +213,7 @@ func TestMeasuredDefectFlagsASlideTheReviewerCalledClean(t *testing.T) {
 func TestRequestCarriesTheImageAndTheManifestQuestionVerbatim(t *testing.T) {
 	deck := newFakeDeck(sampleManifest(0, section("fine")))
 	decisions := &fakeDecisionModel{answer: distributionBySuffix}
-	if _, errorValue := runLoop(context.Background(), decisions, &fakeLanguageModel{}, deck); errorValue != nil {
+	if _, errorValue := Run(context.Background(), decisions, &fakeLanguageModel{}, deck); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	request := decisions.requests[0]
@@ -282,25 +231,22 @@ func TestRequestCarriesTheImageAndTheManifestQuestionVerbatim(t *testing.T) {
 	}
 }
 
-func TestFixerRequestCarriesFindingsEditsAndImage(t *testing.T) {
+func TestFixerRequestCarriesGuideFindingsAndImage(t *testing.T) {
 	deck := newFakeDeck(sampleManifest(1, section("BAD")))
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "moved"}
 	}}
-	runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
 	request := languageModel.requests[0]
 	if request.Messages[0].Role != "system" || request.Messages[0].Content != "Repair the slide." {
 		t.Fatalf("system message %+v", request.Messages[0])
 	}
 	parts := request.Messages[1].Parts
-	if len(parts) != 2 || parts[1].Type != "image" || parts[1].MimeType != "image/png" || parts[1].DataBase64 == "" {
+	if parts[0].Text != "Kit guide:\nlayouts: split" || parts[2].Type != "image" || parts[2].MimeType != "image/png" || parts[2].DataBase64 == "" {
 		t.Fatalf("parts %+v", parts)
 	}
 	var payload repairContext
-	json.Unmarshal([]byte(parts[0].Text), &payload)
-	if len(payload.Edits) != 1 || payload.Edits[0] != (editChoice{ID: proposedEdit, Operation: "recompose", Description: "the proposed rewrite"}) {
-		t.Fatalf("edits %+v", payload.Edits)
-	}
+	json.Unmarshal([]byte(parts[1].Text), &payload)
 	if payload.Theme != "corporate" || payload.ReviewerFindings[0].Kind != "unreadable_chart" || payload.ReviewerFindings[0].Meaning != "chart squashed" {
 		t.Fatalf("payload %+v", payload)
 	}
@@ -315,7 +261,7 @@ func TestOnlyFixedSlidesAreReasked(t *testing.T) {
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: strings.Replace(original, "BAD", "good", 1), Change: "regrouped"}
 	}}
-	report, errorValue := runLoop(context.Background(), decisions, languageModel, deck)
+	report, errorValue := Run(context.Background(), decisions, languageModel, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -332,7 +278,7 @@ func TestNonImprovingFixIsRestoredAndNotTriedAgain(t *testing.T) {
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>same</p>"), Change: "tried"}
 	}}
-	report, errorValue := runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -353,7 +299,7 @@ func TestRewriteThatTurnsATableIntoAChartIsRejected(t *testing.T) {
 	languageModel := &fakeLanguageModel{rewrite: func(string) Repair {
 		return Repair{Section: section("BAD<div data-chart=\"bar\"></div>"), Change: "chart"}
 	}}
-	report, _ := runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	report, _ := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
 	if len(deck.rebuilds) != 0 || len(report.Fixed) != 0 || !strings.Contains(report.Slides[0].Error, "tables, images and charts") {
 		t.Fatalf("rebuilds %v, report %+v", deck.rebuilds, report)
 	}
@@ -388,7 +334,7 @@ func TestRoundsCapStopsFixing(t *testing.T) {
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "+"), Change: "step"}
 	}}
-	report, errorValue := runLoop(context.Background(), &fakeDecisionModel{answer: answer}, languageModel, deck)
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: answer}, languageModel, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -405,7 +351,7 @@ func TestTextChangeIsReportedOnlyWhenVisibleWordsDiffer(t *testing.T) {
 		}
 		return Repair{Section: section("<p data-x=\"ok\">three</p>"), Change: "reworded"}
 	}}
-	report, _ := runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	report, _ := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
 	if !slices.Equal(report.TextChanged, []int{2}) || len(report.Fixed) != 2 {
 		t.Fatalf("report %+v", report)
 	}
@@ -421,12 +367,11 @@ func TestVisibleTextIgnoresTagsAttributesAndNotes(t *testing.T) {
 
 func TestARewriteTheBuildRefusesIsRetriedWithTheRefusalInFrontOfTheFixer(t *testing.T) {
 	deck := newFakeDeck(sampleManifest(2, section("BAD")))
-	deck.editsPer = 2
 	deck.failure = errors.New("office failed on slide 1")
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "x"}
 	}}
-	report, errorValue := runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -434,26 +379,22 @@ func TestARewriteTheBuildRefusesIsRetriedWithTheRefusalInFrontOfTheFixer(t *test
 		t.Fatalf("report %+v, %d fixer requests", report, len(languageModel.requests))
 	}
 	var first, second repairContext
-	json.Unmarshal([]byte(languageModel.requests[0].Messages[1].Parts[0].Text), &first)
-	json.Unmarshal([]byte(languageModel.requests[1].Messages[1].Parts[0].Text), &second)
+	json.Unmarshal([]byte(languageModel.requests[0].Messages[1].Parts[1].Text), &first)
+	json.Unmarshal([]byte(languageModel.requests[1].Messages[1].Parts[1].Text), &second)
 	if first.RefusedLastTime != "" || !strings.Contains(second.RefusedLastTime, "office failed on slide 1") {
 		t.Fatalf("refusals %q then %q", first.RefusedLastTime, second.RefusedLastTime)
-	}
-	if len(first.Edits) != 2 || len(second.Edits) != 1 || second.Edits[0].ID != "edit2" {
-		t.Fatalf("edits offered %+v then %+v", first.Edits, second.Edits)
 	}
 }
 
 func TestARefusalIsCutToALengthTheFixerCanRead(t *testing.T) {
 	deck := newFakeDeck(sampleManifest(2, section("BAD")))
-	deck.editsPer = 2
 	deck.failure = errors.New(strings.Repeat("x", 5000))
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "x"}
 	}}
-	runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
 	var second repairContext
-	json.Unmarshal([]byte(languageModel.requests[1].Messages[1].Parts[0].Text), &second)
+	json.Unmarshal([]byte(languageModel.requests[1].Messages[1].Parts[1].Text), &second)
 	if len([]rune(second.RefusedLastTime)) > maximumRefusalRunes {
 		t.Fatalf("%d runes", len([]rune(second.RefusedLastTime)))
 	}
@@ -465,7 +406,7 @@ func TestOneRefusedRewriteDoesNotDiscardTheOthersTheBuildAccepts(t *testing.T) {
 	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: strings.Replace(original, "BAD", "good", 1), Change: "regrouped"}
 	}}
-	report, errorValue := runLoop(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
+	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
@@ -487,7 +428,7 @@ func TestADeckCallStillRunsWhenEveryRewriteWasRefused(t *testing.T) {
 	fixer := &fakeLanguageModel{rewrite: func(original string) Repair {
 		return Repair{Section: appendedBody(original, "<p>x</p>"), Change: "x"}
 	}}
-	if _, errorValue := runLoop(context.Background(), decisions, fixer, deck); errorValue != nil {
+	if _, errorValue := Run(context.Background(), decisions, fixer, deck); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	if len(decisions.deck.deckRequests) != 1 {
@@ -496,7 +437,7 @@ func TestADeckCallStillRunsWhenEveryRewriteWasRefused(t *testing.T) {
 }
 
 func TestParseManifestValidates(t *testing.T) {
-	valid := `{"question":{"instructions":"q","options":{"none":"clean","crowded":"c"},"cleanOption":"none"},"threshold":0.3,"rounds":3,"fixer":{"instructions":"f"},"source":"/a","slides":[{"number":1,"image":"/a.png","state":{"theme":{}},"section":"<section></section>","measured":[]}]}`
+	valid := `{"question":{"instructions":"q","options":{"none":"clean","crowded":"c"},"cleanOption":"none"},"threshold":0.3,"rounds":3,"fixer":{"instructions":"f","kitGuide":"g"},"source":"/a","slides":[{"number":1,"image":"/a.png","state":{"theme":{}},"section":"<section></section>","measured":[]}]}`
 	manifest, errorValue := ParseManifest([]byte(valid))
 	if errorValue != nil || manifest.Slides[0].Number != 1 || manifest.Rounds != 3 {
 		t.Fatalf("valid manifest: %+v %v", manifest, errorValue)
@@ -512,82 +453,5 @@ func TestParseManifestValidates(t *testing.T) {
 		if _, errorValue := ParseManifest([]byte(content)); errorValue == nil {
 			t.Errorf("%s was accepted", name)
 		}
-	}
-}
-
-func TestTheRepairSchemaAllowsOnlyTheEditsTheSlideOffers(t *testing.T) {
-	var schema struct {
-		Required   []string `json:"required"`
-		Properties struct {
-			Edit struct {
-				Enum []string `json:"enum"`
-			} `json:"edit"`
-		} `json:"properties"`
-	}
-	if errorValue := json.Unmarshal([]byte(repairSchema([]Edit{{ID: "recompose:table"}, {ID: "recompose:text"}})), &schema); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if !slices.Equal(schema.Properties.Edit.Enum, []string{"recompose:table", "recompose:text"}) || !slices.Equal(schema.Required, []string{"edit", "change"}) {
-		t.Fatalf("schema %+v", schema)
-	}
-}
-
-func TestAnEditTheSlideDoesNotOfferIsRefusedWithoutARebuild(t *testing.T) {
-	deck := newFakeDeck(sampleManifest(1, section("BAD")))
-	deck.proposes = func(original string) string { return appendedBody(original, "<p>x</p>") }
-	deck.refreshEdits()
-	languageModel := &fakeLanguageModel{rewrite: func(string) Repair { return Repair{Change: "invented"} }, editName: "made-up"}
-	report, _ := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
-	if len(deck.rebuilds) != 0 || !strings.Contains(report.Slides[0].Error, `"made-up"`) {
-		t.Fatalf("rebuilds %v, report %+v", deck.rebuilds, report)
-	}
-}
-
-func TestASlideWithNoEditIsGivenUpWithoutAskingTheFixer(t *testing.T) {
-	deck := newFakeDeck(sampleManifest(3, section("BAD")))
-	languageModel := &fakeLanguageModel{rewrite: func(original string) Repair { return Repair{Change: "x"} }}
-	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, languageModel, deck)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(languageModel.requests) != 0 || !slices.Equal(report.GivenUp, []int{1}) || !slices.Equal(report.Leftovers, []int{1}) || report.RoundsUsed != 1 {
-		t.Fatalf("%d fixer requests, report %+v", len(languageModel.requests), report)
-	}
-}
-
-func TestASlideThatStillSpillsIsRecomposedWithAVerifiedEditWithoutAskingTheFixer(t *testing.T) {
-	deck := newFakeDeck(sampleManifest(0, section("fine"), section("SPILL")))
-	deck.measures = func(section string) []MeasuredDefect {
-		if strings.Contains(section, "SPILL") {
-			return []MeasuredDefect{{Code: "CONTENT_OVERFLOW", Message: "past the box"}}
-		}
-		return nil
-	}
-	deck.proposes = func(section string) string { return strings.Replace(section, "SPILL", "fits", 1) }
-	deck.refreshEdits()
-	decisions := &fakeDecisionModel{answer: distributionBySuffix}
-	languageModel := &fakeLanguageModel{}
-	deck.manifest.Slides[1].Measured = deck.measures(deck.manifest.Slides[1].Section)
-	report, errorValue := Run(context.Background(), decisions, languageModel, deck)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if len(languageModel.requests) != 0 || len(report.Leftovers) != 0 || !strings.Contains(deck.manifest.Slides[1].Section, "fits") {
-		t.Fatalf("fixer requests %d, report %+v, section %q", len(languageModel.requests), report, deck.manifest.Slides[1].Section)
-	}
-}
-
-func TestASlideWhoseEditsDoNotClearTheSpillStaysNamedAsALeftover(t *testing.T) {
-	deck := newFakeDeck(sampleManifest(0, section("SPILL")))
-	deck.measures = func(string) []MeasuredDefect { return []MeasuredDefect{{Code: "OUT_OF_FRAME", Message: "cut off"}} }
-	deck.proposes = func(section string) string { return section + "<p>x</p>" }
-	deck.refreshEdits()
-	deck.manifest.Slides[0].Measured = deck.measures("")
-	report, errorValue := Run(context.Background(), &fakeDecisionModel{answer: distributionBySuffix}, &fakeLanguageModel{}, deck)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	if !slices.Equal(report.Leftovers, []int{1}) || deck.manifest.Slides[0].Section != section("SPILL") {
-		t.Fatalf("report %+v, section %q", report, deck.manifest.Slides[0].Section)
 	}
 }

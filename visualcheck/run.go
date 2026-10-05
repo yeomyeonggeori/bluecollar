@@ -49,8 +49,6 @@ type loopState struct {
 	changes       map[int]string
 	givenUp       map[int]bool
 	refusals      map[int]string
-	chosen        map[int]string
-	excluded      map[int][]string
 	roundsUsed    int
 	usage         Usage
 	deckSheet     model.DecisionImage
@@ -74,8 +72,6 @@ func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel m
 		changes:       map[int]string{},
 		givenUp:       map[int]bool{},
 		refusals:      map[int]string{},
-		chosen:        map[int]string{},
-		excluded:      map[int][]string{},
 	}
 	state.recordReviews(reviewSlides(ctx, decisionModel, deck, manifest, manifest.Slides))
 	for state.roundsUsed < manifest.Rounds && len(state.candidates()) > 0 {
@@ -83,7 +79,6 @@ func Run(ctx context.Context, decisionModel model.DecisionModel, languageModel m
 			return state.report(), errorValue
 		}
 	}
-	state.clearGeometry(ctx)
 	if errorValue := state.deckPass(ctx); errorValue != nil {
 		return state.report(), errorValue
 	}
@@ -111,7 +106,7 @@ func (state *loopState) fixRound(ctx context.Context) error {
 	state.roundsUsed++
 	candidates := state.candidates()
 	attempts := inParallel(candidates, func(slide Slide) attempt {
-		return fixSlide(ctx, state.languageModel, state.deck, state.manifest.Fixer, state.withoutExcludedEdits(slide), state.assessments[slide.Number], state.sheetFor(slide.Number), state.refusals[slide.Number])
+		return fixSlide(ctx, state.languageModel, state.deck, state.manifest.Fixer, slide, state.assessments[slide.Number], state.sheetFor(slide.Number), state.refusals[slide.Number])
 	})
 	replacements := state.acceptedReplacements(candidates, attempts)
 	if len(replacements) == 0 {
@@ -158,19 +153,7 @@ func (state *loopState) refuse(replacements map[int]string, errorValue error) {
 		refusal := truncatedRunes(errorValue.Error(), maximumRefusalRunes)
 		state.fixProblems[number] = "the deck rebuild refused the rewrite: " + refusal
 		state.refusals[number] = refusal
-		state.excluded[number] = append(state.excluded[number], state.chosen[number])
 	}
-}
-
-func (state *loopState) withoutExcludedEdits(slide Slide) Slide {
-	remaining := []Edit{}
-	for _, edit := range slide.Edits {
-		if !slices.Contains(state.excluded[slide.Number], edit.ID) {
-			remaining = append(remaining, edit)
-		}
-	}
-	slide.Edits = remaining
-	return slide
 }
 
 func truncatedRunes(text string, limit int) string {
@@ -192,12 +175,8 @@ func (state *loopState) acceptedReplacements(candidates []Slide, attempts []atte
 	for index, slide := range candidates {
 		state.usage.Language = addedUsage(state.usage.Language, attempts[index].usage)
 		state.fixProblems[slide.Number] = attempts[index].problem
-		if attempts[index].hasNoEdit {
-			state.givenUp[slide.Number] = true
-		}
 		if attempts[index].isAccepted() {
 			replacements[slide.Number] = attempts[index].repair.Section
-			state.chosen[slide.Number] = attempts[index].repair.Edit
 		}
 	}
 	return replacements
@@ -312,56 +291,4 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-var geometryCodes = []string{"OUT_OF_FRAME", "CONTENT_OVERFLOW", "CONTENT_OVERLAP"}
-
-func geometryDefects(slide Slide) int {
-	count := 0
-	for _, defect := range slide.Measured {
-		if slices.Contains(geometryCodes, defect.Code) {
-			count++
-		}
-	}
-	return count
-}
-
-func (manifest Manifest) slideNumbered(number int) (Slide, bool) {
-	for _, slide := range manifest.Slides {
-		if slide.Number == number {
-			return slide, true
-		}
-	}
-	return Slide{}, false
-}
-
-func (state *loopState) clearGeometry(ctx context.Context) {
-	for _, slide := range slices.Clone(state.manifest.Slides) {
-		if geometryDefects(slide) > 0 {
-			state.recomposeUntilClear(ctx, slide)
-		}
-	}
-}
-
-func (state *loopState) recomposeUntilClear(ctx context.Context, slide Slide) {
-	for _, edit := range state.withoutExcludedEdits(slide).Edits {
-		rebuilt, errorValue := state.deck.Rebuild(ctx, map[int]string{slide.Number: edit.Section})
-		if errorValue != nil {
-			state.excluded[slide.Number] = append(state.excluded[slide.Number], edit.ID)
-			continue
-		}
-		after, isFound := rebuilt.slideNumbered(slide.Number)
-		if isFound && geometryDefects(after) < geometryDefects(slide) {
-			state.manifest = rebuilt
-			state.changes[slide.Number] = edit.Description
-			assessment := state.assessments[slide.Number]
-			assessment.Measured = after.Measured
-			state.assessments[slide.Number] = assessment
-			return
-		}
-		restored, errorValue := state.deck.Rebuild(ctx, map[int]string{slide.Number: slide.Section})
-		if errorValue == nil {
-			state.manifest = restored
-		}
-	}
 }

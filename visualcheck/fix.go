@@ -14,6 +14,8 @@ import (
 
 const maximumRefusalRunes = 1500
 
+const repairSchemaDocument = `{"type":"object","additionalProperties":false,"required":["section","change"],"properties":{"section":{"type":"string"},"change":{"type":"string"}}}`
+
 var (
 	sectionOpening = regexp.MustCompile(`(?i)<section[\s>]`)
 	sectionClosing = regexp.MustCompile(`(?i)</section\s*>`)
@@ -23,16 +25,14 @@ var (
 )
 
 type Repair struct {
-	Edit    string `json:"edit"`
+	Section string `json:"section"`
 	Change  string `json:"change"`
-	Section string `json:"-"`
 }
 
 type attempt struct {
-	repair    Repair
-	problem   string
-	usage     model.Usage
-	hasNoEdit bool
+	repair  Repair
+	problem string
+	usage   model.Usage
 }
 
 func (attempt attempt) isAccepted() bool {
@@ -45,19 +45,9 @@ type repairContext struct {
 	MeasuredDefects  []MeasuredDefect `json:"measuredDefects"`
 	Section          string           `json:"section"`
 	RefusedLastTime  string           `json:"refusedLastTime,omitempty"`
-	Edits            []editChoice     `json:"edits"`
-}
-
-type editChoice struct {
-	ID          string `json:"id"`
-	Operation   string `json:"operation"`
-	Description string `json:"description"`
 }
 
 func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck Deck, fixer Fixer, slide Slide, assessment Assessment, sheet model.DecisionImage, refusal string) attempt {
-	if len(slide.Edits) == 0 {
-		return attempt{problem: "no edit is offered for this slide", hasNoEdit: true}
-	}
 	image, errorValue := deck.Image(ctx, slide.Image)
 	if errorValue != nil {
 		return attempt{problem: fmt.Sprintf("read the render: %v", errorValue)}
@@ -74,11 +64,6 @@ func fixSlide(ctx context.Context, provider model.LanguageModelProvider, deck De
 	if errorValue := json.Unmarshal([]byte(response.Content), &repair); errorValue != nil {
 		return attempt{usage: response.Usage, problem: fmt.Sprintf("the repair is not the requested JSON: %v", errorValue)}
 	}
-	edit, isOffered := slide.edit(repair.Edit)
-	if !isOffered {
-		return attempt{repair: repair, usage: response.Usage, problem: fmt.Sprintf("the repair names edit %q, which this slide does not offer", repair.Edit)}
-	}
-	repair.Section = edit.Section
 	return attempt{repair: repair, usage: response.Usage, problem: rejectionReason(slide.Section, repair.Section)}
 }
 
@@ -89,12 +74,12 @@ func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte
 		MeasuredDefects:  assessment.Measured,
 		Section:          slide.Section,
 		RefusedLastTime:  refusal,
-		Edits:            slide.editChoices(),
 	})
 	if errorValue != nil {
 		return model.StructuredResponseRequest{}, errorValue
 	}
 	parts := []model.MessagePart{
+		{Type: "text", Text: "Kit guide:\n" + fixer.KitGuide},
 		{Type: "text", Text: string(payload)},
 		{Type: "image", MimeType: imageMediaType, DataBase64: base64.StdEncoding.EncodeToString(image)},
 	}
@@ -106,26 +91,8 @@ func repairRequest(fixer Fixer, slide Slide, assessment Assessment, image []byte
 			{Role: "system", Content: fixer.Instructions},
 			{Role: "user", Parts: parts},
 		},
-		StructuredOutputSchema: model.StructuredOutputSchema{Name: "slide_repair", Document: repairSchema(slide.Edits), IsStrictlyEnforced: true},
+		StructuredOutputSchema: model.StructuredOutputSchema{Name: "slide_repair", Document: repairSchemaDocument, IsStrictlyEnforced: true},
 	}, nil
-}
-
-func repairSchema(edits []Edit) string {
-	identifiers := make([]string, 0, len(edits))
-	for _, edit := range edits {
-		identifiers = append(identifiers, edit.ID)
-	}
-	document := map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"required":             []string{"edit", "change"},
-		"properties": map[string]any{
-			"edit":   map[string]any{"type": "string", "enum": identifiers},
-			"change": map[string]any{"type": "string"},
-		},
-	}
-	encoded, _ := json.Marshal(document)
-	return string(encoded)
 }
 
 func rejectionReason(original string, rewrite string) string {
