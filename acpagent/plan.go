@@ -32,31 +32,8 @@ func (runningAgent *Agent) planTurn(ctx context.Context, openSession *session, t
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
 	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
 	callLedger := &agentcontract.IntakeCallLedger{}
-	decision, errorValue := router.PlanObserved(ctx, routingRequestOf(turnRequest), callLedger)
+	decision, errorValue := router.PlanObserved(ctx, turnRequest.RoutingRequest(), callLedger)
 	return plannedTurn{decision: decision, callRecords: callLedger.Records}, errorValue
-}
-
-func routingRequestOf(turnRequest agentcontract.AgentTurnRequest) agentcontract.AgentRequest {
-	return agentcontract.AgentRequest{
-		RequesterPersonID:    turnRequest.RequesterPersonID,
-		RequesterName:        turnRequest.RequesterName,
-		RequesterCallingName: turnRequest.RequesterCallingName,
-		RequesterHandle:      turnRequest.RequesterHandle,
-		AgentIdentity:        turnRequest.AgentIdentity,
-		ConversationID:       turnRequest.ConversationID,
-		ConversationType:     turnRequest.ConversationType,
-		Prompt:               turnRequest.Prompt,
-		InputParts:           turnRequest.InputParts,
-		ResponseLanguage:     turnRequest.ResponseLanguage,
-		VisibleContext:       turnRequest.VisibleContext,
-		ScheduledRun:         turnRequest.ScheduledRun,
-		ActiveGoal:           turnRequest.ActiveGoal,
-		PriorTask:            turnRequest.PriorTask,
-		TurnStartedAt:        turnRequest.TurnStartedAt,
-		EnvironmentNow:       turnRequest.EnvironmentNow,
-		Company:              turnRequest.Company,
-		ToolSet:              turnRequest.ToolSet,
-	}
 }
 
 func isReplyToAskedQuestion(turnRequest agentcontract.AgentTurnRequest) bool {
