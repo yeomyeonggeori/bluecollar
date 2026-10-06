@@ -139,7 +139,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
-	return acp.PromptResponse{StopReason: stopReasonForStatus(turnResult.TaskRun.Status)}, nil
+	return promptResponseFor(turnResult), nil
 }
 
 func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest, isResumedFromHostLedger bool) agentcontract.AgentTurnRequest {

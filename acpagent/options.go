@@ -13,6 +13,7 @@ const requesterPersonID = "bluecollar"
 const (
 	TaskRunMetaKey    = "bluecollar.dev/task-run"
 	CheckpointMetaKey = "bluecollar.dev/checkpoint"
+	TurnResultMetaKey = "bluecollar.dev/turn-result"
 	SteerMethod       = "_bluecollar.dev/steer"
 )
 
