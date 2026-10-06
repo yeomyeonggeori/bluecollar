@@ -159,7 +159,7 @@ type ToolSelectionNeed struct {
 	ToolSet           *toolcontract.ToolSet
 	CallableToolNames []string
 	CountLimit        int
-	CallLedger        *IntakeCallLedger
+	CallObserver      LLMCallObserver
 }
 
 type ToolSelector interface {

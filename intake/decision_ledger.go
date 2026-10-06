@@ -16,12 +16,19 @@ type decisionCallContext struct {
 	toolSelection        *agentcontract.ToolSelectionRecord
 }
 
-func recordDecisionCalls(callLedger *agentcontract.IntakeCallLedger, calls []decisionCall, callContext decisionCallContext) {
+func observerOf(callLedger *agentcontract.IntakeCallLedger) agentcontract.LLMCallObserver {
 	if callLedger == nil {
+		return nil
+	}
+	return callLedger.Observe
+}
+
+func recordDecisionCalls(observe agentcontract.LLMCallObserver, calls []decisionCall, callContext decisionCallContext) {
+	if observe == nil {
 		return
 	}
 	for index, call := range calls {
-		callLedger.Observe(decisionLLMCallRecord(call, decidedCallContext(callContext, index)))
+		observe(decisionLLMCallRecord(call, decidedCallContext(callContext, index)))
 	}
 }
 

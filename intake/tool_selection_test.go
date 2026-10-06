@@ -472,10 +472,10 @@ func TestASelectionForOneNeedLandsInTheCallLedger(t *testing.T) {
 	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil)
 
 	selectedTools, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
-		Need:       "이번 주 회의 일정을 읽는다",
-		ToolSet:    newTestToolSet([]string{"event_list", "message_send", "web_search"}),
-		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
-		CallLedger: callLedger,
+		Need:         "이번 주 회의 일정을 읽는다",
+		ToolSet:      newTestToolSet([]string{"event_list", "message_send", "web_search"}),
+		CountLimit:   toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CallObserver: callLedger.Observe,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the selection call to answer: %v", errorValue)

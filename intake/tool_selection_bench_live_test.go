@@ -276,7 +276,7 @@ func TestToolSelectionPolicyBenchmark(t *testing.T) {
 			Need:              benchmark.task,
 			ToolSet:           toolSet,
 			CallableToolNames: toolNames,
-			CallLedger:        callLedger,
+			CallObserver:      callLedger.Observe,
 		}); errorValue != nil {
 			t.Fatalf("%q: %v", benchmark.task, errorValue)
 		}

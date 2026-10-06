@@ -42,7 +42,7 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 	callError := firstCallError(calls)
 	answers := mergedDecisionAnswers(calls)
 	decisions, readError := planner.readDecisions(describedRequest, answers, callError)
-	recordDecisionCalls(callLedger, calls, decisionCallContext{
+	recordDecisionCalls(observerOf(callLedger), calls, decisionCallContext{
 		errorValue:           firstError(callError, readError),
 		decisions:            decisions,
 		messageIDs:           decidedMessageIDs(describedRequest.Messages),
