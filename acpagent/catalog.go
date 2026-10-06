@@ -50,7 +50,7 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 		}
 		for _, tool := range toolList.Tools {
 			descriptor := descriptorForTool(tool)
-			if descriptor.Visibility != toolcontract.ToolVisibilityInternal {
+			if descriptor.Visibility != toolcontract.ToolVisibilityInternal && !isOfferedOnRequest(tool) {
 				toolNames = append(toolNames, tool.Name)
 			}
 			descriptors[tool.Name] = descriptor
@@ -119,6 +119,11 @@ func (roundTripper headerRoundTripper) RoundTrip(request *http.Request) (*http.R
 		request.Header.Set(header.Name, header.Value)
 	}
 	return http.DefaultTransport.RoundTrip(request)
+}
+
+func isOfferedOnRequest(tool *mcp.Tool) bool {
+	isOffered, _ := tool.Meta[OfferedOnRequestMetaKey].(bool)
+	return isOffered
 }
 
 func descriptorForTool(tool *mcp.Tool) toolcontract.ToolDescriptor {

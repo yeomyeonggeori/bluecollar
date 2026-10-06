@@ -16,6 +16,7 @@ const (
 	TurnResultMetaKey        = "bluecollar.dev/turn-result"
 	TurnRequestMetaKey       = "bluecollar.dev/turn-request"
 	InstructionBundleMetaKey = "bluecollar.dev/instruction-bundle"
+	OfferedOnRequestMetaKey  = "bluecollar.dev/offered-on-request"
 	SteerMethod              = "_bluecollar.dev/steer"
 )
 
