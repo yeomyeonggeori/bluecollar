@@ -3,6 +3,7 @@ package acpagent
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
@@ -56,11 +57,13 @@ type countingDecisionModel struct {
 	model.DecisionModel
 	mutex     sync.Mutex
 	callCount int
+	states    []any
 }
 
 func (decisionModel *countingDecisionModel) Decide(ctx context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
 	decisionModel.mutex.Lock()
 	decisionModel.callCount++
+	decisionModel.states = append(decisionModel.states, request.State)
 	decisionModel.mutex.Unlock()
 	return decisionModel.DecisionModel.Decide(ctx, request)
 }
@@ -515,4 +518,27 @@ func (languageModel *routingProbeLanguageModel) GenerateStructuredResponse(ctx c
 		}
 	}
 	return languageModel.scriptedLanguageModel.GenerateStructuredResponse(ctx, request)
+}
+
+func TestRoutingIsAskedAboutWhatThePersonWroteNotTheBriefingAroundIt(t *testing.T) {
+	hostCalls := []hostToolCall{}
+	languageModel := noteWriteTurnScript()
+	decisionModel := &countingDecisionModel{DecisionModel: scriptedDecisionModel(languageModel)}
+	options := testOptions(languageModel)
+	options.DecisionModel = decisionModel
+	handedOver := agentcontract.AgentTurnRequest{Prompt: "회의록 정리해줘"}
+
+	host := openPipedHost(t, options, publishedCatalogTransport(t, &hostCalls), &hostClient{})
+	briefedPrompt := "Identity:\n- Your name is 김인턴.\n\n회의록 정리해줘"
+	if _, errorValue := host.prompt(t, map[string]any{TurnRequestMetaKey: handedOver}, acp.TextBlock(briefedPrompt)); errorValue != nil {
+		t.Fatalf("session/prompt: %v", errorValue)
+	}
+
+	encodedStates, _ := json.Marshal(decisionModel.states)
+	if strings.Contains(string(encodedStates), "Identity:") {
+		t.Fatalf("routing read the briefing as the person's message: %s", encodedStates)
+	}
+	if !strings.Contains(string(encodedStates), "회의록 정리해줘") {
+		t.Fatalf("routing never saw what the person wrote: %s", encodedStates)
+	}
 }
