@@ -66,34 +66,37 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 	check := changeCheck{ExpectedChanges: expected}
 	changedObjectTypes := changedObjectTypes(observations)
 	objectTypeByKind := objectTypeByChangeKind(request.ToolSet)
-	recordedIndexes := []int{}
+	location := companyLocation(request.Company.TimeZone)
+	judgedIndexes := []int{}
 	for index, change := range expected {
-		if changedObjectTypes[objectTypeByKind[change.Change]] {
-			recordedIndexes = append(recordedIndexes, index)
+		isRecorded := changedObjectTypes[objectTypeByKind[change.Change]]
+		if !isRecorded {
+			check.Unrecorded = append(check.Unrecorded, change)
+		}
+		if isRecorded || isLookedUp(request.ToolSet, change, observations, location) {
+			judgedIndexes = append(judgedIndexes, index)
 			continue
 		}
-		check.Unrecorded = append(check.Unrecorded, change)
+		check.Unmet = append(check.Unmet, change)
 	}
-	check.Unmet = append(check.Unmet, check.Unrecorded...)
-	if len(recordedIndexes) == 0 {
+	if len(judgedIndexes) == 0 {
 		return check, nil
 	}
-	location := companyLocation(request.Company.TimeZone)
 	heldObjectTypes := heldObjectTypes(observations)
-	state := changeCheckState(request, location, expected, recordedIndexes, heldObjectTypes, observations)
+	state := changeCheckState(request, location, expected, judgedIndexes, heldObjectTypes, observations)
 	check.StateDigest = judgedStateDigest(state)
 	if refusal, isRefused := refusalOverState(observations, check.StateDigest); isRefused {
 		return refusal, nil
 	}
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
 		State:     state,
-		Questions: changeCheckQuestions(recordedIndexes, len(heldObjectTypes) > 0),
+		Questions: changeCheckQuestions(judgedIndexes, len(heldObjectTypes) > 0),
 	})
 	if errorValue != nil {
 		return changeCheck{}, errorValue
 	}
 	check.CarriedOut = map[string]float64{}
-	for _, index := range recordedIndexes {
+	for _, index := range judgedIndexes {
 		answer := response.Answers[changeQuestionKey(index)]
 		check.CarriedOut[changeQuestionKey(index)] = answer.Noul
 		if answer.Noul < changeCarriedOutThreshold {
@@ -101,6 +104,10 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		}
 	}
 	return check, nil
+}
+
+func isLookedUp(toolSet *toolcontract.ToolSet, change expectedChange, observations []turnObservation, location *time.Location) bool {
+	return len(changeLookups(toolSet, []expectedChange{change}, observations, location)) > 0
 }
 
 func judgedStateDigest(state map[string]any) string {
@@ -159,7 +166,7 @@ func changeQuestionKey(index int) string {
 	return fmt.Sprintf("expected%d", index)
 }
 
-func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, recordedIndexes []int, heldObjectTypes map[string]bool, observations []turnObservation) map[string]any {
+func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, judgedIndexes []int, heldObjectTypes map[string]bool, observations []turnObservation) map[string]any {
 	state := map[string]any{
 		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
 		"now":             environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST"),
@@ -169,7 +176,7 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
 		state["conversationBefore"] = conversation
 	}
-	changesBeyondHolds := changesNotJudgedByHolds(request.ToolSet, expected, recordedIndexes, heldObjectTypes)
+	changesBeyondHolds := changesNotJudgedByHolds(request.ToolSet, expected, judgedIndexes, heldObjectTypes)
 	if lookups := changeLookups(request.ToolSet, changesBeyondHolds, observations, location); len(lookups) > 0 {
 		state["lookups"] = lookups
 	}
@@ -182,10 +189,10 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 	return state
 }
 
-func changesNotJudgedByHolds(toolSet *toolcontract.ToolSet, expected []expectedChange, recordedIndexes []int, heldObjectTypes map[string]bool) []expectedChange {
+func changesNotJudgedByHolds(toolSet *toolcontract.ToolSet, expected []expectedChange, judgedIndexes []int, heldObjectTypes map[string]bool) []expectedChange {
 	objectTypeByKind := objectTypeByChangeKind(toolSet)
 	changes := []expectedChange{}
-	for _, index := range recordedIndexes {
+	for _, index := range judgedIndexes {
 		if !heldObjectTypes[objectTypeByKind[expected[index].Change]] {
 			changes = append(changes, expected[index])
 		}
