@@ -28,6 +28,7 @@ type Options struct {
 	TurnOptions          agentcontract.TurnOptions
 	IntakeOptions        agentcontract.IntakeOptions
 	CompanyProvider      func() agentcontract.CompanyContext
+	RouterLanguageModel  model.LanguageModelProvider
 }
 
 type Skills struct {

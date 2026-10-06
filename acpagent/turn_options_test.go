@@ -54,3 +54,19 @@ func TestConfiguredGenerationOptionsReachTheModelsActionCalls(t *testing.T) {
 		}
 	}
 }
+
+func TestAConfiguredRouterModelRoutesTheTurn(t *testing.T) {
+	hostCalls := []hostToolCall{}
+	catalogClientTransport, catalogServerTransport := mcp.NewInMemoryTransports()
+	go publishedCatalog(t, &hostCalls).Run(t.Context(), catalogServerTransport)
+	taskModel := &scriptedLanguageModel{}
+	routerModel := &scriptedLanguageModel{}
+	options := testOptions(taskModel)
+	options.RouterLanguageModel = routerModel
+
+	driveOneTurnWithOptions(t, catalogClientTransport, options, nil)
+
+	if routerModel.routedCount == 0 {
+		t.Fatal("the model the host named for routing was never asked to route")
+	}
+}

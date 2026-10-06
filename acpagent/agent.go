@@ -183,7 +183,7 @@ func failTurnOnPanic(openSession *session, promptResponse *acp.PromptResponse, e
 }
 
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, runningAgent.routingOptions())
+	router := intake.NewTurnRouter(runningAgent.routingLanguageModel(), runningAgent.decisionPlanner, runningAgent.routingOptions())
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: turnRequest.RequesterPersonID,
 		ConversationID:    turnRequest.ConversationID,
@@ -191,6 +191,13 @@ func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontr
 		InputParts:        turnRequest.InputParts,
 		ToolSet:           turnRequest.ToolSet,
 	})
+}
+
+func (runningAgent *Agent) routingLanguageModel() model.LanguageModelProvider {
+	if runningAgent.options.RouterLanguageModel != nil {
+		return runningAgent.options.RouterLanguageModel
+	}
+	return runningAgent.languageModel
 }
 
 func (runningAgent *Agent) routingOptions() agentcontract.IntakeOptions {

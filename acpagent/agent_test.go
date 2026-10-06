@@ -30,6 +30,7 @@ type scriptedLanguageModel struct {
 	level         string
 	sawImageData  []string
 	generation    []model.GenerationOptions
+	routedCount   int
 }
 
 func (languageModel *scriptedLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -38,6 +39,7 @@ func (languageModel *scriptedLanguageModel) GenerateResponse(context.Context, st
 
 func (languageModel *scriptedLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
 	if request.StructuredOutputSchema.Name != "bluecollar_agent_turn_action" {
+		languageModel.routedCount++
 		return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"` + languageModel.routedLevel() + `","responseLanguage":"en","reason":"test"}`}, nil
 	}
 	languageModel.actionPrompts = append(languageModel.actionPrompts, allMessageContent(request))
