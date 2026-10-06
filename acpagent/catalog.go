@@ -164,7 +164,7 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *ru
 			return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.Unavailable, toolName, errorValue.Error()), nil
 		}
 		if carriedResult, isCarried := toolcontract.ResultOfMeta(callResult.Meta); isCarried {
-			carriedResult.Attachments = withImageBytes(carriedResult.Attachments, imageAttachmentsOfResult(callResult))
+			carriedResult.Attachments = withFileBytes(withImageBytes(carriedResult.Attachments, imageAttachmentsOfResult(callResult)), fileAttachmentsOfResult(callResult))
 			if len(carriedResult.Output.Data) == 0 {
 				carriedResult.Output.Data = json.RawMessage(`{}`)
 			}
@@ -196,6 +196,36 @@ func withImageBytes(attachments []toolcontract.FileAttachment, images []toolcont
 		imageIndex++
 	}
 	return completed
+}
+
+func withFileBytes(attachments []toolcontract.FileAttachment, files []toolcontract.FileAttachment) []toolcontract.FileAttachment {
+	completed := append([]toolcontract.FileAttachment{}, attachments...)
+	for index := range completed {
+		for _, file := range files {
+			if completed[index].DevicePath == file.DevicePath && completed[index].ContentBase64 == "" {
+				completed[index].ContentBase64 = file.ContentBase64
+			}
+		}
+	}
+	return completed
+}
+
+func fileAttachmentsOfResult(callResult *mcp.CallToolResult) []toolcontract.FileAttachment {
+	attachments := []toolcontract.FileAttachment{}
+	for _, content := range callResult.Content {
+		embedded, isEmbedded := content.(*mcp.EmbeddedResource)
+		if !isEmbedded || embedded.Resource == nil || len(embedded.Resource.Blob) == 0 {
+			continue
+		}
+		attachment := toolcontract.FileAttachment{
+			ContentType:   embedded.Resource.MIMEType,
+			SizeBytes:     int64(len(embedded.Resource.Blob)),
+			ContentBase64: base64.StdEncoding.EncodeToString(embedded.Resource.Blob),
+		}
+		toolcontract.ApplyAttachmentMeta(&attachment, embedded.Resource.Meta)
+		attachments = append(attachments, attachment)
+	}
+	return attachments
 }
 
 func textOfResult(callResult *mcp.CallToolResult) string {
