@@ -176,7 +176,7 @@ func shouldCleanRestartRestoredTask(events []agentcontract.TaskEvent) bool {
 		return false
 	}
 	for index := lastStallIndex + 1; index < len(events); index++ {
-		if events[index].Name == agentcontract.TaskEventTaskSteerRequested {
+		if events[index].Name == agentcontract.TaskEventAgentSteerReceived || events[index].Name == agentcontract.TaskEventTaskSteerRequested {
 			return true
 		}
 	}

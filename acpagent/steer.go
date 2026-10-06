@@ -44,5 +44,5 @@ func (runningAgent *Agent) steer(notification SteerNotification) {
 	if errorValue != nil {
 		return
 	}
-	openSession.taskRuns.AppendTaskEvent(taskRunID, agentcontract.TaskEventTaskSteerRequested, string(body))
+	openSession.taskRuns.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentSteerReceived, string(body))
 }

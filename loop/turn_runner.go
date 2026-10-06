@@ -872,7 +872,7 @@ func updateCompletionIntent(state *agentTaskState, actionDocument turnActionDocu
 
 func (agentTurnRunner *AgentTurnRunner) applyPendingSteeringEvents(taskRunID string, observations []turnObservation, appliedEventIDs map[string]bool) []turnObservation {
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
-		if taskEvent.Name != agentcontract.TaskEventTaskSteerRequested || appliedEventIDs[taskEvent.TaskEventID] {
+		if taskEvent.Name != agentcontract.TaskEventAgentSteerReceived || appliedEventIDs[taskEvent.TaskEventID] {
 			continue
 		}
 		var document struct {
