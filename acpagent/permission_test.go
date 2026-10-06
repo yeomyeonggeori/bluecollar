@@ -40,12 +40,22 @@ func (client *askedHostClient) RequestPermission(_ context.Context, request acp.
 
 func gatedCatalog(t *testing.T, calls *[]hostToolCall) mcp.Transport {
 	t.Helper()
+	return noteWriteCatalog(t, calls, false)
+}
+
+func hostGatedCatalog(t *testing.T, calls *[]hostToolCall) mcp.Transport {
+	t.Helper()
+	return noteWriteCatalog(t, calls, true)
+}
+
+func noteWriteCatalog(t *testing.T, calls *[]hostToolCall, isHostGated bool) mcp.Transport {
+	t.Helper()
 	server := mcp.NewServer(&mcp.Implementation{Name: "host", Version: "test"}, nil)
 	server.AddTool(&mcp.Tool{
 		Name:        "note_write",
 		Description: "write a note",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}}},
-		Meta:        mcp.Meta{toolcontract.MetaKeySideEffectClass: "state_change", toolcontract.MetaKeyRequiresApproval: true},
+		Meta:        mcp.Meta{toolcontract.MetaKeySideEffectClass: "state_change", toolcontract.MetaKeyRequiresApproval: true, toolcontract.MetaKeyHostGated: isHostGated},
 	}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		*calls = append(*calls, hostToolCall{toolName: "note_write"})
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "note written"}}}, nil

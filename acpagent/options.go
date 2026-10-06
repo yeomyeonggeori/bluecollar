@@ -11,26 +11,24 @@ import (
 const requesterPersonID = "bluecollar"
 
 const (
-	TaskRunMetaKey     = "bluecollar.dev/task-run"
-	CheckpointMetaKey  = "bluecollar.dev/checkpoint"
-	TurnResultMetaKey  = "bluecollar.dev/turn-result"
-	TurnRequestMetaKey = "bluecollar.dev/turn-request"
-	SteerMethod        = "_bluecollar.dev/steer"
+	TaskRunMetaKey           = "bluecollar.dev/task-run"
+	CheckpointMetaKey        = "bluecollar.dev/checkpoint"
+	TurnResultMetaKey        = "bluecollar.dev/turn-result"
+	TurnRequestMetaKey       = "bluecollar.dev/turn-request"
+	InstructionBundleMetaKey = "bluecollar.dev/instruction-bundle"
+	SteerMethod              = "_bluecollar.dev/steer"
 )
 
 type Options struct {
-	AgentName            string
-	LanguageModels       agentcontract.TaskTierLanguageModels
-	DecisionModel        model.DecisionModel
-	LLMCallRepository    taskstate.LLMCallRepository
-	Skills               Skills
-	HostCheckedToolNames []string
+	AgentName         string
+	LanguageModels    agentcontract.TaskTierLanguageModels
+	DecisionModel     model.DecisionModel
+	LLMCallRepository taskstate.LLMCallRepository
+	Skills            Skills
 }
 
 type Skills struct {
-	InstructionBundleLoader func() agentcontract.InstructionBundle
-	Retriever               agentcontract.SkillRetriever
-	PinnedSkillNames        []string
+	Retriever agentcontract.SkillRetriever
 }
 
 func (options Options) validate() error {

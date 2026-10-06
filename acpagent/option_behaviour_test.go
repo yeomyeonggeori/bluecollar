@@ -296,10 +296,9 @@ func TestAToolTheHostChecksRunsWithoutBluecollarAskingAgain(t *testing.T) {
 		`{"action":"reply","final":true,"message":"done","goalSatisfied":true}`,
 	}}}
 	options := testOptions(languageModel)
-	options.HostCheckedToolNames = []string{"note_write"}
 	client := &askedHostClient{selectedOption: approveOptionID}
 
-	host := openPipedHost(t, options, gatedCatalog(t, &hostCalls), client)
+	host := openPipedHost(t, options, hostGatedCatalog(t, &hostCalls), client)
 	if _, errorValue := host.prompt(t, nil, acp.TextBlock("회의록 남겨줘")); errorValue != nil {
 		t.Fatalf("session/prompt: %v", errorValue)
 	}
@@ -375,15 +374,13 @@ func TestASkillLoaderTheHostGivesReplacesTheWorkingDirectory(t *testing.T) {
 	writeSkill(t, workingDirectory, "meeting-minutes", "정리해줘 회의록 meeting minutes", "Always list decisions first.")
 	languageModel := noteWriteTurnScript()
 	options := testOptions(languageModel)
-	options.Skills.InstructionBundleLoader = func() agentcontract.InstructionBundle {
-		return agentcontract.InstructionBundle{Skills: []agentcontract.SkillInstruction{{
-			Name: "host-skill", Description: "정리해줘 회의록 from the host", Prompt: "Host prompt body.",
-			Source: agentcontract.InstructionSource{Path: "host:host-skill", SkillName: "host-skill"},
-		}}}
-	}
+	handedOverBundle := agentcontract.InstructionBundle{Skills: []agentcontract.SkillInstruction{{
+		Name: "host-skill", Description: "정리해줘 회의록 from the host", Prompt: "Host prompt body.",
+		Source: agentcontract.InstructionSource{Path: "host:host-skill", SkillName: "host-skill"},
+	}}}
 
 	host := openPipedHost(t, options, publishedCatalogTransport(t, &hostCalls), &recordingHost{directory: workingDirectory})
-	if _, errorValue := host.prompt(t, nil, acp.TextBlock("회의록 정리해줘")); errorValue != nil {
+	if _, errorValue := host.prompt(t, map[string]any{InstructionBundleMetaKey: handedOverBundle}, acp.TextBlock("회의록 정리해줘")); errorValue != nil {
 		t.Fatalf("session/prompt: %v", errorValue)
 	}
 
@@ -401,10 +398,10 @@ func TestAPinnedSkillIsLoadedWithoutBeingRetrieved(t *testing.T) {
 	writeSkill(t, workingDirectory, "tax-rules", "unrelated words only", "Pinned body marker.")
 	languageModel := noteWriteTurnScript()
 	options := testOptions(languageModel)
-	options.Skills.PinnedSkillNames = []string{"tax-rules"}
+	pinnedRequest := agentcontract.AgentTurnRequest{PinnedSkillNames: []string{"tax-rules"}}
 
 	host := openPipedHost(t, options, publishedCatalogTransport(t, &hostCalls), &recordingHost{directory: workingDirectory})
-	if _, errorValue := host.prompt(t, nil, acp.TextBlock("회의록 정리해줘")); errorValue != nil {
+	if _, errorValue := host.prompt(t, map[string]any{TurnRequestMetaKey: pinnedRequest}, acp.TextBlock("회의록 정리해줘")); errorValue != nil {
 		t.Fatalf("session/prompt: %v", errorValue)
 	}
 

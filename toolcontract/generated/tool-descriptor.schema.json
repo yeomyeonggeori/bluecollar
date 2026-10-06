@@ -147,6 +147,9 @@
     "requiresApproval": {
       "type": "boolean"
     },
+    "isHostGated": {
+      "type": "boolean"
+    },
     "approvalScope": {
       "type": "string"
     },

@@ -25,6 +25,10 @@ type session struct {
 	taskRuns       *taskstate.TaskRunService
 	taskEvents     *taskstate.TaskEventService
 	gate           *approval.Gate
+
+	instructionBundleMutex sync.Mutex
+	instructionBundle      agentcontract.InstructionBundle
+	hasInstructionBundle   bool
 }
 
 type Agent struct {
@@ -83,7 +87,6 @@ func (runningAgent *Agent) NewSession(ctx context.Context, request acp.NewSessio
 	kernel.UseTaskTierLanguageModels(runningAgent.options.LanguageModels)
 	kernel.UseDecisionModel(runningAgent.options.DecisionModel)
 	kernel.UseToolResultImageSource(openedCatalog)
-	kernel.UseInstructionBundleLoader(instructionBundleLoaderFor(runningAgent.options.Skills, request.Cwd))
 	if runningAgent.options.Skills.Retriever != nil {
 		kernel.UseSkillRetriever(runningAgent.options.Skills.Retriever)
 	}
@@ -95,13 +98,15 @@ func (runningAgent *Agent) NewSession(ctx context.Context, request acp.NewSessio
 	defer runningAgent.mutex.Unlock()
 	runningAgent.nextSessionNumber++
 	sessionID := acp.SessionId("bluecollar-" + strconv.Itoa(runningAgent.nextSessionNumber))
-	runningAgent.sessionsByID[sessionID] = &session{
+	openSession := &session{
 		catalog:    openedCatalog,
 		kernel:     kernel,
 		taskRuns:   taskRuns,
 		taskEvents: taskEvents,
 		gate:       approval.New(taskRuns, runningAgent.languageModel, permissionAsker{requester: runningAgent.permissions, sessionID: sessionID}),
 	}
+	kernel.UseInstructionBundleLoader(openSession.instructionBundleLoader(request.Cwd))
+	runningAgent.sessionsByID[sessionID] = openSession
 	return acp.NewSessionResponse{SessionId: sessionID}, nil
 }
 
@@ -119,6 +124,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	if !isResumedFromHostLedger {
 		openSession.adoptNamedTaskRun(request.Meta, promptText(request.Prompt))
 	}
+	openSession.adoptInstructionBundle(request.Meta)
 	turnRequest := runningAgent.turnRequestFor(openSession, request)
 	stopObserving := openSession.taskEvents.RegisterTurnObserver(ledgerObserver(ctx, runningAgent.sessionUpdates, request.SessionId, openSession.rememberTaskRun))
 	defer stopObserving()
@@ -132,7 +138,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	openSession.catalog.toolSet.UseToolCallGate(newHostCheckedGate(openSession.gate.TurnGate(approval.Turn{
 		ResponseLanguage: planned.decision.ResponseLanguage,
 		Prompt:           turnRequest.Prompt,
-	}), runningAgent.options.HostCheckedToolNames))
+	})))
 
 	turnResult, errorValue := openSession.kernel.RunTurn(ctx, turnRequest)
 	if errorValue != nil {
@@ -152,7 +158,6 @@ func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.Prom
 	turnRequest.AgentIdentity.Name = firstNonEmpty(turnRequest.AgentIdentity.Name, runningAgent.options.AgentName)
 	turnRequest.ToolSet = openSession.catalog.toolSet
 	turnRequest.PinnedToolNames = openSession.catalog.toolNames
-	turnRequest.PinnedSkillNames = runningAgent.options.Skills.PinnedSkillNames
 	turnRequest.CarriedOutCalls = carriedOutCallsOfMeta(request.Meta)
 	turnRequest.CheckpointSender = checkpointSender(runningAgent.sessionUpdates, request.SessionId)
 	return turnRequest

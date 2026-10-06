@@ -20,6 +20,19 @@ func turnRequestOfMeta(promptMeta map[string]any) (agentcontract.AgentTurnReques
 	return turnRequest, json.Unmarshal(encoded, &turnRequest) == nil
 }
 
+func instructionBundleOfMeta(promptMeta map[string]any) (agentcontract.InstructionBundle, bool) {
+	value, isPresent := promptMeta[InstructionBundleMetaKey]
+	if !isPresent {
+		return agentcontract.InstructionBundle{}, false
+	}
+	encoded, errorValue := json.Marshal(value)
+	if errorValue != nil {
+		return agentcontract.InstructionBundle{}, false
+	}
+	bundle := agentcontract.InstructionBundle{}
+	return bundle, json.Unmarshal(encoded, &bundle) == nil
+}
+
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {

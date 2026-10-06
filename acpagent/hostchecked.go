@@ -7,23 +7,15 @@ import (
 )
 
 type hostCheckedGate struct {
-	inner                toolcontract.ToolCallGate
-	hostCheckedToolNames map[string]bool
+	inner toolcontract.ToolCallGate
 }
 
-func newHostCheckedGate(inner toolcontract.ToolCallGate, hostCheckedToolNames []string) toolcontract.ToolCallGate {
-	if len(hostCheckedToolNames) == 0 {
-		return inner
-	}
-	toolNames := map[string]bool{}
-	for _, toolName := range hostCheckedToolNames {
-		toolNames[toolName] = true
-	}
-	return hostCheckedGate{inner: inner, hostCheckedToolNames: toolNames}
+func newHostCheckedGate(inner toolcontract.ToolCallGate) toolcontract.ToolCallGate {
+	return hostCheckedGate{inner: inner}
 }
 
 func (gate hostCheckedGate) ReviewToolCall(ctx context.Context, invocation toolcontract.ToolInvocation, definition toolcontract.ToolDefinition) (toolcontract.ToolCallReview, error) {
-	if gate.hostCheckedToolNames[definition.Name] {
+	if definition.IsHostGated {
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
 	return gate.inner.ReviewToolCall(ctx, invocation, definition)

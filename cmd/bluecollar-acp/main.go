@@ -10,6 +10,7 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/acpagent"
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
@@ -19,13 +20,17 @@ func main() {
 	apiKey := flag.String("api-key", "", "API key for that endpoint; default $BLUECOLLAR_LLM_API_KEY")
 	modelName := flag.String("model", os.Getenv("BLUECOLLAR_LLM_MODEL"), "model name to request")
 	agentName := flag.String("name", envOrDefault("BLUECOLLAR_AGENT_NAME", "bluecollar"), "the name this agent answers to")
+	isStructuredOutputOnly := flag.Bool("structured-output-only", os.Getenv("BLUECOLLAR_LLM_STRUCTURED_OUTPUT_ONLY") != "", "reason through structured responses only, never native tool-calling chat; default set by $BLUECOLLAR_LLM_STRUCTURED_OUTPUT_ONLY")
 	flag.Parse()
 
 	if *modelName == "" {
 		log.Fatal("bluecollar-acp: no model named; pass -model or set BLUECOLLAR_LLM_MODEL")
 	}
 
-	languageModel := openaicompatible.NewProvider(*endpointURL, flagOrEnvironment(*apiKey, "BLUECOLLAR_LLM_API_KEY"), *modelName)
+	var languageModel model.LanguageModelProvider = openaicompatible.NewProvider(*endpointURL, flagOrEnvironment(*apiKey, "BLUECOLLAR_LLM_API_KEY"), *modelName)
+	if *isStructuredOutputOnly {
+		languageModel = structuredOutputOnly{languageModel}
+	}
 	errorValue := acpagent.Serve(acpagent.Options{
 		AgentName:      *agentName,
 		LanguageModels: agentcontract.TaskTierLanguageModels{Low: languageModel},
@@ -35,6 +40,8 @@ func main() {
 		log.Fatal(errorValue)
 	}
 }
+
+type structuredOutputOnly struct{ model.LanguageModelProvider }
 
 func envOrDefault(environmentName string, fallback string) string {
 	if value := os.Getenv(environmentName); value != "" {
