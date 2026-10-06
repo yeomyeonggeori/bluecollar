@@ -18,6 +18,7 @@ type catalog struct {
 	sessions  []*mcp.ClientSession
 	toolSet   *toolcontract.ToolSet
 	toolNames []string
+	parking   *runParking
 }
 
 type transportResolver func(acp.McpServer) (mcp.Transport, error)
@@ -57,14 +58,15 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 		}
 	}
 
+	parking := &runParking{}
 	toolSet := toolcontract.NewToolSet(toolNames)
 	toolSet.AllowTestReplacement()
 	for toolName, descriptor := range descriptors {
-		if errorValue := toolSet.RegisterTool(descriptor, callThroughCatalog(handlers[toolName], toolName)); errorValue != nil {
+		if errorValue := toolSet.RegisterTool(descriptor, callThroughCatalog(handlers[toolName], toolName, parking)); errorValue != nil {
 			return nil, errorValue
 		}
 	}
-	return &catalog{sessions: openedSessions, toolSet: toolSet, toolNames: toolNames}, nil
+	return &catalog{sessions: openedSessions, toolSet: toolSet, toolNames: toolNames, parking: parking}, nil
 }
 
 func (openedCatalog *catalog) LoadImageContentBase64(ctx context.Context, taskRunID string, devicePath string) (string, error) {
@@ -151,7 +153,7 @@ func encodedSchema(schema any) json.RawMessage {
 	return encoded
 }
 
-func callThroughCatalog(session *mcp.ClientSession, toolName string) toolcontract.ToolHandler {
+func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *runParking) toolcontract.ToolHandler {
 	return func(ctx context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		arguments := map[string]any{}
 		if len(invocation.Input) > 0 {
@@ -166,6 +168,8 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string) toolcontrac
 			if len(carriedResult.Output.Data) == 0 {
 				carriedResult.Output.Data = json.RawMessage(`{}`)
 			}
+			parking.parkOnHeldCall(ctx, carriedResult)
+			carriedResult.IsValidatedUpstream = true
 			return carriedResult, nil
 		}
 		summary := textOfResult(callResult)

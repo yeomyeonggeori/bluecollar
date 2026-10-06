@@ -77,6 +77,7 @@ func (runningAgent *Agent) NewSession(ctx context.Context, request acp.NewSessio
 	}
 	taskEvents := taskstate.NewTaskEventService()
 	taskRuns := taskstate.NewTaskRunService(taskEvents)
+	openedCatalog.parking.taskRuns = taskRuns
 	kernel := loop.NewAgentKernel(taskRuns, taskstate.NewTaskStepService())
 	kernel.UseLanguageModelProvider(runningAgent.languageModel)
 	kernel.UseTaskTierLanguageModels(runningAgent.options.LanguageModels)

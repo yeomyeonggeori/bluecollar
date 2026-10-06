@@ -295,6 +295,8 @@ type ToolResult struct {
 	Attachments     []FileAttachment `json:"attachments,omitempty"`
 	RecoveryActions []RecoveryAction `json:"recoveryActions,omitempty"`
 	ReplyNotes      []string         `json:"replyNotes,omitempty"`
+
+	IsValidatedUpstream bool `json:"isValidatedUpstream,omitempty"`
 }
 
 func ToolSuccess(content string) ToolResult {
@@ -772,6 +774,9 @@ func (toolSet *ToolSet) invokeRegistered(ctx context.Context, toolInvocation Too
 	result, errorValue := toolSet.invokeWithinDeclaredBudget(ctx, boundTool, toolInvocation)
 	if errorValue != nil || result.Failed() {
 		return result, errorValue
+	}
+	if result.IsValidatedUpstream {
+		return result, nil
 	}
 	if boundTool.Definition.ResultContract == nil {
 		if len(result.Effects) > 0 {

@@ -12,6 +12,8 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -323,5 +325,67 @@ func TestAHiddenToolIsRegisteredButNotOfferedToTheModel(t *testing.T) {
 	result, errorValue := opened.toolSet.AllowingInternalTool("ask_input").Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "ask_input", Input: json.RawMessage(`{}`)})
 	if errorValue != nil || result.Failed() {
 		t.Fatalf("the loop has to reach the hidden tool it calls on the model's behalf: %+v, %v", result, errorValue)
+	}
+}
+
+func openHostedTool(t *testing.T, descriptor toolcontract.ToolDescriptor, published toolcontract.ToolResult) *catalog {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: descriptor.Name, InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{IsError: published.Failed(), Content: []mcp.Content{&mcp.TextContent{Text: published.ContentText()}}, Meta: toolcontract.ResultMeta(published)}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	t.Cleanup(opened.Close)
+	return opened
+}
+
+func TestAResultTheHostAlreadyCheckedIsNotCheckedAgainstTheSchemaItDescribes(t *testing.T) {
+	descriptor := toolcontract.ToolDescriptor{Name: "host_update", ResultContract: &toolcontract.ToolResultContract{
+		Schema: json.RawMessage(`{"type":"object","properties":{"status":{"type":"string"}},"additionalProperties":false}`),
+	}}
+	deferred := toolcontract.ToolSuccessData("scheduled for tonight", json.RawMessage(`{"scheduleID":"schedule-1"}`))
+
+	result, errorValue := openHostedTool(t, descriptor, deferred).toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "host_update", Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || result.Failed() {
+		t.Fatalf("the host answered for the call, got %+v, %v", result, errorValue)
+	}
+}
+
+func TestACallTheHostHeldForApprovalParksTheRunTheAgentHolds(t *testing.T) {
+	held := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.InteractionRequired, "approval", "waiting for the requester")
+	held.Failure.RequiresApproval = true
+	opened := openHostedTool(t, toolcontract.ToolDescriptor{Name: "message_send", ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}, held)
+	taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	taskRun := taskRuns.CreateTaskRunWithOrigin("person-1", taskstate.TaskRunOrigin{}, "send it")
+	taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "default")
+	opened.parking.taskRuns = taskRuns
+
+	opened.toolSet.Invoke(toolcontract.WithTaskRunID(t.Context(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "message_send", Input: json.RawMessage(`{}`)})
+
+	parked, _ := taskRuns.FindTaskRun(taskRun.TaskRunID)
+	if parked.Status != agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("the loop ends its turn on a run that waits, and cannot see the host's store, got %q", parked.Status)
+	}
+}
+
+func TestACallTheHostRefusedDoesNotParkTheRun(t *testing.T) {
+	refused := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", "the requester declined")
+	opened := openHostedTool(t, toolcontract.ToolDescriptor{Name: "message_send", ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}, refused)
+	taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	taskRun := taskRuns.CreateTaskRunWithOrigin("person-1", taskstate.TaskRunOrigin{}, "send it")
+	taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "default")
+	opened.parking.taskRuns = taskRuns
+
+	opened.toolSet.Invoke(toolcontract.WithTaskRunID(t.Context(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "message_send", Input: json.RawMessage(`{}`)})
+
+	notParked, _ := taskRuns.FindTaskRun(taskRun.TaskRunID)
+	if notParked.Status == agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("a refusal is an answer, not a wait, got %q", notParked.Status)
 	}
 }
