@@ -1,6 +1,9 @@
 package toolcontract
 
-import "strings"
+import (
+	"encoding/json"
+	"strings"
+)
 
 const (
 	MetaKeyRequiresApproval     = "toolcontract/requiresApproval"
@@ -9,6 +12,8 @@ const (
 	MetaKeyApprovalScopeSummary = "toolcontract/approvalScopeSummary"
 	MetaKeyApprovalInputFields  = "toolcontract/approvalInputFields"
 	MetaKeyAttachmentDevicePath = "toolcontract/attachmentDevicePath"
+	MetaKeyDescriptor           = "toolcontract/descriptor"
+	MetaKeyResult               = "toolcontract/result"
 )
 
 func DescriptorMeta(descriptor ToolDescriptor) map[string]any {
@@ -18,10 +23,15 @@ func DescriptorMeta(descriptor ToolDescriptor) map[string]any {
 		MetaKeyApprovalScope:        descriptor.ApprovalScope,
 		MetaKeyApprovalScopeSummary: descriptor.ApprovalScopeSummary,
 		MetaKeyApprovalInputFields:  append([]string{}, descriptor.ApprovalInputFields...),
+		MetaKeyDescriptor:           descriptor,
 	}
 }
 
 func ApplyDescriptorMeta(descriptor *ToolDescriptor, meta map[string]any) {
+	if published, isPublished := descriptorOfMeta(meta); isPublished {
+		*descriptor = published
+		return
+	}
 	readMetaString(meta, MetaKeySideEffectClass, &descriptor.SideEffectClass)
 	readMetaString(meta, MetaKeyApprovalScope, &descriptor.ApprovalScope)
 	readMetaString(meta, MetaKeyApprovalScopeSummary, &descriptor.ApprovalScopeSummary)
@@ -29,6 +39,36 @@ func ApplyDescriptorMeta(descriptor *ToolDescriptor, meta map[string]any) {
 		descriptor.RequiresApproval = requiresApproval
 	}
 	descriptor.ApprovalInputFields = append(descriptor.ApprovalInputFields, metaStrings(meta, MetaKeyApprovalInputFields)...)
+}
+
+func descriptorOfMeta(meta map[string]any) (ToolDescriptor, bool) {
+	value, isPresent := meta[MetaKeyDescriptor]
+	if !isPresent {
+		return ToolDescriptor{}, false
+	}
+	encoded, errorValue := json.Marshal(value)
+	if errorValue != nil {
+		return ToolDescriptor{}, false
+	}
+	descriptor := ToolDescriptor{}
+	return descriptor, json.Unmarshal(encoded, &descriptor) == nil && descriptor.Name != ""
+}
+
+func ResultMeta(result ToolResult) map[string]any {
+	return map[string]any{MetaKeyResult: result}
+}
+
+func ResultOfMeta(meta map[string]any) (ToolResult, bool) {
+	value, isPresent := meta[MetaKeyResult]
+	if !isPresent {
+		return ToolResult{}, false
+	}
+	encoded, errorValue := json.Marshal(value)
+	if errorValue != nil {
+		return ToolResult{}, false
+	}
+	result := ToolResult{}
+	return result, json.Unmarshal(encoded, &result) == nil
 }
 
 func AttachmentMeta(attachment FileAttachment) map[string]any {

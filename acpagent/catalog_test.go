@@ -270,3 +270,58 @@ func TestAnImageAToolReturnsReachesTheModelAsAnImageAttachment(t *testing.T) {
 		t.Fatalf("the text beside the image changed: %q", result.ContentText())
 	}
 }
+
+func TestAToolResultTheHostDescribedArrivesWithItsEffectsAndFailure(t *testing.T) {
+	published := toolcontract.ToolResult{
+		Output:  toolcontract.ToolOutput{Content: "created task", Data: json.RawMessage(`{"taskID":"task-1"}`)},
+		Effects: []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "task-1"}},
+	}
+	descriptor := toolcontract.ToolDescriptor{Name: "task_add", ResultContract: &toolcontract.ToolResultContract{
+		Schema:  json.RawMessage(`{"type":"object"}`),
+		Effects: []toolcontract.ResourceEffectContract{{ObjectType: "task", Effect: "created", ResultField: "taskID", EffectIdentity: "id"}},
+	}}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: "task_add", InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "created task"}}, Meta: toolcontract.ResultMeta(published)}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	result, errorValue := opened.toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "task_add", Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || len(result.Effects) != 1 || result.Effects[0].ID != "task-1" {
+		t.Fatalf("the completion gate reads effects, and they were lost in transit: %+v, %v", result, errorValue)
+	}
+}
+
+func TestAHiddenToolIsRegisteredButNotOfferedToTheModel(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	for _, descriptor := range []toolcontract.ToolDescriptor{
+		{Name: "task_add", Visibility: toolcontract.ToolVisibilityModel},
+		{Name: "ask_input", Visibility: toolcontract.ToolVisibilityInternal},
+	} {
+		server.AddTool(&mcp.Tool{Name: descriptor.Name, InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+			func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil
+			})
+	}
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	if !reflect.DeepEqual(opened.toolNames, []string{"task_add"}) {
+		t.Fatalf("a tool the host keeps hidden is the loop's to call, not the model's, got %v", opened.toolNames)
+	}
+	result, errorValue := opened.toolSet.AllowingInternalTool("ask_input").Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "ask_input", Input: json.RawMessage(`{}`)})
+	if errorValue != nil || result.Failed() {
+		t.Fatalf("the loop has to reach the hidden tool it calls on the model's behalf: %+v, %v", result, errorValue)
+	}
+}

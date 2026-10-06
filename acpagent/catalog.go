@@ -48,8 +48,11 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 			return nil, errorValue
 		}
 		for _, tool := range toolList.Tools {
-			toolNames = append(toolNames, tool.Name)
-			descriptors[tool.Name] = descriptorForTool(tool)
+			descriptor := descriptorForTool(tool)
+			if descriptor.Visibility != toolcontract.ToolVisibilityInternal {
+				toolNames = append(toolNames, tool.Name)
+			}
+			descriptors[tool.Name] = descriptor
 			handlers[tool.Name] = session
 		}
 	}
@@ -128,6 +131,9 @@ func descriptorForTool(tool *mcp.Tool) toolcontract.ToolDescriptor {
 		},
 	}
 	toolcontract.ApplyDescriptorMeta(&descriptor, tool.Meta)
+	if descriptor.Visibility == "" {
+		descriptor.Visibility = toolcontract.ToolVisibilityModel
+	}
 	if descriptor.SideEffectClass == "" && tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
 		descriptor.SideEffectClass = toolcontract.ToolSideEffectRead
 	}
@@ -155,6 +161,13 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string) toolcontrac
 		if errorValue != nil {
 			return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.Unavailable, toolName, errorValue.Error()), nil
 		}
+		if carriedResult, isCarried := toolcontract.ResultOfMeta(callResult.Meta); isCarried {
+			carriedResult.Attachments = withImageBytes(carriedResult.Attachments, imageAttachmentsOfResult(callResult))
+			if len(carriedResult.Output.Data) == 0 {
+				carriedResult.Output.Data = json.RawMessage(`{}`)
+			}
+			return carriedResult, nil
+		}
 		summary := textOfResult(callResult)
 		if callResult.IsError {
 			if callResult.StructuredContent != nil {
@@ -166,6 +179,19 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string) toolcontrac
 		toolResult.Attachments = imageAttachmentsOfResult(callResult)
 		return toolResult, nil
 	}
+}
+
+func withImageBytes(attachments []toolcontract.FileAttachment, images []toolcontract.FileAttachment) []toolcontract.FileAttachment {
+	completed := append([]toolcontract.FileAttachment{}, attachments...)
+	imageIndex := 0
+	for index := range completed {
+		if imageIndex >= len(images) || !strings.HasPrefix(strings.ToLower(completed[index].ContentType), "image/") {
+			continue
+		}
+		completed[index].ContentBase64 = images[imageIndex].ContentBase64
+		imageIndex++
+	}
+	return completed
 }
 
 func textOfResult(callResult *mcp.CallToolResult) string {
