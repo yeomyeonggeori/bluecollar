@@ -17,11 +17,17 @@ import (
 
 const DefaultEndpointURL = "https://openrouter.ai/api/alpha/decisions"
 
-const (
-	endpointEnvironmentName = "BLUECOLLAR_DECISION_ENDPOINT"
-	apiKeyEnvironmentName   = "BLUECOLLAR_DECISION_API_KEY"
-	modelEnvironmentName    = "BLUECOLLAR_DECISION_MODEL"
-)
+type EnvironmentNames struct {
+	Endpoint string
+	APIKey   string
+	Model    string
+}
+
+var DecisionEnvironmentNames = EnvironmentNames{
+	Endpoint: "BLUECOLLAR_DECISION_ENDPOINT",
+	APIKey:   "BLUECOLLAR_DECISION_API_KEY",
+	Model:    "BLUECOLLAR_DECISION_MODEL",
+}
 
 type Endpoint struct {
 	URL        string
@@ -30,18 +36,18 @@ type Endpoint struct {
 	HTTPClient *http.Client
 }
 
-var ErrDecisionAPIKeyMissing = errors.New(apiKeyEnvironmentName + " is not set")
+var ErrDecisionAPIKeyMissing = errors.New("the decision API key is not set")
 
-func EndpointFromEnvironment() (Endpoint, error) {
-	apiKey := strings.TrimSpace(os.Getenv(apiKeyEnvironmentName))
+func EndpointFromEnvironment(names EnvironmentNames) (Endpoint, error) {
+	apiKey := strings.TrimSpace(os.Getenv(names.APIKey))
 	if apiKey == "" {
-		return Endpoint{}, ErrDecisionAPIKeyMissing
+		return Endpoint{}, fmt.Errorf("%w: set %s", ErrDecisionAPIKeyMissing, names.APIKey)
 	}
-	modelName := strings.TrimSpace(os.Getenv(modelEnvironmentName))
+	modelName := strings.TrimSpace(os.Getenv(names.Model))
 	if modelName == "" {
-		return Endpoint{}, errors.New(modelEnvironmentName + " is not set and there is no default decision model")
+		return Endpoint{}, fmt.Errorf("%s is not set and there is no default decision model", names.Model)
 	}
-	endpointURL := strings.TrimSpace(os.Getenv(endpointEnvironmentName))
+	endpointURL := strings.TrimSpace(os.Getenv(names.Endpoint))
 	if endpointURL == "" {
 		endpointURL = DefaultEndpointURL
 	}
@@ -53,7 +59,7 @@ func (endpoint Endpoint) DecisionModel() model.DecisionModel {
 }
 
 func ConfiguredDecisionModel(warnings io.Writer) model.DecisionModel {
-	endpoint, errorValue := EndpointFromEnvironment()
+	endpoint, errorValue := EndpointFromEnvironment(DecisionEnvironmentNames)
 	if errorValue != nil {
 		fmt.Fprintln(warnings, "no decision model:", errorValue)
 		return nil

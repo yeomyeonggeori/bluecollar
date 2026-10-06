@@ -3,6 +3,7 @@ package agentcontract
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"time"
 
@@ -14,6 +15,8 @@ const TurnRouterSchemaName = "bluecollar_turn_router"
 const AttachmentDescriptionSchemaName = "bluecollar_attachment_description"
 const LLMCallKindDecision = "decision"
 const AgentActionSchemaName = "bluecollar_agent_turn_action"
+
+var IntakeSchemaNames = []string{TurnRouterSchemaName, AttachmentDescriptionSchemaName}
 
 type LLMCallRecord struct {
 	Kind                   string                                   `json:"kind"`
@@ -73,26 +76,19 @@ type ToolSelectionRecord struct {
 type LLMCallObserver func(record LLMCallRecord)
 
 type IntakeCallLedger struct {
-	Records []LLMCallRecord
+	Records     []LLMCallRecord
+	SchemaNames []string
 }
 
 func (ledger *IntakeCallLedger) Observe(record LLMCallRecord) {
-	if !isIntakeCallRecord(record) {
+	if !ledger.includes(record) {
 		return
 	}
 	ledger.Records = append(ledger.Records, record)
 }
 
-func isIntakeCallRecord(record LLMCallRecord) bool {
-	if record.Kind == LLMCallKindDecision {
-		return true
-	}
-	switch record.SchemaName {
-	case TurnRouterSchemaName, AttachmentDescriptionSchemaName:
-		return true
-	default:
-		return false
-	}
+func (ledger *IntakeCallLedger) includes(record LLMCallRecord) bool {
+	return record.Kind == LLMCallKindDecision || slices.Contains(ledger.SchemaNames, record.SchemaName)
 }
 
 func (ledger *IntakeCallLedger) LanguageModel(provider model.LanguageModelProvider) model.LanguageModelProvider {

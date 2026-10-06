@@ -117,7 +117,7 @@ func TestFailureNoticeGeneratorUsesRecoveryChatBeforeLegacyText(t *testing.T) {
 	if provider.chatCalls != 1 || provider.legacyCalls != 0 {
 		t.Fatalf("expected chat-first generation, got chat=%d legacy=%d", provider.chatCalls, provider.legacyCalls)
 	}
-	if len(provider.chatRequests) != 1 || provider.chatRequests[0].SchemaName != "bluecollar_failure_notice" {
+	if len(provider.chatRequests) != 1 || provider.chatRequests[0].SchemaName != "failure_notice" {
 		t.Fatalf("expected named failure notice chat request, got %+v", provider.chatRequests)
 	}
 }
@@ -170,7 +170,7 @@ func TestFailureNoticeGeneratorDoesNotUseLegacyAfterRecoveryChatCancellation(t *
 	responseContext, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	reply, errorValue := (FailureNoticeGenerator{LanguageModel: provider}).generateRecoveryText(responseContext, "bluecollar_failure_notice", "failure prompt")
+	reply, errorValue := (FailureNoticeGenerator{LanguageModel: provider}).generateRecoveryText(responseContext, "failure_notice", "failure prompt")
 	if reply != "" || !errors.Is(errorValue, context.Canceled) {
 		t.Fatalf("expected canceled recovery chat, got %q and %v", reply, errorValue)
 	}

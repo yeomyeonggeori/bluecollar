@@ -30,8 +30,8 @@ func solidColorPNG(t *testing.T, fill color.Color) []byte {
 }
 
 func TestLiveDecisionReadsImageBackground(t *testing.T) {
-	apiKey := evaltest.RequireInput(t, apiKeyEnvironmentName, "use an OpenRouter key")
-	modelName := evaltest.RequireInput(t, modelEnvironmentName, "use cloudflare/clef-flash")
+	apiKey := evaltest.RequireInput(t, "DECISION_API_KEY", "use an OpenRouter key")
+	modelName := evaltest.RequireInput(t, "DECISION_MODEL", "use cloudflare/clef-flash")
 	decisionModel := Endpoint{URL: DefaultEndpointURL, ModelName: modelName, APIKey: apiKey}.DecisionModel()
 	question := model.ChoiceQuestion{
 		Instructions: "What color is the background of this image?",

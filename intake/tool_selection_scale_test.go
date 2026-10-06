@@ -18,7 +18,7 @@ func TestAThousandToolsAreSelectedFromInBatchesTheModelAccepts(t *testing.T) {
 	outcome.TurnDecision.InitialToolNames = nil
 	outcome.ToolProbabilities = map[string]float64{"provider_0_tool_0": 0.91, "provider_29_tool_49": 0.77}
 	decisionModel := &concurrencyCountingDecisionModel{outcome: outcome}
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	startedAt := time.Now()
 	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, callLedger)

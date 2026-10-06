@@ -3,8 +3,8 @@ package agentcontract
 import "encoding/json"
 
 const (
-	LedgerMetaKey         = "bluecollar.dev/ledger"
-	CarriedOutCallMetaKey = "bluecollar.dev/carried-out"
+	LedgerMetaKey         = "blueprotocol/ledger"
+	CarriedOutCallMetaKey = "blueprotocol/carried-out"
 )
 
 type LedgerRecord struct {

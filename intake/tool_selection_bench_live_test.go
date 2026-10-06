@@ -249,7 +249,7 @@ func rankOf(toolName string, ranked []string) int {
 }
 
 func TestToolSelectionPolicyBenchmark(t *testing.T) {
-	endpoint, errorValue := decisions.EndpointFromEnvironment()
+	endpoint, errorValue := decisions.EndpointFromEnvironment(decisions.DecisionEnvironmentNames)
 	evaltest.RequireConfigured(t, "the decision model", errorValue)
 	toolSet, toolNames := catalogToolSet(t)
 	inCatalog := map[string]bool{}
@@ -271,7 +271,7 @@ func TestToolSelectionPolicyBenchmark(t *testing.T) {
 	for _, benchmark := range benchmarkCases {
 		recorder := &recordingDecisionModel{inner: endpoint.DecisionModel(), noulByQuestion: map[string]float64{}}
 		planner := NewDecisionPlanner(recorder, nil)
-		callLedger := &agentcontract.IntakeCallLedger{}
+		callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 		if _, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
 			Need:              benchmark.task,
 			ToolSet:           toolSet,

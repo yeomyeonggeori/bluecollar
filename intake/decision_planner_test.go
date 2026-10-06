@@ -180,7 +180,7 @@ func TestDecisionPlannerFailsWithoutADecisionModel(t *testing.T) {
 
 func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
 	planner := NewDecisionPlanner(intaketest.NewDecisionModel(startTaskOutcome()), nil)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	if _, errorValue := planner.Decide(context.Background(), addressedDecisionRequest("보고서 정리해줘"), callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
@@ -294,7 +294,7 @@ func TestDecisionPlannerDescribesAnAttachmentsOnlyMessageBeforeDeciding(t *testi
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	describer := &scriptedAttachmentDescriber{descriptions: []string{"화이트보드에 적힌 다음 주 배포 일정 사진."}}
 	planner := NewDecisionPlanner(decisionModel, describer)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	if _, errorValue := planner.Decide(context.Background(), imageDecisionRequest(""), callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
@@ -342,7 +342,7 @@ func TestDecisionPlannerDecidesAnImageWithTextFromFactsAlone(t *testing.T) {
 func TestDecisionPlannerSendsFactsAloneWithoutADescriber(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	planner := NewDecisionPlanner(decisionModel, nil)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	if _, errorValue := planner.Decide(context.Background(), imageDecisionRequest(""), callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)

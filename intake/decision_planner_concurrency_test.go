@@ -85,7 +85,7 @@ func TestOneFailedBatchCancelsTheRestAndSelectsNothing(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88}
 	decisionModel := &concurrencyCountingDecisionModel{outcome: outcome, failSelectionBatches: true}
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	startedAt := time.Now()
 	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, callLedger)

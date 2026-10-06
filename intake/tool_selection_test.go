@@ -244,7 +244,7 @@ func TestTheLedgerCarriesTheProbabilitiesTheSelectionWasMadeFrom(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.TurnDecision.InitialToolNames = nil
 	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	if _, errorValue := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil).Decide(context.Background(), request, callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
@@ -356,7 +356,7 @@ func TestAFailedSelectionStartsTheTaskWithNoLikelyToolsAndSaysSoOnTheLedger(t *t
 	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88}
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	decisions, errorValue := NewDecisionPlanner(&partFailingDecisionModel{outcome: outcome}, nil).Decide(context.Background(), request, callLedger)
 
@@ -468,7 +468,7 @@ func TestOnlyAMessageRoutedToWorkCostsAToolSelectionCall(t *testing.T) {
 func TestASelectionForOneNeedLandsInTheCallLedger(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil)
 
 	selectedTools, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{

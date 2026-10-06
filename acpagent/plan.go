@@ -36,7 +36,7 @@ func DecisionFromFacts(taskEvents []agentcontract.TaskEvent, turnRequest agentco
 
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
 	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 	decision, errorValue := router.PlanObserved(ctx, turnRequest.RoutingRequest(), agentcontract.Routing{}, callLedger)
 	return plannedTurn{decision: decision, callRecords: callLedger.Records}, errorValue
 }

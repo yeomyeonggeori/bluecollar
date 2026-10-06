@@ -15,7 +15,7 @@ import (
 
 func TestRoutedSelectionReachesEveryToolTheWorkNeeds(t *testing.T) {
 	toolSet, toolNames := catalogToolSet(t)
-	endpoint, errorValue := decisions.EndpointFromEnvironment()
+	endpoint, errorValue := decisions.EndpointFromEnvironment(decisions.DecisionEnvironmentNames)
 	evaltest.RequireConfigured(t, "the decision model", errorValue)
 	planner := NewDecisionPlanner(endpoint.DecisionModel(), nil)
 
@@ -31,7 +31,7 @@ func TestRoutedSelectionReachesEveryToolTheWorkNeeds(t *testing.T) {
 			request := addressedDecisionRequest(task)
 			request.ToolSet = toolSet
 			request.CallableToolNames = toolNames
-			decisions, errorValue := planner.Decide(context.Background(), request, &agentcontract.IntakeCallLedger{})
+			decisions, errorValue := planner.Decide(context.Background(), request, &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames})
 			if errorValue != nil {
 				t.Errorf("%q: %v", task, errorValue)
 				return

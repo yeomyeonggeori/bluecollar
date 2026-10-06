@@ -71,7 +71,7 @@ func selectedToolNamesOfFirstMessage(t *testing.T, decisionModel model.DecisionM
 	t.Helper()
 	request := addressedDecisionRequest("이번 주 할 일 목록 보여줘")
 	request.ToolSet = newTestToolSet(toolNames)
-	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, &agentcontract.IntakeCallLedger{})
+	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames})
 	if errorValue != nil {
 		t.Fatalf("decide: %v", errorValue)
 	}

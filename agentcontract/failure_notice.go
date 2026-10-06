@@ -144,7 +144,7 @@ func (generator FailureNoticeGenerator) Generate(ctx context.Context, report Fai
 		status.Reason = "language_model_unavailable"
 		return BuildRawErrorFailureNotice(report), status
 	}
-	reply, errorValue := generator.generateRecoveryText(generationContext, "bluecollar_failure_notice", BuildFailureNoticePrompt(report))
+	reply, errorValue := generator.generateRecoveryText(generationContext, "failure_notice", BuildFailureNoticePrompt(report))
 	if errorValue == nil {
 		if notice, source, hasNotice := PrepareFailureNoticeWithGenerator(generator, generationContext, reply, "generated", report); hasNotice {
 			status.Source = source
@@ -160,7 +160,7 @@ func (generator FailureNoticeGenerator) Generate(ctx context.Context, report Fai
 	if strings.TrimSpace(reply) != "" {
 		status.FirstInvalid = true
 		for repairCount := 1; repairCount <= 2; repairCount++ {
-			repairedReply, repairError := generator.generateRecoveryText(generationContext, "bluecollar_failure_notice_repair", BuildFailureNoticeRepairPrompt(report, reply, repairCount))
+			repairedReply, repairError := generator.generateRecoveryText(generationContext, "failure_notice_repair", BuildFailureNoticeRepairPrompt(report, reply, repairCount))
 			if repairError != nil || strings.TrimSpace(repairedReply) == "" {
 				status.RepairCount = repairCount
 				status.TextRecoveryError = firstNonEmptyString(errorString(repairError), "empty_repair")
@@ -212,7 +212,7 @@ func (generator FailureNoticeGenerator) GenerateIntakeNotice(ctx context.Context
 	generationContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 	prompt := BuildIntakeNoticePrompt(report.Classification, failureReport)
-	reply, errorValue := generator.generateRecoveryText(generationContext, "bluecollar_intake_notice", prompt)
+	reply, errorValue := generator.generateRecoveryText(generationContext, "intake_notice", prompt)
 	if errorValue == nil {
 		if notice := BuildFailureNotice(reply, "generated", failureReport); notice.IsSendable {
 			return notice
@@ -221,7 +221,7 @@ func (generator FailureNoticeGenerator) GenerateIntakeNotice(ctx context.Context
 	if RecoveryContextError(generationContext, errorValue) != nil {
 		return BuildRawErrorFailureNotice(failureReport)
 	}
-	localReply, localError := generator.generateLocalRecoveryText(generationContext, "bluecollar_intake_notice", prompt)
+	localReply, localError := generator.generateLocalRecoveryText(generationContext, "intake_notice", prompt)
 	if localError == nil {
 		if notice := BuildFailureNotice(localReply, "local_generated", failureReport); notice.IsSendable {
 			return notice
@@ -342,7 +342,7 @@ func (generator FailureNoticeGenerator) generateLocalFailureNotice(ctx context.C
 	if strings.TrimSpace(rejectedReply) != "" {
 		prompt = BuildFailureNoticeRepairPrompt(report, rejectedReply, 3)
 	}
-	reply, errorValue := generator.generateLocalRecoveryText(ctx, "bluecollar_failure_notice", prompt)
+	reply, errorValue := generator.generateLocalRecoveryText(ctx, "failure_notice", prompt)
 	if errorValue != nil || strings.TrimSpace(reply) == "" {
 		return FailureNotice{}, firstNonEmptyString(errorString(errorValue), "empty_local_reply"), false
 	}
@@ -351,7 +351,7 @@ func (generator FailureNoticeGenerator) generateLocalFailureNotice(ctx context.C
 		return notice, "", true
 	}
 	for repairCount := 1; repairCount <= 2; repairCount++ {
-		repairedReply, repairError := generator.generateLocalRecoveryText(ctx, "bluecollar_failure_notice_repair", BuildFailureNoticeRepairPrompt(report, reply, repairCount))
+		repairedReply, repairError := generator.generateLocalRecoveryText(ctx, "failure_notice_repair", BuildFailureNoticeRepairPrompt(report, reply, repairCount))
 		if repairError != nil || strings.TrimSpace(repairedReply) == "" {
 			return FailureNotice{}, firstNonEmptyString(errorString(repairError), "empty_local_repair"), false
 		}
@@ -367,7 +367,7 @@ func (generator FailureNoticeGenerator) generateLocalFailureNotice(ctx context.C
 func PrepareFailureNoticeWithGenerator(generator FailureNoticeGenerator, ctx context.Context, reply string, source string, report FailureReport) (FailureNotice, string, bool) {
 	candidate := strings.TrimSpace(reply)
 	if TextExceedsCharacterBudget(candidate, failureNoticeMaximumCharacters) {
-		compressedReply, errorValue := generator.generateRecoveryText(ctx, "bluecollar_failure_notice_compression", BuildFailureNoticeCompressionPrompt(report, reply, failureNoticeMaximumCharacters))
+		compressedReply, errorValue := generator.generateRecoveryText(ctx, "failure_notice_compression", BuildFailureNoticeCompressionPrompt(report, reply, failureNoticeMaximumCharacters))
 		if errorValue != nil || strings.TrimSpace(compressedReply) == "" {
 			return FailureNotice{}, "", false
 		}
@@ -418,9 +418,9 @@ func (generator FailureNoticeGenerator) reviewFailureNotice(ctx context.Context,
 
 func (generator FailureNoticeGenerator) generateFailureNoticeReview(ctx context.Context, source string, prompt string) (string, error) {
 	if strings.HasPrefix(source, "local_") {
-		return generator.generateLocalRecoveryText(ctx, "bluecollar_failure_notice_review", prompt)
+		return generator.generateLocalRecoveryText(ctx, "failure_notice_review", prompt)
 	}
-	return generator.generateRecoveryText(ctx, "bluecollar_failure_notice_review", prompt)
+	return generator.generateRecoveryText(ctx, "failure_notice_review", prompt)
 }
 
 func BuildRawErrorFailureNotice(report FailureReport) FailureNotice {

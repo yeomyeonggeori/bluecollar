@@ -99,7 +99,7 @@ func TestAStalledDecisionCallIsCutAtTheMeasuredPatienceAndAskedAgain(t *testing.
 	decisionModel := &stallingThenAnsweringDecisionModel{stalledCalls: 1, answering: intaketest.NewDecisionModel(clarifyOutcome())}
 	decisionPlanner := NewDecisionPlanner(decisionModel, nil)
 	decisionPlanner.callCost.record("a-decision-model", time.Millisecond)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
 
 	decisions, errorValue := decisionPlanner.Decide(context.Background(), agentcontract.IntakeDecisionRequest{
 		Messages: []agentcontract.IntakeDecisionMessage{{MessageID: "message-1", Prompt: "보고서 하나 만들어줘"}},
