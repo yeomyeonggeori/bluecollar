@@ -3,6 +3,8 @@ package loop
 import (
 	"strings"
 
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -141,4 +143,112 @@ func normalizeEvidenceAnyOf(values [][]string) [][]string {
 		result = append(result, normalizedGroup)
 	}
 	return result
+}
+
+func activeGoalForTurn(request AgentRequest, outcomeContract OutcomeContract, executionPlan ExecutionPlan, hasExecutionPlan bool) ActiveGoal {
+	activeGoal := request.ActiveGoal
+	activeGoal.SelectedToolNames = appendUniqueStrings(activeGoal.SelectedToolNames, request.PinnedToolNames...)
+	activeGoal.SelectedSkillNames = appendUniqueStrings(activeGoal.SelectedSkillNames, request.PinnedSkillNames...)
+	activeGoal.OutcomeContract = normalizeOutcomeContract(outcomeContract)
+	if strings.TrimSpace(activeGoal.OriginalInstruction) == "" {
+		activeGoal.OriginalInstruction = strings.TrimSpace(request.Prompt)
+	}
+	if hasExecutionPlan {
+		activeGoal.OriginalInstruction = firstNonEmptyString(executionPlan.OriginalInstruction, activeGoal.OriginalInstruction)
+		activeGoal.CurrentObjective = firstNonEmptyString(executionPlan.Summary, activeGoal.CurrentObjective)
+		activeGoal.MissingInformation = append([]string{}, executionPlan.MissingInformation...)
+	}
+	if activeGoal.Status == "" {
+		activeGoal.Status = ActiveGoalStatusActive
+	}
+	return activeGoal
+}
+
+func selectedSkillNameList(skillDecisions []SkillSelectionDecision) []string {
+	selectedNames := []string{}
+	for _, skillDecision := range skillDecisions {
+		if skillDecision.Status == "selected" {
+			selectedNames = appendUniqueStrings(selectedNames, skillDecision.Name)
+		}
+	}
+	return selectedNames
+}
+
+func activeGoalFromExecutionPlan(taskRunID string, executionPlan ExecutionPlan, status ActiveGoalStatus, toolSet *toolcontract.ToolSet, evidenceHints []string, requiredAttachmentSuffixes []string) ActiveGoal {
+	outcomeContract := normalizeOutcomeContract(OutcomeContract{
+		RequiredEvidenceTools:      executionPlanEvidenceTools(toolSet, executionPlan, evidenceHints),
+		RequiredAttachmentSuffixes: append([]string{}, requiredAttachmentSuffixes...),
+		SelectedEvidenceHints:      append([]string{}, evidenceHints...),
+		Source:                     "execution_plan",
+	})
+	return ActiveGoal{
+		GoalID:              strings.TrimSpace(taskRunID),
+		TaskRunID:           strings.TrimSpace(taskRunID),
+		OriginalInstruction: strings.TrimSpace(executionPlan.OriginalInstruction),
+		CurrentObjective:    strings.TrimSpace(executionPlan.Summary),
+		MissingInformation:  append([]string{}, executionPlan.MissingInformation...),
+		OutcomeContract:     outcomeContract,
+		Status:              status,
+	}
+}
+
+func activeGoalFromIntakeOnly(routing turnclassification.Routing, taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
+	goal := ActiveGoal{}
+	if canPreserveIntakeGoal(routing, taskRunID, request) {
+		goal = request.ActiveGoal
+	}
+	goal.GoalID = strings.TrimSpace(taskRunID)
+	goal.TaskRunID = strings.TrimSpace(taskRunID)
+	goal.OriginalInstruction = firstNonEmptyString(goal.OriginalInstruction, request.Prompt)
+	goal.CurrentObjective = firstNonEmptyString(intakeDecision.Reason, goal.CurrentObjective)
+	goal.Status = activeGoalStatusForTaskStatus(status)
+	if !OutcomeContractHasRequirements(goal.OutcomeContract) {
+		goal.OutcomeContract.ExpectedResults = turnclassification.NormalizeExpectedResults(intakeDecision.ExpectedResults)
+		goal.OutcomeContract.RequiredAttachmentSuffixes = attachmentSuffixesForRequestedOutputFormats(intakeDecision.RequestedOutputFormats)
+	}
+	goal.SelectedToolNames = appendUniqueStrings(goal.SelectedToolNames, registeredToolNamesOnly(request.ToolSet, request.PinnedToolNames)...)
+	goal.SelectedSkillNames = appendUniqueStrings(goal.SelectedSkillNames, request.PinnedSkillNames...)
+	return goal
+}
+
+func canPreserveIntakeGoal(routing turnclassification.Routing, taskRunID string, request AgentRequest) bool {
+	if strings.TrimSpace(request.ActiveGoal.TaskRunID) != strings.TrimSpace(taskRunID) {
+		return false
+	}
+	decision := routing.Decision
+	if decision == nil {
+		return true
+	}
+	route := decision.Route
+	return route != TurnRouteStartTask && route != TurnRouteReviseTask
+}
+
+func activeGoalStatusForTaskStatus(status agentcontract.TaskStatus) ActiveGoalStatus {
+	switch status {
+	case agentcontract.TaskStatusWaitingUserInput:
+		return ActiveGoalStatusWaitingUserInput
+	case agentcontract.TaskStatusWaitingApproval:
+		return ActiveGoalStatusWaitingApproval
+	case agentcontract.TaskStatusCompleted:
+		return ActiveGoalStatusCompleted
+	case agentcontract.TaskStatusBlocked, agentcontract.TaskStatusFailed, agentcontract.TaskStatusCancelled:
+		return ActiveGoalStatusBlocked
+	default:
+		return ActiveGoalStatusActive
+	}
+}
+
+func activeGoalEventNameForTaskStatus(status agentcontract.TaskStatus) string {
+	switch status {
+	case agentcontract.TaskStatusWaitingUserInput:
+		return agentcontract.TaskEventAgentGoalWaitingUserInput
+	case agentcontract.TaskStatusWaitingApproval:
+		return agentcontract.TaskEventAgentGoalWaitingApproval
+	case agentcontract.TaskStatusCompleted:
+		return agentcontract.TaskEventAgentGoalCompleted
+	case agentcontract.TaskStatusBlocked, agentcontract.TaskStatusFailed, agentcontract.TaskStatusCancelled:
+		return agentcontract.TaskEventAgentGoalBlocked
+	default:
+		return agentcontract.TaskEventAgentGoalUpdated
+	}
 }

@@ -4,8 +4,6 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/toolexposure"
-	"github.com/yeomyeonggeori/bluecollar/turnclassification"
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -76,11 +74,6 @@ func shouldExposeToolForOutcome(toolSet *toolcontract.ToolSet, toolName string, 
 		return outcomeAllowsExternalSendTools(toolSet, executionPlan, hasExecutionPlan, outcomeContract)
 	}
 	return true
-}
-
-func outcomeAllowsExternalSendTools(toolSet *toolcontract.ToolSet, executionPlan ExecutionPlan, hasExecutionPlan bool, outcomeContract OutcomeContract) bool {
-	return contractRequiresSendTool(toolSet, outcomeContract) ||
-		(hasExecutionPlan && (executionPlan.ExternalSend || executionPlan.ThirdPartyExternalSend))
 }
 
 func outcomeAllowsVisualArtifactReview(request AgentRequest, outcomeContract OutcomeContract) bool {
@@ -304,46 +297,11 @@ func toolResultContractAttachesFile(resultContract *toolcontract.ToolResultContr
 	return false
 }
 
-func requestExpectsExternalSend(request AgentRequest, executionPlan ExecutionPlan, hasExecutionPlan bool) bool {
-	_ = request
-	if !hasExecutionPlan {
-		return true
-	}
-	return executionPlan.ExternalSend || executionPlan.ThirdPartyExternalSend
-}
-
 func outcomeContractExpectsFileResult(contract OutcomeContract) bool {
 	return len(contract.RequiredAttachmentSuffixes) > 0 ||
 		evidenceToolsContainArtifactDelivery(contract.RequiredEvidenceTools) ||
 		evidenceAnyOfContainsArtifactDelivery(contract.RequiredEvidenceAnyOf) ||
 		expectedResultIncludesType(contract, ExpectedResultTypeFile)
-}
-
-func outcomeContractRequiresPlatformMessageMaintenance(toolSet *toolcontract.ToolSet, contract OutcomeContract) bool {
-	for _, toolName := range outcomeContractToolNames(contract) {
-		if toolIsInNamespace(toolSet, toolName, "message") && !isSendEvidenceTool(toolSet, toolName) {
-			return true
-		}
-	}
-	return false
-}
-
-func removePlatformMessageSendContract(contract OutcomeContract) OutcomeContract {
-	contract.RequiredEvidenceTools = removeToolName(contract.RequiredEvidenceTools, "message_send")
-	contract.SelectedEvidenceHints = removeToolName(contract.SelectedEvidenceHints, "message_send")
-	contract.RequiredEvidenceAnyOf = removeToolNameGroups(contract.RequiredEvidenceAnyOf, "message_send")
-	return contract
-}
-
-func removeExternalSendContract(toolSet *toolcontract.ToolSet, contract OutcomeContract) OutcomeContract {
-	for _, toolName := range outcomeContractToolNames(contract) {
-		if !isSendEvidenceTool(toolSet, toolName) {
-			continue
-		}
-		contract.RequiredEvidenceTools = removeToolName(contract.RequiredEvidenceTools, toolName)
-		contract.RequiredEvidenceAnyOf = removeToolNameGroups(contract.RequiredEvidenceAnyOf, toolName)
-	}
-	return contract
 }
 
 func removeImplicitFileContract(contract OutcomeContract) OutcomeContract {
@@ -541,95 +499,6 @@ func isArtifactOutputFormat(value string) bool {
 	}
 }
 
-func outcomeEvidenceTools(request AgentRequest, intakeDecision IntakeDecision, executionPlan ExecutionPlan, hasExecutionPlan bool, evidenceHints []string, requiredAttachmentSuffixes []string) []string {
-	toolNames := []string{}
-	for _, toolName := range evidenceHints {
-		if evidenceHintMatchesOutcome(toolName, request, intakeDecision, executionPlan, hasExecutionPlan, requiredAttachmentSuffixes) {
-			toolNames = appendUniqueStrings(toolNames, toolName)
-		}
-	}
-	return toolNames
-}
-
-func plannedSendEvidenceTools(request AgentRequest, intakeDecision IntakeDecision, executionPlan ExecutionPlan, hasExecutionPlan bool) []string {
-	if !hasExecutionPlan {
-		return nil
-	}
-	if !executionPlan.ExternalSend && !executionPlan.ThirdPartyExternalSend {
-		return nil
-	}
-	return sendEvidenceToolsFromValues(request.ToolSet, workingSetEvidenceGroup(request.ToolSet, intakeDecision.InitialToolNames))
-}
-
-func requiredSendEvidenceToolsForContract(toolSet *toolcontract.ToolSet, contract OutcomeContract) []string {
-	if contractRequiresSendTool(toolSet, contract) {
-		return sendEvidenceToolsFromValues(toolSet, outcomeContractRequiredToolNames(contract))
-	}
-	return nil
-}
-
-func sendEvidenceToolsFromValues(toolSet *toolcontract.ToolSet, values []string) []string {
-	toolNames := []string{}
-	for _, value := range values {
-		if isSendEvidenceTool(toolSet, value) {
-			toolNames = appendUniqueStrings(toolNames, value)
-		}
-	}
-	return toolNames
-}
-
-func availableSendEvidenceToolNames(toolSet *toolcontract.ToolSet) []string {
-	if toolSet == nil {
-		return nil
-	}
-	toolNames := []string{}
-	for _, toolName := range toolSet.ListToolNames() {
-		if isSendEvidenceTool(toolSet, toolName) {
-			toolNames = appendUniqueStrings(toolNames, toolName)
-		}
-	}
-	return toolNames
-}
-
-func singleAvailableSendEvidenceTool(toolSet *toolcontract.ToolSet) []string {
-	toolNames := availableSendEvidenceToolNames(toolSet)
-	if len(toolNames) != 1 {
-		return nil
-	}
-	return toolNames
-}
-
-func evidenceHintMatchesOutcome(toolName string, request AgentRequest, intakeDecision IntakeDecision, executionPlan ExecutionPlan, hasExecutionPlan bool, requiredAttachmentSuffixes []string) bool {
-	trimmedToolName := strings.TrimSpace(toolName)
-	if trimmedToolName == "" {
-		return false
-	}
-	if isSendEvidenceTool(request.ToolSet, trimmedToolName) {
-		return activeGoalRequiresTool(request.ActiveGoal, trimmedToolName) ||
-			(hasExecutionPlan && (executionPlan.ExternalSend || executionPlan.ThirdPartyExternalSend))
-	}
-	if toolIsInNamespace(request.ToolSet, trimmedToolName, "message") {
-		return intakeDecision.TaskShape == TaskShapeMaintenanceTask ||
-			activeGoalMentionsTool(request.ActiveGoal, trimmedToolName) ||
-			contractRequiresToolNamespace(request.ToolSet, request.ActiveGoal.OutcomeContract, "message")
-	}
-	if activeGoalRequiresTool(request.ActiveGoal, trimmedToolName) {
-		return true
-	}
-	if toolexposure.IsArtifactDeliveryTool(trimmedToolName) {
-		return len(requiredAttachmentSuffixes) > 0
-	}
-	if toolIsInNamespace(request.ToolSet, trimmedToolName, "schedule") {
-		return intakeDecision.TaskShape == TaskShapeScheduledTask
-	}
-	return false
-}
-
-func isSendEvidenceTool(toolSet *toolcontract.ToolSet, toolName string) bool {
-	toolDefinition, isFound := toolDefinitionForName(toolSet, toolName)
-	return isFound && toolDefinition.SideEffectClass == toolcontract.ToolSideEffectExternalSend
-}
-
 func toolIsInNamespace(toolSet *toolcontract.ToolSet, toolName string, namespace string) bool {
 	toolDefinition, isFound := toolDefinitionForName(toolSet, toolName)
 	return isFound && toolDefinition.Namespace == strings.TrimSpace(namespace)
@@ -645,15 +514,6 @@ func toolDefinitionForName(toolSet *toolcontract.ToolSet, toolName string) (tool
 func contractRequiresToolNamespace(toolSet *toolcontract.ToolSet, contract OutcomeContract, namespace string) bool {
 	for _, toolName := range outcomeContractRequiredToolNames(contract) {
 		if toolIsInNamespace(toolSet, toolName, namespace) {
-			return true
-		}
-	}
-	return false
-}
-
-func contractRequiresSendTool(toolSet *toolcontract.ToolSet, contract OutcomeContract) bool {
-	for _, toolName := range outcomeContractRequiredToolNames(contract) {
-		if isSendEvidenceTool(toolSet, toolName) {
 			return true
 		}
 	}
@@ -686,10 +546,6 @@ func activeGoalRequiresTool(activeGoal ActiveGoal, toolName string) bool {
 	return false
 }
 
-func requestLooksLikeExternalSendContinuation(request AgentRequest, contract OutcomeContract) bool {
-	return contractRequiresSendTool(request.ToolSet, contract)
-}
-
 func outcomeContractToolNames(contract OutcomeContract) []string {
 	toolNames := outcomeContractRequiredToolNames(contract)
 	toolNames = append(toolNames, contract.SelectedEvidenceHints...)
@@ -716,114 +572,6 @@ func outcomeContractSource(hasExecutionPlan bool, requiredAttachmentSuffixes []s
 		return "explicit_request"
 	}
 	return strings.Join(sources, "+")
-}
-
-func activeGoalForTurn(request AgentRequest, outcomeContract OutcomeContract, executionPlan ExecutionPlan, hasExecutionPlan bool) ActiveGoal {
-	activeGoal := request.ActiveGoal
-	activeGoal.SelectedToolNames = appendUniqueStrings(activeGoal.SelectedToolNames, request.PinnedToolNames...)
-	activeGoal.SelectedSkillNames = appendUniqueStrings(activeGoal.SelectedSkillNames, request.PinnedSkillNames...)
-	activeGoal.OutcomeContract = normalizeOutcomeContract(outcomeContract)
-	if strings.TrimSpace(activeGoal.OriginalInstruction) == "" {
-		activeGoal.OriginalInstruction = strings.TrimSpace(request.Prompt)
-	}
-	if hasExecutionPlan {
-		activeGoal.OriginalInstruction = firstNonEmptyString(executionPlan.OriginalInstruction, activeGoal.OriginalInstruction)
-		activeGoal.CurrentObjective = firstNonEmptyString(executionPlan.Summary, activeGoal.CurrentObjective)
-		activeGoal.MissingInformation = append([]string{}, executionPlan.MissingInformation...)
-	}
-	if activeGoal.Status == "" {
-		activeGoal.Status = ActiveGoalStatusActive
-	}
-	return activeGoal
-}
-
-func selectedSkillNameList(skillDecisions []SkillSelectionDecision) []string {
-	selectedNames := []string{}
-	for _, skillDecision := range skillDecisions {
-		if skillDecision.Status == "selected" {
-			selectedNames = appendUniqueStrings(selectedNames, skillDecision.Name)
-		}
-	}
-	return selectedNames
-}
-
-func activeGoalFromExecutionPlan(taskRunID string, executionPlan ExecutionPlan, status ActiveGoalStatus, toolSet *toolcontract.ToolSet, evidenceHints []string, requiredAttachmentSuffixes []string) ActiveGoal {
-	outcomeContract := normalizeOutcomeContract(OutcomeContract{
-		RequiredEvidenceTools:      executionPlanEvidenceTools(toolSet, executionPlan, evidenceHints),
-		RequiredAttachmentSuffixes: append([]string{}, requiredAttachmentSuffixes...),
-		SelectedEvidenceHints:      append([]string{}, evidenceHints...),
-		Source:                     "execution_plan",
-	})
-	return ActiveGoal{
-		GoalID:              strings.TrimSpace(taskRunID),
-		TaskRunID:           strings.TrimSpace(taskRunID),
-		OriginalInstruction: strings.TrimSpace(executionPlan.OriginalInstruction),
-		CurrentObjective:    strings.TrimSpace(executionPlan.Summary),
-		MissingInformation:  append([]string{}, executionPlan.MissingInformation...),
-		OutcomeContract:     outcomeContract,
-		Status:              status,
-	}
-}
-
-func activeGoalFromIntakeOnly(routing turnclassification.Routing, taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
-	goal := ActiveGoal{}
-	if canPreserveIntakeGoal(routing, taskRunID, request) {
-		goal = request.ActiveGoal
-	}
-	goal.GoalID = strings.TrimSpace(taskRunID)
-	goal.TaskRunID = strings.TrimSpace(taskRunID)
-	goal.OriginalInstruction = firstNonEmptyString(goal.OriginalInstruction, request.Prompt)
-	goal.CurrentObjective = firstNonEmptyString(intakeDecision.Reason, goal.CurrentObjective)
-	goal.Status = activeGoalStatusForTaskStatus(status)
-	if !OutcomeContractHasRequirements(goal.OutcomeContract) {
-		goal.OutcomeContract.ExpectedResults = turnclassification.NormalizeExpectedResults(intakeDecision.ExpectedResults)
-		goal.OutcomeContract.RequiredAttachmentSuffixes = attachmentSuffixesForRequestedOutputFormats(intakeDecision.RequestedOutputFormats)
-	}
-	goal.SelectedToolNames = appendUniqueStrings(goal.SelectedToolNames, registeredToolNamesOnly(request.ToolSet, request.PinnedToolNames)...)
-	goal.SelectedSkillNames = appendUniqueStrings(goal.SelectedSkillNames, request.PinnedSkillNames...)
-	return goal
-}
-
-func canPreserveIntakeGoal(routing turnclassification.Routing, taskRunID string, request AgentRequest) bool {
-	if strings.TrimSpace(request.ActiveGoal.TaskRunID) != strings.TrimSpace(taskRunID) {
-		return false
-	}
-	decision := routing.Decision
-	if decision == nil {
-		return true
-	}
-	route := decision.Route
-	return route != TurnRouteStartTask && route != TurnRouteReviseTask
-}
-
-func activeGoalStatusForTaskStatus(status agentcontract.TaskStatus) ActiveGoalStatus {
-	switch status {
-	case agentcontract.TaskStatusWaitingUserInput:
-		return ActiveGoalStatusWaitingUserInput
-	case agentcontract.TaskStatusWaitingApproval:
-		return ActiveGoalStatusWaitingApproval
-	case agentcontract.TaskStatusCompleted:
-		return ActiveGoalStatusCompleted
-	case agentcontract.TaskStatusBlocked, agentcontract.TaskStatusFailed, agentcontract.TaskStatusCancelled:
-		return ActiveGoalStatusBlocked
-	default:
-		return ActiveGoalStatusActive
-	}
-}
-
-func activeGoalEventNameForTaskStatus(status agentcontract.TaskStatus) string {
-	switch status {
-	case agentcontract.TaskStatusWaitingUserInput:
-		return agentcontract.TaskEventAgentGoalWaitingUserInput
-	case agentcontract.TaskStatusWaitingApproval:
-		return agentcontract.TaskEventAgentGoalWaitingApproval
-	case agentcontract.TaskStatusCompleted:
-		return agentcontract.TaskEventAgentGoalCompleted
-	case agentcontract.TaskStatusBlocked, agentcontract.TaskStatusFailed, agentcontract.TaskStatusCancelled:
-		return agentcontract.TaskEventAgentGoalBlocked
-	default:
-		return agentcontract.TaskEventAgentGoalUpdated
-	}
 }
 
 func executionPlanEvidenceTools(toolSet *toolcontract.ToolSet, executionPlan ExecutionPlan, evidenceHints []string) []string {
