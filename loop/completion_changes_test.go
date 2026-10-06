@@ -202,17 +202,17 @@ func TestExpectedChangesQuoteTheLatestMessageAboutAnEarlierRequest(t *testing.T)
 	}
 }
 
-func TestExpectedChangeIsUnmetWithoutAskingJevWhenNothingOfItsRecordTypeChanged(t *testing.T) {
-	decisionModel := &scriptedDecisionModel{}
+func TestJevJudgesAChangeWithNoLookupAndNoRecordedChangeAndALowVerdictLeavesItUnmet(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.1}}
 	expected := []expectedChange{{Change: "calendar created", Asked: "회의도 잡아줘"}}
 
 	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
 
+	if len(decisionModel.requests) != 1 {
+		t.Fatalf("expected Jev asked about a change nothing recorded or looked up, got %d calls", len(decisionModel.requests))
+	}
 	if errorValue != nil || len(check.Unmet) != 1 || len(check.Unrecorded) != 1 {
 		t.Fatalf("expected the unrecorded change to be unmet, got %+v error=%v", check, errorValue)
-	}
-	if len(decisionModel.requests) != 0 {
-		t.Fatalf("expected no Jev call when no record of that type changed, got %d", len(decisionModel.requests))
 	}
 }
 

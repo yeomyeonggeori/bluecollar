@@ -63,51 +63,42 @@ type changeLookup struct {
 }
 
 func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []expectedChange, observations []turnObservation) (changeCheck, error) {
-	check := changeCheck{ExpectedChanges: expected}
-	changedObjectTypes := changedObjectTypes(observations)
-	objectTypeByKind := objectTypeByChangeKind(request.ToolSet)
+	check := changeCheck{ExpectedChanges: expected, Unrecorded: unrecordedChanges(request.ToolSet, expected, observations)}
 	location := companyLocation(request.Company.TimeZone)
-	judgedIndexes := []int{}
-	for index, change := range expected {
-		isRecorded := changedObjectTypes[objectTypeByKind[change.Change]]
-		if !isRecorded {
-			check.Unrecorded = append(check.Unrecorded, change)
-		}
-		if isRecorded || isLookedUp(request.ToolSet, change, observations, location) {
-			judgedIndexes = append(judgedIndexes, index)
-			continue
-		}
-		check.Unmet = append(check.Unmet, change)
-	}
-	if len(judgedIndexes) == 0 {
-		return check, nil
-	}
 	heldObjectTypes := heldObjectTypes(observations)
-	state := changeCheckState(request, location, expected, judgedIndexes, heldObjectTypes, observations)
+	state := changeCheckState(request, location, expected, heldObjectTypes, observations)
 	check.StateDigest = judgedStateDigest(state)
 	if refusal, isRefused := refusalOverState(observations, check.StateDigest); isRefused {
 		return refusal, nil
 	}
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
 		State:     state,
-		Questions: changeCheckQuestions(judgedIndexes, len(heldObjectTypes) > 0),
+		Questions: changeCheckQuestions(len(expected), len(heldObjectTypes) > 0),
 	})
 	if errorValue != nil {
 		return changeCheck{}, errorValue
 	}
 	check.CarriedOut = map[string]float64{}
-	for _, index := range judgedIndexes {
+	for index, change := range expected {
 		answer := response.Answers[changeQuestionKey(index)]
 		check.CarriedOut[changeQuestionKey(index)] = answer.Noul
 		if answer.Noul < changeCarriedOutThreshold {
-			check.Unmet = append(check.Unmet, expected[index])
+			check.Unmet = append(check.Unmet, change)
 		}
 	}
 	return check, nil
 }
 
-func isLookedUp(toolSet *toolcontract.ToolSet, change expectedChange, observations []turnObservation, location *time.Location) bool {
-	return len(changeLookups(toolSet, []expectedChange{change}, observations, location)) > 0
+func unrecordedChanges(toolSet *toolcontract.ToolSet, expected []expectedChange, observations []turnObservation) []expectedChange {
+	changedObjectTypes := changedObjectTypes(observations)
+	objectTypeByKind := objectTypeByChangeKind(toolSet)
+	var unrecorded []expectedChange
+	for _, change := range expected {
+		if !changedObjectTypes[objectTypeByKind[change.Change]] {
+			unrecorded = append(unrecorded, change)
+		}
+	}
+	return unrecorded
 }
 
 func judgedStateDigest(state map[string]any) string {
@@ -135,13 +126,14 @@ func refusalOverState(observations []turnObservation, stateDigest string) (chang
 	return changeCheck{}, false
 }
 
-func changeCheckQuestions(indexes []int, isAnyFileHeld bool) map[string]model.DecisionQuestion {
+func changeCheckQuestions(changeCount int, isAnyFileHeld bool) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
-	for _, index := range indexes {
+	for index := range changeCount {
 		instructions := []string{
 			fmt.Sprintf("Was expectedChanges[%d] carried out? asked is the user's own words asking for it; read them in request and conversationBefore, with relative words (now, tomorrow, by 6:30) read against now.", index),
 			"changedRecords lists every record a tool recorded changing, with its changes in order; judge a record by where its history ends. unrecordedWork lists calls that can change things but record no change of their own, such as commands: a record they made or changed shows in changedRecords only through a later recorded change, so read the two together.",
 			"It is carried out when the records asked about end up the way asked says, as changedRecords and unrecordedWork show together, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
+			"It counts as already so only when lookups or changedRecords show it; with no such evidence it was not carried out.",
 		}
 		if isAnyFileHeld {
 			instructions = append(instructions,
@@ -166,7 +158,7 @@ func changeQuestionKey(index int) string {
 	return fmt.Sprintf("expected%d", index)
 }
 
-func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, judgedIndexes []int, heldObjectTypes map[string]bool, observations []turnObservation) map[string]any {
+func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, heldObjectTypes map[string]bool, observations []turnObservation) map[string]any {
 	state := map[string]any{
 		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
 		"now":             environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST"),
@@ -176,7 +168,7 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
 		state["conversationBefore"] = conversation
 	}
-	changesBeyondHolds := changesNotJudgedByHolds(request.ToolSet, expected, judgedIndexes, heldObjectTypes)
+	changesBeyondHolds := changesNotJudgedByHolds(request.ToolSet, expected, heldObjectTypes)
 	if lookups := changeLookups(request.ToolSet, changesBeyondHolds, observations, location); len(lookups) > 0 {
 		state["lookups"] = lookups
 	}
@@ -189,12 +181,12 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 	return state
 }
 
-func changesNotJudgedByHolds(toolSet *toolcontract.ToolSet, expected []expectedChange, judgedIndexes []int, heldObjectTypes map[string]bool) []expectedChange {
+func changesNotJudgedByHolds(toolSet *toolcontract.ToolSet, expected []expectedChange, heldObjectTypes map[string]bool) []expectedChange {
 	objectTypeByKind := objectTypeByChangeKind(toolSet)
 	changes := []expectedChange{}
-	for _, index := range judgedIndexes {
-		if !heldObjectTypes[objectTypeByKind[expected[index].Change]] {
-			changes = append(changes, expected[index])
+	for _, change := range expected {
+		if !heldObjectTypes[objectTypeByKind[change.Change]] {
+			changes = append(changes, change)
 		}
 	}
 	return changes
