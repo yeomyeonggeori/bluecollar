@@ -32,7 +32,7 @@ func DecisionFromFacts(taskEvents []agentcontract.TaskEvent, turnRequest agentco
 	case turnRequest.IsRuntimeRestartResume:
 		return withHostTaskLevel(resumedTurnDecision(taskEvents, turnRequest), turnRequest), true
 	case isReplyToAskedQuestion(turnRequest):
-		return withHostTaskLevel(answeredQuestionDecision(taskEvents, turnRequest), turnRequest), true
+		return withHostTaskLevel(answeredQuestionDecision(turnRequest), turnRequest), true
 	}
 	return agentcontract.TurnDecision{}, false
 }
@@ -49,23 +49,23 @@ func isReplyToAskedQuestion(turnRequest agentcontract.AgentTurnRequest) bool {
 }
 
 func resumedTurnDecision(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest) agentcontract.TurnDecision {
-	decision := continuedTurnDecision(taskEvents, turnRequest, "the host resumes a run the runtime had stopped")
+	decision := continuedTurnDecision(turnRequest, "the host resumes a run the runtime had stopped").WithRestoredIntakeState(latestIntakeDecision(taskEvents))
 	decision.TaskLevel = highestRecordedTaskLevel(taskEvents)
 	return decision
 }
 
-func answeredQuestionDecision(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest) agentcontract.TurnDecision {
-	return continuedTurnDecision(taskEvents, turnRequest, "a reply to the question the run asked")
+func answeredQuestionDecision(turnRequest agentcontract.AgentTurnRequest) agentcontract.TurnDecision {
+	return continuedTurnDecision(turnRequest, "a reply to the question the run asked")
 }
 
-func continuedTurnDecision(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest, reason string) agentcontract.TurnDecision {
+func continuedTurnDecision(turnRequest agentcontract.AgentTurnRequest, reason string) agentcontract.TurnDecision {
 	return agentcontract.TurnDecision{
 		Route:            agentcontract.TurnRouteContinueTask,
 		Classification:   agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
 		ResponseLanguage: turnRequest.ResponseLanguage,
 		Reason:           reason,
-	}.WithRestoredIntakeState(latestIntakeDecision(taskEvents))
+	}
 }
 
 func withHostTaskLevel(decision agentcontract.TurnDecision, turnRequest agentcontract.AgentTurnRequest) agentcontract.TurnDecision {
