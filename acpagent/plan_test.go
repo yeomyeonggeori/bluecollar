@@ -200,3 +200,43 @@ func TestThePlanningCallsAreRecordedUnderTheRunTheyPlanned(t *testing.T) {
 		t.Fatalf("planning a turn is a model call the run has to show, got %d calls with it and %d without", withPlanning, withoutPlanning)
 	}
 }
+
+func TestAResumedRunInheritsTheHighestLevelItRecorded(t *testing.T) {
+	taskEvents := []agentcontract.TaskEvent{
+		{Name: agentcontract.TaskEventAgentIntake, Body: `{"effortLevel":"deep","taskComplexity":"complex"}`},
+		{Name: agentcontract.TaskEventAgentIntake, Body: `{"effortLevel":"standard","taskComplexity":"normal"}`},
+	}
+
+	decision, isFromFacts := DecisionFromFacts(taskEvents, agentcontract.AgentTurnRequest{IsRuntimeRestartResume: true})
+
+	if !isFromFacts || decision.TaskLevel != agentcontract.TaskLevelMedium {
+		t.Fatalf("a resume carries the highest recorded level, got %q from facts %v", decision.TaskLevel, isFromFacts)
+	}
+}
+
+func TestAResumedRunWithNoRecordedLevelRunsAtLow(t *testing.T) {
+	taskEvents := []agentcontract.TaskEvent{{Name: agentcontract.TaskEventAgentIntake, Body: "not-json"}}
+
+	decision, _ := DecisionFromFacts(taskEvents, agentcontract.AgentTurnRequest{IsRuntimeRestartResume: true})
+
+	if decision.TaskLevel != agentcontract.TaskLevelLow {
+		t.Fatalf("a run with no recorded level resumes at low, got %q", decision.TaskLevel)
+	}
+}
+
+func TestAReplyToAskedQuestionRestoresNothingFromTheRunsIntake(t *testing.T) {
+	taskEvents := []agentcontract.TaskEvent{{Name: agentcontract.TaskEventAgentIntake, Body: `{"taskLevel":"high","taskShape":"research_task","classification":"bounded_task"}`}}
+	request := agentcontract.AgentTurnRequest{PendingInput: agentcontract.PendingInputContext{TaskRunID: "run-1"}}
+
+	decision, isFromFacts := DecisionFromFacts(taskEvents, request)
+
+	if !isFromFacts || decision.TaskLevel != "" || decision.TaskShape != agentcontract.TaskShapeMaintenanceTask {
+		t.Fatalf("an answer continues the run bare, got %+v from facts %v", decision, isFromFacts)
+	}
+}
+
+func TestAFreshTurnHasNoDecisionInItsFacts(t *testing.T) {
+	if _, isFromFacts := DecisionFromFacts(nil, agentcontract.AgentTurnRequest{Prompt: "회의록 정리해줘"}); isFromFacts {
+		t.Fatal("a fresh turn is planned, not read from its facts")
+	}
+}
