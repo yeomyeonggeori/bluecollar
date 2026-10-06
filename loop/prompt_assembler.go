@@ -130,16 +130,9 @@ func toolResultContextText(observations []turnObservation) string {
 	return "Tool result context. This is the model-visible representation of tool outputs; use it for the next action instead of guessing from progress labels:\n" + body
 }
 
-func observationsShowingTheirImages(observations []turnObservation) []turnObservation {
-	if len(observations) <= maxProgressObservations {
-		return observations
-	}
-	return observations[len(observations)-maxProgressObservations:]
-}
-
 func toolResultImageContextMessage(observations []turnObservation) model.Message {
 	message := model.Message{Role: "user"}
-	for _, observation := range observationsShowingTheirImages(observations) {
+	for _, observation := range latestProgressItems(observations) {
 		for index, attachment := range observation.Attachments {
 			if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(attachment.ContentType)), "image/") || strings.TrimSpace(attachment.ContentBase64) == "" {
 				continue

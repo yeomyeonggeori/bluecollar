@@ -81,7 +81,7 @@ func recoveryGuidanceContent(toolSet *toolcontract.ToolSet, observation turnObse
 }
 
 func browserPublicFetchRecoveryGuidance(toolSet *toolcontract.ToolSet, observation turnObservation) string {
-	definition, isFound := toolDefinitionForRecovery(toolSet, observation.Tool)
+	definition, isFound := toolDefinitionForName(toolSet, observation.Tool)
 	if !isFound || definition.Namespace != "browser" {
 		return ""
 	}

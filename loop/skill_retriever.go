@@ -51,7 +51,7 @@ func NewEmbeddingSkillRetriever(embeddingProvider model.EmbeddingProvider, index
 func (skillRetriever *EmbeddingSkillRetriever) Available(request AgentRequest, skillInstructions []SkillInstruction) []SkillInstruction {
 	availableInstructions := make([]SkillInstruction, 0, len(skillInstructions))
 	for _, skillInstruction := range skillInstructions {
-		if !isSkillAllowedForDirectRetrieval(skillInstruction, request) {
+		if allToolReferencesMissing(skillInstruction, request) {
 			continue
 		}
 		availableInstructions = append(availableInstructions, skillInstruction)
@@ -223,7 +223,7 @@ func (skillRetriever *EmbeddingSkillRetriever) embeddingCandidates(request Agent
 	hasDimensionMismatch := false
 	for _, document := range skillRetriever.documents {
 		skillInstruction, isFound := skillInstructionByName[document.SkillName]
-		if !isFound || !isSkillAllowedForAutomaticRetrieval(skillInstruction, request) {
+		if !isFound || allToolReferencesMissing(skillInstruction, request) {
 			continue
 		}
 		score, hasMatchedDimension := maximumCosineSimilarity(queryEmbeddings, document.Embedding)
@@ -289,7 +289,7 @@ func retrieveSkillsWithBM25(request AgentRequest, skillInstructions []SkillInstr
 	candidates := []SkillCandidate{}
 	for _, score := range scores {
 		skillInstruction, isFound := skillInstructionByName(skillInstructions)[score.Name]
-		if !isFound || !isSkillAllowedForAutomaticRetrieval(skillInstruction, request) {
+		if !isFound || allToolReferencesMissing(skillInstruction, request) {
 			continue
 		}
 		candidates = append(candidates, SkillCandidate{
@@ -316,7 +316,7 @@ func directSkillCandidate(request AgentRequest, skillInstructions []SkillInstruc
 		if skillName == "" || !directSkillNames[skillName] {
 			continue
 		}
-		if !isSkillAllowedForDirectRetrieval(skillInstruction, request) {
+		if allToolReferencesMissing(skillInstruction, request) {
 			continue
 		}
 		return SkillCandidate{
@@ -342,14 +342,6 @@ func directSkillNamesFromPrompt(prompt string) map[string]bool {
 		}
 	}
 	return directSkillNames
-}
-
-func isSkillAllowedForDirectRetrieval(skillInstruction SkillInstruction, request AgentRequest) bool {
-	return !allToolReferencesMissing(skillInstruction, request)
-}
-
-func isSkillAllowedForAutomaticRetrieval(skillInstruction SkillInstruction, request AgentRequest) bool {
-	return isSkillAllowedForDirectRetrieval(skillInstruction, request)
 }
 
 func skillSearchDocumentByKey(searchDocuments []SkillSearchDocument) map[string]SkillSearchDocument {

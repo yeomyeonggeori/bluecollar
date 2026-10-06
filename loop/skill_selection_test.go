@@ -316,7 +316,6 @@ func TestAgentKernelActionSchemaExposesTypedInitialTools(t *testing.T) {
 }
 
 func TestSkillSelectorOnlyChecksSkillAvailability(t *testing.T) {
-	skillSelector := SkillSelector{}
 	skillInstruction := SkillInstruction{
 		Name:           "presentation",
 		TriggerHints:   []string{"피피티", "파워포인트", "발표자료", "pptx"},
@@ -324,13 +323,12 @@ func TestSkillSelectorOnlyChecksSkillAvailability(t *testing.T) {
 	}
 	request := AgentRequest{Prompt: "피피티 만들어줘", ToolSet: testToolSet([]string{"bash", "write", "file_deliver"})}
 
-	if skillSelector.ShouldInclude(skillInstruction, request) {
+	if skillAvailabilityDecision(skillInstruction, request, "default").Status == "selected" {
 		t.Fatal("expected prompt hints not to select skills outside retrieval")
 	}
 }
 
 func TestSkillSelectorKeepsSkillWithPartiallyReachableTools(t *testing.T) {
-	skillSelector := SkillSelector{}
 	skillInstruction := SkillInstruction{
 		Name:           "presentation",
 		TriggerHints:   []string{"피피티"},
@@ -341,27 +339,26 @@ func TestSkillSelectorKeepsSkillWithPartiallyReachableTools(t *testing.T) {
 		ToolSet: testToolSet([]string{"bash", "write"}),
 	}
 
-	if !skillSelector.IsAvailable(skillInstruction, request) {
+	if allToolReferencesMissing(skillInstruction, request) {
 		t.Fatal("expected presentation to stay available with partially reachable tools")
 	}
-	decision := skillSelector.Evaluate(skillInstruction, request, "default")
+	decision := skillAvailabilityDecision(skillInstruction, request, "default")
 	if decision.Reason == "missing_tool_references" {
 		t.Fatalf("expected partial reachability to keep the skill scorable, got %+v", decision)
 	}
 }
 
 func TestSkillSelectorSkipsSkillWhenEveryToolIsMissing(t *testing.T) {
-	skillSelector := SkillSelector{}
 	skillInstruction := SkillInstruction{
 		Name:           "mattermost",
 		ToolReferences: []string{"message_send", "message_update"},
 	}
 	request := AgentRequest{ToolSet: testToolSet([]string{"bash"})}
 
-	if skillSelector.IsAvailable(skillInstruction, request) {
+	if !allToolReferencesMissing(skillInstruction, request) {
 		t.Fatal("expected the skill to be unavailable when no tool reference is reachable")
 	}
-	decision := skillSelector.Evaluate(skillInstruction, request, "default")
+	decision := skillAvailabilityDecision(skillInstruction, request, "default")
 	if decision.Reason != "missing_tool_references" || len(decision.MissingToolReferences) != 2 {
 		t.Fatalf("expected all references reported missing, got %+v", decision)
 	}

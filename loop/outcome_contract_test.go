@@ -9,19 +9,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func TestSelectedRequiredAttachmentSuffixesStayAdvisoryForSlides(t *testing.T) {
-	instructionBundle := InstructionBundle{
-		Skills:         []SkillInstruction{{Name: "presentation"}},
-		SkillDecisions: []SkillSelectionDecision{{Name: "presentation", Status: "selected"}},
-	}
-
-	suffixes := selectedRequiredAttachmentSuffixes(instructionBundle, "Hermes Agent make a six-slide pros and cons deck, html is enough")
-
-	if len(suffixes) != 0 {
-		t.Fatalf("expected no hard suffix contract, got %+v", suffixes)
-	}
-}
-
 func TestSelectedEvidenceHintsComeFromSelectedSkills(t *testing.T) {
 	instructionBundle := InstructionBundle{
 		Skills:                []SkillInstruction{{Name: "office"}, {Name: "calendar"}},

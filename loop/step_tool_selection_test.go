@@ -36,13 +36,13 @@ func TestConsecutiveIterationsOfOneStepSendTheSameInstructionAndToolCatalog(t *t
 	}
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-1")
 
-	firstIteration := services.runner.requestForStep(context.Background(), request, &state)
+	firstIteration := services.runner.requestForStep(request, &state)
 	firstPrompt := buildAgentActionRequest(services.runner.actionStateForIteration(firstIteration, state, false), true, false)
 
 	state.Observations = append(state.Observations, newContentObservation("obs-001", "continue", "deal_update", "moved the deal"))
 	state.IterationCount = 1
 	state.ToolCallCount = 1
-	secondIteration := services.runner.requestForStep(context.Background(), request, &state)
+	secondIteration := services.runner.requestForStep(request, &state)
 	secondPrompt := buildAgentActionRequest(services.runner.actionStateForIteration(secondIteration, state, false), true, false)
 
 	if firstPrompt.Messages[0].Content != secondPrompt.Messages[0].Content {
@@ -83,7 +83,7 @@ func TestAPlanStepChangeReselectsTheShortlist(t *testing.T) {
 	if len(state.PlanStepToolNames) != 1 || state.PlanStepToolNames[0] != "deal_update" {
 		t.Fatalf("expected the step shortlist to replace the pinned tools, got %+v", state.PlanStepToolNames)
 	}
-	stepRequest := services.runner.requestForStep(context.Background(), request, &state)
+	stepRequest := services.runner.requestForStep(request, &state)
 	if !stepRequest.ToolSet.IsAllowed("deal_update") || stepRequest.ToolSet.IsAllowed("deal_list") {
 		t.Fatalf("expected only the step shortlist exposed, got %+v", stepRequest.ToolSet.ListToolNames())
 	}
@@ -101,7 +101,7 @@ func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
 	}
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-batch")
 
-	originalRequest := services.runner.requestForStep(context.Background(), request, &state)
+	originalRequest := services.runner.requestForStep(request, &state)
 	if !originalRequest.ToolSet.IsAllowed("deal_list") {
 		t.Fatal("expected the initial model request to expose the queued read tool")
 	}
@@ -109,7 +109,7 @@ func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
 		`{"steps":[{"title":"move the deal","status":"in_progress"}]}`))
 	rememberBatchedActions(&state, turnActionDocument{BatchedActions: []turnActionDocument{{Action: "continue", ToolName: "deal_list"}}}, originalRequest.ToolSet.ListToolNames(), originalRequest.ToolExposure)
 
-	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
+	queuedRequest := services.runner.requestForStep(request, &state)
 	if !queuedRequest.ToolSet.IsAllowed("deal_list") {
 		t.Fatalf("expected queued call to retain its request-time tool exposure, got %+v", queuedRequest.ToolSet.ListToolNames())
 	}
@@ -120,7 +120,7 @@ func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
 		t.Fatal("expected queued action to run without another model call")
 	}
 
-	nextRequest := services.runner.requestForStep(context.Background(), request, &state)
+	nextRequest := services.runner.requestForStep(request, &state)
 	if nextRequest.ToolSet.IsAllowed("deal_list") || !nextRequest.ToolSet.IsAllowed("deal_update") {
 		t.Fatalf("expected the next model call to use the newly selected shortlist, got %+v", nextRequest.ToolSet.ListToolNames())
 	}
@@ -139,7 +139,7 @@ func TestQueuedExposureRetainsApprovalAndDelegationGuards(t *testing.T) {
 	toolSet.UseToolCallGate(holdingToolCallGate{taskRunService: services.taskRunService, confirmation: "Confirm deletion", denialNotice: "Delegated tasks cannot delete events"})
 	request := AgentTurnRequest{ToolSet: toolSet}
 	state := agentTaskState{PendingBatchedActions: []turnActionDocument{{Action: "continue", ToolName: "calendar_delete"}}, PendingBatchedToolNames: []string{"calendar_delete"}}
-	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
+	queuedRequest := services.runner.requestForStep(request, &state)
 
 	approvalResult, errorValue := queuedRequest.ToolSet.Invoke(context.Background(), toolcontract.ToolInvocation{ToolName: "calendar_delete", Input: json.RawMessage(`{"eventHint":"event-1"}`)})
 	if errorValue != nil || approvalResult.Failure == nil || !approvalResult.Failure.RequiresApproval {
@@ -176,7 +176,7 @@ func TestQueuedExposureFailsClosedWhenEveryCapturedToolIsDenied(t *testing.T) {
 	}
 	state.PendingBatchedToolExposure.ExposedToolIDs = []string{"deal_update"}
 
-	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
+	queuedRequest := services.runner.requestForStep(request, &state)
 	if len(queuedRequest.ToolExposure.ExposedToolIDs) != 0 || len(queuedRequest.ToolSet.ListToolNames()) != 0 {
 		t.Fatalf("expected denied captured tool to leave no exposed tool, got exposure=%+v allowed=%+v", queuedRequest.ToolExposure, queuedRequest.ToolSet.ListToolNames())
 	}

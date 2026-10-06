@@ -210,13 +210,6 @@ func inputDocumentFromToolInput(toolInput json.RawMessage) map[string]any {
 	return inputDocument
 }
 
-func toolDefinitionForRecovery(toolSet *toolcontract.ToolSet, toolName string) (toolcontract.ToolDefinition, bool) {
-	if toolSet == nil {
-		return toolcontract.ToolDefinition{}, false
-	}
-	return toolSet.ToolDefinition(strings.TrimSpace(toolName))
-}
-
 func isAlternateRouteToolPair(toolSet *toolcontract.ToolSet, firstToolName string, secondToolName string) bool {
 	firstNamespace := recoveryToolNamespace(toolSet, firstToolName)
 	secondNamespace := recoveryToolNamespace(toolSet, secondToolName)
@@ -224,7 +217,7 @@ func isAlternateRouteToolPair(toolSet *toolcontract.ToolSet, firstToolName strin
 }
 
 func recoveryToolNamespace(toolSet *toolcontract.ToolSet, toolName string) string {
-	definition, isFound := toolDefinitionForRecovery(toolSet, toolName)
+	definition, isFound := toolDefinitionForName(toolSet, toolName)
 	if !isFound {
 		return ""
 	}

@@ -196,7 +196,7 @@ func (run *turnRun) runIteration(iteration int) turnOutcome {
 	if run.workContext.Err() != nil {
 		return run.abandon(run.workContext.Err(), "the turn's work context ended before the agent could act: "+errorString(run.workContext.Err()))
 	}
-	iterationRequest := run.runner.requestForStep(run.workContext, run.request, &run.state)
+	iterationRequest := run.runner.requestForStep(run.request, &run.state)
 	run.state.ShouldRestrictNextActionToTerminal = false
 	run.runner.appendEvent(run.taskRun.TaskRunID, agentcontract.TaskEventAgentStepWorkingSet, marshalEventBody(map[string]any{
 		"step":     iteration,

@@ -44,7 +44,7 @@ func (agentKernel *AgentKernel) BuildExecutionPlan(responseContext context.Conte
 }
 
 func EvaluateConfirmationPolicy(executionPlan ExecutionPlan) ConfirmationPolicyDecision {
-	if len(trimNonEmptyConfirmationStrings(executionPlan.MissingInformation)) > 0 {
+	if len(nonEmptyStrings(executionPlan.MissingInformation)) > 0 {
 		return ConfirmationPolicyDecision{RequiresClarification: true, Reason: "missing_information"}
 	}
 	if executionPlan.Repeated && executionPlan.ThirdPartyExternalSend && strings.TrimSpace(executionPlan.EndAt) == "" {
@@ -179,17 +179,6 @@ func confirmationToolContext(request AgentRequest, evidenceHints []string) strin
 
 func executionPlanSchema() string {
 	return `{"type":"object","properties":{"summary":{"type":"string"},"targets":{"type":"array","items":{"type":"string"}},"schedule":{"type":"string"},"startAt":{"type":"string"},"endAt":{"type":"string"},"cadence":{"type":"string"},"externalSend":{"type":"boolean"},"thirdPartyExternalSend":{"type":"boolean"},"repeated":{"type":"boolean"},"highFrequency":{"type":"boolean"},"destructive":{"type":"boolean"},"permissionChange":{"type":"boolean"},"publicDeploy":{"type":"boolean"},"paidAction":{"type":"boolean"},"requesterAuthorization":{"type":"string","enum":["explicit","implied","absent"]},"missingInformation":{"type":"array","items":{"type":"string"}},"continuationInstruction":{"type":"string"}},"required":["summary","targets","schedule","startAt","endAt","cadence","externalSend","thirdPartyExternalSend","repeated","highFrequency","destructive","permissionChange","publicDeploy","paidAction","requesterAuthorization","missingInformation","continuationInstruction"],"additionalProperties":false}`
-}
-
-func trimNonEmptyConfirmationStrings(values []string) []string {
-	trimmedValues := []string{}
-	for _, value := range values {
-		trimmedValue := strings.TrimSpace(value)
-		if trimmedValue != "" {
-			trimmedValues = append(trimmedValues, trimmedValue)
-		}
-	}
-	return trimmedValues
 }
 
 func withoutEmptyMessages(messages []model.Message) []model.Message {

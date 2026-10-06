@@ -14,21 +14,20 @@ import (
 )
 
 type AgentTurnRunner struct {
-	iterationCostObserver  *IterationCostObserver
-	toolSelector           ToolSelector
-	modelInUse             string
-	promptTokensInUse      int64
-	taskRunService         taskstate.TaskRunStore
-	taskStepService        taskstate.TaskStepStore
-	taskArtifactService    taskstate.TaskArtifactStore
-	languageModel          model.LanguageModelProvider
-	languageModelTaskLevel TaskLevel
-	recoveryLanguageModel  model.LanguageModelProvider
-	toolResultSpillStore   ToolResultSpillStore
-	toolResultImageSource  ToolResultImageSource
-	decisionModel          model.DecisionModel
-	expectedChanges        *sync.Map
-	options                TurnOptions
+	iterationCostObserver *IterationCostObserver
+	toolSelector          ToolSelector
+	modelInUse            string
+	promptTokensInUse     int64
+	taskRunService        taskstate.TaskRunStore
+	taskStepService       taskstate.TaskStepStore
+	taskArtifactService   taskstate.TaskArtifactStore
+	languageModel         model.LanguageModelProvider
+	recoveryLanguageModel model.LanguageModelProvider
+	toolResultSpillStore  ToolResultSpillStore
+	toolResultImageSource ToolResultImageSource
+	decisionModel         model.DecisionModel
+	expectedChanges       *sync.Map
+	options               TurnOptions
 }
 
 type TaskLevelLanguageModelResolver func(TaskLevel) model.LanguageModelProvider
@@ -46,15 +45,14 @@ func NewAgentTurnRunnerWithRecoveryModel(taskRunService taskstate.TaskRunStore, 
 	}
 	normalizedOptions := normalizeTurnOptions(options)
 	return &AgentTurnRunner{
-		iterationCostObserver:  NewIterationCostObserver(),
-		taskRunService:         taskRunService,
-		taskStepService:        taskStepService,
-		taskArtifactService:    taskArtifactService,
-		languageModel:          languageModel,
-		languageModelTaskLevel: normalizedOptions.TaskLevel,
-		recoveryLanguageModel:  recoveryLanguageModel,
-		options:                normalizedOptions,
-		expectedChanges:        &sync.Map{},
+		iterationCostObserver: NewIterationCostObserver(),
+		taskRunService:        taskRunService,
+		taskStepService:       taskStepService,
+		taskArtifactService:   taskArtifactService,
+		languageModel:         languageModel,
+		recoveryLanguageModel: recoveryLanguageModel,
+		options:               normalizedOptions,
+		expectedChanges:       &sync.Map{},
 	}
 }
 

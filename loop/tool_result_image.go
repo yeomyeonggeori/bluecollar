@@ -27,7 +27,7 @@ func rehydrateImageAttachments(
 		return nil
 	}
 	outcomes := []imageRehydrationOutcome{}
-	for _, observation := range observationsShowingTheirImages(observations) {
+	for _, observation := range latestProgressItems(observations) {
 		for index, attachment := range observation.Attachments {
 			if !imageAttachmentNeedsItsContent(attachment) {
 				continue

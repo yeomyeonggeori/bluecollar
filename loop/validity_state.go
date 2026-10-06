@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -21,15 +20,13 @@ type ArtifactValidity struct {
 	RelativePath string `json:"relativePath,omitempty"`
 	Suffix       string `json:"suffix,omitempty"`
 	SizeBytes    int64  `json:"sizeBytes,omitempty"`
-	PageCount    int    `json:"pageCount,omitempty"`
-	SlideCount   int    `json:"slideCount,omitempty"`
 	ModifiedAt   string `json:"modifiedAt,omitempty"`
 	Passed       bool   `json:"passed"`
 	Reason       string `json:"reason,omitempty"`
 	path         string
 }
 
-func buildAttachmentValidityState(workspaceRootPath string, attachments []toolcontract.FileAttachment, _ ...time.Time) ValidityState {
+func buildAttachmentValidityState(workspaceRootPath string, attachments []toolcontract.FileAttachment) ValidityState {
 	return summarizeArtifactValidity(validateAttachments(workspaceRootPath, attachments))
 }
 

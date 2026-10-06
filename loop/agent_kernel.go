@@ -374,7 +374,7 @@ func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(ctx context.Context
 }
 
 func artifactTaskLevelFloor(request AgentRequest, intakeDecision IntakeDecision) TaskLevel {
-	if requestLooksLikeSlidesArtifactWork(request) || intakeDecisionRequestsVisualDeliverable(intakeDecision) {
+	if requestNeedsSlidesArtifactContract(request) || intakeDecisionRequestsVisualDeliverable(intakeDecision) {
 		return TaskLevelXHigh
 	}
 	return TaskLevelXLow

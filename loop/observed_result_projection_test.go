@@ -19,7 +19,6 @@ func TestObservedResultProjectionAcceptsCalendarClaimWithCalendarFact(t *testing
 	projection := buildObservedResultProjection(
 		AgentTurnRequest{ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{descriptor})},
 		[]turnObservation{observation},
-		nil,
 		turnActionDocument{
 			Action:        "finish",
 			Message:       "Registered the July 13 meeting from 10 to 11am.",
@@ -68,7 +67,6 @@ func TestObservedResultProjectionPreservesFileDeliveryEffect(t *testing.T) {
 	projection := buildObservedResultProjection(
 		AgentTurnRequest{ToolSet: newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{descriptor})},
 		[]turnObservation{observation},
-		[]toolcontract.FileAttachment{{Filename: "quarterly.docx"}},
 		turnActionDocument{},
 	)
 
@@ -128,7 +126,6 @@ func TestObservedResultProjectionRequiresCurrentDocumentModificationEffects(t *t
 			}},
 		},
 		[]turnObservation{newContentObservation("obs-001", "continue", "document_read", `{"documentID":"document-1","status":"published","publicURL":"https://pretty-gyul.example"}`)},
-		nil,
 		turnActionDocument{
 			Action:        "finish",
 			Message:       "The tangerine document is already published: https://pretty-gyul.example",
@@ -170,7 +167,6 @@ func TestObservedResultProjectionAcceptsCurrentDocumentModificationEffects(t *te
 			}},
 		},
 		[]turnObservation{fileObservation, publishObservation},
-		nil,
 		turnActionDocument{
 			Action:        "finish",
 			Message:       "Made it prettier and redeployed: https://pretty-gyul.example",
@@ -198,7 +194,6 @@ func TestObservedResultProjectionDoesNotInferTaskReadEffectFromStatus(t *testing
 			}}},
 		},
 		[]turnObservation{newContentObservation("obs-001", "continue", "task_list", `{"taskID":"task-1","status":"published"}`)},
-		nil,
 		turnActionDocument{
 			Action:        "finish",
 			Message:       "Checked the task status.",
@@ -229,7 +224,6 @@ func TestObservedResultProjectionAllowsTaskDeleteEffect(t *testing.T) {
 			}}},
 		},
 		[]turnObservation{observation},
-		nil,
 		turnActionDocument{
 			Action:        "finish",
 			Message:       "Deleted the task.",

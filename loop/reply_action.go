@@ -146,7 +146,6 @@ func (agentTurnRunner *AgentTurnRunner) sendReply(ctx context.Context, taskRunID
 		return agentTurnRunner.recordReplyReceipt(taskRunID, state, replyReceipt{Status: replyStatusNotDelivered, Reason: "sender_failed", Detail: errorValue.Error(), Message: message, AttachmentCount: len(attachments)})
 	}
 	deliveredPaths := attachmentDevicePaths(attachments)
-	state.LastModelMessage = ""
 	state.DeliveredAttachmentPaths = appendUniqueStrings(state.DeliveredAttachmentPaths, deliveredPaths...)
 	return agentTurnRunner.recordReplyReceipt(taskRunID, state, replyReceipt{Status: replyStatusDelivered, Message: message, AttachmentCount: len(attachments), AttachmentPaths: deliveredPaths})
 }

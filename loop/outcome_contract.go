@@ -24,11 +24,6 @@ func shouldBuildExecutionPlanForConfirmation(request AgentRequest, intakeDecisio
 	return false
 }
 
-func requestLooksLikeSlidesArtifactWork(request AgentRequest) bool {
-	return outcomeContractMentionsAttachmentSuffix(request.ActiveGoal.OutcomeContract, ".pptx") ||
-		outcomeContractMentionsAttachmentSuffix(request.ActiveGoal.OutcomeContract, ".ppt")
-}
-
 func intakeDecisionRequestsVisualDeliverable(intakeDecision IntakeDecision) bool {
 	for _, format := range intakeDecision.RequestedOutputFormats {
 		switch strings.ToLower(strings.TrimSpace(format)) {
@@ -80,7 +75,7 @@ func outcomeAllowsVisualArtifactReview(request AgentRequest, outcomeContract Out
 	return (artifactRequirement != "" && artifactRequirement != ArtifactRequirementNone) ||
 		expectedResultIncludesType(outcomeContract, ExpectedResultTypeFile) ||
 		expectedResultIncludesType(outcomeContract, ExpectedResultTypeLink) ||
-		requestLooksLikeSlidesArtifactWork(request)
+		requestNeedsSlidesArtifactContract(request)
 }
 
 func outcomeContractMentionsAttachmentSuffix(contract OutcomeContract, suffix string) bool {
@@ -133,10 +128,6 @@ func confirmationEvidenceHintsForRequest(request AgentRequest, intakeDecision In
 		}
 	}
 	return toolNames
-}
-
-func selectedRequiredAttachmentSuffixes(_ InstructionBundle, _ string) []string {
-	return nil
 }
 
 func selectedEvidenceToolsForRequestContinuation(request AgentRequest, contract OutcomeContract, selectedEvidenceHints []string) []string {

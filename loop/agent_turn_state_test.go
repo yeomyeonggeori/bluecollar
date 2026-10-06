@@ -20,14 +20,14 @@ func TestDecideAgentActionUsesNativeChatForFinalReplyAndContinue(t *testing.T) {
 		toolName     string
 		arguments    string
 		expectedType string
-		check        func(*testing.T, agentAction)
+		check        func(*testing.T, turnActionDocument)
 	}{
 		{
 			name:         "final reply",
 			toolName:     "reply",
 			arguments:    `{"message":"done","final":true,"goalStatus":"satisfied","goalSatisfied":true,"hasRemainingWork":false,"completionEvidenceIDs":["obs-1"],"qualityReview":[],"executionStateUpdate":{"goal":"done"}}`,
 			expectedType: "finish",
-			check: func(t *testing.T, action agentAction) {
+			check: func(t *testing.T, action turnActionDocument) {
 				if action.Message != "done" || len(action.CompletionEvidenceIDs) != 1 || action.ExecutionStateUpdate.Goal != "done" {
 					t.Fatalf("expected final reply fields to survive native action parsing, got %+v", action)
 				}
@@ -38,7 +38,7 @@ func TestDecideAgentActionUsesNativeChatForFinalReplyAndContinue(t *testing.T) {
 			toolName:     "bash",
 			arguments:    `{"command":"pwd"}`,
 			expectedType: "continue",
-			check: func(t *testing.T, action agentAction) {
+			check: func(t *testing.T, action turnActionDocument) {
 				if action.ToolName != "bash" || string(action.ToolInput) != `{"command":"pwd"}` {
 					t.Fatalf("expected continue tool fields to survive native action parsing, got %+v", action)
 				}
