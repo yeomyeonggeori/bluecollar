@@ -178,48 +178,6 @@ func (agentKernel *AgentKernel) RunPlannedTurn(responseContext context.Context, 
 	})
 }
 
-func (agentKernel *AgentKernel) CompleteLaunchFailure(responseContext context.Context, request AgentTurnRequest, phase string, stepName string, errorValue error) AgentTurnResult {
-	taskRun, createError := agentKernel.taskRunForLaunchFailure(request)
-	reason := firstNonEmptyString(errorString(errorValue), errorString(createError))
-	if createError != nil {
-		reason = strings.TrimSpace(reason + "; task_run_create=" + createError.Error())
-	}
-	failedTaskRun, failError := agentKernel.taskRunService.FailTaskRun(taskRun.TaskRunID, reason)
-	if failError != nil {
-		taskRun.Status = agentcontract.TaskStatusFailed
-		taskRun.FailureReason = firstNonEmptyString(reason, failError.Error())
-		failedTaskRun = taskRun
-	}
-	launchFailureReport := FailureReport{
-		Phase:              phase,
-		StepName:           stepName,
-		StopReason:         reason,
-		SafeFailureSummary: reason,
-		RawError:           reason,
-		OriginalRequest:    request.Prompt,
-		ResponseLanguage:   request.ResponseLanguage,
-		DiagnosticEventID:  diagnosticEventID(request, taskRun.TaskRunID, phase),
-	}
-	failureNotice, noticeStatus := (FailureNoticeGenerator{LanguageModel: agentKernel.languageModel}).Generate(responseContext, launchFailureReport)
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReply, marshalEventBody(noticeStatus))
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody(phase, launchFailureReport, noticeStatus)))
-	failedTaskRun = persistTaskRunResult(agentKernel.taskRunService, failedTaskRun, failureNotice.SendableMessage())
-	return AgentTurnResult{TaskRun: failedTaskRun, UserNotice: failedTaskRun.Result, FailureNotice: failureNotice, ToolNames: toolNamesForEvent(request.ToolSet)}
-}
-
-func (agentKernel *AgentKernel) taskRunForLaunchFailure(request AgentTurnRequest) (agentcontract.TaskRun, error) {
-	if taskRunID := strings.TrimSpace(request.ExistingTaskRunID); taskRunID != "" {
-		if taskRun, isFound := agentKernel.taskRunService.FindTaskRun(taskRunID); isFound {
-			return taskRun, nil
-		}
-	}
-	return agentKernel.taskRunService.CreateTaskRunWithOriginAndError(request.RequesterPersonID, taskstate.TaskRunOrigin{
-		ConversationID: request.ConversationID,
-		ReplyTargetID:  request.OriginReplyTargetID,
-		IsThread:       request.OriginIsThread,
-	}, request.Prompt)
-}
-
 func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context, routing turnclassification.Routing, request AgentRequest) (AgentTurnResult, error) {
 	requestReceivedAt := time.Now()
 	routerCallLedger := &intakeCallLedger{}
@@ -468,21 +426,6 @@ func requestStartsFreshTask(turnDecision TurnDecision, request AgentRequest) boo
 		strings.TrimSpace(request.ExistingTaskRunID) == ""
 }
 
-func launchFailureRequest(request AgentRequest) AgentTurnRequest {
-	return AgentTurnRequest{
-		RequesterPersonID:   request.RequesterPersonID,
-		AgentIdentity:       request.AgentIdentity,
-		SourceReference:     request.SourceReference,
-		ExistingTaskRunID:   request.ExistingTaskRunID,
-		OriginReplyTargetID: request.OriginReplyTargetID,
-		OriginIsThread:      request.OriginIsThread,
-		ConversationID:      request.ConversationID,
-		Prompt:              request.Prompt,
-		ResponseLanguage:    request.ResponseLanguage,
-		ToolSet:             request.ToolSet,
-	}
-}
-
 type taskLifecycleMode string
 
 const (
@@ -528,22 +471,6 @@ func requiredNextToolNamesForResolvedRequest(activeGoal ActiveGoal, arbitratedTo
 	return appendUniqueStrings(arbitratedToolNames)
 }
 
-func (agentKernel *AgentKernel) completeTurnRouterFailure(responseContext context.Context, request AgentRequest, errorValue error, routerCallRecords []llmCallRecord) AgentTurnResult {
-	result := agentKernel.CompleteLaunchFailure(responseContext, AgentTurnRequest{
-		RequesterPersonID:   request.RequesterPersonID,
-		SourceReference:     request.SourceReference,
-		ExistingTaskRunID:   request.ExistingTaskRunID,
-		OriginReplyTargetID: request.OriginReplyTargetID,
-		OriginIsThread:      request.OriginIsThread,
-		ConversationID:      request.ConversationID,
-		Prompt:              request.Prompt,
-		ResponseLanguage:    request.ResponseLanguage,
-		ToolSet:             request.ToolSet,
-	}, "routing", "turn_router", errorValue)
-	agentKernel.appendTurnRouterCallRecords(result.TaskRun.TaskRunID, routerCallRecords)
-	return result
-}
-
 func (agentKernel *AgentKernel) selectInstructionBundleForResolvedRequest(ctx context.Context, baseInstructionBundle InstructionBundle, request AgentRequest, intakeDecision IntakeDecision) (InstructionBundle, IntakeDecision) {
 	selectionRequest := request
 	selectionContract := selectionRequest.ActiveGoal.OutcomeContract
@@ -564,21 +491,6 @@ func (agentKernel *AgentKernel) selectInstructionBundleForResolvedRequest(ctx co
 	instructionBundle = instructionBundleWithPinnedSkills(instructionBundle, selectionRequest)
 	instructionBundle = instructionBundleWithToolOwningSkills(instructionBundle, selectionRequest, intakeDecision.InitialToolNames)
 	return instructionBundle, intakeDecision
-}
-
-func (agentKernel *AgentKernel) completeConsumedRequest(request AgentRequest, decision TurnDecision, routerCallRecords []llmCallRecord) (AgentTurnResult, error) {
-	taskRun := agentKernel.taskRunForRequest(request)
-	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(decision.IntakeDecision()))
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentConsumed, marshalEventBody(map[string]string{
-		"route":  string(decision.Route),
-		"reason": strings.TrimSpace(decision.Reason),
-	}))
-	completedTaskRun, errorValue := agentKernel.taskRunService.CompleteTaskRun(taskRun.TaskRunID, "consumed")
-	if errorValue != nil {
-		return AgentTurnResult{}, errorValue
-	}
-	return AgentTurnResult{TaskRun: completedTaskRun, TurnRoute: TurnRouteConsume, FinishMessage: strings.TrimSpace(decision.UserFacingReply), ReplySuppressed: true, ToolNames: toolNamesForEvent(request.ToolSet)}, nil
 }
 
 type confirmationGatePlan struct {
@@ -652,40 +564,6 @@ func (agentKernel *AgentKernel) ResumeTask(taskRunID string) (agentcontract.Task
 	return agentKernel.taskRunService.ResumeTaskRun(taskRunID)
 }
 
-func (agentKernel *AgentKernel) completeIntakeOnlyRequest(responseContext context.Context, routing turnclassification.Routing, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus, routerCallRecords []llmCallRecord) (AgentTurnResult, error) {
-	taskRun := agentKernel.taskRunForRequest(request)
-	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(intakeDecision))
-	finishMessage := intakeOnlyFinishMessage(intakeDecision)
-	if finishMessage == "" {
-		finishMessage = (FailureNoticeGenerator{LanguageModel: agentKernel.languageModel}).GenerateIntakeNotice(responseContext, IntakeReport{
-			Classification:    intakeDecision.Classification,
-			Reason:            intakeDecision.Reason,
-			OriginalRequest:   request.Prompt,
-			ResponseLanguage:  request.ResponseLanguage,
-			DiagnosticEventID: taskRun.TaskRunID + ":task_intake",
-		}).SendableMessage()
-	}
-	blockedTaskRun, errorValue := agentKernel.taskRunService.PauseTaskRun(taskRun.TaskRunID, status, intakeDecision.Reason)
-	if errorValue != nil {
-		return AgentTurnResult{}, errorValue
-	}
-	if status == agentcontract.TaskStatusWaitingUserInput && intakeDecision.Classification == IntakeClassificationNeedsConfirmation {
-		agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentInputRequested, marshalEventBody(agentcontract.NewAskInputRequest(finishMessage, intakeDecision.ClarificationOptions, request.ResponseLanguage)))
-	}
-	agentKernel.appendGoalLifecycleEvent(blockedTaskRun, activeGoalFromIntakeOnly(routing, taskRun.TaskRunID, request, intakeDecision, status))
-	blockedTaskRun = persistTaskRunResult(agentKernel.taskRunService, blockedTaskRun, finishMessage)
-	return AgentTurnResult{TaskRun: blockedTaskRun, UserNotice: finishMessage, ToolNames: toolNamesForEvent(request.ToolSet)}, nil
-}
-
-func intakeOnlyFinishMessage(intakeDecision IntakeDecision) string {
-	userFacingReply := strings.TrimSpace(intakeDecision.UserFacingReply)
-	if intakeDecision.Classification != IntakeClassificationNeedsConfirmation {
-		return userFacingReply
-	}
-	return firstNonEmptyString(strings.TrimSpace(intakeDecision.ClarificationQuestion), userFacingReply)
-}
-
 func (agentKernel *AgentKernel) taskRunForRequest(request AgentRequest) agentcontract.TaskRun {
 	if taskRunID := strings.TrimSpace(request.ExistingTaskRunID); taskRunID != "" {
 		if taskRun, isFound := agentKernel.taskRunService.FindTaskRun(taskRunID); isFound {
@@ -715,159 +593,6 @@ func (agentKernel *AgentKernel) appendGoalLifecycleEvent(taskRun agentcontract.T
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, activeGoalEventNameForTaskStatus(taskRun.Status), marshalEventBody(activeGoal))
 }
 
-type turnBudgetContext struct {
-	parentContext         context.Context
-	totalContext          context.Context
-	workContext           context.Context
-	cancelTotal           context.CancelFunc
-	cancelWork            context.CancelFunc
-	turnOptions           TurnOptions
-	turnStartedAt         time.Time
-	workDeadline          time.Time
-	didClampAnchor        bool
-	originalTurnStartedAt time.Time
-}
-
-const nonResumeAnchorStaleAllowance = 2 * time.Minute
-
-func clampedTurnStartedAt(turnStartedAt time.Time, isRuntimeRestartResume bool, referenceNow time.Time) (resolvedTurnStartedAt time.Time, didClampAnchor bool, originalTurnStartedAt time.Time) {
-	if isRuntimeRestartResume || turnStartedAt.IsZero() {
-		return turnStartedAt, false, turnStartedAt
-	}
-	if referenceNow.Sub(turnStartedAt) <= nonResumeAnchorStaleAllowance {
-		return turnStartedAt, false, turnStartedAt
-	}
-	return referenceNow, true, turnStartedAt
-}
-
-func newTurnBudgetContext(parentContext context.Context, turnStartedAt time.Time, isRuntimeRestartResume bool, referenceNow time.Time, turnOptions TurnOptions) turnBudgetContext {
-	resolvedTurnStartedAt, didClampAnchor, originalTurnStartedAt := clampedTurnStartedAt(turnStartedAt, isRuntimeRestartResume, referenceNow)
-	if resolvedTurnStartedAt.IsZero() || turnOptions.MaxElapsedSecond <= 0 {
-		totalContext, cancelTotal := context.WithCancel(parentContext)
-		workContext, cancelWork := context.WithCancel(totalContext)
-		return turnBudgetContext{
-			parentContext:         parentContext,
-			totalContext:          totalContext,
-			workContext:           workContext,
-			cancelTotal:           cancelTotal,
-			cancelWork:            cancelWork,
-			turnOptions:           turnOptions,
-			turnStartedAt:         resolvedTurnStartedAt,
-			didClampAnchor:        didClampAnchor,
-			originalTurnStartedAt: originalTurnStartedAt,
-		}
-	}
-	totalDuration := time.Duration(turnOptions.MaxElapsedSecond) * time.Second
-	workDeadline := resolvedTurnStartedAt.Add(workDurationWithinTotal(totalDuration))
-	totalContext, cancelTotal := context.WithDeadline(parentContext, resolvedTurnStartedAt.Add(totalDuration))
-	workContext, cancelWork := context.WithDeadline(totalContext, workDeadline)
-	return turnBudgetContext{
-		parentContext:         parentContext,
-		totalContext:          totalContext,
-		workContext:           workContext,
-		cancelTotal:           cancelTotal,
-		cancelWork:            cancelWork,
-		turnOptions:           turnOptions,
-		turnStartedAt:         resolvedTurnStartedAt,
-		workDeadline:          workDeadline,
-		didClampAnchor:        didClampAnchor,
-		originalTurnStartedAt: originalTurnStartedAt,
-	}
-}
-
-func (turnBudget turnBudgetContext) cancel() {
-	turnBudget.cancelWork()
-	turnBudget.cancelTotal()
-}
-
-func (turnBudget turnBudgetContext) callerContext() context.Context {
-	return turnBudget.parentContext
-}
-
-func (turnBudget turnBudgetContext) didWorkExpire() bool {
-	return turnBudget.parentContext.Err() == nil && errors.Is(turnBudget.workContext.Err(), context.DeadlineExceeded)
-}
-
-func (agentKernel *AgentKernel) completeIntakeIfElapsed(turnBudget turnBudgetContext, routing turnclassification.Routing, request AgentRequest, intakeDecision IntakeDecision, turnRoute TurnRoute, routerCallRecords []llmCallRecord) (AgentTurnResult, bool) {
-	if !turnBudget.didWorkExpire() {
-		return AgentTurnResult{}, false
-	}
-	result := agentKernel.completeIntakeElapsed(turnBudget, routing, request, intakeDecision, routerCallRecords)
-	result.TurnRoute = turnRoute
-	return result, true
-}
-
-func (agentKernel *AgentKernel) completeIntakeElapsed(turnBudget turnBudgetContext, routing turnclassification.Routing, request AgentRequest, intakeDecision IntakeDecision, routerCallRecords []llmCallRecord) AgentTurnResult {
-	taskRun := agentKernel.taskRunForRequest(request)
-	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
-	if intakeDecision.TaskLevel != "" {
-		agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(intakeDecision))
-	}
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitStop, marshalEventBody(intakeLimitEventBody(turnBudget)))
-	if turnBudget.didClampAnchor {
-		agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentTurnAnchorClamped, marshalEventBody(turnAnchorClampedEventBody(turnBudget)))
-	}
-	blockedTaskRun, errorValue := agentKernel.taskRunService.PauseTaskRun(taskRun.TaskRunID, agentcontract.TaskStatusBlocked, "max_elapsed")
-	if errorValue != nil {
-		taskRun.Status = agentcontract.TaskStatusBlocked
-		taskRun.FailureReason = "max_elapsed"
-		blockedTaskRun = taskRun
-	}
-	failureReport := buildIntakeFailureReport(turnBudget, request, intakeDecision, taskRun.TaskRunID)
-	failureNotice, noticeStatus := agentKernel.generateIntakeElapsedNotice(turnBudget.totalContext, failureReport)
-	replyStatus := limitReplyStatus{Source: noticeStatus.Source, Reason: noticeStatus.Reason, TextRecoveryError: noticeStatus.TextRecoveryError}
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(replyStatus))
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody("limit", failureReport, noticeStatus)))
-	blockedTaskRun = persistTaskRunResult(agentKernel.taskRunService, blockedTaskRun, failureNotice.SendableMessage())
-	agentKernel.appendGoalLifecycleEvent(blockedTaskRun, activeGoalFromIntakeOnly(routing, taskRun.TaskRunID, request, intakeDecision, agentcontract.TaskStatusBlocked))
-	return AgentTurnResult{
-		TaskRun:       blockedTaskRun,
-		UserNotice:    failureNotice.SendableMessage(),
-		FailureNotice: failureNotice,
-		ToolNames:     toolNamesForEvent(request.ToolSet),
-	}
-}
-
-func (agentKernel *AgentKernel) generateIntakeElapsedNotice(responseContext context.Context, report FailureReport) (FailureNotice, FailureNoticeGenerationStatus) {
-	return (FailureNoticeGenerator{LanguageModel: agentKernel.languageModel}).Generate(responseContext, report)
-}
-
-func intakeLimitEventBody(turnBudget turnBudgetContext) map[string]any {
-	turnOptions := turnBudget.turnOptions
-	body := map[string]any{
-		"phase":              "intake",
-		"taskLevel":          turnOptions.TaskLevel,
-		"maxIterationCount":  turnOptions.MaxIterationCount,
-		"maxElapsedSecond":   turnOptions.MaxElapsedSecond,
-		"maxToolCallCount":   turnOptions.MaxToolCallCount,
-		"usedIterationCount": 0,
-		"usedToolCallCount":  0,
-		"limitStopReason":    "max_elapsed",
-		"anchorClamped":      turnBudget.didClampAnchor,
-		"nowUnixMs":          time.Now().UnixMilli(),
-	}
-	if !turnBudget.turnStartedAt.IsZero() {
-		body["turnStartedAtUnixMs"] = turnBudget.turnStartedAt.UnixMilli()
-	}
-	if !turnBudget.workDeadline.IsZero() {
-		body["workDeadlineUnixMs"] = turnBudget.workDeadline.UnixMilli()
-	}
-	if turnBudget.didClampAnchor {
-		body["originalTurnStartedAtUnixMs"] = turnBudget.originalTurnStartedAt.UnixMilli()
-	}
-	return body
-}
-
-func turnAnchorClampedEventBody(turnBudget turnBudgetContext) map[string]any {
-	return map[string]any{
-		"phase":                       "intake",
-		"maxElapsedSecond":            turnBudget.turnOptions.MaxElapsedSecond,
-		"originalTurnStartedAtUnixMs": turnBudget.originalTurnStartedAt.UnixMilli(),
-		"clampedTurnStartedAtUnixMs":  turnBudget.turnStartedAt.UnixMilli(),
-		"nowUnixMs":                   time.Now().UnixMilli(),
-	}
-}
-
 func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(ctx context.Context, intakeDecision IntakeDecision) TurnOptions {
 	baseOptions := normalizeTurnOptions(agentKernel.turnOptions)
 	taskLevelProfile := TaskLevelProfileForLevel(intakeDecision.TaskLevel)
@@ -877,30 +602,6 @@ func (agentKernel *AgentKernel) turnOptionsForIntakeDecision(ctx context.Context
 	baseOptions.MaxElapsedSecond = int(elapsedBudgetForProfile(taskLevelProfile, agentKernel.iterationCostObserver.CostOfModelInUse()).Seconds())
 	baseOptions.ElapsedBudgetSource = ElapsedBudgetFromLevel
 	return withElapsedBudgetFromDeadline(ctx, baseOptions)
-}
-
-// The budget is the level's step count at what a step measurably costs on this model, floored so
-// a fast model still gets a usable one and capped by the level's tier. The caller's deadline is a
-// ceiling on that, never the value: a number someone typed says what may be spent, not how long
-// the work takes.
-func withElapsedBudgetFromDeadline(ctx context.Context, turnOptions TurnOptions) TurnOptions {
-	deadline, hasDeadline := ctx.Deadline()
-	if !hasDeadline {
-		return turnOptions
-	}
-	remainingSecond := int(time.Until(deadline).Seconds())
-	if remainingSecond <= 0 {
-		return turnOptions
-	}
-	turnOptions.DeadlineSecond = remainingSecond
-	if turnOptions.MaxElapsedSecond > remainingSecond {
-		turnOptions.MaxElapsedSecond = remainingSecond
-	}
-	return turnOptions
-}
-
-func elapsedBudgetForProfile(taskLevelProfile TaskLevelProfile, throughput IterationCost) time.Duration {
-	return DurationForIterationCount(taskLevelProfile.MaxIterationCount, throughput, taskLevelProfile.CostCeiling)
 }
 
 func artifactTaskLevelFloor(request AgentRequest, intakeDecision IntakeDecision) TaskLevel {
