@@ -28,7 +28,7 @@ func (gate *Gate) recordHold(request approvalRequest, question string) holdrecor
 }
 
 func (gate *Gate) recordApprovalQuestion(request approvalRequest, question string) {
-	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventConfirmationRequested, marshalEventBody(map[string]string{
+	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventAgentApprovalConfirmationRequested, marshalEventBody(map[string]string{
 		"userFacingMessage": question,
 		"message":           question,
 		"reasonCode":        approvalReasonCode(request),
@@ -36,7 +36,7 @@ func (gate *Gate) recordApprovalQuestion(request approvalRequest, question strin
 		"responseLanguage":  request.turn.ResponseLanguage,
 		"source":            "tool_catalog",
 	}))
-	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventAskRequested, marshalEventBody(askRecord(request, question)))
+	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventAgentApprovalAskRequested, marshalEventBody(askRecord(request, question)))
 }
 
 func approvalReasonCode(request approvalRequest) string {

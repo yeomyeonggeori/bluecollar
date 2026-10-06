@@ -103,7 +103,7 @@ func TestAgentTurnRunnerAppliesPendingSteeringEvent(t *testing.T) {
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "PDF 보고서를 작성한다")
-	services.taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventTaskSteerRequested, marshalEventBody(map[string]string{
+	services.taskEventService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentSteerReceived, marshalEventBody(map[string]string{
 		"messageID":   "message-steer",
 		"instruction": "PDF 대신 HTML로 작성한다.",
 		"reason":      "user corrected output format",

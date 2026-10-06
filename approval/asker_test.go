@@ -22,7 +22,7 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 	}
 	for _, wanted := range []string{
 		agentcontract.TaskEventApprovalHoldOpened,
-		agentcontract.TaskEventConfirmationRequested,
+		agentcontract.TaskEventAgentApprovalConfirmationRequested,
 		agentcontract.TaskEventApprovalDecided,
 		agentcontract.TaskEventApprovalHoldSpent,
 	} {

@@ -253,7 +253,7 @@ func TestASteerSentMidTurnIsReadByTheLoopBeforeItsNextStep(t *testing.T) {
 	<-catalog.started
 
 	notifyError := host.connection.NotifyExtension(t.Context(), SteerMethod, SteerNotification{SessionID: host.sessionID, Instruction: "write it in English"})
-	waitForLedgerEvent(t, client, agentcontract.TaskEventTaskSteerRequested)
+	waitForLedgerEvent(t, client, agentcontract.TaskEventAgentSteerReceived)
 	close(catalog.release)
 
 	if notifyError != nil {

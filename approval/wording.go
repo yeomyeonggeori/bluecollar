@@ -59,7 +59,7 @@ func (gate *Gate) recordWordingFailure(request approvalRequest, errorValue error
 	if taskRunID == "" {
 		return
 	}
-	gate.taskRuns.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalWordingFailed, marshalEventBody(map[string]string{
+	gate.taskRuns.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentApprovalWordingFailed, marshalEventBody(map[string]string{
 		"toolName": request.toolName(),
 		"error":    errorValue.Error(),
 	}))

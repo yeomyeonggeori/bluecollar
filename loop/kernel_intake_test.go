@@ -329,10 +329,10 @@ func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 		t.Fatalf("expected waiting user input, got %s", result.TaskRun.Status)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "ask.requested", `"kind":"ask_input"`) {
+	if !taskEventsContain(events, "agent.input_requested", `"kind":"ask_input"`) {
 		t.Fatalf("expected option-bearing ask_input event, got %+v", events)
 	}
-	if !taskEventsContain(events, "ask.requested", `"recommendedOptionKey":"A"`) {
+	if !taskEventsContain(events, "agent.input_requested", `"recommendedOptionKey":"A"`) {
 		t.Fatalf("expected first option to be recommended, got %+v", events)
 	}
 	if len(replyLanguageModel.requests) != 0 {
@@ -366,10 +366,10 @@ func TestAgentKernelAsksTheClarificationQuestionWithoutOptions(t *testing.T) {
 		t.Fatalf("expected waiting user input, got %s", result.TaskRun.Status)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "ask.requested", `"kind":"ask_input"`) {
+	if !taskEventsContain(events, "agent.input_requested", `"kind":"ask_input"`) {
 		t.Fatalf("expected an open ask_input event so the reply resumes the task, got %+v", events)
 	}
-	if taskEventsContain(events, "ask.requested", `"selectionMode"`) {
+	if taskEventsContain(events, "agent.input_requested", `"selectionMode"`) {
 		t.Fatalf("expected no selection mode without options, got %+v", events)
 	}
 }
