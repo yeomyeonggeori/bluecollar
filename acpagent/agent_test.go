@@ -1,4 +1,4 @@
-package main
+package acpagent
 
 import (
 	"context"
@@ -27,6 +27,8 @@ type scriptedLanguageModel struct {
 	contents      []string
 	callCount     int
 	actionPrompts []string
+	level         string
+	sawImageData  []string
 }
 
 func (languageModel *scriptedLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -35,15 +37,35 @@ func (languageModel *scriptedLanguageModel) GenerateResponse(context.Context, st
 
 func (languageModel *scriptedLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
 	if request.StructuredOutputSchema.Name != "bluecollar_agent_turn_action" {
-		return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"xlow","responseLanguage":"en","reason":"test"}`}, nil
+		return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"` + languageModel.routedLevel() + `","responseLanguage":"en","reason":"test"}`}, nil
 	}
 	languageModel.actionPrompts = append(languageModel.actionPrompts, allMessageContent(request))
+	languageModel.sawImageData = append(languageModel.sawImageData, imageDataOf(request)...)
 	if languageModel.callCount >= len(languageModel.contents) {
 		return model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"done","goalSatisfied":true}`}, nil
 	}
 	content := languageModel.contents[languageModel.callCount]
 	languageModel.callCount++
 	return model.StructuredResponse{Content: content}, nil
+}
+
+func (languageModel *scriptedLanguageModel) routedLevel() string {
+	if languageModel.level == "" {
+		return "xlow"
+	}
+	return languageModel.level
+}
+
+func imageDataOf(request model.StructuredResponseRequest) []string {
+	imageData := []string{}
+	for _, message := range request.Messages {
+		for _, part := range message.Parts {
+			if part.Type == "image" {
+				imageData = append(imageData, part.DataBase64)
+			}
+		}
+	}
+	return imageData
 }
 
 type hostToolCall struct {
@@ -175,11 +197,11 @@ func driveOneTurnWithMeta(t *testing.T, catalogTransport mcp.Transport, language
 	t.Helper()
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
-	runningAgent := newAgent(languageModel, scriptedDecisionModel(languageModel), "bluecollar")
+	runningAgent := newTestAgent(t, languageModel)
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)
-		runningAgent.connect(agentConnection)
+		runningAgent.Connect(agentConnection)
 		<-agentConnection.Done()
 	}()
 
@@ -294,11 +316,11 @@ func TestACancelledTurnStopsCallingTools(t *testing.T) {
 
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
-	runningAgent := newAgent(languageModel, scriptedDecisionModel(languageModel), "bluecollar")
+	runningAgent := newTestAgent(t, languageModel)
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogClientTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)
-		runningAgent.connect(agentConnection)
+		runningAgent.Connect(agentConnection)
 		<-agentConnection.Done()
 	}()
 

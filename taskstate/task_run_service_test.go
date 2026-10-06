@@ -1201,3 +1201,17 @@ func TestAnInterruptWaitingToResumeIsLeftAlone(t *testing.T) {
 		t.Fatal("a run the resumer will pick up must not be failed out from under it")
 	}
 }
+
+func TestATaskRunCanBeCreatedUnderAnIdentifierTheHostChose(t *testing.T) {
+	taskRunService := NewTaskRunService(NewTaskEventService())
+
+	taskRun, errorValue := taskRunService.CreateTaskRunWithID("host-run-7", "person-1", TaskRunOrigin{ConversationID: "direct-1"}, "plan the trip")
+
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	foundTaskRun, isFound := taskRunService.FindTaskRun("host-run-7")
+	if taskRun.TaskRunID != "host-run-7" || !isFound || foundTaskRun.OriginConversationID != "direct-1" {
+		t.Fatalf("the run has to live under the host's identifier, got %+v found=%v", taskRun, isFound)
+	}
+}

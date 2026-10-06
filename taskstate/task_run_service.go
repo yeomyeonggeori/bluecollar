@@ -104,8 +104,12 @@ func (taskRunService *TaskRunService) CreateTaskRunWithOrigin(requesterPersonID 
 }
 
 func (taskRunService *TaskRunService) CreateTaskRunWithOriginAndError(requesterPersonID string, origin TaskRunOrigin, prompt string) (agentcontract.TaskRun, error) {
+	return taskRunService.CreateTaskRunWithID(NewIdentifier(), requesterPersonID, origin, prompt)
+}
+
+func (taskRunService *TaskRunService) CreateTaskRunWithID(taskRunID string, requesterPersonID string, origin TaskRunOrigin, prompt string) (agentcontract.TaskRun, error) {
 	taskRun := agentcontract.TaskRun{
-		TaskRunID:            NewIdentifier(),
+		TaskRunID:            taskRunID,
 		RequesterPersonID:    requesterPersonID,
 		OriginConversationID: strings.TrimSpace(origin.ConversationID),
 		OriginReplyTargetID:  strings.TrimSpace(origin.ReplyTargetID),

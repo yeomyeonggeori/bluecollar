@@ -29,7 +29,7 @@ go build ./...
 go test ./...
 ```
 
-The module needs Go 1.26 and depends on `github.com/google/jsonschema-go` and `github.com/ergochat/readline`. The ACP agent in `cmd/bluecollar-acp` is a second module, so its protocol dependencies stay out of anything that embeds the loop.
+The module needs Go 1.26 and depends on `github.com/google/jsonschema-go` and `github.com/ergochat/readline`. The ACP agent in `acpagent` is a package of this module, and `cmd/bluecollar-acp` is a second module that wraps it as a binary.
 
 ### Serve a model locally
 
@@ -221,11 +221,12 @@ A harness that executes its own tools defeats the host's isolation boundary and 
 | `trace/` | one run's ledger rendered as a single JSON or Markdown file |
 | `bench/` | run metrics and a runner that measures any `Harness` |
 | `cmd/bluecollar/` | the command-line runner |
-| `cmd/bluecollar-acp/` | the loop as an Agent Client Protocol agent, in its own module |
+| `acpagent/` | the loop as an importable Agent Client Protocol agent |
+| `cmd/bluecollar-acp/` | the binary around `acpagent`, in its own module |
 
 ### ACP
 
-`cmd/bluecollar-acp` runs the loop as an [Agent Client Protocol](https://agentclientprotocol.com) agent. It owns no tools: the tool catalog arrives on the MCP servers the host names when it opens a session, and a tool's `toolcontract/requiresApproval`, `toolcontract/sideEffectClass`, `toolcontract/approvalScope`, `toolcontract/approvalScopeSummary` and `toolcontract/approvalInputFields` metadata become its descriptor (the names live in `toolcontract/mcp_meta.go`), and an image a tool returns reaches the model as an image that reloads by its `toolcontract/attachmentDevicePath` after a replay. Ledger events go out on `session/update`, tool calls as the standard variants and every event's name and body in `_meta`. A host that kept those records hands them back in the prompt's `_meta`, and the turn resumes on the work they describe. A steer injected mid-turn reaches only an in-process host, because the protocol has no message for it during a turn.
+`acpagent` runs the loop as an [Agent Client Protocol](https://agentclientprotocol.com) agent. It owns no tools: the tool catalog arrives on the MCP servers the host names when it opens a session, and a tool's `toolcontract/requiresApproval`, `toolcontract/sideEffectClass`, `toolcontract/approvalScope`, `toolcontract/approvalScopeSummary` and `toolcontract/approvalInputFields` metadata become its descriptor (the names live in `toolcontract/mcp_meta.go`), and an image a tool returns reaches the model as an image that reloads by its `toolcontract/attachmentDevicePath` after a replay. Ledger events go out on `session/update`, tool calls as the standard variants and every event's name and body in `_meta`. A host that kept those records hands them back in the prompt's `_meta`, and the turn resumes on the work they describe. A host steers a running turn with the `_bluecollar.dev/steer` extension notification, and names the run it wants with the `bluecollar.dev/task-run` key in the prompt's `_meta`.
 
 # Concepts
 

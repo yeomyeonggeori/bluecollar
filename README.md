@@ -36,7 +36,8 @@ The documentation is [DOCS.md](DOCS.md), published at [bluecollar.intern.kim](ht
 | `turnstream/`, `trace/` | a live view of a turn's ledger, and one run rendered as a file |
 | `bench/` | run metrics, a harness runner, and the Terminal-Bench adapter |
 | `cmd/bluecollar/` | the command-line runner |
-| `cmd/bluecollar-acp/` | the loop as an Agent Client Protocol agent, in its own module |
+| `acpagent/` | the loop as an importable Agent Client Protocol agent |
+| `cmd/bluecollar-acp/` | the binary around `acpagent`, in its own module |
 | `docs/` | the documentation site, generated from `DOCS.md` |
 
 ## Contributing

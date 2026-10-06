@@ -1,4 +1,4 @@
-package main
+package acpagent
 
 import (
 	"context"
@@ -64,11 +64,11 @@ func driveGatedTurn(t *testing.T, selectedOption acp.PermissionOptionId, calls *
 	catalogTransport := gatedCatalog(t, calls)
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
-	runningAgent := newAgent(languageModel, scriptedDecisionModel(languageModel), "bluecollar")
+	runningAgent := newTestAgent(t, languageModel)
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)
-		runningAgent.connect(agentConnection)
+		runningAgent.Connect(agentConnection)
 		<-agentConnection.Done()
 	}()
 	host := &askedHostClient{selectedOption: selectedOption}

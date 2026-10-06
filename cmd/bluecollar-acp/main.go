@@ -8,12 +8,11 @@ import (
 	"log"
 	"os"
 
-	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/bluecollar/acpagent"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model/decisions"
 	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 )
-
-const requesterPersonID = "bluecollar"
 
 func main() {
 	endpointURL := flag.String("endpoint", envOrDefault("BLUECOLLAR_LLM_ENDPOINT", "http://127.0.0.1:8080/v1"), "OpenAI-compatible endpoint the loop reasons through")
@@ -27,10 +26,14 @@ func main() {
 	}
 
 	languageModel := openaicompatible.NewProvider(*endpointURL, flagOrEnvironment(*apiKey, "BLUECOLLAR_LLM_API_KEY"), *modelName)
-	runningAgent := newAgent(languageModel, decisions.ConfiguredDecisionModel(os.Stderr), *agentName)
-	connection := acp.NewAgentSideConnection(runningAgent, os.Stdout, os.Stdin)
-	runningAgent.connect(connection)
-	<-connection.Done()
+	errorValue := acpagent.Serve(acpagent.Options{
+		AgentName:      *agentName,
+		LanguageModels: agentcontract.TaskTierLanguageModels{Low: languageModel},
+		DecisionModel:  decisions.ConfiguredDecisionModel(os.Stderr),
+	}, os.Stdout, os.Stdin)
+	if errorValue != nil {
+		log.Fatal(errorValue)
+	}
 }
 
 func envOrDefault(environmentName string, fallback string) string {
