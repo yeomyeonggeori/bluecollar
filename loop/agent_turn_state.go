@@ -201,11 +201,6 @@ func durableDeliveryObservations(events []agentcontract.TaskEvent) []turnObserva
 	return durable
 }
 
-// producedSourcePaths recovers the workspace paths the model was writing or
-// editing before the restart, taken from the small result of each successful
-// write/edit (path only, never the file body, so no stale content is
-// carried forward). Surfacing them structurally lets the restart continue the
-// exact same source in place instead of guessing what it was building.
 func producedSourcePaths(events []agentcontract.TaskEvent) []string {
 	const maxSourcePaths = 8
 	seen := map[string]bool{}
@@ -347,10 +342,6 @@ func requestedToolCallFromTaskEvent(event agentcontract.TaskEvent) (requestedToo
 	return requestedCall, true
 }
 
-// The intent is written before the call and the result after it, so a request with no
-// result is the record of a process that stopped mid-call. Reading only results turns
-// that into a call the turn believes never happened, and the obvious next move is to
-// do it again.
 func interruptedCallObservations(unanswered map[string]requestedToolCall) []turnObservation {
 	observationIDs := make([]string, 0, len(unanswered))
 	for observationID := range unanswered {

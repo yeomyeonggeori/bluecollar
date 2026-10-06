@@ -77,8 +77,6 @@ func (agentTurnRunner *AgentTurnRunner) noteDriftFromHold(taskRunID string, hold
 	return true
 }
 
-// The summary is the loop's sentence about an observation, so a note belongs there.
-// Output is the tool's, and a result contract that promised JSON still has to parse.
 func observationNotingApprovalDrift(observation turnObservation) turnObservation {
 	observation.Summary = strings.TrimSpace(observation.Summary + " " + approvalUnmatchedObservationNote)
 	return observation

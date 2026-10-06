@@ -76,14 +76,6 @@ func shouldExposeFailAction(state agentTaskState) bool {
 	return turnIsAlreadyWrappingUp(state)
 }
 
-// Nothing the runtime can see has gone wrong, so there is nothing to fail about yet. An error
-// raised inside a tool call that succeeded never becomes failure debt, which is exactly the
-// state in which the exit used to be the one thing on offer. It comes back when the turn is
-// already being told to wrap up.
-// Told this many times that what it did is not the task, an agent needs to be able to say it
-// cannot do the task. Recovery being possible is not the same as the task being possible, and
-// while it is possible the exit is otherwise never on the menu.
-// This refusal is not evidence_missing, so it never reaches the count above.
 func declinedToClaimSuccess(observations []turnObservation) bool {
 	for _, observation := range observations {
 		if observation.PolicyCode == policyCodeGoalNotClaimedSatisfied {
@@ -112,8 +104,6 @@ func turnIsAlreadyWrappingUp(state agentTaskState) bool {
 		limitUsageReached(state.ToolCallCount, state.Options.MaxToolCallCount, wrapUpThresholdPercent)
 }
 
-// A refusal the agent answers with the same finish is the refusal saying nothing. Withdrawing
-// the action leaves the work and the exit, which is the choice the refusal was describing.
 func finishKeepsBeingRefusedWithNothingDoneBetween(observations []turnObservation) bool {
 	refusalCount := 0
 	for index := len(observations) - 1; index >= 0; index-- {

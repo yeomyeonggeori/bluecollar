@@ -65,8 +65,6 @@ func compactedTranscriptAdvice(spillRef ToolResultSpillRef) string {
 	return advice + " Look there when a detail the summary dropped matters, rather than redoing the step."
 }
 
-// Once a summary of the same observations came back no smaller than what it replaced,
-// asking for it again every step buys the same nothing and pays the summarizer for it.
 func compactionAlreadyFreedNothing(events []agentcontract.TaskEvent, compactedThroughObservationID string) bool {
 	trimmedObservationID := strings.TrimSpace(compactedThroughObservationID)
 	for _, taskEvent := range events {

@@ -225,8 +225,6 @@ func evidenceReferencesFromIDs(values []string) []completionEvidenceReference {
 	return references
 }
 
-// The model producing something the runtime cannot read is the model's mistake, which every
-// other layer hands back for one more try. Only a transport failure ends the turn.
 type unreadableModelActionError struct {
 	reason string
 }

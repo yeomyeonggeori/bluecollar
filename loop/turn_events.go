@@ -72,8 +72,6 @@ func (agentTurnRunner *AgentTurnRunner) taskRunForRequest(request AgentTurnReque
 	}, request.Prompt)
 }
 
-// The window comes from the endpoint, and one that will not name it leaves every fitting decision
-// derived from a default an order of magnitude smaller.
 func (agentTurnRunner *AgentTurnRunner) appendConversationBudgetEvent(taskRunID string, contextWindowTokens int) {
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentConversationBudget, marshalEventBody(map[string]any{
 		"contextWindowTokens":        contextWindowTokens,

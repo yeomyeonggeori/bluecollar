@@ -36,7 +36,6 @@ func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredRes
 	}, true
 }
 
-// A result the model reads as loose text says nothing about where it came from.
 func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMessage {
 	transcript := []model.ChatCompletionMessage{}
 	for _, observation := range observations {
@@ -74,7 +73,6 @@ func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMe
 	return transcript
 }
 
-// Summary describes the call for a compact ledger; a tool message is the answer itself.
 func toolResultForTranscript(observation turnObservation) string {
 	if content := strings.TrimSpace(observation.ContentText()); content != "" {
 		return content

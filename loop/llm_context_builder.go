@@ -89,8 +89,6 @@ func (builder LLMContextBuilder) BuildChangingContext(input LLMContextInput) str
 	}), "\n\n")
 }
 
-// A native transcript carries every result on the call that produced it, so repeating them here
-// would send each one twice.
 func (builder LLMContextBuilder) toolResultContext(input LLMContextInput) string {
 	if input.ToolResultsCarriedNatively {
 		return ""

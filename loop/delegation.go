@@ -24,9 +24,6 @@ func delegationsRemaining(options TurnOptions, observations []turnObservation) i
 	return remaining
 }
 
-// A child is a turn like any other: the host executes its tool calls as the same actor,
-// so it reaches nothing its parent could not. What it does not get is the right to
-// delegate again, which is what keeps one request from becoming a tree nobody sized.
 func childTurnRequest(request AgentTurnRequest, actionDocument turnActionDocument) AgentTurnRequest {
 	childRequest := request
 	childRequest.Prompt = childPrompt(actionDocument)

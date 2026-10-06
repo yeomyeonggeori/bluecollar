@@ -93,11 +93,6 @@ func recoveryFinalizationContextWithParent(parentContext context.Context, reques
 	return context.WithCancel(model.ContextWithRequestContext(parentContext, requestContextForTurn(request)))
 }
 
-// A notice generated on a context that is already dead cannot be written at all, so a dead caller
-// is detached from, keeping its values. A caller still alive keeps its cancellation, because a
-// stop arriving mid-notice should end it rather than wait out the bound. Either way the bound is
-// the ceiling the elapsed closing reply is given: outliving it would hold the turn, and with it
-// the conversation, open forever.
 func closingNoticeContextWithParent(parentContext context.Context, request AgentTurnRequest) (context.Context, context.CancelFunc) {
 	noticeParent := parentContext
 	if parentContext.Err() != nil {
@@ -122,8 +117,6 @@ func latestFailedOperation(observations []turnObservation) string {
 	return ""
 }
 
-// The summary labels the failure and shell labels every one of them with its exit status.
-// A report that reaches the user saying the command exited 1 tells them nothing they can act on.
 func failureLineForUser(observation turnObservation) string {
 	summary := strings.TrimSpace(observation.FailureSummary())
 	printed := strings.TrimSpace(observation.ContentText())

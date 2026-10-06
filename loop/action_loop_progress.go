@@ -57,10 +57,6 @@ func (tracker *actionProgressTracker) noteStallRecoveryDirective(observations []
 	tracker.stallRecoveryDirectiveCount++
 }
 
-// structuralFailureRepeatThreshold is how many times the same failure signature
-// (tool + stage + error code) may recur — across cosmetically different inputs —
-// before recovery treats that route as structurally broken and stops. Below this
-// the normal corrected-retry / alternate-route budget still applies.
 const structuralFailureRepeatThreshold = 3
 
 func evaluateRecoveryAllowance(observations []turnObservation, budget RecoveryBudget) recoveryAllowance {
@@ -83,13 +79,6 @@ func evaluateRecoveryAllowance(observations []turnObservation, budget RecoveryBu
 	return recoveryAllowance{CanRecover: false, Reason: "tool recovery budget exhausted"}
 }
 
-// repeatedFailureSignature returns a human-readable signature when the latest
-// failure's (tool + stage + error code) has already failed
-// structuralFailureRepeatThreshold times within the episode it is still in. It ignores the tool
-// input, so changing cosmetic fields to re-issue the same broken call does not disguise it as
-// fresh progress and does not keep the recovery loop banging on a route that keeps failing the
-// same way. It counts inside the episode because a signature that a successful call already
-// cleared is not recurring, and shell gives every shell failure the same signature.
 func repeatedFailureSignature(observations []turnObservation, failureDebt FailureDebt) string {
 	signature := failureSignatureKey(failureDebt.LatestFailure)
 	if signature == "" {

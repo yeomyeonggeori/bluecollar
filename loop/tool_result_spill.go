@@ -17,16 +17,12 @@ type ToolResultSpill struct {
 	Content           string
 }
 
-// Locator is opaque: a host that stores spills somewhere other than a filesystem
-// renders it as whatever its RetrievalHint tells the agent to use, so nothing parses it.
 type ToolResultSpillRef struct {
 	Locator       string
 	Bytes         int
 	RetrievalHint string
 }
 
-// A host that registers no store keeps the elided output and the advice to ask again
-// more narrowly, so implementing this is optional.
 type ToolResultSpillStore interface {
 	SaveToolResultSpill(context.Context, ToolResultSpill) (ToolResultSpillRef, error)
 }
@@ -61,8 +57,6 @@ func spillSuggestedName(toolName string) string {
 	return trimmedToolName + ".result.txt"
 }
 
-// A storage failure of ours must not fail the agent's call, so every unhappy path
-// here returns an empty ref and leaves the elided result standing.
 func (agentTurnRunner *AgentTurnRunner) spillToolResult(ctx context.Context, taskRunID string, observationID string, toolName string, workspaceRootPath string, content string) ToolResultSpillRef {
 	if agentTurnRunner.toolResultSpillStore == nil {
 		return ToolResultSpillRef{}

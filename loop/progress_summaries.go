@@ -31,10 +31,6 @@ func summarizeStructuredFailure(observation turnObservation) string {
 	return strings.Join(parts, "; ")
 }
 
-// summarizeTerminalRun keeps a shell result diagnosable instead of
-// collapsing a long build log to a bare "success": it always surfaces the exit
-// code and the tail of stdout and stderr, so warnings like a failed browser
-// render are visible in the task record and to the model.
 func summarizeTerminalRun(observation turnObservation) string {
 	tail, ok := terminalObservationTail(observation)
 	if !ok {

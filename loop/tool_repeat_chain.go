@@ -8,12 +8,8 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-// The first run length delivers a short nudge and every later one names the call, so an
-// agent that keeps going gets louder evidence instead of the same sentence again.
 var toolRepeatReminderRunLengths = []int{3, 5, 8}
 
-// Detection always compares the whole canonical key, so a long payload cannot slip a loop
-// past the chain. Only what the reminder quotes back is shortened.
 const toolRepeatArgumentsPreviewLimit = 500
 
 func chainTransparentToolName(toolName string) bool {
@@ -88,17 +84,12 @@ func toolRepeatReminderObservation(observations []turnObservation, observation t
 	), count, true
 }
 
-// The reminder reaches the model, so the ledger carries its words and not just the
-// fact that one fired: a reader replaying the record has to see what the model saw.
 type reminderEventBody struct {
 	Observation         turnObservation `json:"observation"`
 	RepeatedObservation string          `json:"repeatedObservationID"`
 	ConsecutiveCalls    int             `json:"consecutiveCalls,omitempty"`
 }
 
-// A tool that declares no side effect produces nothing but its own result, so a result
-// identical to an earlier one means the call changed nothing. That holds however much
-// work happened in between, which is why this does not go through the consecutive chain.
 func unchangedResultReminderObservation(toolSet *toolcontract.ToolSet, observations []turnObservation, observation turnObservation) (turnObservation, bool) {
 	if observation.RepeatsObservationID == "" {
 		return turnObservation{}, false
@@ -114,9 +105,6 @@ func unchangedResultReminderObservation(toolSet *toolcontract.ToolSet, observati
 	), true
 }
 
-// One repeat of a tool that changes something proves nothing: two runs of ls print the same
-// listing and may both have changed the machine. The same earlier result coming back three
-// times no longer reads as verification, so it earns the run lengths the input chain uses.
 func identicalResultCount(observations []turnObservation, observation turnObservation) int {
 	count := 0
 	for _, earlier := range observations {

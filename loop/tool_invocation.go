@@ -335,9 +335,6 @@ func toolResultImageRefs(observationID string, attachments []toolcontract.FileAt
 	return imageRefs
 }
 
-// Before this, a panicking tool printed a full goroutine dump and took the process
-// with it. Recovering kept the task alive and left whoever has to fix that tool with
-// one sentence, so the stack goes where it is useful and nowhere else.
 func (agentTurnRunner *AgentTurnRunner) recordToolCrash(taskRunID string, observationID string, toolName string, toolResult toolcontract.ToolResult) {
 	if toolResult.Failure == nil || strings.TrimSpace(toolResult.Failure.CrashStack) == "" {
 		return

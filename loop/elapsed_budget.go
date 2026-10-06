@@ -10,7 +10,6 @@ import (
 
 const maximumElapsedClosingDuration = time.Minute
 
-// Every clock a level profile draws goes through here.
 func (agentTurnRunner *AgentTurnRunner) setElapsedBudgetFromProfile(taskLevelProfile TaskLevelProfile) {
 	agentTurnRunner.options.MaxElapsedSecond = agentTurnRunner.elapsedSecondForProfile(taskLevelProfile)
 }
