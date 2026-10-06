@@ -165,6 +165,7 @@ type AgentTurnRequest struct {
 	ActiveGoal                   ActiveGoal
 	PriorTask                    PriorTaskContext
 	ScheduledRun                 ScheduledRunContext
+	PendingInput                 PendingInputContext
 	ToolExposure                 ToolExposureEvent
 	PrecomputedTurnDecision      *TurnDecision
 	IsPrecomputedDecisionExact   bool
