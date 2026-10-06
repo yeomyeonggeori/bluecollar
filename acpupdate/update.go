@@ -46,7 +46,7 @@ func ToolCallForEvent(rawTurnEvent taskstate.RawTurnEvent) (acp.SessionUpdate, b
 }
 
 func ledgerMeta(rawTurnEvent taskstate.RawTurnEvent) map[string]any {
-	record := agentcontract.LedgerRecord{Name: rawTurnEvent.Name}
+	record := agentcontract.LedgerRecord{Name: rawTurnEvent.Name, Text: rawTurnEvent.Body}
 	if json.Valid([]byte(rawTurnEvent.Body)) {
 		record.Body = json.RawMessage(rawTurnEvent.Body)
 	} else {
