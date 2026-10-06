@@ -389,3 +389,19 @@ func TestACallTheHostRefusedDoesNotParkTheRun(t *testing.T) {
 		t.Fatalf("a refusal is an answer, not a wait, got %q", notParked.Status)
 	}
 }
+
+func TestAQuestionTheHostAskedParksTheRunTheAgentHoldsForTheAnswer(t *testing.T) {
+	asked := toolcontract.ToolSuccess("which room?")
+	opened := openHostedTool(t, toolcontract.ToolDescriptor{Name: toolcontract.AskInputToolName, ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}, asked)
+	taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	taskRun := taskRuns.CreateTaskRunWithOrigin("person-1", taskstate.TaskRunOrigin{}, "book a room")
+	taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "default")
+	opened.parking.taskRuns = taskRuns
+
+	opened.toolSet.Invoke(toolcontract.WithTaskRunID(t.Context(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: toolcontract.AskInputToolName, Input: json.RawMessage(`{}`)})
+
+	parked, _ := taskRuns.FindTaskRun(taskRun.TaskRunID)
+	if parked.Status != agentcontract.TaskStatusWaitingUserInput || parked.FailureReason != "which room?" {
+		t.Fatalf("the loop checks its own store to learn that the question is out, got %q %q", parked.Status, parked.FailureReason)
+	}
+}

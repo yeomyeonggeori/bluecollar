@@ -168,7 +168,7 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *ru
 			if len(carriedResult.Output.Data) == 0 {
 				carriedResult.Output.Data = json.RawMessage(`{}`)
 			}
-			parking.parkOnHeldCall(ctx, carriedResult)
+			parking.parkOnHostPause(ctx, toolName, carriedResult)
 			carriedResult.IsValidatedUpstream = true
 			return carriedResult, nil
 		}

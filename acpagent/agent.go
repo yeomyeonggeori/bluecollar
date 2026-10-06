@@ -120,10 +120,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 		openSession.adoptNamedTaskRun(request.Meta, promptText(request.Prompt))
 	}
 	turnRequest := runningAgent.turnRequestFor(openSession, request, isResumedFromHostLedger)
-	stopObserving := openSession.taskEvents.RegisterTurnObserver(func(rawTurnEvent taskstate.RawTurnEvent) {
-		openSession.rememberTaskRun(rawTurnEvent.TaskRunID)
-		sendLedgerEvent(ctx, runningAgent.sessionUpdates, request.SessionId, rawTurnEvent)
-	})
+	stopObserving := openSession.taskEvents.RegisterTurnObserver(ledgerObserver(ctx, runningAgent.sessionUpdates, request.SessionId, openSession.rememberTaskRun))
 	defer stopObserving()
 
 	turnDecision, errorValue := runningAgent.decisionForTurn(ctx, turnRequest)

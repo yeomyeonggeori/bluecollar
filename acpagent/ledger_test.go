@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
 
 func TestSessionUpdateWaitingForConnectionCanBeCancelled(t *testing.T) {
@@ -62,5 +63,28 @@ func benchmarkSessionUpdateSender(b *testing.B, sender sessionUpdateSender) {
 		if errorValue := sender.SessionUpdate(b.Context(), acp.SessionNotification{}); errorValue != nil {
 			b.Fatal(errorValue)
 		}
+	}
+}
+
+type recordingSessionUpdates struct {
+	deliveredWithLiveContext int
+}
+
+func (sender *recordingSessionUpdates) SessionUpdate(ctx context.Context, _ acp.SessionNotification) error {
+	if ctx.Err() == nil {
+		sender.deliveredWithLiveContext++
+	}
+	return ctx.Err()
+}
+
+func TestARecordTheAgentWritesAfterTheHostCancelledTheTurnStillReachesTheHost(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	sender := &recordingSessionUpdates{}
+
+	ledgerObserver(cancelled, sender, "session-1", func(string) {})(taskstate.RawTurnEvent{TaskRunID: "run-1", Name: "agent.goal.waiting_approval", Body: "{}"})
+
+	if sender.deliveredWithLiveContext != 1 {
+		t.Fatal("the host cancels a turn to end it, and the records the loop writes while ending are the ones that say why")
 	}
 }
