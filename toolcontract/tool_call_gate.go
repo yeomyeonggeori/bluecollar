@@ -21,6 +21,10 @@ func (toolSet *ToolSet) UseToolCallGate(toolCallGate ToolCallGate) {
 	toolSet.toolCallGate = toolCallGate
 }
 
+func (toolSet *ToolSet) HasToolCallGate() bool {
+	return toolSet.toolCallGate != nil
+}
+
 func (toolSet *ToolSet) reviewToolCall(ctx context.Context, toolInvocation ToolInvocation, toolDefinition ToolDefinition) (context.Context, ToolResult, bool) {
 	if toolSet.toolCallGate == nil {
 		return ctx, ToolResult{}, false
