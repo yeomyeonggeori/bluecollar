@@ -454,3 +454,26 @@ func TestAnAnswerTheHostAlreadyHasDoesNotParkTheRun(t *testing.T) {
 		t.Fatalf("a question answered in the thread leaves the run going, got %q", notParked.Status)
 	}
 }
+
+func TestAToolOfferedOnRequestIsRegisteredForSelectionButNotPinnedToTheTurn(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	handler := func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ran"}}}, nil
+	}
+	server.AddTool(&mcp.Tool{Name: "event_add", InputSchema: map[string]any{"type": "object"}}, handler)
+	server.AddTool(&mcp.Tool{Name: "message_send", InputSchema: map[string]any{"type": "object"}, Meta: mcp.Meta(toolcontract.DescriptorMeta(toolcontract.ToolDescriptor{Name: "message_send", IsOfferedOnRequest: true}))}, handler)
+	transport, _ := connectCatalogServer(t, server)
+
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	if !reflect.DeepEqual(opened.toolNames, []string{"event_add"}) {
+		t.Fatalf("only a tool the host preloads is pinned to every turn, got %v", opened.toolNames)
+	}
+	if _, isRegistered := opened.toolSet.ToolDefinition("message_send"); !isRegistered {
+		t.Fatal("a tool offered on request has to be registered, or the router cannot choose it")
+	}
+}

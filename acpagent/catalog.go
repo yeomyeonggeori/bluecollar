@@ -50,7 +50,7 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 		}
 		for _, tool := range toolList.Tools {
 			descriptor := descriptorForTool(tool)
-			if descriptor.Visibility != toolcontract.ToolVisibilityInternal {
+			if descriptor.Visibility != toolcontract.ToolVisibilityInternal && !descriptor.IsOfferedOnRequest {
 				toolNames = append(toolNames, tool.Name)
 			}
 			descriptors[tool.Name] = descriptor
