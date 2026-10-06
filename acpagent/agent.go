@@ -87,6 +87,10 @@ func (runningAgent *Agent) NewSession(ctx context.Context, request acp.NewSessio
 	kernel.UseLanguageModelProvider(runningAgent.languageModel)
 	kernel.UseTaskTierLanguageModels(runningAgent.options.LanguageModels)
 	kernel.UseDecisionModel(runningAgent.options.DecisionModel)
+	kernel.UseTurnOptions(runningAgent.options.TurnOptions)
+	if runningAgent.options.CompanyProvider != nil {
+		kernel.UseCompanyProvider(runningAgent.options.CompanyProvider)
+	}
 	kernel.UseToolResultImageSource(openedCatalog)
 	if runningAgent.options.Skills.Retriever != nil {
 		kernel.UseSkillRetriever(runningAgent.options.Skills.Retriever)
@@ -145,7 +149,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 		return acp.PromptResponse{}, errorValue
 	}
 	openSession.recordPlanningCalls(turnResult.TaskRun.TaskRunID, planned.callRecords)
-	return promptResponseFor(turnResult), nil
+	return promptResponseFor(ctx, turnResult), nil
 }
 
 func routedAsThePersonWroteIt(turnRequest agentcontract.AgentTurnRequest, promptMeta map[string]any) agentcontract.AgentTurnRequest {

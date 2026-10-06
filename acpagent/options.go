@@ -3,6 +3,7 @@ package acpagent
 import (
 	"errors"
 
+	"github.com/yeomyeonggeori/bluecollar/turnoptions"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -20,11 +21,14 @@ const (
 )
 
 type Options struct {
-	AgentName         string
-	LanguageModels    agentcontract.TaskTierLanguageModels
-	DecisionModel     model.DecisionModel
-	LLMCallRepository taskstate.LLMCallRepository
-	Skills            Skills
+	AgentName           string
+	LanguageModels      agentcontract.TaskTierLanguageModels
+	DecisionModel       model.DecisionModel
+	LLMCallRepository   taskstate.LLMCallRepository
+	Skills              Skills
+	TurnOptions         turnoptions.TurnOptions
+	CompanyProvider     func() agentcontract.CompanyContext
+	RouterLanguageModel model.LanguageModelProvider
 }
 
 type Skills struct {
