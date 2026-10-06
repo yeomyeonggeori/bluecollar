@@ -5,6 +5,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/bluecollar/approval"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 const (
@@ -17,7 +18,7 @@ type permissionAsker struct {
 	sessionID acp.SessionId
 }
 
-func (asker permissionAsker) Ask(ctx context.Context, hold approval.Hold) approval.Answer {
+func (asker permissionAsker) Ask(ctx context.Context, hold holdrecord.Hold) approval.Answer {
 	response, errorValue := asker.requester.RequestPermission(ctx, acp.RequestPermissionRequest{
 		SessionId: asker.sessionID,
 		ToolCall:  permissionToolCall(hold),
@@ -32,7 +33,7 @@ func (asker permissionAsker) Ask(ctx context.Context, hold approval.Hold) approv
 	return answerForOption(response.Outcome.Selected.OptionId)
 }
 
-func permissionToolCall(hold approval.Hold) acp.ToolCallUpdate {
+func permissionToolCall(hold holdrecord.Hold) acp.ToolCallUpdate {
 	title := hold.Call.Confirmation
 	return acp.ToolCallUpdate{ToolCallId: acp.ToolCallId(hold.ID), Title: &title, RawInput: hold.Call.ToolInput}
 }

@@ -81,7 +81,7 @@ func TestAgentTurnRunnerRejectsMalformedInputBeforeApproval(t *testing.T) {
 	if !taskEventsContain(events, "agent.tool_input_malformed", "task_delete") {
 		t.Fatalf("expected malformed input event, got %+v", events)
 	}
-	if taskEventsContain(events, "approval.pending_call", "") {
+	if taskEventsContain(events, "approval.hold_opened", "") {
 		t.Fatalf("expected no held approval call, got %+v", events)
 	}
 }

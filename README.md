@@ -32,6 +32,7 @@ The documentation is [DOCS.md](DOCS.md), published at [bluecollar.intern.kim](ht
 | `loop/` | the agent loop |
 | `intake/` | the turn router and the decision planner |
 | `taskstate/` | the services over task runs, steps, events and artifacts |
+| `holdrecord/` | the approval hold events, their writers and the fold that reads them |
 | `turnstream/`, `trace/` | a live view of a turn's ledger, and one run rendered as a file |
 | `bench/` | run metrics, a harness runner, and the Terminal-Bench adapter |
 | `cmd/bluecollar/` | the command-line runner |

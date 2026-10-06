@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/yeomyeonggeori/bluecollar/approval"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 const (
@@ -18,7 +19,7 @@ type terminalAsker struct {
 	readLine func(prompt string) (string, error)
 }
 
-func (asker terminalAsker) Ask(_ context.Context, hold approval.Hold) approval.Answer {
+func (asker terminalAsker) Ask(_ context.Context, hold holdrecord.Hold) approval.Answer {
 	fmt.Fprintln(asker.output, hold.Call.Confirmation)
 	choice, errorValue := asker.readLine("1) Allow  2) Reject ❯ ")
 	if errorValue != nil {

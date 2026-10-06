@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -14,7 +15,7 @@ type Turn struct {
 }
 
 type Asker interface {
-	Ask(context.Context, Hold) Answer
+	Ask(context.Context, holdrecord.Hold) Answer
 }
 
 type Answer string

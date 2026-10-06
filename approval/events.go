@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 func marshalEventBody(value any) string {
@@ -16,17 +16,15 @@ func marshalEventBody(value any) string {
 	return string(document)
 }
 
-func (gate *Gate) recordHold(request approvalRequest, question string) Hold {
-	call := agentcontract.HeldCall{
-		ApprovalToken: taskstate.NewIdentifier(),
+func (gate *Gate) recordHold(request approvalRequest, question string) holdrecord.Hold {
+	hold := holdrecord.Open(gate.taskRuns, request.taskRunID, agentcontract.HeldCall{
 		ToolName:      request.toolDefinition.Name,
 		ToolInput:     request.toolInput,
 		ApprovalScope: request.approvalScope(),
 		Confirmation:  question,
-	}
-	gate.taskRuns.AppendTaskEvent(request.taskRunID, agentcontract.TaskEventApprovalPendingCall, marshalEventBody(call))
+	}, nil)
 	gate.recordApprovalQuestion(request, question)
-	return Hold{ID: call.ApprovalToken, Call: call, taskRunID: request.taskRunID, state: holdPending}
+	return hold
 }
 
 func (gate *Gate) recordApprovalQuestion(request approvalRequest, question string) {
@@ -61,28 +59,4 @@ func askRecord(request approvalRequest, question string) map[string]any {
 		record["sessionApprovable"] = true
 	}
 	return record
-}
-
-func recordDecision(taskRunStore taskstate.TaskRunStore, hold Hold, decision string, source string) {
-	taskRunStore.AppendTaskEvent(hold.taskRunID, agentcontract.TaskEventApprovalDecided, marshalEventBody(decidedBody{
-		HoldID:   hold.ID,
-		Decision: decision,
-		Source:   source,
-	}))
-}
-
-func recordSpent(taskRunStore taskstate.TaskRunStore, taskRunID string, holdID string, toolName string, toolInput json.RawMessage) {
-	taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalExecuted, marshalEventBody(spentBody{
-		HoldID:    holdID,
-		ToolName:  strings.TrimSpace(toolName),
-		ToolInput: toolInput,
-	}))
-}
-
-func grantApprovalScope(taskRunStore taskstate.TaskRunStore, hold Hold) {
-	approvalScope := strings.TrimSpace(hold.Call.ApprovalScope)
-	if approvalScope == "" {
-		return
-	}
-	taskRunStore.AppendTaskEvent(hold.taskRunID, agentcontract.TaskEventApprovalScopeGranted, marshalEventBody(scopeGrantedBody{Scope: approvalScope}))
 }

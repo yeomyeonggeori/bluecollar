@@ -91,7 +91,7 @@ func decodeEvent(rawTurnEvent taskstate.RawTurnEvent) (Event, bool) {
 	case rawTurnEvent.Name == agentcontract.TaskEventAgentCheckpointSent:
 		checkpoint := decodeBody[checkpointEventBody](rawTurnEvent.Body)
 		return Event{Kind: EventReply, Message: checkpoint.Message, ToolName: checkpoint.ToolName}, true
-	case rawTurnEvent.Name == agentcontract.TaskEventApprovalPendingCall:
+	case rawTurnEvent.Name == agentcontract.TaskEventApprovalHoldOpened:
 		hold := decodeBody[agentcontract.HeldCall](rawTurnEvent.Body)
 		return Event{Kind: EventApproval, ToolName: hold.ToolName, Message: hold.Confirmation}, true
 	case isToolResultEventName(rawTurnEvent.Name):

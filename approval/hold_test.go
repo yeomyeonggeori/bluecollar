@@ -5,52 +5,15 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 func (fixture fixture) recordHold(holdID string, toolName string, toolInput string) {
-	fixture.record(agentcontract.TaskEventApprovalPendingCall, `{"approvalToken":"`+holdID+`","toolName":"`+toolName+`","toolInput":`+toolInput+`,"confirmation":"?"}`)
+	fixture.record(agentcontract.TaskEventApprovalHoldOpened, `{"holdID":"`+holdID+`","toolName":"`+toolName+`","toolInput":`+toolInput+`,"confirmation":"?"}`)
 }
 
 func (fixture fixture) recordDecided(holdID string, decision string) {
-	fixture.record(agentcontract.TaskEventApprovalDecided, `{"approvalToken":"`+holdID+`","decision":"`+decision+`","source":"chat_reply"}`)
-}
-
-func TestAHoldIsSettledByItsOwnDecisionAndOnlyByIt(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.recordHold("hold-1", "event_delete", `{"eventID":"event-1"}`)
-	fixture.recordHold("hold-2", "event_delete", `{"eventID":"event-2"}`)
-	fixture.recordDecided("hold-2", decisionCancel)
-	fixture.recordDecided("hold-unknown", decisionConfirm)
-
-	holds := holdLedgerOf(fixture.events()).holds
-
-	if len(holds) != 2 || holds[0].state != holdPending || holds[1].state != holdRejected {
-		t.Fatalf("a decision settles the hold it names, got %+v", holds)
-	}
-}
-
-func TestAHoldThatIsAlreadySettledIgnoresALaterDecision(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.recordHold("hold-1", "event_delete", `{}`)
-	fixture.recordDecided("hold-1", decisionCancel)
-	fixture.recordDecided("hold-1", decisionConfirm)
-
-	if holds := holdLedgerOf(fixture.events()).holds; holds[0].state != holdRejected {
-		t.Fatalf("a rejection is not undone by a decision that arrives after it, got %+v", holds)
-	}
-}
-
-func TestAHoldWrittenWithoutAnIdentityIsKnownByItsEvent(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.record(agentcontract.TaskEventApprovalPendingCall, `{"toolName":"shell","toolInput":{"command":"pwd"},"confirmation":"?"}`)
-	pendingEvent := fixture.eventNamed(agentcontract.TaskEventApprovalPendingCall)
-	fixture.recordDecided(pendingEvent.TaskEventID, decisionConfirm)
-
-	holds := holdLedgerOf(fixture.events()).holds
-
-	if len(holds) != 1 || holds[0].ID != pendingEvent.TaskEventID || holds[0].Call.ToolName != "bash" || holds[0].state != holdApproved {
-		t.Fatalf("a hold recorded without an identity is the event that recorded it, under the tool's current name, got %+v", holds)
-	}
+	fixture.record(agentcontract.TaskEventApprovalDecided, `{"holdID":"`+holdID+`","decision":"`+decision+`","source":"chat_reply"}`)
 }
 
 func TestAHoldRecordedByTheGateReadsBackWhole(t *testing.T) {
@@ -59,7 +22,7 @@ func TestAHoldRecordedByTheGateReadsBackWhole(t *testing.T) {
 
 	hold := fixture.pendingHold(t)
 
-	if hold.ID == "" || hold.Call.ApprovalToken != hold.ID || hold.Call.ApprovalScope != "calendar" || hold.state != holdPending {
+	if hold.ID == "" || hold.Call.HoldID != hold.ID || hold.Call.ApprovalScope != "calendar" || hold.State != holdrecord.StatePending {
 		t.Fatalf("a hold is read back whole from the ledger, got %+v", hold)
 	}
 }
@@ -75,7 +38,7 @@ func TestAFreshCallAfterAReloadCancellationIsAskedAboutNotRejected(t *testing.T)
 	if outcome.kind != outcomeUnanswered || asker.askedCount != 2 {
 		t.Fatalf("a rejection settles the hold it answered, so the same call made fresh is a new question, got %+v after %d questions", outcome, asker.askedCount)
 	}
-	if holds := holdLedgerOf(fixture.events()).holds; len(holds) != 2 || holds[0].state != holdRejected || holds[1].state != holdPending {
+	if holds := holdrecord.Holds(fixture.events()); len(holds) != 2 || holds[0].State != holdrecord.StateRejected || holds[1].State != holdrecord.StatePending {
 		t.Fatalf("expected a rejected hold and a fresh pending one, got %+v", holds)
 	}
 }
@@ -118,9 +81,9 @@ func TestAnApprovedHoldIsReusedOnlyByAnIdenticalCallAndOnlyOnce(t *testing.T) {
 func TestAnApprovalForOneCallSurvivesAnotherCallOfTheSameToolRunning(t *testing.T) {
 	fixture := newFixture(t)
 	fixture.recordHold("hold-1", "event_delete", `{"eventID":"event-1"}`)
-	fixture.recordDecided("hold-1", decisionConfirm)
+	fixture.recordDecided("hold-1", holdrecord.DecisionApprove)
 	fixture.recordHold("hold-2", "event_delete", `{"eventID":"event-2"}`)
-	fixture.recordDecided("hold-2", decisionConfirm)
+	fixture.recordDecided("hold-2", holdrecord.DecisionApprove)
 
 	fixture.awaitOutcome(fixture.requestWithInput(`{"eventID":"event-2"}`))
 
@@ -137,11 +100,11 @@ func TestTheSpentApprovalCarriesTheCallAndTheHoldItRanUnder(t *testing.T) {
 
 	outcome := fixture.awaitOutcome(fixture.request())
 
-	spent := fixture.eventBody(t, agentcontract.TaskEventApprovalExecuted)
+	spent := fixture.eventBody(t, agentcontract.TaskEventApprovalHoldSpent)
 	if outcome.holdID != hold.ID {
 		t.Fatalf("the approved call runs under the hold's own identity, got %+v", outcome)
 	}
-	for _, expectedFragment := range []string{`"toolName":"event_delete"`, `"eventID":"event-1"`, `"approvalToken":"` + hold.ID + `"`} {
+	for _, expectedFragment := range []string{`"toolName":"event_delete"`, `"eventID":"event-1"`, `"holdID":"` + hold.ID + `"`} {
 		if !strings.Contains(spent, expectedFragment) {
 			t.Fatalf("expected the spent approval to carry %q, got %s", expectedFragment, spent)
 		}
@@ -154,7 +117,7 @@ func TestACallInsideAGrantedScopeRunsUnderNoHold(t *testing.T) {
 
 	outcome := fixture.awaitOutcome(fixture.scopedRequest())
 
-	if outcome.kind != outcomeApproved || outcome.holdID != "" || strings.Contains(fixture.eventBody(t, agentcontract.TaskEventApprovalExecuted), "approvalToken") {
+	if outcome.kind != outcomeApproved || outcome.holdID != "" || strings.Contains(fixture.eventBody(t, agentcontract.TaskEventApprovalHoldSpent), "holdID") {
 		t.Fatalf("a call approved by its scope runs under no hold, got %+v", outcome)
 	}
 }
@@ -176,8 +139,8 @@ func TestEverySurfaceRecordsTheRequesterDecisionOnTheHoldItAnswered(t *testing.T
 		answer           Answer
 		expectedDecision string
 	}{
-		{"approve", Approved, "confirm"},
-		{"reject", Rejected, "cancel"},
+		{"approve", Approved, "approve"},
+		{"reject", Rejected, "reject"},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			fixture := newFixture(t)
@@ -187,7 +150,7 @@ func TestEverySurfaceRecordsTheRequesterDecisionOnTheHoldItAnswered(t *testing.T
 			fixture.answer(t, testCase.answer, "chat_reply")
 
 			decided := fixture.eventBody(t, agentcontract.TaskEventApprovalDecided)
-			for _, expectedFragment := range []string{`"approvalToken":"` + hold.ID + `"`, `"decision":"` + testCase.expectedDecision + `"`, `"source":"chat_reply"`} {
+			for _, expectedFragment := range []string{`"holdID":"` + hold.ID + `"`, `"decision":"` + testCase.expectedDecision + `"`, `"source":"chat_reply"`} {
 				if !strings.Contains(decided, expectedFragment) {
 					t.Fatalf("expected %q in %s", expectedFragment, decided)
 				}

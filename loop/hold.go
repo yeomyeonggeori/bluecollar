@@ -1,8 +1,6 @@
 package loop
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"strings"
 
@@ -12,48 +10,27 @@ import (
 
 const approvalUnmatchedObservationNote = "This is not the call that was held for approval. The held call is still waiting, and what ran here was recorded as its own effect."
 
-func newHoldID() string {
-	buffer := make([]byte, 16)
-	if _, errorValue := rand.Read(buffer); errorValue != nil {
-		return ""
-	}
-	return hex.EncodeToString(buffer)
-}
-
-func (agentTurnRunner *AgentTurnRunner) recordHold(taskRunID string, observation turnObservation) {
-	hold := HeldCall{
-		ApprovalToken: newHoldID(),
-		ToolName:      strings.TrimSpace(observation.Tool),
-		ToolInput:     observation.ToolInput,
-		ObservationID: observation.ObservationID,
-	}
-	if hold.ApprovalToken == "" {
-		return
-	}
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventApprovalHeldCall, marshalEventBody(hold))
-}
-
 func (agentTurnRunner *AgentTurnRunner) unspentHolds(taskRunID string) []HeldCall {
 	holds := []HeldCall{}
 	spentHoldIDs := map[string]bool{}
 	for _, taskEvent := range agentTurnRunner.taskRunService.ListTaskEvent(taskRunID) {
 		switch taskEvent.Name {
-		case agentcontract.TaskEventApprovalHeldCall:
+		case agentcontract.TaskEventApprovalHoldOpened:
 			hold := HeldCall{}
-			if json.Unmarshal([]byte(taskEvent.Body), &hold) == nil && hold.ApprovalToken != "" {
+			if json.Unmarshal([]byte(taskEvent.Body), &hold) == nil && hold.HoldID != "" {
 				hold.ToolName = toolcontract.CanonicalToolName(hold.ToolName)
 				holds = append(holds, hold)
 			}
-		case agentcontract.TaskEventApprovalExecuted:
-			executed := HeldCall{}
-			if json.Unmarshal([]byte(taskEvent.Body), &executed) == nil {
-				spentHoldIDs[executed.ApprovalToken] = true
+		case agentcontract.TaskEventApprovalHoldSpent:
+			spent := HeldCall{}
+			if json.Unmarshal([]byte(taskEvent.Body), &spent) == nil {
+				spentHoldIDs[spent.HoldID] = true
 			}
 		}
 	}
 	awaiting := []HeldCall{}
 	for _, hold := range holds {
-		if !spentHoldIDs[hold.ApprovalToken] {
+		if !spentHoldIDs[hold.HoldID] {
 			awaiting = append(awaiting, hold)
 		}
 	}
@@ -71,13 +48,13 @@ func isToolHeld(holds []HeldCall, toolName string) bool {
 }
 
 func holdForCarriedOutCall(holds []HeldCall, carriedOutCall CarriedOutCall) (HeldCall, bool) {
-	holdID := strings.TrimSpace(carriedOutCall.ApprovalToken)
+	holdID := strings.TrimSpace(carriedOutCall.HoldID)
 	if holdID == "" {
 		return HeldCall{}, false
 	}
 	toolInputKey := canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput)
 	for _, hold := range holds {
-		if hold.ApprovalToken == holdID && hold.CanonicalCallKey() == toolInputKey {
+		if hold.HoldID == holdID && hold.CanonicalCallKey() == toolInputKey {
 			return hold, true
 		}
 	}
@@ -92,10 +69,10 @@ func (agentTurnRunner *AgentTurnRunner) noteDriftFromHold(taskRunID string, hold
 		return false
 	}
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventApprovalUnheldCallCarriedOut, marshalEventBody(map[string]any{
-		"toolName":            strings.TrimSpace(carriedOutCall.ToolName),
-		"toolInputKey":        canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput),
-		"presentedToken":      strings.TrimSpace(carriedOutCall.ApprovalToken),
-		"awaitingHeldCallIDs": holdObservationIDs(holds),
+		"toolName":        strings.TrimSpace(carriedOutCall.ToolName),
+		"toolInputKey":    canonicalToolCallKey(carriedOutCall.ToolName, carriedOutCall.ToolInput),
+		"presentedHoldID": strings.TrimSpace(carriedOutCall.HoldID),
+		"awaitingHoldIDs": holdIDs(holds),
 	}))
 	return true
 }
@@ -107,10 +84,10 @@ func observationNotingApprovalDrift(observation turnObservation) turnObservation
 	return observation
 }
 
-func holdObservationIDs(holds []HeldCall) []string {
-	observationIDs := make([]string, 0, len(holds))
+func holdIDs(holds []HeldCall) []string {
+	ids := make([]string, 0, len(holds))
 	for _, hold := range holds {
-		observationIDs = append(observationIDs, hold.ObservationID)
+		ids = append(ids, hold.HoldID)
 	}
-	return observationIDs
+	return ids
 }

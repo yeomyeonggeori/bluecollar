@@ -6,7 +6,7 @@
 // advances them through their nine statuses, and appends to the event ledger.
 //
 // Event names follow a fixed grammar — tool.<name>.requested, tool.<name>.result,
-// approval.pending_call, approval.executed — so a reader can reconstruct a run
+// approval.hold_opened, approval.hold_spent — so a reader can reconstruct a run
 // without access to any harness's internal types.
 //
 // The ledger is what makes a task survive its process. A run is resumed by

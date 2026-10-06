@@ -34,7 +34,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 func reviewForOutcome(decided outcome) toolcontract.ToolCallReview {
 	switch decided.kind {
 	case outcomeApproved:
-		return toolcontract.ToolCallReview{MayProceed: true, ApprovedCallID: decided.holdID}
+		return toolcontract.ToolCallReview{MayProceed: true, HoldID: decided.holdID}
 	case outcomeRejected:
 		return toolcontract.ToolCallReview{Result: rejectedCallResult()}
 	case outcomeUnanswered:

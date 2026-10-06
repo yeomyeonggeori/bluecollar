@@ -12,7 +12,7 @@ const observationIDContextKey toolContextKey = "observationID"
 const responseLanguageContextKey toolContextKey = "responseLanguage"
 const userFacingMessageContextKey toolContextKey = "userFacingMessage"
 const delegatedTurnContextKey toolContextKey = "delegatedTurn"
-const approvedCallIDContextKey toolContextKey = "approvedCallID"
+const holdIDContextKey toolContextKey = "holdID"
 
 func WithUserFacingMessage(ctx context.Context, userFacingMessage string) context.Context {
 	if strings.TrimSpace(userFacingMessage) == "" {
@@ -72,14 +72,14 @@ func ResponseLanguageFromContext(ctx context.Context) string {
 	return ResolveResponseLanguage(responseLanguage)
 }
 
-func WithApprovedCallID(ctx context.Context, approvedCallID string) context.Context {
-	if strings.TrimSpace(approvedCallID) == "" {
+func WithHoldID(ctx context.Context, holdID string) context.Context {
+	if strings.TrimSpace(holdID) == "" {
 		return ctx
 	}
-	return context.WithValue(ctx, approvedCallIDContextKey, approvedCallID)
+	return context.WithValue(ctx, holdIDContextKey, holdID)
 }
 
-func ApprovedCallIDFromContext(ctx context.Context) string {
-	approvedCallID, _ := ctx.Value(approvedCallIDContextKey).(string)
-	return approvedCallID
+func HoldIDFromContext(ctx context.Context) string {
+	holdID, _ := ctx.Value(holdIDContextKey).(string)
+	return holdID
 }

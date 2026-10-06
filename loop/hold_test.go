@@ -11,45 +11,43 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-func TestAHoldIsSettledOnlyByTheIDTheLoopMintedForIt(t *testing.T) {
+func TestAHoldIsSettledOnlyByTheIDItWasOpenedWith(t *testing.T) {
 	holds := []HeldCall{{
-		ApprovalToken: "token-1",
-		ToolName:      "message_send",
-		ToolInput:     json.RawMessage(`{"to":["alice"],"message":"회의록"}`),
-		ObservationID: "obs-1",
+		HoldID:    "hold-1",
+		ToolName:  "message_send",
+		ToolInput: json.RawMessage(`{"to":["alice"],"message":"회의록"}`),
 	}}
 
-	sameCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"message":"회의록","to":["alice"]}`), ApprovalToken: "token-1"}
+	sameCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"message":"회의록","to":["alice"]}`), HoldID: "hold-1"}
 	if _, isMatched := holdForCarriedOutCall(holds, sameCall); !isMatched {
-		t.Fatal("the same call with its own token is the call that was approved, whatever order its fields arrive in")
+		t.Fatal("the same call with its own hold id is the call that was approved, whatever order its fields arrive in")
 	}
 
-	widerCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"to":["everyone"],"message":"회의록"}`), ApprovalToken: "token-1"}
+	widerCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"to":["everyone"],"message":"회의록"}`), HoldID: "hold-1"}
 	if _, isMatched := holdForCarriedOutCall(holds, widerCall); isMatched {
-		t.Fatal("a token is bound to the exact call it was minted for; carrying a wider one back under it is how an approval for one thing becomes an approval for another")
+		t.Fatal("a hold id is bound to the exact call it was opened for; carrying a wider one back under it is how an approval for one thing becomes an approval for another")
 	}
 
 	untokenedCall := CarriedOutCall{ToolName: "message_send", ToolInput: json.RawMessage(`{"to":["alice"],"message":"회의록"}`)}
 	if _, isMatched := holdForCarriedOutCall(holds, untokenedCall); isMatched {
-		t.Fatal("without the token the loop minted, a carried-out call is a claim about what was approved rather than proof of it")
+		t.Fatal("without the id its hold was opened with, a carried-out call is a claim about what was approved rather than proof of it")
 	}
 }
 
 func TestARestoredFormerKernelHoldMatchesOnlyItsCurrentEquivalent(t *testing.T) {
 	services := newTurnRunnerTestServices(nil, TurnOptions{})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "run the command")
-	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHeldCall,
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened,
 		marshalEventBody(agentcontract.HeldCall{
-			ApprovalToken: "token-legacy-shell",
-			ToolName:      "shell",
-			ToolInput:     json.RawMessage(`{"command":"pwd"}`),
-			ObservationID: "obs-legacy-shell",
+			HoldID:    "hold-legacy-shell",
+			ToolName:  "shell",
+			ToolInput: json.RawMessage(`{"command":"pwd"}`),
 		}))
 	holds := services.runner.unspentHolds(taskRun.TaskRunID)
 	carriedOutCall := CarriedOutCall{
-		ApprovalToken: "token-legacy-shell",
-		ToolName:      toolcontract.BashToolName,
-		ToolInput:     json.RawMessage(`{"command":"pwd"}`),
+		HoldID:    "hold-legacy-shell",
+		ToolName:  toolcontract.BashToolName,
+		ToolInput: json.RawMessage(`{"command":"pwd"}`),
 	}
 
 	if _, isMatched := holdForCarriedOutCall(holds, carriedOutCall); !isMatched {
@@ -94,23 +92,20 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 	services := newTurnRunnerTestServices(&sequenceLanguageModel{modelTier: "xlow", contents: []string{finishMessageDocument("보냈습니다")}},
 		TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "회의록 보내줘")
-	services.runner.recordHold(taskRun.TaskRunID, turnObservation{
-		ObservationID: "obs-1",
-		Tool:          "message_send",
-		ToolInput:     json.RawMessage(`{"to":["alice"]}`),
-	})
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHoldOpened,
+		marshalEventBody(agentcontract.HeldCall{HoldID: "hold-1", ToolName: "message_send", ToolInput: json.RawMessage(`{"to":["alice"]}`)}))
 	holds := services.runner.unspentHolds(taskRun.TaskRunID)
 	if len(holds) != 1 {
-		t.Fatalf("a held call is minted once and waits in the ledger: %v", holds)
+		t.Fatalf("a hold is opened once and waits in the ledger: %v", holds)
 	}
 
 	state := &agentTaskState{}
 	services.runner.recordCarriedOutCalls(context.Background(), taskRun.TaskRunID, AgentTurnRequest{
 		CarriedOutCalls: []CarriedOutCall{{
-			ToolName:      "message_send",
-			ToolInput:     json.RawMessage(`{"to":["everyone"]}`),
-			ApprovalToken: holds[0].ApprovalToken,
-			Result:        toolcontract.ToolSuccessData(`{"messageID":"m-1"}`, json.RawMessage(`{"messageID":"m-1"}`)),
+			ToolName:  "message_send",
+			ToolInput: json.RawMessage(`{"to":["everyone"]}`),
+			HoldID:    holds[0].HoldID,
+			Result:    toolcontract.ToolSuccessData(`{"messageID":"m-1"}`, json.RawMessage(`{"messageID":"m-1"}`)),
 		}},
 	}, state, map[string]turnObservation{})
 
@@ -129,8 +124,8 @@ func TestAnUnmatchedCarriedOutCallLeavesTheHoldWaitingAndSaysSo(t *testing.T) {
 		t.Fatal("a call nobody approved does not spend the approval that is still waiting")
 	}
 
-	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalExecuted,
-		`{"approvalToken":"`+holds[0].ApprovalToken+`","toolName":"message_send","toolInput":{"to":["alice"]}}`)
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventApprovalHoldSpent,
+		`{"holdID":"`+holds[0].HoldID+`","toolName":"message_send","toolInput":{"to":["alice"]}}`)
 	if len(services.runner.unspentHolds(taskRun.TaskRunID)) != 0 {
 		t.Fatal("the host that released the approval records the call it let run, and that record is what spends the hold")
 	}

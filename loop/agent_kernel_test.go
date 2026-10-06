@@ -565,7 +565,7 @@ func TestExternalSendPlanReachesApprovalGateBeforeEffect(t *testing.T) {
 		t.Fatalf("expected no send before approval, got %d handler calls", sendCallCount)
 	}
 	events := taskRunService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "approval.held_call", "message_send") {
+	if !taskEventsContain(events, agentcontract.TaskEventApprovalHoldOpened, "message_send") {
 		t.Fatalf("expected the exact external send call to be held for approval, got %+v", events)
 	}
 	if taskEventsContain(events, "agent.external_send_intent_rejected", "") {

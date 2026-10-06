@@ -91,7 +91,7 @@ func TestACallHeldForApprovalIsNotCountedAsAFailedToolCall(t *testing.T) {
 		taskEventAt(1, "agent.action", `{"action":"continue","toolName":"message_send"}`),
 		taskEventAt(2, "tool.message_send.requested", `{"observationID":"obs-001"}`),
 		taskEventAt(3, "tool.message_send.result", `{"observationID":"obs-001","failure":{"code":"interaction_required","requiresApproval":true}}`),
-		taskEventAt(4, "approval.pending_call", `{"toolName":"message_send"}`),
+		taskEventAt(4, "approval.hold_opened", `{"toolName":"message_send"}`),
 	})
 
 	if metrics.FailedToolCalls != 0 {

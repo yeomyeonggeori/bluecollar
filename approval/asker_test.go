@@ -1,6 +1,7 @@
 package approval
 
 import (
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
 
@@ -20,10 +21,10 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 		t.Fatalf("the person was asked %d times, expected once", asker.askedCount)
 	}
 	for _, wanted := range []string{
-		agentcontract.TaskEventApprovalPendingCall,
+		agentcontract.TaskEventApprovalHoldOpened,
 		agentcontract.TaskEventConfirmationRequested,
 		agentcontract.TaskEventApprovalDecided,
-		agentcontract.TaskEventApprovalExecuted,
+		agentcontract.TaskEventApprovalHoldSpent,
 	} {
 		if !fixture.hasEvent(wanted) {
 			t.Fatalf("the ledger carries %v and not %s, so a live-answered turn reads differently from a later-answered one", fixture.eventNames(), wanted)
@@ -42,7 +43,7 @@ func TestARejectedCallIsNotRecordedAsExecuted(t *testing.T) {
 	if outcome.kind != outcomeRejected {
 		t.Fatalf("the declined call decided %q, expected rejected", outcome.kind)
 	}
-	if fixture.hasEvent(agentcontract.TaskEventApprovalExecuted) {
+	if fixture.hasEvent(agentcontract.TaskEventApprovalHoldSpent) {
 		t.Fatal("a declined call was recorded as executed")
 	}
 }
@@ -53,7 +54,7 @@ func TestAnAskerIsHandedTheHoldWithTheWordedQuestion(t *testing.T) {
 
 	fixture.awaitOutcome(fixture.request())
 
-	if len(asker.holds) != 1 || asker.holds[0].Call.Confirmation != "일정을 지울까요?" || asker.holds[0].Call.ToolName != "event_delete" || asker.holds[0].state != holdPending {
+	if len(asker.holds) != 1 || asker.holds[0].Call.Confirmation != "일정을 지울까요?" || asker.holds[0].Call.ToolName != "event_delete" || asker.holds[0].State != holdrecord.StatePending {
 		t.Fatalf("the asker was handed %+v", asker.holds)
 	}
 }
