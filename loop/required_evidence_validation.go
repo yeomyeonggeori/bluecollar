@@ -58,15 +58,6 @@ func requiredEvidenceToolIsCapabilityOperation(toolSet *toolcontract.ToolSet, to
 	return !toolSet.IsBuiltInTool(toolName) && toolSet.CanExpose(toolName)
 }
 
-func requiredEvidenceIncludesNamespace(toolSet *toolcontract.ToolSet, toolNames []string, namespace string) bool {
-	for _, toolName := range toolNames {
-		if toolIsInNamespace(toolSet, toolName, namespace) {
-			return true
-		}
-	}
-	return false
-}
-
 func requiredEvidenceIncludesSideEffect(toolSet *toolcontract.ToolSet, toolNames []string) bool {
 	for _, toolName := range toolNames {
 		if evidenceToolChangesSomething(toolSet, toolName) {

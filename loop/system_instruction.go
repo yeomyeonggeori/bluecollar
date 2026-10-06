@@ -9,10 +9,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func (agentTurnRunner *AgentTurnRunner) buildSystemInstruction(request AgentTurnRequest) string {
-	return systemInstructionFor(agentTurnRunner.options, request).Text()
-}
-
 func systemInstructionFor(options TurnOptions, request AgentTurnRequest) SystemInstruction {
 	systemInstruction := buildAgentSystemInstruction(request, options)
 	if options.SystemInstructionOverlay == nil {
@@ -133,14 +129,6 @@ func askingInstructionBody(request AgentTurnRequest) string {
 
 func requestCanAskTheUser(request AgentTurnRequest) bool {
 	return request.ToolSet.IsRegistered(toolcontract.AskInputToolName) || request.ToolSet.IsRegistered(toolcontract.AskChoiceToolName)
-}
-
-func requestSpeaksToPeople(request AgentTurnRequest) bool {
-	return strings.TrimSpace(request.Platform) != "" || strings.TrimSpace(request.ConversationID) != ""
-}
-
-func (agentTurnRunner *AgentTurnRunner) buildToolDescription(toolRegistry *toolcontract.ToolSet) string {
-	return buildAgentToolDescription(toolRegistry)
 }
 
 func buildAgentToolDescription(toolRegistry *toolcontract.ToolSet) string {

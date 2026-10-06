@@ -1494,30 +1494,6 @@ func hasSuccessfulArtifactDeliveryObservation(observations []turnObservation) bo
 	return false
 }
 
-func selectedSkillFileDeliveryToolNames(request AgentTurnRequest) []string {
-	selectedSkillNames := selectedSkillNameSet(request.SkillDecisions)
-	toolNames := []string{}
-	for _, skillInstruction := range request.AvailableSkills {
-		if !selectedSkillNames[skillInstruction.Name] {
-			continue
-		}
-		if !skillSupportsFileDelivery(skillInstruction) {
-			continue
-		}
-		toolNames = appendUniqueStrings(toolNames, SkillToolNames(skillInstruction)...)
-	}
-	return toolNames
-}
-
-func hasSuccessfulToolObservation(observations []turnObservation, toolName string) bool {
-	for _, observation := range observations {
-		if strings.TrimSpace(observation.Tool) == toolName && observation.Failure == nil {
-			return true
-		}
-	}
-	return false
-}
-
 func instructionBundleFromTurnRequest(request AgentTurnRequest) InstructionBundle {
 	contractToolWorkingSet := request.ContractToolWorkingSet
 	return InstructionBundle{
@@ -1835,10 +1811,6 @@ func (agentTurnRunner *AgentTurnRunner) finalizeIfSatisfiedOrFail(ctx context.Co
 	return agentTurnRunner.failTurnWithContext(ctx, state.TaskRunID, request, reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
 }
 
-func (agentTurnRunner *AgentTurnRunner) failTurn(taskRunID string, request AgentTurnRequest, reason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) (AgentTurnResult, error) {
-	return agentTurnRunner.failTurnWithContext(context.Background(), taskRunID, request, reason, observations, attachments, executionState)
-}
-
 func (agentTurnRunner *AgentTurnRunner) failTurnWithContext(ctx context.Context, taskRunID string, request AgentTurnRequest, reason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) (AgentTurnResult, error) {
 	failureNotice, replyStatus, hasReply := agentTurnRunner.generateFailureNotice(ctx, taskRunID, request, reason, observations, attachments, executionState)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFailureReply, marshalEventBody(replyStatus))
@@ -1955,10 +1927,6 @@ func elapsedUsageReached(elapsed time.Duration, maxElapsed time.Duration, thresh
 		return false
 	}
 	return elapsed*100 >= maxElapsed*time.Duration(thresholdPercent)
-}
-
-func roundedSeconds(duration time.Duration) string {
-	return duration.Round(time.Second).String()
 }
 
 func limitUsageReached(usedCount int, maxCount int, thresholdPercent int) bool {

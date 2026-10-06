@@ -270,26 +270,6 @@ func regroundingObservation(index int, sourcePaths []string) turnObservation {
 	return observation
 }
 
-func operationInputSelectsDeliveryFile(requiredInput map[string]any) bool {
-	if path, isString := requiredInput["path"].(string); isString && strings.TrimSpace(path) != "" {
-		return true
-	}
-	files, isArray := requiredInput["files"].([]any)
-	if !isArray {
-		return false
-	}
-	for _, fileValue := range files {
-		file, isObject := fileValue.(map[string]any)
-		if !isObject {
-			continue
-		}
-		if path, isString := file["path"].(string); isString && strings.TrimSpace(path) != "" {
-			return true
-		}
-	}
-	return false
-}
-
 func BuildAgentActionRequest(state agentTaskState) model.StructuredResponseRequest {
 	return buildAgentActionRequest(state, true, false)
 }
@@ -1115,22 +1095,6 @@ func isNativeTerminalAction(action string) bool {
 	default:
 		return false
 	}
-}
-
-func applyAgentAction(state agentTaskState, action agentAction) (agentTaskState, error) {
-	switch strings.TrimSpace(action.Action) {
-	case "set_quality_criteria":
-		state.QualityCriteria = normalizeQualityCriteria(action.QualityCriteria)
-	case "continue":
-		state.ToolCallCount++
-	case "finish":
-		state.Status = agentcontract.TaskStatusCompleted
-	case "reply":
-		state.Status = agentcontract.TaskStatusRunning
-	case "fail":
-		state.Status = agentcontract.TaskStatusFailed
-	}
-	return state, nil
 }
 
 func applyToolResult(state agentTaskState, invocation toolcontract.ToolInvocation, result toolcontract.ToolResult) agentTaskState {
