@@ -11,8 +11,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-type agentAction = turnActionDocument
-
 type agentTaskState struct {
 	PendingBatchedActions              []turnActionDocument
 	PendingBatchedToolNames            []string
@@ -30,7 +28,6 @@ type agentTaskState struct {
 	ToolCallCount                      int
 	GrantedTaskLevel                   TaskLevel
 	TurnStartedAt                      time.Time
-	LastModelMessage                   string
 	CompletionIntentToolName           string
 	ShouldRestrictNextActionToTerminal bool
 	DidNudgePlan                       bool

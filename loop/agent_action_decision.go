@@ -11,7 +11,7 @@ import (
 
 const maximumAgentActionCorrectionCount = 2
 
-func DecideAgentAction(ctx context.Context, languageModel model.LanguageModelProvider, state agentTaskState) (agentAction, error) {
+func DecideAgentAction(ctx context.Context, languageModel model.LanguageModelProvider, state agentTaskState) (turnActionDocument, error) {
 	if chatCompleter, isAvailable := model.ResolveTextChatCompleter(languageModel); isAvailable {
 		if chatRequest, isRepresentable := nativeAgentActionRequest(state); isRepresentable {
 			return decideAgentActionWithChat(ctx, chatCompleter, chatRequest, state)
@@ -25,7 +25,7 @@ func DecideAgentAction(ctx context.Context, languageModel model.LanguageModelPro
 	return ParseAgentActionResponse(structuredResponse)
 }
 
-func decideAgentActionWithChat(ctx context.Context, chatCompleter model.ChatCompleter, request model.ChatCompletionRequest, state agentTaskState) (agentAction, error) {
+func decideAgentActionWithChat(ctx context.Context, chatCompleter model.ChatCompleter, request model.ChatCompletionRequest, state agentTaskState) (turnActionDocument, error) {
 	currentRequest := request
 	for correctionCount := 0; ; correctionCount++ {
 		response, errorValue := chatCompleter.GenerateChatCompletion(ctx, currentRequest)

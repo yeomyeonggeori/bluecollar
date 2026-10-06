@@ -34,7 +34,7 @@ type ObservedResultProjection struct {
 	RecoverableActions  []ProjectionRecoverableAction  `json:"recoverableActions,omitempty"`
 }
 
-func buildObservedResultProjection(request AgentTurnRequest, observations []turnObservation, _ []toolcontract.FileAttachment, actionDocument turnActionDocument) ObservedResultProjection {
+func buildObservedResultProjection(request AgentTurnRequest, observations []turnObservation, actionDocument turnActionDocument) ObservedResultProjection {
 	facts := observedFactsFromObservations(request.ToolSet, observations)
 	facts = deduplicateObservedFacts(facts)
 	return ObservedResultProjection{

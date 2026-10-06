@@ -9,7 +9,7 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
-func ParseAgentActionResponse(response model.StructuredResponse) (agentAction, error) {
+func ParseAgentActionResponse(response model.StructuredResponse) (turnActionDocument, error) {
 	content, errorValue := normalizeAgentActionResponseContent([]byte(response.Content))
 	if errorValue != nil {
 		return turnActionDocument{}, errorValue

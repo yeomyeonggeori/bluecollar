@@ -329,7 +329,7 @@ func (builder LLMContextBuilder) knownFileContext(input LLMContextInput) string 
 }
 
 func (builder LLMContextBuilder) observedResultProjectionContext(input LLMContextInput) string {
-	projection := buildObservedResultProjection(agentTurnRequestForContext(input), input.Observations, input.Attachments, turnActionDocument{})
+	projection := buildObservedResultProjection(agentTurnRequestForContext(input), input.Observations, turnActionDocument{})
 	if len(projection.ObservedFacts) == 0 && len(projection.RecoverableActions) == 0 {
 		return ""
 	}

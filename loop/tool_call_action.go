@@ -2,7 +2,6 @@ package loop
 
 import (
 	"context"
-	"strings"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
@@ -40,9 +39,6 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		return toolCallActionOutcome{Result: result, ShouldReturn: true, WasHandled: true, CanYieldToElapsed: result.TaskRun.Status != agentcontract.TaskStatusCompleted}
 	}
 	state.Observations = agentTurnRunner.sendCheckpointMessage(effortContext, taskRunID, request, actionDocument, state.Observations)
-	if strings.TrimSpace(actionDocument.Message) != "" {
-		state.LastModelMessage = ""
-	}
 	observationID := nextObservationIDForObservations(state.Observations)
 	observation := agentTurnRunner.invokeTool(invocationContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, state.Attachments); isCancelled {

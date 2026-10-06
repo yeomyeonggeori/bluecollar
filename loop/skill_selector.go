@@ -6,21 +6,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-type SkillSelector struct{}
-
-func (skillSelector SkillSelector) IsAvailable(skillInstruction SkillInstruction, request AgentRequest) bool {
-	return !allToolReferencesMissing(skillInstruction, request)
-}
-
-func (skillSelector SkillSelector) ShouldInclude(skillInstruction SkillInstruction, request AgentRequest) bool {
-	decision := skillSelector.Evaluate(skillInstruction, request, "default")
-	return decision.Status == "selected"
-}
-
-func (skillSelector SkillSelector) Evaluate(skillInstruction SkillInstruction, request AgentRequest, profileName string) SkillSelectionDecision {
-	return skillAvailabilityDecision(skillInstruction, request, profileName)
-}
-
 func skillAvailabilityDecision(skillInstruction SkillInstruction, request AgentRequest, profileName string) SkillSelectionDecision {
 	normalizedProfileName := firstNonEmptyString(profileName, "default")
 	if allToolReferencesMissing(skillInstruction, request) {

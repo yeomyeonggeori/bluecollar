@@ -92,8 +92,8 @@ func buildTurnProgress(observations []turnObservation) TurnProgress {
 	progress.AttemptLedger = attemptLedger(observations)
 	progress.RecentFiles = recentFileContexts(observations)
 	progress.OmittedObservationCount = omittedObservationCount(progress)
-	progress.CompletedSteps = keepLatestProgressObservations(progress.CompletedSteps)
-	progress.FailedOrBlockedSteps = keepLatestProgressObservations(progress.FailedOrBlockedSteps)
+	progress.CompletedSteps = latestProgressItems(progress.CompletedSteps)
+	progress.FailedOrBlockedSteps = latestProgressItems(progress.FailedOrBlockedSteps)
 	if failureDebt, hasFailureDebt := activeFailureDebt(observations); hasFailureDebt {
 		progress.FailureDebt = buildProgressFailureDebt(failureDebt, observations)
 	}
@@ -138,14 +138,14 @@ func compactProgressObservations(observations []turnObservation) []ProgressObser
 }
 
 func recentProgressObservations(observations []turnObservation) []ProgressObservation {
-	return keepLatestProgressObservations(compactProgressObservations(observations))
+	return latestProgressItems(compactProgressObservations(observations))
 }
 
-func keepLatestProgressObservations(observations []ProgressObservation) []ProgressObservation {
-	if len(observations) <= maxProgressObservations {
-		return observations
+func latestProgressItems[Item any](items []Item) []Item {
+	if len(items) <= maxProgressObservations {
+		return items
 	}
-	return observations[len(observations)-maxProgressObservations:]
+	return items[len(items)-maxProgressObservations:]
 }
 
 func omittedObservationCount(progress TurnProgress) int {
@@ -224,18 +224,11 @@ func buildProgressFailureDebt(failureDebt FailureDebt, observations []turnObserv
 func remainingRecoveryBudget(observations []turnObservation, budget RecoveryBudget) RecoveryBudget {
 	budget = normalizeRecoveryBudget(budget)
 	return RecoveryBudget{
-		CorrectedRetry: maxInt(0, budget.CorrectedRetry-recoveryStepUseCount(observations, recoveryStepCorrectedRetry)),
-		AlternateRoute: maxInt(0, budget.AlternateRoute-recoveryStepUseCount(observations, recoveryStepAlternateRoute)),
-		AdjacentTool:   maxInt(0, budget.AdjacentTool-recoveryStepUseCount(observations, recoveryStepAdjacentTool)),
+		CorrectedRetry: max(0, budget.CorrectedRetry-recoveryStepUseCount(observations, recoveryStepCorrectedRetry)),
+		AlternateRoute: max(0, budget.AlternateRoute-recoveryStepUseCount(observations, recoveryStepAlternateRoute)),
+		AdjacentTool:   max(0, budget.AdjacentTool-recoveryStepUseCount(observations, recoveryStepAdjacentTool)),
 		NoToolFallback: budget.NoToolFallback,
 	}
-}
-
-func maxInt(first int, second int) int {
-	if first > second {
-		return first
-	}
-	return second
 }
 
 func summarizeObservationContent(observation turnObservation) string {

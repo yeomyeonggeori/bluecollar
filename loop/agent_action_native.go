@@ -225,7 +225,7 @@ func satisfiedFinishDocument(reply string) turnActionDocument {
 	}
 }
 
-func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools []model.ChatCompletionTool) (agentAction, error) {
+func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools []model.ChatCompletionTool) (turnActionDocument, error) {
 	if response.Message.Role != "assistant" {
 		return turnActionDocument{}, errors.New("native agent action chat message must be assistant")
 	}

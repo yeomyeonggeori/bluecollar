@@ -54,7 +54,7 @@ func addRequiredEvidenceSkillCandidates(result SkillRetrievalResult, request Age
 	}
 	requiredCandidates := []SkillCandidate{}
 	for _, skillInstruction := range skillInstructions {
-		if existingCandidateNames[skillInstruction.Name] || !isSkillAllowedForAutomaticRetrieval(skillInstruction, request) {
+		if existingCandidateNames[skillInstruction.Name] || allToolReferencesMissing(skillInstruction, request) {
 			continue
 		}
 		if !skillOwnsAnyTool(skillInstruction, requiredToolNames) {

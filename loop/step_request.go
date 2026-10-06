@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -13,7 +12,7 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func (agentTurnRunner *AgentTurnRunner) requestForStep(_ context.Context, request AgentTurnRequest, state *agentTaskState) AgentTurnRequest {
+func (agentTurnRunner *AgentTurnRunner) requestForStep(request AgentTurnRequest, state *agentTaskState) AgentTurnRequest {
 	plannedRequest := requestWithStepWorkingSetTools(request, *state)
 	elapsed := agentTurnRunner.turnElapsed(request.EffortStartedAt)
 	pressureStage := limitPressureStageFor(state.IterationCount, state.ToolCallCount, elapsed, agentTurnRunner.reachableLimits(*state))

@@ -21,7 +21,6 @@ func TestCalendarFullCrudFinishIsBackedByObservedFacts(t *testing.T) {
 			}},
 		},
 		[]turnObservation{addObservation, updateObservation, deleteObservation},
-		nil,
 		turnActionDocument{
 			Action:        "finish",
 			Message:       "Created, updated, and then deleted the event.",

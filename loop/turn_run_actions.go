@@ -62,9 +62,6 @@ func (run *turnRun) failOrFinalize(reason string, iteration int) turnOutcome {
 }
 
 func (run *turnRun) recordAction(actionDocument turnActionDocument) {
-	if message := strings.TrimSpace(actionDocument.Message); message != "" {
-		run.state.LastModelMessage = message
-	}
 	if !executionStateIsEmpty(actionDocument.ExecutionStateUpdate) {
 		run.state.ExecutionState = normalizeExecutionState(actionDocument.ExecutionStateUpdate)
 		run.runner.appendEvent(run.taskRun.TaskRunID, agentcontract.TaskEventAgentExecutionState, marshalEventBody(run.state.ExecutionState))
