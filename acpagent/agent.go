@@ -119,17 +119,18 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	if !isResumedFromHostLedger {
 		openSession.adoptNamedTaskRun(request.Meta, promptText(request.Prompt))
 	}
-	turnRequest := runningAgent.turnRequestFor(openSession, request, isResumedFromHostLedger)
+	turnRequest := runningAgent.turnRequestFor(openSession, request)
 	stopObserving := openSession.taskEvents.RegisterTurnObserver(ledgerObserver(ctx, runningAgent.sessionUpdates, request.SessionId, openSession.rememberTaskRun))
 	defer stopObserving()
 
-	turnDecision, errorValue := runningAgent.decisionForTurn(ctx, turnRequest)
+	planned, errorValue := runningAgent.planTurn(ctx, openSession, turnRequest)
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
-	turnRequest.PrecomputedTurnDecision = &turnDecision
+	turnRequest.PrecomputedTurnDecision = &planned.decision
+	turnRequest.IsRuntimeRestartResume = turnRequest.IsRuntimeRestartResume || isResumedFromHostLedger
 	openSession.catalog.toolSet.UseToolCallGate(newHostCheckedGate(openSession.gate.TurnGate(approval.Turn{
-		ResponseLanguage: turnDecision.ResponseLanguage,
+		ResponseLanguage: planned.decision.ResponseLanguage,
 		Prompt:           turnRequest.Prompt,
 	}), runningAgent.options.HostCheckedToolNames))
 
@@ -137,31 +138,24 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
+	openSession.recordPlanningCalls(turnResult.TaskRun.TaskRunID, planned.callRecords)
 	return promptResponseFor(turnResult), nil
 }
 
-func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest, isResumedFromHostLedger bool) agentcontract.AgentTurnRequest {
+func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest) agentcontract.AgentTurnRequest {
 	turnRequest, _ := turnRequestOfMeta(request.Meta)
 	turnRequest.RequesterPersonID = requesterPersonID
-	turnRequest.IsRuntimeRestartResume = turnRequest.IsRuntimeRestartResume || isResumedFromHostLedger
 	turnRequest.ConversationID = firstNonEmpty(turnRequest.ConversationID, string(request.SessionId))
 	turnRequest.ExistingTaskRunID = openSession.currentTaskRunID()
 	turnRequest.Prompt = promptText(request.Prompt)
 	turnRequest.InputParts = append(partsWithoutImages(turnRequest.InputParts), imagePartsOf(request.Prompt)...)
-	turnRequest.AgentIdentity = agentcontract.AgentIdentity{Name: runningAgent.options.AgentName}
+	turnRequest.AgentIdentity.Name = firstNonEmpty(turnRequest.AgentIdentity.Name, runningAgent.options.AgentName)
 	turnRequest.ToolSet = openSession.catalog.toolSet
 	turnRequest.PinnedToolNames = openSession.catalog.toolNames
 	turnRequest.PinnedSkillNames = runningAgent.options.Skills.PinnedSkillNames
 	turnRequest.CarriedOutCalls = carriedOutCallsOfMeta(request.Meta)
 	turnRequest.CheckpointSender = checkpointSender(runningAgent.sessionUpdates, request.SessionId)
 	return turnRequest
-}
-
-func (runningAgent *Agent) decisionForTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	if turnRequest.PrecomputedTurnDecision != nil {
-		return *turnRequest.PrecomputedTurnDecision, nil
-	}
-	return runningAgent.routeTurn(ctx, turnRequest)
 }
 
 func failTurnOnPanic(openSession *session, promptResponse *acp.PromptResponse, errorValue *error) {
@@ -175,17 +169,6 @@ func failTurnOnPanic(openSession *session, promptResponse *acp.PromptResponse, e
 	}
 	*promptResponse = acp.PromptResponse{}
 	*errorValue = errors.New(reason)
-}
-
-func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
-	return router.Plan(ctx, agentcontract.AgentRequest{
-		RequesterPersonID: turnRequest.RequesterPersonID,
-		ConversationID:    turnRequest.ConversationID,
-		Prompt:            turnRequest.Prompt,
-		InputParts:        turnRequest.InputParts,
-		ToolSet:           turnRequest.ToolSet,
-	})
 }
 
 func (runningAgent *Agent) session(sessionID acp.SessionId) (*session, bool) {
