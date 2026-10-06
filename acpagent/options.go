@@ -11,10 +11,11 @@ import (
 const requesterPersonID = "bluecollar"
 
 const (
-	TaskRunMetaKey    = "bluecollar.dev/task-run"
-	CheckpointMetaKey = "bluecollar.dev/checkpoint"
-	TurnResultMetaKey = "bluecollar.dev/turn-result"
-	SteerMethod       = "_bluecollar.dev/steer"
+	TaskRunMetaKey     = "bluecollar.dev/task-run"
+	CheckpointMetaKey  = "bluecollar.dev/checkpoint"
+	TurnResultMetaKey  = "bluecollar.dev/turn-result"
+	TurnRequestMetaKey = "bluecollar.dev/turn-request"
+	SteerMethod        = "_bluecollar.dev/steer"
 )
 
 type Options struct {

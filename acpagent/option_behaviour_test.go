@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -464,4 +465,45 @@ func TestASkillRetrieverTheHostGivesDecidesWhichSkillIsOffered(t *testing.T) {
 	if containsSubstring(languageModel.actionPrompts, "minutes marker") {
 		t.Fatal("a skill the host's retriever did not pick must not be offered")
 	}
+}
+
+func TestATurnRequestTheHostHandsOverReachesTheLoopWithoutBeingRoutedAgain(t *testing.T) {
+	hostCalls := []hostToolCall{}
+	languageModel := &scriptedLanguageModel{level: "medium", contents: []string{
+		`{"action":"reply","final":true,"message":"봤습니다","goalSatisfied":true}`,
+	}}
+	decision := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, TaskShape: agentcontract.TaskShapeImmediateReply, TaskLevel: agentcontract.TaskLevelXLow, ResponseLanguage: "ko", Reason: "host routed"}
+	handedOver := agentcontract.AgentTurnRequest{
+		PrecomputedTurnDecision: &decision,
+		VisibleContext: agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{
+			{Filename: "meeting-notes.csv", URL: "https://files.example.com/meeting-notes.csv", IsAvailable: true},
+		}},
+	}
+	routing := &routingProbeLanguageModel{scriptedLanguageModel: languageModel}
+	options := testOptions(routing)
+	options.LanguageModels.XLow = languageModel
+
+	host := openPipedHost(t, options, publishedCatalogTransport(t, &hostCalls), &hostClient{})
+	if _, errorValue := host.prompt(t, map[string]any{TurnRequestMetaKey: handedOver}, acp.TextBlock("첨부 요약해줘")); errorValue != nil {
+		t.Fatalf("session/prompt: %v", errorValue)
+	}
+
+	if routing.routingCalls != 0 {
+		t.Fatalf("the host already routed this turn, so the agent routing it again is a second opinion that can disagree, got %d routing calls", routing.routingCalls)
+	}
+	if len(languageModel.actionPrompts) == 0 || !strings.Contains(languageModel.actionPrompts[0], "https://files.example.com/meeting-notes.csv") {
+		t.Fatalf("the context the host sees has to reach the model, got %v", languageModel.actionPrompts)
+	}
+}
+
+type routingProbeLanguageModel struct {
+	*scriptedLanguageModel
+	routingCalls int
+}
+
+func (languageModel *routingProbeLanguageModel) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	if request.StructuredOutputSchema.Name != "bluecollar_agent_turn_action" {
+		languageModel.routingCalls++
+	}
+	return languageModel.scriptedLanguageModel.GenerateStructuredResponse(ctx, request)
 }
