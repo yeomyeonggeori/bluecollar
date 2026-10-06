@@ -47,7 +47,7 @@ func New(options Options) (*Agent, error) {
 	return &Agent{
 		options:          options,
 		languageModel:    options.LanguageModels.Low,
-		decisionPlanner:  intake.NewDecisionPlanner(options.DecisionModel, nil, nil),
+		decisionPlanner:  intake.NewDecisionPlanner(options.DecisionModel, intake.NewAttachmentDescriber(options.LanguageModels.Low)),
 		resolveTransport: transportForServer,
 		sessionUpdates:   &deferredSessionUpdateSender{ready: make(chan struct{})},
 		permissions:      &deferredPermissionRequester{ready: make(chan struct{})},

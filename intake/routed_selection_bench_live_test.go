@@ -17,7 +17,7 @@ func TestRoutedSelectionReachesEveryToolTheWorkNeeds(t *testing.T) {
 	toolSet, toolNames := catalogToolSet(t)
 	endpoint, errorValue := decisions.EndpointFromEnvironment()
 	evaltest.RequireConfigured(t, "the decision model", errorValue)
-	planner := NewDecisionPlanner(endpoint.DecisionModel(), nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(endpoint.DecisionModel(), nil)
 
 	selectedByCase := make([][]string, len(benchmarkCases))
 	countByCase := make([]agentcontract.ExpectedToolCount, len(benchmarkCases))

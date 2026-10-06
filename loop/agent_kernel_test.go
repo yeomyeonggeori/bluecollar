@@ -33,7 +33,6 @@ func (languageModel intakeDecisionLanguageModel) GenerateStructuredResponse(_ co
 			ClarificationDisposition: languageModel.clarificationDisposition,
 			ClarificationQuestion:    languageModel.decision.ClarificationQuestion,
 			ClarificationOptions:     languageModel.decision.ClarificationOptions,
-			BusyInstruction:          languageModel.decision.BusyInstruction,
 			ExpectedResults:          languageModel.decision.ExpectedResults,
 		}
 	}

@@ -6,7 +6,6 @@ type IntakeClassification string
 type TaskShape string
 type TurnRoute string
 type ApprovalSignal string
-type BusyRoute string
 type PriorTaskReference string
 type DeliverableKind string
 type ExpectedToolCount string
@@ -31,13 +30,6 @@ const (
 	TurnRouteClarify        TurnRoute = "clarify"
 	TurnRouteConsume        TurnRoute = "consume"
 	TurnRouteGiveUp         TurnRoute = "give_up"
-
-	BusyRouteStatus    BusyRoute = "status"
-	BusyRouteSteer     BusyRoute = "steer"
-	BusyRouteReplace   BusyRoute = "replace"
-	BusyRouteCancel    BusyRoute = "cancel"
-	BusyRouteNewTask   BusyRoute = "new_task"
-	BusyRouteUnrelated BusyRoute = "unrelated"
 
 	ExpectedToolCountNone    ExpectedToolCount = "none"
 	ExpectedToolCountOne     ExpectedToolCount = "one"
@@ -111,9 +103,6 @@ type TurnDecision struct {
 	HasIndependentWork      bool                  `json:"hasIndependentWork"`
 	ExpectedToolCount       ExpectedToolCount     `json:"expectedToolCount,omitempty"`
 	RawDecisionRoute        TurnRoute             `json:"rawDecisionRoute,omitempty"`
-	ReactionEmojiName       string                `json:"reactionEmojiName,omitempty"`
-	BusyRoute               BusyRoute             `json:"busyRoute,omitempty"`
-	BusyInstruction         string                `json:"busyInstruction,omitempty"`
 	RoutingFallbackReason   string                `json:"routingFallbackReason,omitempty"`
 }
 
@@ -130,7 +119,6 @@ type TurnWords struct {
 	ClarificationDisposition ClarificationDisposition `json:"clarificationDisposition,omitempty"`
 	ClarificationQuestion    string                   `json:"clarificationQuestion"`
 	ClarificationOptions     []ClarificationOption    `json:"clarificationOptions"`
-	BusyInstruction          string                   `json:"busyInstruction"`
 	ExpectedResults          []ExpectedResult         `json:"expectedResults"`
 }
 
@@ -139,7 +127,6 @@ func (turnDecision TurnDecision) WithTurnWords(turnWords TurnWords) TurnDecision
 	turnDecision.UserFacingReply = turnWords.UserFacingReply
 	turnDecision.ClarificationQuestion = turnWords.ClarificationQuestion
 	turnDecision.ClarificationOptions = turnWords.ClarificationOptions
-	turnDecision.BusyInstruction = turnWords.BusyInstruction
 	turnDecision.ExpectedResults = turnWords.ExpectedResults
 	return turnDecision
 }
@@ -220,11 +207,6 @@ var ApprovalSignalNames = []string{
 	string(ApprovalSignalApprove), string(ApprovalSignalReject),
 }
 
-var BusyRouteNames = []string{
-	string(BusyRouteStatus), string(BusyRouteSteer), string(BusyRouteReplace),
-	string(BusyRouteCancel), string(BusyRouteNewTask), string(BusyRouteUnrelated),
-}
-
 var PriorTaskReferenceNames = []string{string(PriorTaskReferenceOutcomeRecovery), string(PriorTaskReferenceNone)}
 
 func IsTurnRouteName(name string) bool {
@@ -245,10 +227,6 @@ func IsDeliverableKindName(name string) bool {
 
 func IsApprovalSignalName(name string) bool {
 	return isListedName(ApprovalSignalNames, name)
-}
-
-func IsBusyRouteName(name string) bool {
-	return isListedName(BusyRouteNames, name)
 }
 
 func IsPriorTaskReferenceName(name string) bool {

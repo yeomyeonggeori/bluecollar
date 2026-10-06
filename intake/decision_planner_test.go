@@ -19,7 +19,6 @@ func addressedDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest
 			Prompt:       prompt,
 			SenderName:   "이샘플",
 			SenderHandle: "sample",
-			BotMentioned: true,
 			SentAt:       time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC),
 		}},
 		ConversationType: "channel",
@@ -32,7 +31,6 @@ func addressedDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest
 
 func startTaskOutcome() intaketest.Outcome {
 	return intaketest.Outcome{
-		Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
 		TurnDecision: agentcontract.TurnDecision{
 			Route:                  agentcontract.TurnRouteStartTask,
 			Classification:         agentcontract.IntakeClassificationBoundedTask,
@@ -59,11 +57,11 @@ func decideOnce(t *testing.T, planner DecisionPlanner, request agentcontract.Int
 	return decisions.Messages[0]
 }
 
-func TestDecisionPlannerDecidesAddressingAndRoutingInOneCallThatNamesNoTool(t *testing.T) {
+func TestDecisionPlannerDecidesRoutingInOneCallThatNamesNoTool(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	request := addressedDecisionRequest("다음 주 발표자료 초안 만들어줘")
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(decisionModel, nil)
 
 	decision := decideOnce(t, planner, request)
 
@@ -82,9 +80,6 @@ func TestDecisionPlannerDecidesAddressingAndRoutingInOneCallThatNamesNoTool(t *t
 	}
 	if decision.MessageID != "message-1" {
 		t.Fatalf("expected the decision to carry the message identifier, got %q", decision.MessageID)
-	}
-	if decision.Addressing.Target != agentcontract.AddressingTargetBot || !decision.Addressing.ShouldRespond {
-		t.Fatalf("expected an addressed message that wants a reply, got %+v", decision.Addressing)
 	}
 	if decision.TurnFields.Route != agentcontract.TurnRouteStartTask {
 		t.Fatalf("expected the start_task route, got %q", decision.TurnFields.Route)
@@ -114,7 +109,7 @@ func TestDecisionPlannerReadsExternalSendIntentAsNoul(t *testing.T) {
 			outcome.TurnDecision.IsExternalSendRequested = testCase.isExternalSendRequested
 			outcome.TurnDecision.InitialToolNames = testCase.initialToolNames
 			decisionModel := intaketest.NewDecisionModel(outcome)
-			planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
+			planner := NewDecisionPlanner(decisionModel, nil)
 
 			decision := decideOnce(t, planner, addressedDecisionRequest("complete the requested work"))
 			if decision.TurnFields.IsExternalSendRequested != testCase.isExternalSendRequested {
@@ -154,7 +149,7 @@ func TestDecisionPlannerPromotesOnlyClarifyWithToolAndIndependentWork(t *testing
 			outcome.TurnDecision.Classification = testCase.classification
 			outcome.TurnDecision.HasIndependentWork = testCase.hasIndependentWork
 			decisionModel := intaketest.NewDecisionModel(outcome)
-			decision := decideOnce(t, NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }), addressedDecisionRequest("finish the clear part and ask me about the unresolved part"))
+			decision := decideOnce(t, NewDecisionPlanner(decisionModel, nil), addressedDecisionRequest("finish the clear part and ask me about the unresolved part"))
 
 			if decision.TurnFields.Classification != testCase.wantClassification {
 				t.Fatalf("expected classification %q, got %q", testCase.wantClassification, decision.TurnFields.Classification)
@@ -176,76 +171,6 @@ func TestDecisionPlannerPromotesOnlyClarifyWithToolAndIndependentWork(t *testing
 	}
 }
 
-func TestDecisionPlannerLeavesAFollowUpUnaskedWithoutATask(t *testing.T) {
-	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
-
-	decision := decideOnce(t, planner, addressedDecisionRequest("보고서 정리해줘"))
-
-	if decision.HasRelatesToActiveTask {
-		t.Fatal("expected no follow-up answer when no task is running")
-	}
-	if _, isAsked := decisionModel.Requests()[0].Questions["m1."+agentcontract.IntakeQuestionRelatesToActiveTask]; isAsked {
-		t.Fatal("expected the follow-up question to be left out when no task is running")
-	}
-}
-
-func TestDecisionPlannerAsksTheFollowUpQuestionForARunningTask(t *testing.T) {
-	outcome := startTaskOutcome()
-	outcome.RelatesToActiveTask = true
-	outcome.TurnDecision.BusyRoute = agentcontract.BusyRouteSteer
-	decisionModel := intaketest.NewDecisionModel(outcome)
-	request := addressedDecisionRequest("아까 그거 표 말고 그래프로 해줘")
-	request.ActiveTask = agentcontract.ActiveTaskContext{TaskRunID: "task-run-1", Prompt: "보고서 정리", Status: "running"}
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
-
-	decision := decideOnce(t, planner, request)
-
-	if !decision.HasRelatesToActiveTask || !decision.RelatesToActiveTask {
-		t.Fatalf("expected the follow-up answer to be read, got %+v", decision)
-	}
-	if decision.TurnFields.BusyRoute != agentcontract.BusyRouteSteer {
-		t.Fatalf("expected the busy route to be read, got %q", decision.TurnFields.BusyRoute)
-	}
-}
-
-func reactionScript(reactProbability float64) *model.ScriptedDecisionModel {
-	return &model.ScriptedDecisionModel{
-		AnswerFor: func(questionName string, question model.DecisionQuestion) (model.DecisionAnswer, bool) {
-			switch {
-			case strings.HasSuffix(questionName, "."+agentcontract.IntakeQuestionReaction):
-				return model.DecisionAnswer{
-					Type:          model.DecisionQuestionTypeChoice,
-					Choice:        agentcontract.IntakeReactionOptionNone,
-					Probabilities: map[string]float64{agentcontract.IntakeReactionOptionNone: 1 - reactProbability, agentcontract.IntakeReactionOptionReact: reactProbability},
-				}, true
-			case strings.HasSuffix(questionName, "."+agentcontract.IntakeQuestionReactionEmoji):
-				return model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: "white_check_mark"}, true
-			}
-			return intaketest.Answers(map[string]model.DecisionQuestion{questionName: question}, func(string) intaketest.Outcome {
-				return startTaskOutcome()
-			})[questionName], true
-		},
-	}
-}
-
-func TestDecisionPlannerDrawsTheReactionFromItsProbability(t *testing.T) {
-	reactingPlanner := NewDecisionPlanner(reactionScript(0.1), nil, func() float64 { return 0.05 })
-	reacting := decideOnce(t, reactingPlanner, addressedDecisionRequest("배포 끝났습니다"))
-	if reacting.Addressing.ReactionEmoji != "white_check_mark" {
-		t.Fatalf("expected a draw under the probability to react, got %q", reacting.Addressing.ReactionEmoji)
-	}
-	if reacting.ReactionProbability != 0.1 || reacting.ReactionDraw != 0.05 {
-		t.Fatalf("expected the probability and the draw to be recorded, got %+v", reacting)
-	}
-
-	silentPlanner := NewDecisionPlanner(reactionScript(0.1), nil, func() float64 { return 0.5 })
-	silent := decideOnce(t, silentPlanner, addressedDecisionRequest("배포 끝났습니다"))
-	if silent.Addressing.ReactionEmoji != "" {
-		t.Fatalf("expected a draw above the probability to stay silent, got %q", silent.Addressing.ReactionEmoji)
-	}
-}
-
 func TestDecisionPlannerFailsWithoutADecisionModel(t *testing.T) {
 	_, errorValue := DecisionPlanner{}.Decide(context.Background(), addressedDecisionRequest("안녕"), nil)
 	if errorValue != ErrDecisionModelUnavailable {
@@ -254,7 +179,7 @@ func TestDecisionPlannerFailsWithoutADecisionModel(t *testing.T) {
 }
 
 func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
-	planner := NewDecisionPlanner(intaketest.NewDecisionModel(startTaskOutcome()), nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(intaketest.NewDecisionModel(startTaskOutcome()), nil)
 	callLedger := &agentcontract.IntakeCallLedger{}
 
 	if _, errorValue := planner.Decide(context.Background(), addressedDecisionRequest("보고서 정리해줘"), callLedger); errorValue != nil {
@@ -286,7 +211,7 @@ func TestDecisionPlannerDecidesEveryMessageOfABurstInOneCall(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	request := addressedDecisionRequest("보고서 정리해줘")
 	request.Messages = append(request.Messages, agentcontract.IntakeDecisionMessage{MessageID: "message-2", Prompt: "아 그리고 표도 넣어줘", SenderName: "이샘플"})
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(decisionModel, nil)
 
 	decisions, errorValue := planner.Decide(context.Background(), request, nil)
 	if errorValue != nil {
@@ -368,7 +293,7 @@ func imageDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest {
 func TestDecisionPlannerDescribesAnAttachmentsOnlyMessageBeforeDeciding(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	describer := &scriptedAttachmentDescriber{descriptions: []string{"화이트보드에 적힌 다음 주 배포 일정 사진."}}
-	planner := NewDecisionPlanner(decisionModel, describer, func() float64 { return 1 })
+	planner := NewDecisionPlanner(decisionModel, describer)
 	callLedger := &agentcontract.IntakeCallLedger{}
 
 	if _, errorValue := planner.Decide(context.Background(), imageDecisionRequest(""), callLedger); errorValue != nil {
@@ -399,7 +324,7 @@ func TestDecisionPlannerDescribesAnAttachmentsOnlyMessageBeforeDeciding(t *testi
 func TestDecisionPlannerDecidesAnImageWithTextFromFactsAlone(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	describer := &scriptedAttachmentDescriber{descriptions: []string{"설명"}}
-	planner := NewDecisionPlanner(decisionModel, describer, func() float64 { return 1 })
+	planner := NewDecisionPlanner(decisionModel, describer)
 
 	if _, errorValue := planner.Decide(context.Background(), imageDecisionRequest("이거 정리해줘"), nil); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
@@ -416,7 +341,7 @@ func TestDecisionPlannerDecidesAnImageWithTextFromFactsAlone(t *testing.T) {
 
 func TestDecisionPlannerSendsFactsAloneWithoutADescriber(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
-	planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(decisionModel, nil)
 	callLedger := &agentcontract.IntakeCallLedger{}
 
 	if _, errorValue := planner.Decide(context.Background(), imageDecisionRequest(""), callLedger); errorValue != nil {
@@ -436,7 +361,7 @@ func TestDecisionPlannerFailsWhenAnAskedQuestionIsUnanswered(t *testing.T) {
 	request := addressedDecisionRequest("발표자료 초안 만들어줘")
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
 	droppedQuestionKey := "m1." + agentcontract.IntakeQuestionRoute
-	planner := NewDecisionPlanner(answerDroppingDecisionModel{outcome: startTaskOutcome(), droppedQuestionKey: droppedQuestionKey}, nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(answerDroppingDecisionModel{outcome: startTaskOutcome(), droppedQuestionKey: droppedQuestionKey}, nil)
 
 	_, errorValue := planner.Decide(context.Background(), request, nil)
 
@@ -463,7 +388,7 @@ func TestDecisionPlannerAsksTheLanguageOnlyWhenTheHostNamesNone(t *testing.T) {
 		decisionModel := intaketest.NewDecisionModel(outcome)
 		request := addressedDecisionRequest("今パリは何時ですか")
 		request.ResponseLanguage = hostLanguage
-		planner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
+		planner := NewDecisionPlanner(decisionModel, nil)
 
 		decision := decideOnce(t, planner, request)
 

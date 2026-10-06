@@ -2,7 +2,6 @@ package intaketest
 
 import (
 	"context"
-	"encoding/json"
 	"sort"
 	"strings"
 	"sync"
@@ -12,13 +11,8 @@ import (
 )
 
 type Outcome struct {
-	Addressing                           agentcontract.AddressingDecision
-	ReactionProbability                  float64
-	TurnDecision                         agentcontract.TurnDecision
-	ToolProbabilities                    map[string]float64
-	RelatesToActiveTask                  bool
-	PendingChoiceKeys                    []string
-	AnswersPendingChoiceWithoutSelecting bool
+	TurnDecision      agentcontract.TurnDecision
+	ToolProbabilities map[string]float64
 }
 
 type DecisionModel struct {
@@ -96,9 +90,6 @@ func answerFor(shortName string, question model.DecisionQuestion, outcome Outcom
 	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat) {
 		return noulAnswer(containsValue(outcome.TurnDecision.RequestedOutputFormats, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixFormat))), true
 	}
-	if strings.HasPrefix(shortName, agentcontract.IntakeQuestionPrefixChoice) {
-		return noulAnswer(containsValue(outcome.TurnDecision.Choices, strings.TrimPrefix(shortName, agentcontract.IntakeQuestionPrefixChoice))), true
-	}
 	if answer, isKnown := namedAnswer(shortName, outcome); isKnown {
 		return answer, true
 	}
@@ -107,18 +98,6 @@ func answerFor(shortName string, question model.DecisionQuestion, outcome Outcom
 
 func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool) {
 	switch shortName {
-	case agentcontract.IntakeQuestionTarget:
-		return choiceAnswer(addressingTargetName(outcome)), true
-	case agentcontract.IntakeQuestionShouldRespond:
-		return noulAnswer(outcome.Addressing.ShouldRespond), true
-	case agentcontract.IntakeQuestionReaction:
-		return reactionAnswer(outcome), true
-	case agentcontract.IntakeQuestionReactionEmoji:
-		return choiceAnswer(orDefault(outcome.Addressing.ReactionEmoji, agentcontract.DefaultReactionEmojiName)), true
-	case agentcontract.IntakeQuestionDuty:
-		return dutyAnswer(outcome), true
-	case agentcontract.IntakeQuestionRelatesToActiveTask:
-		return noulAnswer(outcome.RelatesToActiveTask), true
 	case agentcontract.IntakeQuestionRoute:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion))), true
 	case agentcontract.IntakeQuestionExpectedToolCount:
@@ -139,20 +118,8 @@ func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool)
 		return choiceAnswer(orDefault(outcome.TurnDecision.ResponseLanguage, "other")), true
 	case agentcontract.IntakeQuestionPriorTaskReference:
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone))), true
-	case agentcontract.IntakeQuestionApproval:
-		return choiceAnswer(approvalName(outcome)), true
-	case agentcontract.IntakeQuestionBusyRoute:
-		return choiceAnswer(string(outcome.TurnDecision.BusyRoute)), true
-	case agentcontract.IntakeQuestionPendingAnswer:
-		return choiceAnswer(pendingAnswerName(outcome)), true
-	case agentcontract.IntakeQuestionChoice:
-		return choiceAnswer(selectedChoiceKey(outcome)), true
 	}
 	return model.DecisionAnswer{}, false
-}
-
-func addressingTargetName(outcome Outcome) string {
-	return orDefault(string(outcome.Addressing.Target), string(agentcontract.AddressingTargetBot))
 }
 
 func orDefault(value string, defaultValue string) string {
@@ -160,64 +127,6 @@ func orDefault(value string, defaultValue string) string {
 		return trimmedValue
 	}
 	return defaultValue
-}
-
-func approvalName(outcome Outcome) string {
-	if outcome.TurnDecision.Approval == nil {
-		return agentcontract.IntakePendingOptionOther
-	}
-	return string(*outcome.TurnDecision.Approval)
-}
-
-func reactionAnswer(outcome Outcome) model.DecisionAnswer {
-	probability := outcome.ReactionProbability
-	if probability == 0 && strings.TrimSpace(outcome.Addressing.ReactionEmoji) != "" {
-		probability = 1
-	}
-	return model.DecisionAnswer{
-		Type:          model.DecisionQuestionTypeChoice,
-		Choice:        reactionChoice(probability),
-		Probabilities: map[string]float64{agentcontract.IntakeReactionOptionNone: 1 - probability, agentcontract.IntakeReactionOptionReact: probability},
-		Confidence:    1,
-	}
-}
-
-func reactionChoice(probability float64) string {
-	if probability >= 0.5 {
-		return agentcontract.IntakeReactionOptionReact
-	}
-	return agentcontract.IntakeReactionOptionNone
-}
-
-func dutyAnswer(outcome Outcome) model.DecisionAnswer {
-	dutyName := agentcontract.IntakeDutyOptionNone
-	confidence := float64(0)
-	if outcome.Addressing.DutyMatch {
-		dutyName = outcome.Addressing.DutyName
-		confidence = outcome.Addressing.DutyConfidence
-	}
-	return model.DecisionAnswer{
-		Type:          model.DecisionQuestionTypeChoice,
-		Choice:        dutyName,
-		Probabilities: map[string]float64{dutyName: 1},
-		Confidence:    confidence,
-	}
-}
-
-func selectedChoiceKey(outcome Outcome) string {
-	for _, choiceKey := range outcome.TurnDecision.Choices {
-		if containsValue(outcome.PendingChoiceKeys, choiceKey) {
-			return choiceKey
-		}
-	}
-	return agentcontract.IntakePendingOptionOther
-}
-
-func pendingAnswerName(outcome Outcome) string {
-	if len(outcome.TurnDecision.Choices) > 0 || outcome.AnswersPendingChoiceWithoutSelecting {
-		return agentcontract.IntakePendingOptionAnswer
-	}
-	return agentcontract.IntakePendingOptionOther
 }
 
 func choiceAnswer(choice string) model.DecisionAnswer {
@@ -254,28 +163,6 @@ func containsValue(values []string, value string) bool {
 		}
 	}
 	return false
-}
-
-func PendingChoiceKeys(state any) []string {
-	document, errorValue := json.Marshal(state)
-	if errorValue != nil {
-		return nil
-	}
-	var decisionState struct {
-		PendingChoice struct {
-			Options []struct {
-				Key string `json:"key"`
-			} `json:"options"`
-		} `json:"pendingChoice"`
-	}
-	if errorValue := json.Unmarshal(document, &decisionState); errorValue != nil {
-		return nil
-	}
-	choiceKeys := []string{}
-	for _, option := range decisionState.PendingChoice.Options {
-		choiceKeys = append(choiceKeys, option.Key)
-	}
-	return choiceKeys
 }
 
 func firstScriptedToolName(decision agentcontract.TurnDecision) string {

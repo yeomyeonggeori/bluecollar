@@ -1,58 +1,25 @@
 package intake
 
 import (
-	"strconv"
-	"strings"
-
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
-var reactionEmojiDescriptions = map[string]string{
-	"white_check_mark":       "acknowledged, seen, done",
-	"eyes":                   "looking at it now",
-	"+1":                     "agreement or approval",
-	"ok_hand":                "understood, will do",
-	"pray":                   "thanks, or please, aimed at the assistant",
-	"heart":                  "warmth or appreciation",
-	"tada":                   "celebration of a result",
-	"clap":                   "praise for someone's work",
-	"raised_hands":           "shared celebration or gratitude",
-	"fire":                   "impressive results",
-	"rocket":                 "a launch or shipped work",
-	"sparkles":               "something new or polished",
-	"100":                    "strong agreement with an impressive result",
-	"muscle":                 "cheering effort on",
-	"wave":                   "a greeting or a farewell",
-	"thinking_face":          "an open question worth considering",
-	"memo":                   "noted, written down",
-	"hourglass_flowing_sand": "it will take a while",
-	"mag":                    "looking into it",
-	"bulb":                   "a good idea",
-	"sob":                    "sympathy for bad news",
-	"sweat_smile":            "an awkward or self-deprecating joke",
-}
-
 type questionBuilder struct {
-	request    agentcontract.IntakeDecisionRequest
-	toolNames  []string
-	choiceKeys []string
+	request   agentcontract.IntakeDecisionRequest
+	toolNames []string
 }
 
 func newQuestionBuilder(request agentcontract.IntakeDecisionRequest) questionBuilder {
-	return questionBuilder{
-		request:    request,
-		toolNames:  request.CallableToolNames,
-		choiceKeys: decisionChoiceKeys(request.PendingChoice),
-	}
+	return questionBuilder{request: request, toolNames: request.CallableToolNames}
 }
 
 func (builder questionBuilder) questionsWithoutTools() map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	for index := range builder.request.Messages {
 		messageKey := decisionMessageKey(index)
-		for name, question := range builder.questionsForMessage(messageKey) {
+		for name, question := range builder.routerQuestions(messageKey) {
 			questions[messageKey+"."+name] = question
 		}
 	}
@@ -90,24 +57,6 @@ func toolQuestionName(messageKey string, toolName string) string {
 	return messageKey + "." + agentcontract.IntakeQuestionPrefixTool + toolName
 }
 
-func (builder questionBuilder) questionsForMessage(messageKey string) map[string]model.DecisionQuestion {
-	questions := map[string]model.DecisionQuestion{}
-	for name, question := range builder.addressingQuestions(messageKey) {
-		questions[name] = question
-	}
-	for name, question := range builder.routerQuestions(messageKey) {
-		questions[name] = question
-	}
-	if builder.asksFollowUp() {
-		questions[agentcontract.IntakeQuestionRelatesToActiveTask] = builder.relatesToActiveTaskQuestion(messageKey)
-	}
-	return questions
-}
-
-func (builder questionBuilder) asksFollowUp() bool {
-	return strings.TrimSpace(builder.request.ActiveTask.TaskRunID) != "" || builder.request.IsTaskRecentlyFinished
-}
-
 const plainMessagePreambleEnding = " in the state. "
 
 const firingMessagePreambleEnding = " in the state, which is the schedule in scheduledRun firing now: " + agentcontract.ScheduledRunReading + " "
@@ -127,48 +76,6 @@ func (builder questionBuilder) agentName() string {
 	return builder.request.AgentIdentity.DisplayName()
 }
 
-func (builder questionBuilder) addressingQuestions(messageKey string) map[string]model.DecisionQuestion {
-	agentName := builder.agentName()
-	return map[string]model.DecisionQuestion{
-		agentcontract.IntakeQuestionTarget: model.ChoiceQuestion{
-			Instructions: builder.about(messageKey) + "Who is it directed at? " + agentName + " is the workplace assistant in this conversation.",
-			OptionDescriptions: map[string]string{
-				string(agentcontract.AddressingTargetBot):     "directed at " + agentName + ", by mention, by reply, or by an unmistakable request to it",
-				string(agentcontract.AddressingTargetHuman):   "directed at one specific person other than " + agentName,
-				string(agentcontract.AddressingTargetAnyone):  "directed at the room in general, a share or an announcement anyone may answer",
-				string(agentcontract.AddressingTargetNone):    "directed at nobody, a self-note, a reaction, or filler",
-				string(agentcontract.AddressingTargetUnclear): "genuinely impossible to tell who it is aimed at",
-			},
-		}.Question(),
-		agentcontract.IntakeQuestionShouldRespond: model.NoulQuestion{
-			Instructions:    builder.about(messageKey) + "Should " + agentName + " write a text reply to it?",
-			TrueDescription: "it is a direct request, question, or instruction to " + agentName + "; it answers a question " + agentName + " asked; it makes " + agentName + " the intended responder; or it is social or playful and aimed at " + agentName + ", where a short in-kind reply keeps the conversation going",
-			FalseDescription: "anything else. Ignore is the normal outcome for channel traffic: work chatter between other people, their status updates and coordination, thanks between two other people, " +
-				"and a share, an FYI, or a closing thanks aimed at " + agentName + " that wants no words back",
-		}.Question(),
-		agentcontract.IntakeQuestionReaction: model.ChoiceQuestion{
-			Instructions: builder.about(messageKey) + "Would a courteous coworker leave an emoji reaction on it?",
-			OptionDescriptions: map[string]string{
-				agentcontract.IntakeReactionOptionNone: "no reaction; reacting would be noise. Routine work chatter between other people, status exchanges between colleagues, personal thanks between two people, and any message that neither addresses nor includes " + agentName + " get nothing. Topic or wording alone is never a reason to react",
-				agentcontract.IntakeReactionOptionReact: "a single emoji acknowledges it well: a share or FYI posted for the whole team or for " + agentName + ", news worth celebrating, a joke posted for the room, " +
-					"or a closing thanks or acknowledgement aimed at " + agentName,
-			},
-		}.Question(),
-		agentcontract.IntakeQuestionReactionEmoji: model.ChoiceQuestion{
-			Instructions:       builder.about(messageKey) + "If a reaction were added to it, which emoji fits best?",
-			OptionDescriptions: reactionEmojiOptionDescriptions(),
-		}.Question(),
-		agentcontract.IntakeQuestionDuty: model.ChoiceQuestion{
-			Instructions:       builder.about(messageKey) + "Does it specify a concrete item a standing duty should record right now, even though it was not addressed to " + agentName + "? The duties are listed in standingDuties in the state. Answer none for vague mentions, opinions, questions, hypotheticals, and chit-chat, and for anything addressed to " + agentName + " as a request.",
-			OptionDescriptions: standingDutyOptionDescriptions(),
-		}.Question(),
-	}
-}
-
-func reactionEmojiOptionDescriptions() map[string]string {
-	return optionDescriptions(agentcontract.ReactionEmojiNames, reactionEmojiDescriptions)
-}
-
 func optionDescriptions(optionNames []string, descriptionsByName map[string]string) map[string]string {
 	descriptions := map[string]string{}
 	for _, optionName := range optionNames {
@@ -179,22 +86,6 @@ func optionDescriptions(optionNames []string, descriptionsByName map[string]stri
 		descriptions[optionName] = description
 	}
 	return descriptions
-}
-
-func standingDutyOptionDescriptions() map[string]string {
-	descriptions := map[string]string{agentcontract.IntakeDutyOptionNone: "it records nothing: chatter, a question, a share, or a request aimed at the assistant itself"}
-	for _, duty := range agentcontract.StandingDuties() {
-		descriptions[duty.Name] = duty.Description
-	}
-	return descriptions
-}
-
-func (builder questionBuilder) relatesToActiveTaskQuestion(messageKey string) model.DecisionQuestion {
-	return model.NoulQuestion{
-		Instructions:     builder.about(messageKey) + "Does it continue, correct, cancel, or ask about the task in the state (activeTask or recentlyFinishedTask)?",
-		TrueDescription:  "it is about that task: a correction, an addition, a cancellation, or a question about its progress",
-		FalseDescription: "it is a self-contained new request that has nothing to do with that task",
-	}.Question()
 }
 
 func (builder questionBuilder) routerQuestions(messageKey string) map[string]model.DecisionQuestion {
@@ -213,39 +104,10 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	if hasPriorTask(builder.request) {
 		questions[agentcontract.IntakeQuestionPriorTaskReference] = builder.priorTaskReferenceQuestion(messageKey)
 	}
-	if strings.TrimSpace(builder.request.ActiveTask.TaskRunID) != "" {
-		questions[agentcontract.IntakeQuestionBusyRoute] = builder.busyRouteQuestion(messageKey)
-	}
 	for _, formatName := range agentcontract.RequestedOutputFormatNames {
 		questions[agentcontract.IntakeQuestionPrefixFormat+formatName] = builder.outputFormatQuestion(messageKey, formatName)
 	}
 	return questions
-}
-
-func hasPendingApproval(request agentcontract.IntakeDecisionRequest) bool {
-	return strings.TrimSpace(request.PendingConfirmation.TaskRunID) != ""
-}
-
-func hasPendingAnswerQuestion(request agentcontract.IntakeDecisionRequest) bool {
-	return hasPendingApproval(request) || len(decisionChoiceKeys(request.PendingChoice)) > 0
-}
-
-func (builder questionBuilder) pendingAnswerQuestions(messageKey string) map[string]model.DecisionQuestion {
-	if hasPendingApproval(builder.request) {
-		return map[string]model.DecisionQuestion{agentcontract.IntakeQuestionApproval: builder.approvalQuestion(messageKey)}
-	}
-	if !isMultipleChoiceSelection(builder.request.PendingChoice) {
-		return map[string]model.DecisionQuestion{agentcontract.IntakeQuestionChoice: builder.singleChoiceSelectionQuestion(messageKey)}
-	}
-	questions := map[string]model.DecisionQuestion{agentcontract.IntakeQuestionPendingAnswer: builder.multipleChoiceAnswerQuestion(messageKey)}
-	for index, choiceKey := range builder.choiceKeys {
-		questions[agentcontract.IntakeQuestionPrefixChoice+choiceKey] = builder.choiceSelectionQuestion(messageKey, index)
-	}
-	return questions
-}
-
-func isMultipleChoiceSelection(pendingChoice agentcontract.PendingChoiceContext) bool {
-	return strings.TrimSpace(pendingChoice.SelectionMode) == "multiple"
 }
 
 func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQuestion {
@@ -337,31 +199,6 @@ func (builder questionBuilder) priorTaskReferenceQuestion(messageKey string) mod
 	}.Question()
 }
 
-func (builder questionBuilder) approvalQuestion(messageKey string) model.DecisionQuestion {
-	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "A confirmation is pending (pendingConfirmation in the state). Read the message as a reply to that question, by what the person means, in any language and any script. A reply to a yes-or-no question is usually brief: a word, a bit of shorthand or a single character is a full answer, and polite or friendly words around it do not change it. Choose other only when the message is not a decision about the pending action.",
-		OptionDescriptions: map[string]string{
-			string(agentcontract.ApprovalSignalApprove): "the person agrees to the pending action as asked, however briefly or informally, alone or with thanks, politeness or a remark that does not change what would be done",
-			string(agentcontract.ApprovalSignalReject):  "the person declines, cancels or halts the pending action, with or without a reason",
-			agentcontract.IntakePendingOptionOther:      "the message is not a decision about the pending action: it asks something, leaves the decision open, changes what would be done (target, scope, time or conditions), or is an unrelated request",
-		},
-	}.Question()
-}
-
-func (builder questionBuilder) busyRouteQuestion(messageKey string) model.DecisionQuestion {
-	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "A task is already running (activeTask in the state). What should happen to it? Natural-language stop requests are ordinary messages, so read them by intent.",
-		OptionDescriptions: optionDescriptions(agentcontract.BusyRouteNames, map[string]string{
-			string(agentcontract.BusyRouteStatus):    "it asks whether work is happening, or asks for progress",
-			string(agentcontract.BusyRouteSteer):     "it corrects or redirects the running task without cancelling it",
-			string(agentcontract.BusyRouteReplace):   "it clearly cancels or replaces the running task with a new instruction",
-			string(agentcontract.BusyRouteCancel):    "it asks to stop, cancel, abort, or not continue the running task",
-			string(agentcontract.BusyRouteNewTask):   "it is independent and should not affect the running task",
-			string(agentcontract.BusyRouteUnrelated): "it should neither start nor alter work",
-		}),
-	}.Question()
-}
-
 func (builder questionBuilder) outputFormatQuestion(messageKey string, formatName string) model.DecisionQuestion {
 	return model.NoulQuestion{
 		Instructions:     builder.about(messageKey) + "Does it explicitly ask for a deliverable file in " + formatName + " format?",
@@ -376,52 +213,6 @@ func (builder questionBuilder) likelyToolQuestion(messageKey string, toolName st
 		TrueDescription:  "the work plainly needs what that tool does",
 		FalseDescription: "its name merely shares a word with the message, or it might conceivably help",
 	}.Question()
-}
-
-func (builder questionBuilder) choiceSelectionQuestion(messageKey string, optionIndex int) model.DecisionQuestion {
-	optionKey := builder.choiceKeys[optionIndex]
-	return model.NoulQuestion{
-		Instructions:     builder.about(messageKey) + "A choice is pending (pendingChoice in the state), and it takes several options at once. Does the message select option " + strconv.Itoa(optionIndex+1) + ", whose key is " + optionKey + "?",
-		TrueDescription:  "it names that option by its number, its label, or a paraphrase of it, in any language and any script",
-		FalseDescription: "it names a different option, gives a custom answer, or is not an answer to the pending question at all",
-	}.Question()
-}
-
-func (builder questionBuilder) singleChoiceSelectionQuestion(messageKey string) model.DecisionQuestion {
-	optionDescriptions := map[string]string{
-		agentcontract.IntakePendingOptionOther: "it does not select one listed option: it gives a custom answer, it selects several, or it is not an answer to the pending question at all",
-	}
-	for index, choiceKey := range builder.choiceKeys {
-		optionDescriptions[choiceKey] = "it selects option " + strconv.Itoa(index+1) + ", named by its number, its label, or a paraphrase of it, in any language and any script"
-	}
-	return model.ChoiceQuestion{
-		Instructions:       builder.about(messageKey) + "A choice is pending (pendingChoice in the state), and it takes exactly one option. Which option does the message select? Read the message by what the person means: a short reply, a bit of shorthand, or a single character can be a full answer.",
-		OptionDescriptions: optionDescriptions,
-	}.Question()
-}
-
-func (builder questionBuilder) multipleChoiceAnswerQuestion(messageKey string) model.DecisionQuestion {
-	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "A choice is pending (pendingChoice in the state), and it takes several options at once. Does the message answer it? Read the message by what the person means, in any language and any script: a short reply, a bit of shorthand, or a single character can be a full answer.",
-		OptionDescriptions: map[string]string{
-			agentcontract.IntakePendingOptionAnswer: "it answers the pending question by selecting from its options",
-			agentcontract.IntakePendingOptionOther:  "it does not answer the pending question: a new or different request, a custom answer, or something unrelated",
-		},
-	}.Question()
-}
-
-func decisionChoiceKeys(pendingChoice agentcontract.PendingChoiceContext) []string {
-	keys := []string{}
-	seenKeys := map[string]bool{}
-	for _, option := range pendingChoice.Options {
-		key := strings.TrimSpace(option.Key)
-		if key == "" || seenKeys[key] {
-			continue
-		}
-		seenKeys[key] = true
-		keys = append(keys, key)
-	}
-	return keys
 }
 
 func needsResponseLanguage(request agentcontract.IntakeDecisionRequest) bool {

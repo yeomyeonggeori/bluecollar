@@ -70,7 +70,7 @@ func TestManyBatchesNeverRunMoreDecisionCallsAtOnceThanTheCap(t *testing.T) {
 	decisionModel := &concurrencyCountingDecisionModel{outcome: outcome}
 	requests := make([]model.DecisionRequest, 40)
 
-	NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }).decideEveryRequest(context.Background(), requests)
+	NewDecisionPlanner(decisionModel, nil).decideEveryRequest(context.Background(), requests)
 
 	if decisionModel.peakInFlightCount > maxConcurrentDecisionRequestCount {
 		t.Fatalf("expected at most %d calls in flight, got %d", maxConcurrentDecisionRequestCount, decisionModel.peakInFlightCount)
@@ -88,7 +88,7 @@ func TestOneFailedBatchCancelsTheRestAndSelectsNothing(t *testing.T) {
 	callLedger := &agentcontract.IntakeCallLedger{}
 
 	startedAt := time.Now()
-	decisions, errorValue := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }).Decide(context.Background(), request, callLedger)
+	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, callLedger)
 
 	if errorValue != nil {
 		t.Fatalf("expected a failed selection to leave the task startable: %v", errorValue)
