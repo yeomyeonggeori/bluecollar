@@ -38,6 +38,7 @@ type ToolDescriptor struct {
 	PolicyResource       string              `json:"policyResource,omitempty"`
 	SideEffectClass      string              `json:"sideEffectClass,omitempty"`
 	RequiresApproval     bool                `json:"requiresApproval,omitempty"`
+	IsHostGated          bool                `json:"isHostGated,omitempty"`
 	ApprovalScope        string              `json:"approvalScope,omitempty"`
 	ApprovalScopeSummary string              `json:"approvalScopeSummary,omitempty"`
 	ApprovalInputFields  []string            `json:"approvalInputFields,omitempty"`

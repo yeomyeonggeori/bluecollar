@@ -7,6 +7,7 @@ import (
 
 const (
 	MetaKeyRequiresApproval     = "toolcontract/requiresApproval"
+	MetaKeyHostGated            = "toolcontract/hostGated"
 	MetaKeySideEffectClass      = "toolcontract/sideEffectClass"
 	MetaKeyApprovalScope        = "toolcontract/approvalScope"
 	MetaKeyApprovalScopeSummary = "toolcontract/approvalScopeSummary"
@@ -19,6 +20,7 @@ const (
 func DescriptorMeta(descriptor ToolDescriptor) map[string]any {
 	return map[string]any{
 		MetaKeyRequiresApproval:     descriptor.RequiresApproval,
+		MetaKeyHostGated:            descriptor.IsHostGated,
 		MetaKeySideEffectClass:      descriptor.SideEffectClass,
 		MetaKeyApprovalScope:        descriptor.ApprovalScope,
 		MetaKeyApprovalScopeSummary: descriptor.ApprovalScopeSummary,
@@ -28,7 +30,11 @@ func DescriptorMeta(descriptor ToolDescriptor) map[string]any {
 }
 
 func ApplyDescriptorMeta(descriptor *ToolDescriptor, meta map[string]any) {
+	if isHostGated, isPresent := meta[MetaKeyHostGated].(bool); isPresent {
+		descriptor.IsHostGated = isHostGated
+	}
 	if published, isPublished := descriptorOfMeta(meta); isPublished {
+		published.IsHostGated = descriptor.IsHostGated
 		*descriptor = published
 		return
 	}

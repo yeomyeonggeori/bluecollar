@@ -13,13 +13,30 @@ import (
 
 const workingDirectorySkillsPath = ".agents/skills"
 
-func instructionBundleLoaderFor(skills Skills, workingDirectory string) func() agentcontract.InstructionBundle {
-	if skills.InstructionBundleLoader != nil {
-		return skills.InstructionBundleLoader
-	}
+func (openSession *session) instructionBundleLoader(workingDirectory string) func() agentcontract.InstructionBundle {
 	return func() agentcontract.InstructionBundle {
+		if bundle, isHandedOver := openSession.handedOverInstructionBundle(); isHandedOver {
+			return bundle
+		}
 		return workingDirectoryInstructionBundle(workingDirectory)
 	}
+}
+
+func (openSession *session) handedOverInstructionBundle() (agentcontract.InstructionBundle, bool) {
+	openSession.instructionBundleMutex.Lock()
+	defer openSession.instructionBundleMutex.Unlock()
+	return openSession.instructionBundle, openSession.hasInstructionBundle
+}
+
+func (openSession *session) adoptInstructionBundle(promptMeta map[string]any) {
+	bundle, isHandedOver := instructionBundleOfMeta(promptMeta)
+	if !isHandedOver {
+		return
+	}
+	openSession.instructionBundleMutex.Lock()
+	defer openSession.instructionBundleMutex.Unlock()
+	openSession.instructionBundle = bundle
+	openSession.hasInstructionBundle = true
 }
 
 func workingDirectoryInstructionBundle(workingDirectory string) agentcontract.InstructionBundle {
