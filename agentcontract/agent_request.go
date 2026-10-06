@@ -44,8 +44,6 @@ type AgentRequest struct {
 	TaskShape                  TaskShape
 	AllowGiveUp                bool
 	AllowGiveUpReason          string
-	PrecomputedTurnDecision    *TurnDecision
-	IsPrecomputedDecisionExact bool
 	SkipSkillSelection         bool
 	TaskLevel                  TaskLevel
 	TurnStartedAt              time.Time
@@ -147,8 +145,6 @@ type AgentTurnRequest struct {
 	ScheduledRun                 ScheduledRunContext
 	PendingInput                 PendingInputContext
 	ToolExposure                 ToolExposureEvent
-	PrecomputedTurnDecision      *TurnDecision
-	IsPrecomputedDecisionExact   bool
 	SkipSkillSelection           bool
 	TaskShape                    TaskShape
 	TaskLevel                    TaskLevel

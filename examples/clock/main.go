@@ -57,14 +57,13 @@ func main() {
 		InitialToolNames:  []string{"time_get"},
 		ExpectedToolCount: agentcontract.ExpectedToolCountOne,
 	}
-	result, errorValue := kernel.RunTurn(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID:       "person-1",
-		RequesterName:           "Alex",
-		ConversationID:          "conversation-1",
-		Prompt:                  "What time is it in Paris right now?",
-		ToolSet:                 tools,
-		PrecomputedTurnDecision: &startTask,
-	})
+	result, errorValue := kernel.RunPlannedTurn(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		RequesterName:     "Alex",
+		ConversationID:    "conversation-1",
+		Prompt:            "What time is it in Paris right now?",
+		ToolSet:           tools,
+	}, agentcontract.Routing{Decision: &startTask})
 	if errorValue != nil {
 		log.Fatal(errorValue)
 	}

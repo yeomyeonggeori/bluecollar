@@ -16,9 +16,6 @@ type plannedTurn struct {
 }
 
 func (runningAgent *Agent) planTurn(ctx context.Context, openSession *session, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
-	if turnRequest.PrecomputedTurnDecision != nil {
-		return plannedTurn{decision: *turnRequest.PrecomputedTurnDecision}, nil
-	}
 	if decision, isFromFacts := DecisionFromFacts(openSession.recordedEvents(turnRequest), turnRequest); isFromFacts {
 		return plannedTurn{decision: decision}, nil
 	}
@@ -40,7 +37,7 @@ func DecisionFromFacts(taskEvents []agentcontract.TaskEvent, turnRequest agentco
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
 	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
 	callLedger := &agentcontract.IntakeCallLedger{}
-	decision, errorValue := router.PlanObserved(ctx, turnRequest.RoutingRequest(), callLedger)
+	decision, errorValue := router.PlanObserved(ctx, turnRequest.RoutingRequest(), agentcontract.Routing{}, callLedger)
 	return plannedTurn{decision: decision, callRecords: callLedger.Records}, errorValue
 }
 

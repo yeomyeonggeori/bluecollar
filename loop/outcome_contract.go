@@ -1,9 +1,10 @@
 package loop
 
 import (
+	"strings"
+
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"strings"
 )
 
 func shouldBuildExecutionPlanForConfirmation(request AgentRequest, intakeDecision IntakeDecision, requiredEvidenceTools []string) bool {
@@ -784,9 +785,9 @@ func activeGoalFromExecutionPlan(taskRunID string, executionPlan ExecutionPlan, 
 	}
 }
 
-func activeGoalFromIntakeOnly(taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
+func activeGoalFromIntakeOnly(routing agentcontract.Routing, taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
 	goal := ActiveGoal{}
-	if canPreserveIntakeGoal(taskRunID, request) {
+	if canPreserveIntakeGoal(routing, taskRunID, request) {
 		goal = request.ActiveGoal
 	}
 	goal.GoalID = strings.TrimSpace(taskRunID)
@@ -803,14 +804,15 @@ func activeGoalFromIntakeOnly(taskRunID string, request AgentRequest, intakeDeci
 	return goal
 }
 
-func canPreserveIntakeGoal(taskRunID string, request AgentRequest) bool {
+func canPreserveIntakeGoal(routing agentcontract.Routing, taskRunID string, request AgentRequest) bool {
 	if strings.TrimSpace(request.ActiveGoal.TaskRunID) != strings.TrimSpace(taskRunID) {
 		return false
 	}
-	if request.PrecomputedTurnDecision == nil {
+	decision := routing.Decision
+	if decision == nil {
 		return true
 	}
-	route := request.PrecomputedTurnDecision.Route
+	route := decision.Route
 	return route != TurnRouteStartTask && route != TurnRouteReviseTask
 }
 

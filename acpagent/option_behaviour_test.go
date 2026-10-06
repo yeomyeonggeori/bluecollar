@@ -464,15 +464,14 @@ func TestASkillRetrieverTheHostGivesDecidesWhichSkillIsOffered(t *testing.T) {
 	}
 }
 
-func TestATurnRequestTheHostHandsOverReachesTheLoopWithoutBeingRoutedAgain(t *testing.T) {
+func TestATurnRequestTheHostHandsOverReachesTheLoopWithItsAttachmentsAndContext(t *testing.T) {
 	hostCalls := []hostToolCall{}
 	languageModel := &scriptedLanguageModel{level: "medium", contents: []string{
 		`{"action":"reply","final":true,"message":"봤습니다","goalSatisfied":true}`,
 	}}
-	decision := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, TaskShape: agentcontract.TaskShapeImmediateReply, TaskLevel: agentcontract.TaskLevelXLow, ResponseLanguage: "ko", Reason: "host routed"}
 	handedOver := agentcontract.AgentTurnRequest{
-		PrecomputedTurnDecision: &decision,
-		InputParts:              []agentcontract.AgentPart{{Type: agentcontract.AgentPartTypeFile, File: &agentcontract.AgentFilePart{Filename: "meeting-notes.csv", Path: "/workspace/inbox/meeting-notes.csv"}}},
+		IsRuntimeRestartResume: true,
+		InputParts:             []agentcontract.AgentPart{{Type: agentcontract.AgentPartTypeFile, File: &agentcontract.AgentFilePart{Filename: "meeting-notes.csv", Path: "/workspace/inbox/meeting-notes.csv"}}},
 		VisibleContext: agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{
 			{Filename: "meeting-notes.csv", URL: "https://files.example.com/meeting-notes.csv", IsAvailable: true},
 		}},

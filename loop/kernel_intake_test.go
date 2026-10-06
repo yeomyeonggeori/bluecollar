@@ -32,12 +32,12 @@ func TestAgentKernelPreservesScheduledIntakeRefusalAfterSkillSelection(t *testin
 	})
 	toolRegistry := newTestCapabilityToolSet([]string{"schedule_create"})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            `1분에 한 번씩 나한테 "죄송합니다" 10번 해봐`,
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
 	}
@@ -85,12 +85,12 @@ func TestAgentKernelSelectsArtifactSkillOnceAfterRouting(t *testing.T) {
 		}, nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "아까 피피티 다시 해봐",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected routed artifact task to run: %v", errorValue)
 	}
@@ -184,12 +184,12 @@ func TestAgentKernelPreservesUnsupportedArtifactWithoutSelectedSkill(t *testing.
 		}, nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "다시 해봐 이제 될 거야",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
 	}
@@ -224,7 +224,7 @@ func TestAgentKernelRecoversPriorTaskOutcomeWithThePriorTaskInContext(t *testing
 		}, nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "direct-1",
 		Prompt:            "전달해줘야지 그럼",
@@ -246,7 +246,7 @@ func TestAgentKernelRecoversPriorTaskOutcomeWithThePriorTaskInContext(t *testing
 			},
 			RequestedOutputFormats: []string{"docx"},
 		},
-	}))
+	})
 
 	if errorValue != nil {
 		t.Fatalf("expected prior task attachment recovery to complete: %v", errorValue)
@@ -280,12 +280,12 @@ func TestAgentKernelUsesIntakeBeforeRunningTools(t *testing.T) {
 		return testToolSuccess("expensive result"), nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "do the entire thing",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected intake-only result: %v", errorValue)
 	}
@@ -312,12 +312,12 @@ func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "소개 자료 만들어줘",
 		ToolSet:           newTestToolSet([]string{toolcontract.AskInputToolName}),
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected clarify result: %v", errorValue)
 	}
@@ -349,12 +349,12 @@ func TestAgentKernelAsksTheClarificationQuestionWithoutOptions(t *testing.T) {
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "회사 조사해줘",
 		ToolSet:           newTestToolSet([]string{toolcontract.AskInputToolName}),
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected clarify result: %v", errorValue)
 	}
@@ -387,12 +387,12 @@ func TestAgentKernelQuickReplyAllowsToolFreeReplyWithoutAskInput(t *testing.T) {
 		return testToolSuccess("expensive result"), nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "hello",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected quick reply: %v", errorValue)
 	}
@@ -435,18 +435,16 @@ func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 		UserFacingReply:  "",
 		InitialToolNames: []string{"alpha"},
 	}
-	result, errorValue := services.kernel.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
-		ConversationID:             "conversation-1",
-		Prompt:                     "확인해줘",
-		ToolSet:                    toolRegistry,
-		PrecomputedTurnDecision:    &precomputedDecision,
-		IsPrecomputedDecisionExact: true,
+	result, errorValue := services.kernel.RunPlannedTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "확인해줘",
+		ToolSet:           toolRegistry,
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			checkpoints = append(checkpoints, checkpoint)
 			return nil
 		},
-	})
+	}, agentcontract.Routing{Decision: &precomputedDecision, IsExact: true})
 	if errorValue != nil {
 		t.Fatalf("expected task to complete: %v", errorValue)
 	}
@@ -483,12 +481,12 @@ func TestAgentKernelQuickReplyPromotesToolFailureToRecovery(t *testing.T) {
 		return testToolSuccess("backup result"), nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "lookup hello",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected quick recovery: %v", errorValue)
 	}
@@ -509,11 +507,11 @@ func TestAgentKernelQuickReplyFailureDoesNotInventToolFailure(t *testing.T) {
 	}}
 	services := newKernelIntakeTestServices(failingLanguageModel{}, intakeLanguageModel)
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "1+1=",
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected direct reply failure result: %v", errorValue)
 	}
@@ -542,12 +540,12 @@ func TestAgentKernelQuickReplyCanUseInitialTool(t *testing.T) {
 		return testToolSuccess(`{"schedules":[]}`), nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "오늘 일정 뭐 있어?",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected quick initial-tool reply: %v", errorValue)
 	}
@@ -594,12 +592,11 @@ func TestAgentKernelQuickReplyAsksWithExpectsAnswerForExplicitChoiceRequest(t *t
 		return testToolSuccess(`{"kind":"choice_single","question":"아래 세 가지 중 하나를 선택해 주세요."}`), nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), AgentRequest{
-		RequesterPersonID:       "person-1",
-		ConversationID:          "conversation-1",
-		Prompt:                  "나한테 1 2 3 선택지 줘봐. 잘 동작하는지 테스트해보게",
-		ToolSet:                 toolRegistry,
-		PrecomputedTurnDecision: &routedDecision,
+	result, errorValue := services.kernel.RunAgentRequest(context.Background(), agentcontract.Routing{Decision: &routedDecision}, AgentRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "나한테 1 2 3 선택지 줘봐. 잘 동작하는지 테스트해보게",
+		ToolSet:           toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected choice request: %v", errorValue)
@@ -655,12 +652,12 @@ func TestAgentKernelPreservesQuickReplyAfterSkillSelection(t *testing.T) {
 		})
 	}
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "너 뭐 할 수 있는지 피피티 만들어서 보내줘봐",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected quick reply: %v", errorValue)
 	}
@@ -706,12 +703,12 @@ func TestAgentKernelUsesStructuredOutputFormatsForAttachmentRequirements(t *test
 		}, nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "html만 주면 돼",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected structured output format task to complete: %v", errorValue)
 	}

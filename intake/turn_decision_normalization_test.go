@@ -241,10 +241,7 @@ func TestAnExactPrecomputedDecisionIsUsedAsItStands(t *testing.T) {
 	precomputedDecision := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, Classification: "vibes", TaskShape: "blob"}
 	turnRouter := NewTurnRouter(nil, DecisionPlanner{}, enabledIntakeOptions())
 
-	exactDecision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{
-		PrecomputedTurnDecision:    &precomputedDecision,
-		IsPrecomputedDecisionExact: true,
-	})
+	exactDecision, errorValue := turnRouter.PlanObserved(context.Background(), agentcontract.AgentRequest{}, agentcontract.Routing{Decision: &precomputedDecision, IsExact: true}, nil)
 	if errorValue != nil {
 		t.Fatalf("expected an exact decision to be used as it stands: %v", errorValue)
 	}
@@ -252,7 +249,7 @@ func TestAnExactPrecomputedDecisionIsUsedAsItStands(t *testing.T) {
 		t.Fatalf("expected the exact decision untouched, got %+v", exactDecision)
 	}
 
-	if _, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{PrecomputedTurnDecision: &precomputedDecision}); errorValue == nil {
+	if _, errorValue := turnRouter.PlanObserved(context.Background(), agentcontract.AgentRequest{}, agentcontract.Routing{Decision: &precomputedDecision}, nil); errorValue == nil {
 		t.Fatal("expected an inexact precomputed decision to be normalized and refused")
 	}
 }

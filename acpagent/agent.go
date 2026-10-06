@@ -133,14 +133,13 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
-	turnRequest.PrecomputedTurnDecision = &planned.decision
 	turnRequest.IsRuntimeRestartResume = turnRequest.IsRuntimeRestartResume || isResumedFromHostLedger
 	openSession.catalog.toolSet.UseToolCallGate(newHostCheckedGate(openSession.gate.TurnGate(approval.Turn{
 		ResponseLanguage: planned.decision.ResponseLanguage,
 		Prompt:           turnRequest.Prompt,
 	})))
 
-	turnResult, errorValue := openSession.kernel.RunTurn(ctx, turnRequest)
+	turnResult, errorValue := openSession.kernel.RunPlannedTurn(ctx, turnRequest, agentcontract.Routing{Decision: &planned.decision})
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}

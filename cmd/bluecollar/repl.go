@@ -80,7 +80,6 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 	}
 
 	turnDecision := decideTurn(ctx, session.languageModel, request, session.options)
-	request.PrecomputedTurnDecision = &turnDecision
 	request.ToolSet.UseToolCallGate(approval.New(session.taskRunService, session.languageModel, session.asker).TurnGate(approval.Turn{
 		ResponseLanguage: turnDecision.ResponseLanguage,
 		Prompt:           prompt,
@@ -94,7 +93,7 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 	defer unregisterLedgerPrinter()
 	printLedgerEvent(taskstate.RawTurnEvent{TaskRunID: taskRun.TaskRunID, Name: agentcontract.TaskEventTaskCreated, Body: prompt})
 
-	result, errorValue := session.kernel.RunTurn(ctx, request)
+	result, errorValue := session.kernel.RunPlannedTurn(ctx, request, agentcontract.Routing{Decision: &turnDecision})
 	writeMetrics(session.options.metricsPath, session.taskRunService, result.TaskRun.TaskRunID)
 	writeTrace(session.options.tracePath, session.taskRunService, result)
 	session.remember(prompt, result)

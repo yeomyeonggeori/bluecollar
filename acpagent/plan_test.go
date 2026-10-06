@@ -192,8 +192,7 @@ func recordedCallCount(t *testing.T, handedOver agentcontract.AgentTurnRequest) 
 }
 
 func TestThePlanningCallsAreRecordedUnderTheRunTheyPlanned(t *testing.T) {
-	decided := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, Classification: agentcontract.IntakeClassificationBoundedTask, TaskShape: agentcontract.TaskShapeMaintenanceTask, TaskLevel: agentcontract.TaskLevelXLow, ResponseLanguage: "ko"}
-	withoutPlanning := recordedCallCount(t, agentcontract.AgentTurnRequest{PrecomputedTurnDecision: &decided})
+	withoutPlanning := recordedCallCount(t, agentcontract.AgentTurnRequest{IsRuntimeRestartResume: true})
 	withPlanning := recordedCallCount(t, agentcontract.AgentTurnRequest{})
 
 	if withPlanning <= withoutPlanning {

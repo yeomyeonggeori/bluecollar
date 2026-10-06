@@ -49,15 +49,15 @@ func NewTurnRouter(languageModel model.LanguageModelProvider, decisionPlanner De
 }
 
 func (turnRouter TurnRouter) Plan(ctx context.Context, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	return turnRouter.PlanObserved(ctx, request, nil)
+	return turnRouter.PlanObserved(ctx, request, agentcontract.Routing{}, nil)
 }
 
-func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
-	if request.PrecomputedTurnDecision != nil {
-		if request.IsPrecomputedDecisionExact {
-			return *request.PrecomputedTurnDecision, nil
+func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, routing agentcontract.Routing, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
+	if routing.Decision != nil {
+		if routing.IsExact {
+			return *routing.Decision, nil
 		}
-		return normalizeTurnDecision(*request.PrecomputedTurnDecision, request)
+		return normalizeTurnDecision(*routing.Decision, request)
 	}
 	if !turnRouter.options.IsEnabled {
 		return agentcontract.TurnDecision{}, ErrTurnRouterDisabled

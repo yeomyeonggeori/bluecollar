@@ -116,14 +116,13 @@ func main() {
 		InitialToolNames:  []string{"time_get"},
 		ExpectedToolCount: agentcontract.ExpectedToolCountOne,
 	}
-	result, errorValue := kernel.RunTurn(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID:       "person-1",
-		RequesterName:           "Alex",
-		ConversationID:          "conversation-1",
-		Prompt:                  "What time is it in Paris right now?",
-		ToolSet:                 tools,
-		PrecomputedTurnDecision: &startTask,
-	})
+	result, errorValue := kernel.RunPlannedTurn(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		RequesterName:     "Alex",
+		ConversationID:    "conversation-1",
+		Prompt:            "What time is it in Paris right now?",
+		ToolSet:           tools,
+	}, agentcontract.Routing{Decision: &startTask})
 	if errorValue != nil {
 		log.Fatal(errorValue)
 	}
@@ -132,7 +131,7 @@ func main() {
 ```
 
 - A tool reaches the model only when its descriptor is `visible` and carries a `ResultContract`, and the result is a JSON object.
-- `RunTurn` refuses a turn without `PrecomputedTurnDecision`. The example fills one in by hand, naming the tool the work needs; the next section has intake decide it.
+- `RunTurn` refuses a turn that arrives without a routing decision; `RunPlannedTurn` takes one as an argument. The example fills one in by hand, naming the tool the work needs; the next section has intake decide it.
 - The `taskstate` services keep everything in memory until a host that needs durability gives each one a repository through `UseRepository`.
 
 ### Route, then run
@@ -163,12 +162,10 @@ if errorValue != nil {
 		InitialToolNames: []string{"time_get"},
 	}
 }
-request.PrecomputedTurnDecision = &decision
-
-result, errorValue := kernel.RunTurn(ctx, request)
+result, errorValue := kernel.RunPlannedTurn(ctx, request, agentcontract.Routing{Decision: &decision})
 ```
 
-`RunTurn` fails a turn that arrives without `PrecomputedTurnDecision`: the host routes before it hands a turn to the harness. `result.TaskRun.Status` is where the task ended and `result.FinishMessage` is what the requester reads.
+`RunTurn` fails a turn that arrives without a routing decision: the host routes before it hands a turn to the harness, and `RunPlannedTurn` is the entry for a turn that is already planned. `result.TaskRun.Status` is where the task ended and `result.FinishMessage` is what the requester reads.
 
 # Architecture
 
@@ -413,7 +410,6 @@ Everything the harness refuses to assume about a turn.
 | `ToolSet`, `PinnedToolNames`, `LikelyToolNames`, `AvailableSkills` | what the agent may call and read |
 | `WorkspaceRootPath`, `WorkspaceDefaultPath`, `ActivePaths` | where files live |
 | `ActiveGoal`, `PriorTask`, `ScheduledRun`, `CarriedOutCalls` | work already in flight or on record |
-| `PrecomputedTurnDecision` | the host's routing decision, required |
 | `TurnStartedAt`, `ExecutionStartedAt`, `EnvironmentNow` | the clocks |
 | `CheckpointSender` | where progress updates go |
 
@@ -540,4 +536,4 @@ CI runs `gofmt`, `go vet`, `go build` and `go test`, then the same inside the AC
 
 **Does the loop escalate to a stronger model when it runs out?** No. It extends the budget one level once, and the model chosen at the start stays.
 
-**Can I run it without a decision model?** The loop runs; intake does not. `cmd/bluecollar` starts a `low` task when intake is unavailable, and a host can do the same by setting `PrecomputedTurnDecision` itself.
+**Can I run it without a decision model?** The loop runs; intake does not. `cmd/bluecollar` starts a `low` task when intake is unavailable, and a host can do the same by handing the loop a routing decision of its own through `RunPlannedTurn`.
