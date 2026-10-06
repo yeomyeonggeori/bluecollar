@@ -608,7 +608,7 @@ func TestAgentKernelQuickReplyAsksWithExpectsAnswerForExplicitChoiceRequest(t *t
 		t.Fatalf("expected waiting user input, got %s", result.TaskRun.Status)
 	}
 	events := services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID)
-	if !taskEventsContain(events, "agent.input_requested", "선택지 1") {
+	if !taskEventsContain(events, "ask.requested", "선택지 1") {
 		t.Fatalf("expected the question to reach the ask request event, got %+v", events)
 	}
 	if len(replyLanguageModel.requests) != 1 {
