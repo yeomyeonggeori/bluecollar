@@ -16,17 +16,25 @@ type plannedTurn struct {
 }
 
 func (runningAgent *Agent) planTurn(ctx context.Context, openSession *session, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
-	switch {
-	case turnRequest.PrecomputedTurnDecision != nil:
+	if turnRequest.PrecomputedTurnDecision != nil {
 		return plannedTurn{decision: *turnRequest.PrecomputedTurnDecision}, nil
-	case turnRequest.IsRuntimeRestartResume:
-		return plannedTurn{decision: withHostTaskLevel(resumedTurnDecision(openSession.recordedEvents(turnRequest), turnRequest), turnRequest)}, nil
-	case isReplyToAskedQuestion(turnRequest):
-		return plannedTurn{decision: withHostTaskLevel(answeredQuestionDecision(openSession.recordedEvents(turnRequest), turnRequest), turnRequest)}, nil
+	}
+	if decision, isFromFacts := DecisionFromFacts(openSession.recordedEvents(turnRequest), turnRequest); isFromFacts {
+		return plannedTurn{decision: decision}, nil
 	}
 	routed, errorValue := runningAgent.routeTurn(ctx, turnRequest)
 	routed.decision = withHostTaskLevel(routed.decision, turnRequest)
 	return routed, errorValue
+}
+
+func DecisionFromFacts(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, bool) {
+	switch {
+	case turnRequest.IsRuntimeRestartResume:
+		return withHostTaskLevel(resumedTurnDecision(taskEvents, turnRequest), turnRequest), true
+	case isReplyToAskedQuestion(turnRequest):
+		return withHostTaskLevel(answeredQuestionDecision(taskEvents, turnRequest), turnRequest), true
+	}
+	return agentcontract.TurnDecision{}, false
 }
 
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
