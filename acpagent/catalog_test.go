@@ -273,6 +273,39 @@ func TestAnImageAToolReturnsReachesTheModelAsAnImageAttachment(t *testing.T) {
 	}
 }
 
+func TestAFileAToolDeliveredKeepsItsBytesSoTheLoopNeedsNoReadAccessToCheckIt(t *testing.T) {
+	body := []byte("plane attachment body")
+	devicePath := "/workspace/private/people/somebody/documents/note.txt"
+	published := toolcontract.ToolResult{
+		Output:      toolcontract.ToolOutput{Content: "delivered", Data: json.RawMessage(`{}`)},
+		Attachments: []toolcontract.FileAttachment{{DevicePath: devicePath, Filename: "note.txt", ContentType: "text/plain", SizeBytes: int64(len(body))}},
+	}
+	descriptor := toolcontract.ToolDescriptor{Name: "file_deliver", ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: "file_deliver", InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{
+				Content: []mcp.Content{
+					&mcp.TextContent{Text: "delivered"},
+					&mcp.EmbeddedResource{Resource: &mcp.ResourceContents{URI: "file://" + devicePath, MIMEType: "text/plain", Blob: body, Meta: toolcontract.AttachmentMeta(published.Attachments[0])}},
+				},
+				Meta: toolcontract.ResultMeta(published),
+			}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	result, errorValue := opened.toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "file_deliver", Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || len(result.Attachments) != 1 || result.Attachments[0].ContentBase64 != base64.StdEncoding.EncodeToString(body) {
+		t.Fatalf("the file arrived without its bytes: %+v, %v", result.Attachments, errorValue)
+	}
+}
+
 func TestAToolResultTheHostDescribedArrivesWithItsEffectsAndFailure(t *testing.T) {
 	published := toolcontract.ToolResult{
 		Output:  toolcontract.ToolOutput{Content: "created task", Data: json.RawMessage(`{"taskID":"task-1"}`)},
