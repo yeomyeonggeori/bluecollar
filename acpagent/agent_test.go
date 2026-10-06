@@ -256,6 +256,30 @@ func TestTheLoopsVerdictReachesTheHostAsAStopReason(t *testing.T) {
 	}
 }
 
+func TestThePromptResponseCarriesTheTurnResultTheLoopReturned(t *testing.T) {
+	hostCalls := []hostToolCall{}
+	catalogServer := publishedCatalog(t, &hostCalls)
+	catalogClientTransport, catalogServerTransport := mcp.NewInMemoryTransports()
+	go catalogServer.Run(t.Context(), catalogServerTransport)
+
+	_, promptResponse := driveOneTurn(t, catalogClientTransport, &scriptedLanguageModel{contents: []string{
+		`{"action":"continue","toolName":"note_write","toolInput":{"text":"회의록"}}`,
+		`{"action":"reply","final":true,"message":"노트를 남겼습니다","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+	}})
+
+	encoded, errorValue := json.Marshal(promptResponse.Meta[TurnResultMetaKey])
+	if errorValue != nil {
+		t.Fatalf("the turn result has to travel as JSON: %v", errorValue)
+	}
+	turnResult := agentcontract.AgentTurnResult{}
+	if errorValue := json.Unmarshal(encoded, &turnResult); errorValue != nil {
+		t.Fatalf("the turn result has to read back as the contract type: %v", errorValue)
+	}
+	if turnResult.TaskRun.Status != agentcontract.TaskStatusCompleted || turnResult.FinishMessage != "노트를 남겼습니다" {
+		t.Fatalf("the host reads the reply and the verdict from the response, got %+v", turnResult)
+	}
+}
+
 func TestTheHostSeesTheLoopsLedgerWithoutBeingInsideIt(t *testing.T) {
 	hostCalls := []hostToolCall{}
 	catalogServer := publishedCatalog(t, &hostCalls)

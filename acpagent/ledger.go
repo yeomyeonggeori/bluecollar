@@ -75,7 +75,7 @@ func replayLedger(openSession *session, promptMeta map[string]any) bool {
 	taskRun := openSession.openTaskRun(promptMeta, "")
 	openSession.taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "")
 	for _, record := range records {
-		openSession.taskRuns.AppendTaskEvent(taskRun.TaskRunID, record.Name, string(record.Body))
+		openSession.taskRuns.AppendTaskEvent(taskRun.TaskRunID, record.Name, record.EventBody())
 	}
 	openSession.rememberTaskRun(taskRun.TaskRunID)
 	return true

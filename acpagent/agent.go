@@ -125,7 +125,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	})
 	defer stopObserving()
 
-	turnDecision, errorValue := runningAgent.routeTurn(ctx, turnRequest)
+	turnDecision, errorValue := runningAgent.decisionForTurn(ctx, turnRequest)
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
@@ -139,24 +139,31 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
-	return acp.PromptResponse{StopReason: stopReasonForStatus(turnResult.TaskRun.Status)}, nil
+	return promptResponseFor(turnResult), nil
 }
 
 func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest, isResumedFromHostLedger bool) agentcontract.AgentTurnRequest {
-	return agentcontract.AgentTurnRequest{
-		RequesterPersonID:      requesterPersonID,
-		IsRuntimeRestartResume: isResumedFromHostLedger,
-		ConversationID:         string(request.SessionId),
-		ExistingTaskRunID:      openSession.currentTaskRunID(),
-		Prompt:                 promptText(request.Prompt),
-		InputParts:             imagePartsOf(request.Prompt),
-		AgentIdentity:          agentcontract.AgentIdentity{Name: runningAgent.options.AgentName},
-		ToolSet:                openSession.catalog.toolSet,
-		PinnedToolNames:        openSession.catalog.toolNames,
-		PinnedSkillNames:       runningAgent.options.Skills.PinnedSkillNames,
-		CarriedOutCalls:        carriedOutCallsOfMeta(request.Meta),
-		CheckpointSender:       checkpointSender(runningAgent.sessionUpdates, request.SessionId),
+	turnRequest, _ := turnRequestOfMeta(request.Meta)
+	turnRequest.RequesterPersonID = requesterPersonID
+	turnRequest.IsRuntimeRestartResume = turnRequest.IsRuntimeRestartResume || isResumedFromHostLedger
+	turnRequest.ConversationID = firstNonEmpty(turnRequest.ConversationID, string(request.SessionId))
+	turnRequest.ExistingTaskRunID = openSession.currentTaskRunID()
+	turnRequest.Prompt = promptText(request.Prompt)
+	turnRequest.InputParts = append(partsWithoutImages(turnRequest.InputParts), imagePartsOf(request.Prompt)...)
+	turnRequest.AgentIdentity = agentcontract.AgentIdentity{Name: runningAgent.options.AgentName}
+	turnRequest.ToolSet = openSession.catalog.toolSet
+	turnRequest.PinnedToolNames = openSession.catalog.toolNames
+	turnRequest.PinnedSkillNames = runningAgent.options.Skills.PinnedSkillNames
+	turnRequest.CarriedOutCalls = carriedOutCallsOfMeta(request.Meta)
+	turnRequest.CheckpointSender = checkpointSender(runningAgent.sessionUpdates, request.SessionId)
+	return turnRequest
+}
+
+func (runningAgent *Agent) decisionForTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
+	if turnRequest.PrecomputedTurnDecision != nil {
+		return *turnRequest.PrecomputedTurnDecision, nil
 	}
+	return runningAgent.routeTurn(ctx, turnRequest)
 }
 
 func failTurnOnPanic(openSession *session, promptResponse *acp.PromptResponse, errorValue *error) {
@@ -222,6 +229,16 @@ func imagePartsOf(contentBlocks []acp.ContentBlock) []agentcontract.AgentPart {
 		}
 	}
 	return imageParts
+}
+
+func partsWithoutImages(parts []agentcontract.AgentPart) []agentcontract.AgentPart {
+	kept := []agentcontract.AgentPart{}
+	for _, part := range parts {
+		if part.Type != agentcontract.AgentPartTypeImage {
+			kept = append(kept, part)
+		}
+	}
+	return kept
 }
 
 func promptText(contentBlocks []acp.ContentBlock) string {
