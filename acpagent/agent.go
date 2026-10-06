@@ -149,7 +149,7 @@ func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.Prom
 	turnRequest.ConversationID = firstNonEmpty(turnRequest.ConversationID, string(request.SessionId))
 	turnRequest.ExistingTaskRunID = openSession.currentTaskRunID()
 	turnRequest.Prompt = promptText(request.Prompt)
-	turnRequest.InputParts = imagePartsOf(request.Prompt)
+	turnRequest.InputParts = append(partsWithoutImages(turnRequest.InputParts), imagePartsOf(request.Prompt)...)
 	turnRequest.AgentIdentity = agentcontract.AgentIdentity{Name: runningAgent.options.AgentName}
 	turnRequest.ToolSet = openSession.catalog.toolSet
 	turnRequest.PinnedToolNames = openSession.catalog.toolNames
@@ -229,6 +229,16 @@ func imagePartsOf(contentBlocks []acp.ContentBlock) []agentcontract.AgentPart {
 		}
 	}
 	return imageParts
+}
+
+func partsWithoutImages(parts []agentcontract.AgentPart) []agentcontract.AgentPart {
+	kept := []agentcontract.AgentPart{}
+	for _, part := range parts {
+		if part.Type != agentcontract.AgentPartTypeImage {
+			kept = append(kept, part)
+		}
+	}
+	return kept
 }
 
 func promptText(contentBlocks []acp.ContentBlock) string {
