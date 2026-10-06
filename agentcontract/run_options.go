@@ -2,8 +2,6 @@ package agentcontract
 
 import "github.com/yeomyeonggeori/bluecollar/model"
 
-const DefaultReactionEmojiName = "white_check_mark"
-
 type RecoveryBudget struct {
 	CorrectedRetry int
 	AlternateRoute int

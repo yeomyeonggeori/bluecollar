@@ -4,7 +4,6 @@ import "strings"
 
 const (
 	TaskEventAgentAction                           = "agent.action"
-	TaskEventAgentAmbientDutyLaunch                = "agent.ambient_duty_launch"
 	TaskEventAgentApprovalUserFacingMessageMissing = "agent.approval_user_facing_message_missing"
 	TaskEventAgentArtifactAttachRejected           = "agent.artifact_attach_rejected"
 	TaskEventAgentBudgetExtendedOneLevel           = "agent.budget_extended_one_level"

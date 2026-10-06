@@ -50,7 +50,7 @@ func configuredToolSelector() agentcontract.ToolSelector {
 	if decisionModel == nil {
 		return nil
 	}
-	return intake.NewDecisionPlanner(decisionModel, nil, nil)
+	return intake.NewDecisionPlanner(decisionModel, nil)
 }
 
 func registerEquipTool(toolSet *toolcontract.ToolSet, toolSelector agentcontract.ToolSelector) {

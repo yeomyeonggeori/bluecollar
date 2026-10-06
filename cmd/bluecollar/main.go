@@ -130,7 +130,7 @@ func collapsedWhitespace(text string) string {
 }
 
 func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(decisions.ConfiguredDecisionModel(os.Stderr), nil, nil), agentcontract.IntakeOptions{IsEnabled: true})
+	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(decisions.ConfiguredDecisionModel(os.Stderr), nil), agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: request.RequesterPersonID,
 		RequesterName:     request.RequesterName,

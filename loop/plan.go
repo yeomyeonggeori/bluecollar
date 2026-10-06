@@ -66,7 +66,7 @@ func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context
 		ToolSet:           state.Request.ToolSet,
 		CallableToolNames: planStepCandidateToolNames(state),
 		CountLimit:        toolcontract.MaxLikelyToolCountForOnePlanStep,
-		CallLedger:        callLedger,
+		CallObserver:      callLedger.Observe,
 	})
 	agentTurnRunner.appendCallRecords(taskRunID, callLedger.Records)
 	if errorValue != nil {

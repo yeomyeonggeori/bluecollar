@@ -21,7 +21,7 @@ func TestAThousandToolsAreSelectedFromInBatchesTheModelAccepts(t *testing.T) {
 	callLedger := &agentcontract.IntakeCallLedger{}
 
 	startedAt := time.Now()
-	decisions, errorValue := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }).Decide(context.Background(), request, callLedger)
+	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, callLedger)
 
 	if errorValue != nil {
 		t.Fatalf("expected a catalog this size to be decided: %v", errorValue)

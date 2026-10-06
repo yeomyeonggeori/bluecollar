@@ -27,7 +27,7 @@ func (planner DecisionPlanner) withLikelyTools(ctx context.Context, request agen
 	calls := planner.decideEveryRequest(ctx, plan.requests)
 	answers := mergedDecisionAnswers(calls)
 	selectedToolNames, selectionError := likelyToolNamesByShape(singleToolKeys, severalToolKeys, candidateToolNames, answers, firstCallError(calls), likelyToolCountLimit)
-	recordDecisionCalls(callLedger, calls, decisionCallContext{
+	recordDecisionCalls(observerOf(callLedger), calls, decisionCallContext{
 		errorValue:    selectionError,
 		toolSelection: toolSelectionRecord(messageKeys, plan, answers, selectionError, likelyToolCountLimit),
 	})
@@ -195,7 +195,7 @@ func (planner DecisionPlanner) SelectToolNames(ctx context.Context, need agentco
 	answers := mergedDecisionAnswers(calls)
 	countLimit := toolSelectionCountLimit(need)
 	selectedToolNames, selectionError := likelyToolNamesByMessageKey(messageKeys, candidateToolNames, answers, firstCallError(calls), countLimit)
-	recordDecisionCalls(need.CallLedger, calls, decisionCallContext{
+	recordDecisionCalls(need.CallObserver, calls, decisionCallContext{
 		errorValue:    selectionError,
 		toolSelection: toolSelectionRecord(messageKeys, plan, answers, selectionError, countLimit),
 	})

@@ -8,76 +8,70 @@ import (
 var _ agentcontract.Harness = (*AgentKernel)(nil)
 
 type (
-	IterationCostObserver      = agentcontract.IterationCostObserver
-	IterationCost              = agentcontract.IterationCost
-	AgentIdentity              = agentcontract.AgentIdentity
-	ActiveGoal                 = agentcontract.ActiveGoal
-	ActiveGoalStatus           = agentcontract.ActiveGoalStatus
-	ActiveTaskContext          = agentcontract.ActiveTaskContext
-	AddressingDecision         = agentcontract.AddressingDecision
-	AddressingTarget           = agentcontract.AddressingTarget
-	AgentCheckpoint            = agentcontract.AgentCheckpoint
-	AgentCheckpointSender      = agentcontract.AgentCheckpointSender
-	AgentFilePart              = agentcontract.AgentFilePart
-	AgentImagePart             = agentcontract.AgentImagePart
-	AgentPart                  = agentcontract.AgentPart
-	AgentPartSource            = agentcontract.AgentPartSource
-	AgentRequest               = agentcontract.AgentRequest
-	AgentTurnRequest           = agentcontract.AgentTurnRequest
-	SystemInstruction          = agentcontract.SystemInstruction
-	CarriedOutCall             = agentcontract.CarriedOutCall
-	AgentTurnResult            = agentcontract.AgentTurnResult
-	AmbientDutyContext         = agentcontract.AmbientDutyContext
-	ApprovalSignal             = agentcontract.ApprovalSignal
-	ArtifactManifestEntry      = agentcontract.ArtifactManifestEntry
-	BusyRoute                  = agentcontract.BusyRoute
-	ChoiceReplyOption          = agentcontract.ChoiceReplyOption
-	ClarificationOption        = agentcontract.ClarificationOption
-	CompanyContext             = agentcontract.CompanyContext
-	PlanStep                   = toolcontract.PlanStep
-	ToolSelector               = agentcontract.ToolSelector
-	ConfirmationReplyDecision  = agentcontract.ConfirmationReplyDecision
-	ContractToolWorkingSet     = agentcontract.ContractToolWorkingSet
-	DeliverableKind            = agentcontract.DeliverableKind
-	ExecutionPlan              = agentcontract.ExecutionPlan
-	ExpectedResult             = agentcontract.ExpectedResult
-	FailureNotice              = agentcontract.FailureNotice
-	HarnessSession             = agentcontract.HarnessSession
-	HeldCall                   = agentcontract.HeldCall
-	InstructionBundle          = agentcontract.InstructionBundle
-	InstructionSource          = agentcontract.InstructionSource
-	IntakeClassification       = agentcontract.IntakeClassification
-	IntakeDecision             = agentcontract.IntakeDecision
-	IntakeOptions              = agentcontract.IntakeOptions
-	MemoryFact                 = agentcontract.MemoryFact
-	OutcomeContract            = agentcontract.OutcomeContract
-	OutcomeEffect              = agentcontract.OutcomeEffect
-	PendingChoiceContext       = agentcontract.PendingChoiceContext
-	PendingConfirmationContext = agentcontract.PendingConfirmationContext
-	PendingInputContext        = agentcontract.PendingInputContext
-	PriorTaskContext           = agentcontract.PriorTaskContext
-	PriorTaskReference         = agentcontract.PriorTaskReference
-	RecoveryBudget             = agentcontract.RecoveryBudget
-	ScheduledRunContext        = agentcontract.ScheduledRunContext
-	SkillCandidate             = agentcontract.SkillCandidate
-	SkillInstruction           = agentcontract.SkillInstruction
-	SkillRetrievalResult       = agentcontract.SkillRetrievalResult
-	SkillRetriever             = agentcontract.SkillRetriever
-	SkillSearchQuery           = agentcontract.SkillSearchQuery
-	SkillSearchQuerySet        = agentcontract.SkillSearchQuerySet
-	SkillSelectionDecision     = agentcontract.SkillSelectionDecision
-	TaskControlIntent          = agentcontract.TaskControlIntent
-	TaskControlIntentDecision  = agentcontract.TaskControlIntentDecision
-	TaskLevel                  = agentcontract.TaskLevel
-	TaskShape                  = agentcontract.TaskShape
-	ToolExposureEvent          = agentcontract.ToolExposureEvent
-	TurnDecision               = agentcontract.TurnDecision
-	TurnOptions                = agentcontract.TurnOptions
-	TurnRoute                  = agentcontract.TurnRoute
-	VisibleContext             = agentcontract.VisibleContext
-	VisibleContextMaterial     = agentcontract.VisibleContextMaterial
-	VisibleContextMessage      = agentcontract.VisibleContextMessage
-	droppedToolGroup           = agentcontract.DroppedToolGroup
+	IterationCostObserver     = agentcontract.IterationCostObserver
+	IterationCost             = agentcontract.IterationCost
+	AgentIdentity             = agentcontract.AgentIdentity
+	ActiveGoal                = agentcontract.ActiveGoal
+	ActiveGoalStatus          = agentcontract.ActiveGoalStatus
+	ActiveTaskContext         = agentcontract.ActiveTaskContext
+	AgentCheckpoint           = agentcontract.AgentCheckpoint
+	AgentCheckpointSender     = agentcontract.AgentCheckpointSender
+	AgentFilePart             = agentcontract.AgentFilePart
+	AgentImagePart            = agentcontract.AgentImagePart
+	AgentPart                 = agentcontract.AgentPart
+	AgentPartSource           = agentcontract.AgentPartSource
+	AgentRequest              = agentcontract.AgentRequest
+	AgentTurnRequest          = agentcontract.AgentTurnRequest
+	SystemInstruction         = agentcontract.SystemInstruction
+	CarriedOutCall            = agentcontract.CarriedOutCall
+	AgentTurnResult           = agentcontract.AgentTurnResult
+	ApprovalSignal            = agentcontract.ApprovalSignal
+	ArtifactManifestEntry     = agentcontract.ArtifactManifestEntry
+	ChoiceReplyOption         = agentcontract.ChoiceReplyOption
+	ClarificationOption       = agentcontract.ClarificationOption
+	CompanyContext            = agentcontract.CompanyContext
+	PlanStep                  = toolcontract.PlanStep
+	ToolSelector              = agentcontract.ToolSelector
+	ConfirmationReplyDecision = agentcontract.ConfirmationReplyDecision
+	ContractToolWorkingSet    = agentcontract.ContractToolWorkingSet
+	DeliverableKind           = agentcontract.DeliverableKind
+	ExecutionPlan             = agentcontract.ExecutionPlan
+	ExpectedResult            = agentcontract.ExpectedResult
+	FailureNotice             = agentcontract.FailureNotice
+	HarnessSession            = agentcontract.HarnessSession
+	HeldCall                  = agentcontract.HeldCall
+	InstructionBundle         = agentcontract.InstructionBundle
+	InstructionSource         = agentcontract.InstructionSource
+	IntakeClassification      = agentcontract.IntakeClassification
+	IntakeDecision            = agentcontract.IntakeDecision
+	IntakeOptions             = agentcontract.IntakeOptions
+	MemoryFact                = agentcontract.MemoryFact
+	OutcomeContract           = agentcontract.OutcomeContract
+	OutcomeEffect             = agentcontract.OutcomeEffect
+	PendingInputContext       = agentcontract.PendingInputContext
+	PriorTaskContext          = agentcontract.PriorTaskContext
+	PriorTaskReference        = agentcontract.PriorTaskReference
+	RecoveryBudget            = agentcontract.RecoveryBudget
+	ScheduledRunContext       = agentcontract.ScheduledRunContext
+	SkillCandidate            = agentcontract.SkillCandidate
+	SkillInstruction          = agentcontract.SkillInstruction
+	SkillRetrievalResult      = agentcontract.SkillRetrievalResult
+	SkillRetriever            = agentcontract.SkillRetriever
+	SkillSearchQuery          = agentcontract.SkillSearchQuery
+	SkillSearchQuerySet       = agentcontract.SkillSearchQuerySet
+	SkillSelectionDecision    = agentcontract.SkillSelectionDecision
+	TaskControlIntent         = agentcontract.TaskControlIntent
+	TaskControlIntentDecision = agentcontract.TaskControlIntentDecision
+	TaskLevel                 = agentcontract.TaskLevel
+	TaskShape                 = agentcontract.TaskShape
+	ToolExposureEvent         = agentcontract.ToolExposureEvent
+	TurnDecision              = agentcontract.TurnDecision
+	TurnOptions               = agentcontract.TurnOptions
+	TurnRoute                 = agentcontract.TurnRoute
+	VisibleContext            = agentcontract.VisibleContext
+	VisibleContextMaterial    = agentcontract.VisibleContextMaterial
+	VisibleContextMessage     = agentcontract.VisibleContextMessage
+	droppedToolGroup          = agentcontract.DroppedToolGroup
 )
 
 const (
@@ -88,12 +82,6 @@ const (
 	ActiveGoalStatusCompleted        = agentcontract.ActiveGoalStatusCompleted
 	ActiveGoalStatusWaitingApproval  = agentcontract.ActiveGoalStatusWaitingApproval
 	ActiveGoalStatusWaitingUserInput = agentcontract.ActiveGoalStatusWaitingUserInput
-
-	AddressingTargetAnyone  = agentcontract.AddressingTargetAnyone
-	AddressingTargetBot     = agentcontract.AddressingTargetBot
-	AddressingTargetHuman   = agentcontract.AddressingTargetHuman
-	AddressingTargetNone    = agentcontract.AddressingTargetNone
-	AddressingTargetUnclear = agentcontract.AddressingTargetUnclear
 
 	AgentPartTypeFile  = agentcontract.AgentPartTypeFile
 	AgentPartTypeImage = agentcontract.AgentPartTypeImage
@@ -106,18 +94,9 @@ const (
 	ArtifactRequirementPreferred = agentcontract.ArtifactRequirementPreferred
 	ArtifactRequirementRequired  = agentcontract.ArtifactRequirementRequired
 
-	BusyRouteCancel    = agentcontract.BusyRouteCancel
-	BusyRouteNewTask   = agentcontract.BusyRouteNewTask
-	BusyRouteReplace   = agentcontract.BusyRouteReplace
-	BusyRouteStatus    = agentcontract.BusyRouteStatus
-	BusyRouteSteer     = agentcontract.BusyRouteSteer
-	BusyRouteUnrelated = agentcontract.BusyRouteUnrelated
-
 	DeliverableKindDocument     = agentcontract.DeliverableKindDocument
 	DeliverableKindNone         = agentcontract.DeliverableKindNone
 	DeliverableKindPresentation = agentcontract.DeliverableKindPresentation
-
-	DefaultReactionEmojiName = agentcontract.DefaultReactionEmojiName
 
 	ResponseLanguageEnglish = toolcontract.ResponseLanguageEnglish
 	ResponseLanguageKorean  = toolcontract.ResponseLanguageKorean
@@ -194,8 +173,6 @@ var (
 	normalizePriorTaskReference = agentcontract.NormalizePriorTaskReference
 )
 
-var reactionEmojiNames = agentcontract.ReactionEmojiNames
-
 var formatContextTimestamp = agentcontract.FormatContextTimestamp
 
 var buildVisibleContextDescription = agentcontract.BuildVisibleContextDescription
@@ -255,7 +232,6 @@ var scheduledRunDescriptionForPrompt = agentcontract.ScheduledRunDescriptionForP
 
 var (
 	normalizeIntakeOptions          = agentcontract.NormalizeIntakeOptions
-	NormalizeReactionEmojiName      = agentcontract.NormalizeReactionEmojiName
 	normalizeRequestedOutputFormats = agentcontract.NormalizeRequestedOutputFormats
 	registeredToolNamesOnly         = agentcontract.RegisteredToolNamesOnly
 	hasAllTools                     = agentcontract.HasAllTools

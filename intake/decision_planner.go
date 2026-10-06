@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"math"
-	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -22,17 +21,13 @@ type AttachmentDescriber interface {
 type DecisionPlanner struct {
 	decisionModel       model.DecisionModel
 	attachmentDescriber AttachmentDescriber
-	randomSource        func() float64
 	callCost            modelCallCost
 }
 
 var ErrDecisionModelUnavailable = errors.New("intake decision model unavailable")
 
-func NewDecisionPlanner(decisionModel model.DecisionModel, attachmentDescriber AttachmentDescriber, randomSource func() float64) DecisionPlanner {
-	if randomSource == nil {
-		randomSource = rand.Float64
-	}
-	return DecisionPlanner{decisionModel: decisionModel, attachmentDescriber: attachmentDescriber, randomSource: randomSource, callCost: newModelCallCost()}
+func NewDecisionPlanner(decisionModel model.DecisionModel, attachmentDescriber AttachmentDescriber) DecisionPlanner {
+	return DecisionPlanner{decisionModel: decisionModel, attachmentDescriber: attachmentDescriber, callCost: newModelCallCost()}
 }
 
 func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
@@ -47,7 +42,7 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 	callError := firstCallError(calls)
 	answers := mergedDecisionAnswers(calls)
 	decisions, readError := planner.readDecisions(describedRequest, answers, callError)
-	recordDecisionCalls(callLedger, calls, decisionCallContext{
+	recordDecisionCalls(observerOf(callLedger), calls, decisionCallContext{
 		errorValue:           firstError(callError, readError),
 		decisions:            decisions,
 		messageIDs:           decidedMessageIDs(describedRequest.Messages),
@@ -61,92 +56,6 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 		return agentcontract.IntakeDecisions{}, readError
 	}
 	return planner.withLikelyTools(ctx, describedRequest, decisions, callLedger), nil
-}
-
-type PendingAnswer struct {
-	IsAnswered bool
-	Approval   *agentcontract.ApprovalSignal
-	Choices    []string
-}
-
-func (planner DecisionPlanner) DecidePendingAnswer(ctx context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (PendingAnswer, error) {
-	if planner.decisionModel == nil {
-		return PendingAnswer{}, ErrDecisionModelUnavailable
-	}
-	if len(request.Messages) == 0 {
-		return PendingAnswer{}, errors.New("intake decision request carries no message")
-	}
-	messageKey := decisionMessageKey(len(request.Messages) - 1)
-	calls := planner.decideEveryRequest(ctx, []model.DecisionRequest{buildPendingAnswerRequest(request, messageKey)})
-	callError := firstCallError(calls)
-	pendingAnswer, readError := readPendingAnswer(request, answerReader{answers: mergedDecisionAnswers(calls), messageKey: messageKey}, callError)
-	recordDecisionCalls(callLedger, calls, decisionCallContext{
-		errorValue: firstError(callError, readError),
-		messageIDs: decidedMessageIDs(request.Messages),
-		input:      decisionInput(request),
-	})
-	return pendingAnswer, firstError(callError, readError)
-}
-
-func buildPendingAnswerRequest(request agentcontract.IntakeDecisionRequest, messageKey string) model.DecisionRequest {
-	questions := map[string]model.DecisionQuestion{}
-	for name, question := range newQuestionBuilder(request).pendingAnswerQuestions(messageKey) {
-		questions[messageKey+"."+name] = question
-	}
-	return model.DecisionRequest{State: buildPendingAnswerState(request), Questions: questions}
-}
-
-func readPendingAnswer(request agentcontract.IntakeDecisionRequest, reader answerReader, callError error) (PendingAnswer, error) {
-	if callError != nil {
-		return PendingAnswer{}, nil
-	}
-	if hasPendingApproval(request) {
-		return readApprovalAnswer(reader)
-	}
-	if isMultipleChoiceSelection(request.PendingChoice) {
-		return readMultipleChoiceAnswer(request, reader)
-	}
-	return readSingleChoiceAnswer(request, reader)
-}
-
-func readApprovalAnswer(reader answerReader) (PendingAnswer, error) {
-	choice, errorValue := reader.choice(agentcontract.IntakeQuestionApproval)
-	if errorValue != nil {
-		return PendingAnswer{}, errorValue
-	}
-	if !agentcontract.IsApprovalSignalName(choice) {
-		return PendingAnswer{}, nil
-	}
-	approval := agentcontract.ApprovalSignal(choice)
-	return PendingAnswer{IsAnswered: true, Approval: &approval}, nil
-}
-
-func readSingleChoiceAnswer(request agentcontract.IntakeDecisionRequest, reader answerReader) (PendingAnswer, error) {
-	selectedKey, errorValue := reader.choice(agentcontract.IntakeQuestionChoice)
-	if errorValue != nil {
-		return PendingAnswer{}, errorValue
-	}
-	for _, choiceKey := range decisionChoiceKeys(request.PendingChoice) {
-		if choiceKey == selectedKey {
-			return PendingAnswer{IsAnswered: true, Choices: []string{choiceKey}}, nil
-		}
-	}
-	return PendingAnswer{}, nil
-}
-
-func readMultipleChoiceAnswer(request agentcontract.IntakeDecisionRequest, reader answerReader) (PendingAnswer, error) {
-	answer, errorValue := reader.choice(agentcontract.IntakeQuestionPendingAnswer)
-	if errorValue != nil {
-		return PendingAnswer{}, errorValue
-	}
-	if answer != agentcontract.IntakePendingOptionAnswer {
-		return PendingAnswer{}, nil
-	}
-	selections, errorValue := reader.yesMembers(agentcontract.IntakeQuestionPrefixChoice, decisionChoiceKeys(request.PendingChoice))
-	if errorValue != nil {
-		return PendingAnswer{}, errorValue
-	}
-	return PendingAnswer{IsAnswered: len(selections) > 0, Choices: selections}, nil
 }
 
 type decisionCall struct {
@@ -232,12 +141,6 @@ func firstError(errorValues ...error) error {
 const largestDecisionRequestByteCountTheModelAccepted = 198185
 const decisionRequestByteBudgetTenthsOfThatCount = 9
 const decisionRequestByteBudget = largestDecisionRequestByteCountTheModelAccepted * decisionRequestByteBudgetTenthsOfThatCount / 10
-
-const burstDecisionRequestByteBudget = 80000
-
-func (planner DecisionPlanner) FitsBurstBudget(request agentcontract.IntakeDecisionRequest) bool {
-	return decisionRequestByteCount(buildIntakeDecisionRequest(request)) <= burstDecisionRequestByteBudget
-}
 
 func decisionRequestByteCount(request model.DecisionRequest) int {
 	document, errorValue := json.Marshal(request)
@@ -338,68 +241,15 @@ func (planner DecisionPlanner) readDecisions(request agentcontract.IntakeDecisio
 }
 
 func (planner DecisionPlanner) readMessageDecision(request agentcontract.IntakeDecisionRequest, message agentcontract.IntakeDecisionMessage, reader answerReader) (agentcontract.IntakeMessageDecision, error) {
-	reactionAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionReaction)
-	if errorValue != nil {
-		return agentcontract.IntakeMessageDecision{}, errorValue
-	}
-	reactionProbability := reactionAnswer.ChoiceProbability(agentcontract.IntakeReactionOptionReact)
-	reactionDraw := planner.randomSource()
-	addressing, errorValue := readAddressingDecision(reader, reactionDraw < reactionProbability)
-	if errorValue != nil {
-		return agentcontract.IntakeMessageDecision{}, errorValue
-	}
 	turnFields, errorValue := readTurnFields(request, reader)
 	if errorValue != nil {
 		return agentcontract.IntakeMessageDecision{}, errorValue
 	}
-	decision := agentcontract.IntakeMessageDecision{
-		MessageID:           strings.TrimSpace(message.MessageID),
-		Addressing:          addressing,
-		ReactionProbability: reactionProbability,
-		ReactionDraw:        reactionDraw,
-		TurnFields:          turnFields,
-		Attachments:         message.Attachments,
-	}
-	if _, hasAnswer := reader.answers[reader.questionKey(agentcontract.IntakeQuestionRelatesToActiveTask)]; hasAnswer {
-		decision.HasRelatesToActiveTask = true
-		decision.RelatesToActiveTask = reader.answer(agentcontract.IntakeQuestionRelatesToActiveTask).IsYes()
-	}
-	return decision, nil
-}
-
-func readAddressingDecision(reader answerReader, isReacting bool) (agentcontract.AddressingDecision, error) {
-	target, errorValue := reader.choice(agentcontract.IntakeQuestionTarget)
-	if errorValue != nil {
-		return agentcontract.AddressingDecision{}, errorValue
-	}
-	shouldRespond, errorValue := reader.noul(agentcontract.IntakeQuestionShouldRespond)
-	if errorValue != nil {
-		return agentcontract.AddressingDecision{}, errorValue
-	}
-	decision := agentcontract.AddressingDecision{
-		Target:        agentcontract.AddressingTarget(target),
-		ShouldRespond: shouldRespond,
-	}
-	if isReacting {
-		reactionEmoji, errorValue := reader.choice(agentcontract.IntakeQuestionReactionEmoji)
-		if errorValue != nil {
-			return agentcontract.AddressingDecision{}, errorValue
-		}
-		decision.ReactionEmoji = normalizeAddressingReactionEmoji(reactionEmoji)
-	}
-	dutyAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionDuty)
-	if errorValue != nil {
-		return agentcontract.AddressingDecision{}, errorValue
-	}
-	if duty, isDuty := agentcontract.StandingDutyByName(dutyAnswer.Choice); isDuty {
-		decision.DutyMatch = true
-		decision.DutyName = duty.Name
-		decision.DutyConfidence = normalizedDutyConfidence(dutyAnswer.Confidence)
-	}
-	if decision.Target == agentcontract.AddressingTargetHuman {
-		decision.ShouldRespond = false
-	}
-	return decision, nil
+	return agentcontract.IntakeMessageDecision{
+		MessageID:   strings.TrimSpace(message.MessageID),
+		TurnFields:  turnFields,
+		Attachments: message.Attachments,
+	}, nil
 }
 
 func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) (agentcontract.TurnDecision, error) {
@@ -409,9 +259,6 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	}
 	if hasPriorTask(request) {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionPriorTaskReference)
-	}
-	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {
-		choiceNames = append(choiceNames, agentcontract.IntakeQuestionBusyRoute)
 	}
 	choices, errorValue := reader.choices(choiceNames)
 	if errorValue != nil {
@@ -451,9 +298,6 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	turnFields.RequestedOutputFormats, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, agentcontract.RequestedOutputFormatNames)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
-	}
-	if busyRouteChoice, isAsked := choices[agentcontract.IntakeQuestionBusyRoute]; isAsked {
-		turnFields.BusyRoute = agentcontract.BusyRoute(busyRouteChoice)
 	}
 	return turnFields, nil
 }

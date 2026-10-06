@@ -23,7 +23,6 @@ type IntakeDecisionMessage struct {
 	Prompt            string
 	SenderName        string
 	SenderHandle      string
-	BotMentioned      bool
 	SentAt            time.Time
 	InputParts        []AgentPart
 	Attachments       []IntakeAttachmentFact
@@ -31,35 +30,26 @@ type IntakeDecisionMessage struct {
 }
 
 type IntakeDecisionRequest struct {
-	Messages               []IntakeDecisionMessage
-	ConversationType       string
-	VisibleContext         VisibleContext
-	AgentIdentity          AgentIdentity
-	Company                CompanyContext
-	ActiveTask             ActiveTaskContext
-	IsTaskRecentlyFinished bool
-	PendingConfirmation    PendingConfirmationContext
-	PendingChoice          PendingChoiceContext
-	PriorTask              PriorTaskContext
-	ScheduledRun           ScheduledRunContext
-	ActiveGoal             ActiveGoal
-	ToolSet                *toolcontract.ToolSet
-	CallableToolNames      []string
-	ResponseLanguage       string
-	AllowGiveUp            bool
-	AllowGiveUpReason      string
-	EnvironmentNow         time.Time
+	Messages          []IntakeDecisionMessage
+	ConversationType  string
+	VisibleContext    VisibleContext
+	AgentIdentity     AgentIdentity
+	Company           CompanyContext
+	PriorTask         PriorTaskContext
+	ScheduledRun      ScheduledRunContext
+	ActiveGoal        ActiveGoal
+	ToolSet           *toolcontract.ToolSet
+	CallableToolNames []string
+	ResponseLanguage  string
+	AllowGiveUp       bool
+	AllowGiveUpReason string
+	EnvironmentNow    time.Time
 }
 
 type IntakeMessageDecision struct {
-	MessageID              string                 `json:"messageID,omitempty"`
-	Addressing             AddressingDecision     `json:"addressing"`
-	ReactionProbability    float64                `json:"reactionProbability"`
-	ReactionDraw           float64                `json:"reactionDraw"`
-	RelatesToActiveTask    bool                   `json:"relatesToActiveTask,omitempty"`
-	HasRelatesToActiveTask bool                   `json:"hasRelatesToActiveTask,omitempty"`
-	TurnFields             TurnDecision           `json:"turnFields"`
-	Attachments            []IntakeAttachmentFact `json:"attachments,omitempty"`
+	MessageID   string                 `json:"messageID,omitempty"`
+	TurnFields  TurnDecision           `json:"turnFields"`
+	Attachments []IntakeAttachmentFact `json:"attachments,omitempty"`
 }
 
 type IntakeDecisions struct {
@@ -147,12 +137,6 @@ func ImageMessageParts(parts []AgentPart) []model.MessagePart {
 }
 
 const (
-	IntakeQuestionTarget                  = "target"
-	IntakeQuestionShouldRespond           = "shouldRespond"
-	IntakeQuestionReaction                = "reaction"
-	IntakeQuestionReactionEmoji           = "reactionEmoji"
-	IntakeQuestionDuty                    = "duty"
-	IntakeQuestionRelatesToActiveTask     = "relatesToActiveTask"
 	IntakeQuestionRoute                   = "route"
 	IntakeQuestionExpectedToolCount       = "expectedToolCount"
 	IntakeQuestionSingleToolChoice        = "singleToolChoice"
@@ -163,21 +147,11 @@ const (
 	IntakeQuestionDeliverableKind         = "deliverableKind"
 	IntakeQuestionPriorTaskReference      = "priorTaskReference"
 	IntakeQuestionResponseLanguage        = "responseLanguage"
-	IntakeQuestionApproval                = "approval"
-	IntakeQuestionBusyRoute               = "busyRoute"
-	IntakeQuestionChoice                  = "choice"
-	IntakeQuestionPendingAnswer           = "pendingAnswer"
 
 	IntakeQuestionPrefixFormat = "format."
 	IntakeQuestionPrefixTool   = "tool."
-	IntakeQuestionPrefixChoice = "choice."
 
-	IntakeReactionOptionNone  = "none"
-	IntakeReactionOptionReact = "react"
-	IntakeDutyOptionNone      = "none"
-	IntakeChoiceOptionNone    = "none_of_these"
-	IntakePendingOptionOther  = "other"
-	IntakePendingOptionAnswer = "answers_it"
+	IntakeChoiceOptionNone = "none_of_these"
 )
 
 type ToolSelectionNeed struct {
@@ -185,7 +159,7 @@ type ToolSelectionNeed struct {
 	ToolSet           *toolcontract.ToolSet
 	CallableToolNames []string
 	CountLimit        int
-	CallLedger        *IntakeCallLedger
+	CallObserver      LLMCallObserver
 }
 
 type ToolSelector interface {

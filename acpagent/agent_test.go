@@ -17,10 +17,7 @@ import (
 )
 
 func scriptedDecisionModel(languageModel model.LanguageModelProvider) *intaketest.LanguageModelDecisionModel {
-	return &intaketest.LanguageModelDecisionModel{
-		LanguageModel: languageModel,
-		Addressing:    agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
-	}
+	return &intaketest.LanguageModelDecisionModel{LanguageModel: languageModel}
 }
 
 type scriptedLanguageModel struct {

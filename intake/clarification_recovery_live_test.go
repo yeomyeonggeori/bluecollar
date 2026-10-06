@@ -22,7 +22,7 @@ func TestClarificationRecoveryWithLiveModel(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	provider.UseHTTPClient(&http.Client{Transport: &armTransport{exchanges: &exchangeJournal{path: os.Getenv(routerEvaluationExchangesName)}}, Timeout: 2 * time.Minute})
-	planner := NewDecisionPlanner(intaketest.NewDecisionModel(clarifyOutcome()), nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(intaketest.NewDecisionModel(clarifyOutcome()), nil)
 	router := NewTurnRouter(provider, planner, enabledIntakeOptions())
 
 	for _, fixture := range clarificationRecoveryFixtures() {
@@ -61,8 +61,7 @@ func clarificationRecoveryFixtures() []clarificationRecoveryFixture {
 					{Speaker: "이샘플", Text: "월별 매출표를 PDF와 엑셀로 둘 다 만들어줘. 수치는 1월 100, 2월 150, 3월 200이야."},
 					{Speaker: "Assistant", Text: "PDF와 엑셀 중 어느 형식으로 만들까요?"},
 				}},
-				ActiveGoal:    agentcontract.ActiveGoal{TaskRunID: "sample-goal", OriginalInstruction: "월별 매출표를 PDF와 엑셀로 둘 다 만들어줘."},
-				PendingChoice: agentcontract.PendingChoiceContext{TaskRunID: "sample-goal", Question: "어느 형식으로 만들까요?", Options: []agentcontract.ChoiceReplyOption{{Key: "pdf", Label: "PDF"}, {Key: "xlsx", Label: "엑셀"}}},
+				ActiveGoal: agentcontract.ActiveGoal{TaskRunID: "sample-goal", OriginalInstruction: "월별 매출표를 PDF와 엑셀로 둘 다 만들어줘."},
 			},
 			route: agentcontract.TurnRouteStartTask,
 		},

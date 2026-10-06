@@ -13,7 +13,6 @@ import (
 
 type LanguageModelDecisionModel struct {
 	LanguageModel model.LanguageModelProvider
-	Addressing    agentcontract.AddressingDecision
 	ModelName     string
 
 	mutex         sync.Mutex
@@ -44,11 +43,7 @@ func (decisionModel *LanguageModelDecisionModel) Decide(ctx context.Context, req
 	if errorValue := json.Unmarshal([]byte(strings.TrimSpace(response.Content)), &turnDecision); errorValue != nil {
 		return model.DecisionResponse{}, errorValue
 	}
-	outcome := Outcome{
-		Addressing:        decisionModel.Addressing,
-		TurnDecision:      turnDecision,
-		PendingChoiceKeys: PendingChoiceKeys(request.State),
-	}
+	outcome := Outcome{TurnDecision: turnDecision}
 	decisionModel.rememberRoutedTurn(outcome)
 	return model.DecisionResponse{
 		Answers:   Answers(request.Questions, func(string) Outcome { return outcome }),

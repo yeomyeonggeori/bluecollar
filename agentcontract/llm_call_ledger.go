@@ -49,7 +49,6 @@ type LLMCallRecord struct {
 	DiagnosticIssues       []model.StructuredOutputValidationIssue  `json:"diagnosticIssues,omitempty"`
 	DiagnosticRepairStatus model.StructuredOutputRepairStatus       `json:"diagnosticRepairStatus,omitempty"`
 	DecisionAnswers        map[string]model.DecisionAnswer          `json:"decisionAnswers,omitempty"`
-	DecisionDraws          map[string]float64                       `json:"decisionDraws,omitempty"`
 	ToolSelection          *ToolSelectionRecord                     `json:"toolSelection,omitempty"`
 	DecidedMessageIDs      []string                                 `json:"decidedMessageIDs,omitempty"`
 	QuestionCount          int                                      `json:"questionCount,omitempty"`

@@ -42,34 +42,6 @@ func (context ScheduledRunContext) IsEmpty() bool {
 		strings.TrimSpace(context.OccurrenceAt) == ""
 }
 
-type AmbientDutyContext struct {
-	IsMatch    bool    `json:"isMatch"`
-	Name       string  `json:"name,omitempty"`
-	Confidence float64 `json:"confidence,omitempty"`
-}
-
-func (context AmbientDutyContext) Normalized() AmbientDutyContext {
-	name := strings.TrimSpace(context.Name)
-	if !context.IsMatch || name == "" {
-		return AmbientDutyContext{}
-	}
-	if _, isKnownDuty := StandingDutyByName(name); !isKnownDuty {
-		return AmbientDutyContext{}
-	}
-	confidence := context.Confidence
-	if confidence < 0 {
-		confidence = 0
-	}
-	if confidence > 1 {
-		confidence = 1
-	}
-	return AmbientDutyContext{
-		IsMatch:    true,
-		Name:       name,
-		Confidence: confidence,
-	}
-}
-
 type ArtifactManifestEntry struct {
 	TaskRunID      string    `json:"taskRunID"`
 	RelativePath   string    `json:"relativePath"`

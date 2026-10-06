@@ -11,16 +11,12 @@ import (
 type Harness struct {
 	taskRunService *taskstate.TaskRunService
 
-	TurnResult           agentcontract.AgentTurnResult
-	TurnStatus           agentcontract.TaskStatus
-	TurnDecision         agentcontract.TurnDecision
-	Reply                string
-	AddressingDecision   agentcontract.AddressingDecision
-	IsActiveTaskFollowUp bool
+	TurnResult agentcontract.AgentTurnResult
+	TurnStatus agentcontract.TaskStatus
+	Reply      string
 
 	lastTurnRequest  agentcontract.AgentTurnRequest
 	runTurnCallCount int
-	decideCallCount  int
 }
 
 func New(taskRunService *taskstate.TaskRunService) *Harness {
@@ -62,14 +58,6 @@ func (harness *Harness) CompleteLaunchFailure(_ context.Context, request agentco
 	}
 }
 
-func (harness *Harness) Plan(context.Context, agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	return harness.TurnDecision, nil
-}
-
-func (harness *Harness) PlanObserved(context.Context, agentcontract.AgentRequest, *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
-	return harness.TurnDecision, nil
-}
-
 func (harness *Harness) GenerateReply(context.Context, string) (string, error) {
 	return harness.Reply, nil
 }
@@ -78,36 +66,12 @@ func (harness *Harness) GenerateReplyWithContext(context.Context, string, agentc
 	return harness.Reply, nil
 }
 
-func (harness *Harness) Decide(_ context.Context, request agentcontract.IntakeDecisionRequest, _ *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
-	harness.decideCallCount++
-	decisions := agentcontract.IntakeDecisions{}
-	for _, message := range request.Messages {
-		decisions.Messages = append(decisions.Messages, agentcontract.IntakeMessageDecision{
-			MessageID:              message.MessageID,
-			Addressing:             harness.AddressingDecision,
-			RelatesToActiveTask:    harness.IsActiveTaskFollowUp,
-			HasRelatesToActiveTask: true,
-			TurnFields:             harness.TurnDecision,
-			Attachments:            message.Attachments,
-		})
-	}
-	return decisions, nil
-}
-
-func (harness *Harness) FitsBurstBudget(agentcontract.IntakeDecisionRequest) bool {
-	return true
-}
-
 func (harness *Harness) LastTurnRequest() agentcontract.AgentTurnRequest {
 	return harness.lastTurnRequest
 }
 
 func (harness *Harness) RunTurnCallCount() int {
 	return harness.runTurnCallCount
-}
-
-func (harness *Harness) DecideCallCount() int {
-	return harness.decideCallCount
 }
 
 func (harness *Harness) settleTaskRun(request agentcontract.AgentTurnRequest, status agentcontract.TaskStatus, message string) (agentcontract.TaskRun, error) {
