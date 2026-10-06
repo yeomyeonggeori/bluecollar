@@ -204,7 +204,7 @@ The port used to be nine methods. Routing, addressing, follow-up classification 
 
 A harness that executes its own tools defeats the host's isolation boundary and is not a valid implementation of this contract. With no identity supplied the agent calls itself "the assistant" and knows nothing about where it runs.
 
-[blueclaw](https://github.com/yeomyeonggeori/blueclaw) is one host. It projects each requester to a POSIX user and runs every tool call as that user, so the permission boundary is the operating system's. `cmd/bluecollar` and `cmd/bluecollar-acp` are two more, small enough to read in one sitting.
+A host can project each requester to a POSIX user and run every tool call as that user, so the permission boundary is the operating system's. `cmd/bluecollar` and `cmd/bluecollar-acp` are two more, small enough to read in one sitting.
 
 ### Packages
 

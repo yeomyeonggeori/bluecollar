@@ -54,7 +54,7 @@ body:
       options:
         - cmd/bluecollar (the standalone runner)
         - embedded in my own host
-        - embedded in blueclaw
+        - embedded in a host
         - a test in this repository
     validations:
       required: true

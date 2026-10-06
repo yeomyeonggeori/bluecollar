@@ -49,7 +49,7 @@ func TestFailureNoticeFallsBackToRawErrorOnlyWhenDraftLeaks(t *testing.T) {
 		StopReason:       "recovery_tool_budget_exhausted",
 		ResponseLanguage: "ko",
 	}
-	generator := FailureNoticeGenerator{LanguageModel: fixedReplyLanguageModel{reply: "작업이 실패했습니다: context deadline exceeded at /workspace/.blueclaw/run"}}
+	generator := FailureNoticeGenerator{LanguageModel: fixedReplyLanguageModel{reply: "작업이 실패했습니다: context deadline exceeded at /workspace/.host/run"}}
 
 	_, status := generator.Generate(context.Background(), report)
 

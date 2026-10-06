@@ -570,7 +570,7 @@ func TestBM25RetrieverSelectsSkillManagement(t *testing.T) {
 		Skills: []SkillInstruction{
 			{
 				Name:        "skill-management",
-				Description: "Create, add, update, or remove user-managed Blueclaw skills, 스킬, and SKILL.md files.",
+				Description: "Create, add, update, or remove user-managed host skills, 스킬, and SKILL.md files.",
 				WhenToUse:   "Use for skill 만들기, 스킬 추가, 스킬 삭제, SKILL.md 작성, and /skill-management.",
 				Prompt:      "Use skill_add and skill.remove.",
 				Source:      InstructionSource{Path: "skills/skill-management/SKILL.md", SHA256: "one", SkillName: "skill-management"},

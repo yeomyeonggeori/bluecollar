@@ -292,9 +292,9 @@ func TestExpectedChangesCanAskForAFileTheReplyDelivers(t *testing.T) {
 }
 
 func kernelFileToolSet() *toolcontract.ToolSet {
-	write := declaringPathToolDefinition("write", "Overwrite one UTF-8 text file under the Blueclaw workspace.", "file", "created")
+	write := declaringPathToolDefinition("write", "Overwrite one UTF-8 text file under the host workspace.", "file", "created")
 	edit := declaringPathToolDefinition("edit", "Apply one or more exact text replacements to workspace files as one atomic edit.", "file", "updated")
-	fileDelete := declaringPathToolDefinition("file_delete", "Delete one file from the Blueclaw workspace by its path.", "file", "deleted")
+	fileDelete := declaringPathToolDefinition("file_delete", "Delete one file from the host workspace by its path.", "file", "deleted")
 	fileDeliver := declaringPathToolDefinition(toolcontract.FileDeliverToolName, "Deliver one or more existing workspace files as final reply evidence.", "file", "attached")
 	fileDeliver.Visibility = toolcontract.ToolVisibilityInternal
 	bash := testToolDescriptor(toolcontract.BashToolName)
