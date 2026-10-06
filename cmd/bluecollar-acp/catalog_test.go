@@ -206,6 +206,40 @@ func TestADescriptorReadsWhatTheToolDeclaresAboutItsApproval(t *testing.T) {
 	}
 }
 
+func TestAnImageAToolReturnedCanBeReloadedAfterTheRunIsReplayed(t *testing.T) {
+	picture := []byte{0x89, 'P', 'N', 'G', 0x01, 0x02}
+	devicePath := "/workspace/private/people/somebody/chart.png"
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: toolcontract.ImageReadToolName, InputSchema: map[string]any{"type": "object"}},
+		func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			var arguments struct{ Path string }
+			if errorValue := json.Unmarshal(request.Params.Arguments, &arguments); errorValue != nil || arguments.Path != devicePath {
+				return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: "no such file"}}}, nil
+			}
+			return &mcp.CallToolResult{Content: []mcp.Content{
+				&mcp.ImageContent{Data: picture, MIMEType: "image/png", Meta: toolcontract.AttachmentMeta(toolcontract.FileAttachment{DevicePath: devicePath})},
+			}}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+	result, errorValue := opened.toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: toolcontract.ImageReadToolName, Input: json.RawMessage(`{"path":"` + devicePath + `"}`)})
+	if errorValue != nil || len(result.Attachments) != 1 {
+		t.Fatalf("the image was dropped: %+v, %v", result, errorValue)
+	}
+	replayed := result.Attachments[0]
+	replayed.ContentBase64 = ""
+
+	reloaded, errorValue := opened.LoadImageContentBase64(t.Context(), "task-1", replayed.DevicePath)
+
+	if errorValue != nil || reloaded != base64.StdEncoding.EncodeToString(picture) {
+		t.Fatalf("the replayed image (%q) could not be reloaded: %q, %v", replayed.DevicePath, reloaded, errorValue)
+	}
+}
+
 func TestAnImageAToolReturnsReachesTheModelAsAnImageAttachment(t *testing.T) {
 	picture := []byte{0x89, 'P', 'N', 'G', 0x01, 0x02}
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)

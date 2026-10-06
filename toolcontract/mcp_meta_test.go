@@ -40,3 +40,21 @@ func TestApplyDescriptorMetaLeavesAbsentKeysAlone(t *testing.T) {
 		t.Fatalf("an empty meta changed the descriptor: %+v", descriptor)
 	}
 }
+
+func TestAttachmentMetaCarriesTheDevicePathAcrossTheWire(t *testing.T) {
+	encoded, errorValue := json.Marshal(AttachmentMeta(FileAttachment{DevicePath: "/workspace/chart.png"}))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	var received map[string]any
+	if errorValue := json.Unmarshal(encoded, &received); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	var read FileAttachment
+	ApplyAttachmentMeta(&read, received)
+
+	if read.DevicePath != "/workspace/chart.png" {
+		t.Fatalf("device path read back as %q", read.DevicePath)
+	}
+}

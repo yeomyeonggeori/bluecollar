@@ -77,6 +77,7 @@ func (runningAgent *agent) NewSession(ctx context.Context, request acp.NewSessio
 	kernel := loop.NewAgentKernel(taskRuns, taskstate.NewTaskStepService())
 	kernel.UseLanguageModelProvider(runningAgent.languageModel)
 	kernel.UseDecisionModel(runningAgent.decisionModel)
+	kernel.UseToolResultImageSource(openedCatalog)
 
 	runningAgent.mutex.Lock()
 	defer runningAgent.mutex.Unlock()

@@ -64,6 +64,20 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 	return &catalog{sessions: openedSessions, toolSet: toolSet, toolNames: toolNames}, nil
 }
 
+func (openedCatalog *catalog) LoadImageContentBase64(ctx context.Context, taskRunID string, devicePath string) (string, error) {
+	result, errorValue := openedCatalog.toolSet.Invoke(toolcontract.WithTaskRunID(ctx, taskRunID), toolcontract.ToolInvocation{
+		ToolName: toolcontract.ImageReadToolName,
+		Input:    toolcontract.MarshalToolInput(map[string]any{"path": devicePath}),
+	})
+	if errorValue != nil {
+		return "", errorValue
+	}
+	if result.Failed() || len(result.Attachments) == 0 {
+		return "", errors.New("the catalog's image_read returned no image for " + devicePath)
+	}
+	return result.Attachments[0].ContentBase64, nil
+}
+
 func (openedCatalog *catalog) Close() {
 	closeCatalogSessions(openedCatalog.sessions)
 }
@@ -168,11 +182,13 @@ func imageAttachmentsOfResult(callResult *mcp.CallToolResult) []toolcontract.Fil
 	attachments := []toolcontract.FileAttachment{}
 	for _, content := range callResult.Content {
 		if imageContent, isImage := content.(*mcp.ImageContent); isImage && len(imageContent.Data) > 0 {
-			attachments = append(attachments, toolcontract.FileAttachment{
+			attachment := toolcontract.FileAttachment{
 				ContentType:   imageContent.MIMEType,
 				SizeBytes:     int64(len(imageContent.Data)),
 				ContentBase64: base64.StdEncoding.EncodeToString(imageContent.Data),
-			})
+			}
+			toolcontract.ApplyAttachmentMeta(&attachment, imageContent.Meta)
+			attachments = append(attachments, attachment)
 		}
 	}
 	return attachments
