@@ -68,6 +68,12 @@ func (agentTurnRunner *AgentTurnRunner) askForReplyAnswer(ctx context.Context, t
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
 	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.AskInputToolName), taskRunID, observationID, toolcontract.AskInputToolName, replyQuestionToolInput(actionDocument), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
+	if isApprovalRequiredObservation(observation) {
+		if pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments); isPaused {
+			agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "reply", observation.ContentText())
+			return pausedResult, true
+		}
+	}
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, "")
 	pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments)
 	if !isPaused {

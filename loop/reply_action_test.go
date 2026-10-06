@@ -397,3 +397,32 @@ func TestADelegatedChildReportsToItsCallerRatherThanToTheRequester(t *testing.T)
 		t.Fatalf("expected the parent to finish, got %s", result.TaskRun.Status)
 	}
 }
+
+func TestAQuestionTheHostHoldsForAnAnswerParksTheRunWithoutAFailureDebt(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		`{"action":"reply","expectsAnswer":true,"message":"어느 방으로 할까요?","choices":["회의실 A","회의실 B"]}`,
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
+	toolRegistry := newTestToolSet([]string{toolcontract.AskInputToolName})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.AskInputToolName, Visibility: toolcontract.ToolVisibilityInternal}, func(toolContext context.Context, _ toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		services.taskRunService.PauseTaskRun(TaskRunIDFromContext(toolContext), agentcontract.TaskStatusWaitingApproval, "어느 방으로 할까요?\n1. 회의실 A\n2. 회의실 B")
+		held := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.InteractionRequired, "approval", "waiting for the requester")
+		held.Failure.RequiresApproval = true
+		return held, nil
+	})
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "방 잡아줘",
+		ToolSet:           toolRegistry,
+		PinnedToolNames:   toolRegistry.ListToolNames(),
+	})
+
+	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("a question held for its answer ends the turn parked, got %q and %v", result.TaskRun.Status, errorValue)
+	}
+	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), agentcontract.TaskEventAgentFailureDebtCreated, "") {
+		t.Fatal("a held question is not a failed call")
+	}
+}
