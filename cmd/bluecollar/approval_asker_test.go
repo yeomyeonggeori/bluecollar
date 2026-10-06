@@ -8,6 +8,7 @@ import (
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/approval"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 )
 
 func askWith(typed string, typingError error) (approval.Answer, string, string) {
@@ -17,7 +18,7 @@ func askWith(typed string, typingError error) (approval.Answer, string, string) 
 		shownPrompt = prompt
 		return typed, typingError
 	}}
-	answer := asker.Ask(context.Background(), approval.Hold{Call: agentcontract.HeldCall{Confirmation: "일정을 지울까요?"}})
+	answer := asker.Ask(context.Background(), holdrecord.Hold{Call: agentcontract.HeldCall{Confirmation: "일정을 지울까요?"}})
 	return answer, output.String(), shownPrompt
 }
 

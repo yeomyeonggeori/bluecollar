@@ -3,6 +3,7 @@ package approval
 import (
 	"context"
 
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 )
@@ -23,11 +24,11 @@ func (gate *Gate) awaitApproval(ctx context.Context, request approvalRequest) ou
 	if gate.asker == nil || request.taskRunID == "" {
 		return outcome{kind: outcomeUnanswerable}
 	}
-	state := holdLedgerOf(gate.taskRuns.ListTaskEvent(request.taskRunID))
-	if state.grantsScope(request.approvalScope()) {
+	ledger := holdrecord.LedgerOf(gate.taskRuns.ListTaskEvent(request.taskRunID))
+	if ledger.GrantsScope(request.approvalScope()) {
 		return gate.spend(request, "")
 	}
-	if hold, isApproved := state.approvedHoldForCall(request.toolName(), request.toolInput); isApproved {
+	if hold, isApproved := holdrecord.ApprovedHoldForCall(ledger.Holds, request.toolName(), request.toolInput); isApproved {
 		return gate.spend(request, hold.ID)
 	}
 	return gate.holdAndAsk(ctx, request)
@@ -39,23 +40,22 @@ func (gate *Gate) holdAndAsk(ctx context.Context, request approvalRequest) outco
 	if !answer.isGiven() {
 		return outcome{kind: outcomeUnanswered}
 	}
-	if gate.settle(hold, answer, askerSource) == outcomeApproved {
+	if gate.settle(request.taskRunID, hold, answer, askerSource) == outcomeApproved {
 		return gate.spend(request, hold.ID)
 	}
 	return outcome{kind: outcomeRejected}
 }
 
-func (gate *Gate) settle(hold Hold, answer Answer, source string) outcomeKind {
+func (gate *Gate) settle(taskRunID string, hold holdrecord.Hold, answer Answer, source string) outcomeKind {
 	if answer == Rejected {
-		recordDecision(gate.taskRuns, hold, decisionReject, source)
+		holdrecord.Decide(gate.taskRuns, taskRunID, hold.ID, holdrecord.DecisionReject, source)
 		return outcomeRejected
 	}
-	recordDecision(gate.taskRuns, hold, decisionApprove, source)
-	grantApprovalScope(gate.taskRuns, hold)
+	holdrecord.Decide(gate.taskRuns, taskRunID, hold.ID, holdrecord.DecisionApprove, source)
 	return outcomeApproved
 }
 
 func (gate *Gate) spend(request approvalRequest, holdID string) outcome {
-	recordSpent(gate.taskRuns, request.taskRunID, holdID, request.toolDefinition.Name, request.toolInput)
+	holdrecord.Spend(gate.taskRuns, request.taskRunID, holdID, request.toolDefinition.Name, request.toolInput)
 	return outcome{kind: outcomeApproved, holdID: holdID}
 }

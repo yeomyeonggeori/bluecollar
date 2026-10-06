@@ -198,7 +198,7 @@ The port used to be nine methods. Routing, addressing, follow-up classification 
 | layer | owns |
 | --- | --- |
 | host | connectors and messengers, tool execution and its isolation boundary, the task store, approvals, the agent's identity, the workspace layout, company context |
-| `agentcontract`, `toolcontract`, `model`, `taskstate` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events |
+| `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events, approval holds |
 | `loop` | the turn: action schema, plan, tool exposure, completion gate and change check, recovery, budgets, context building and compaction |
 | `intake` | what a message means: route, addressing, follow-up, level, likely tools |
 
@@ -216,6 +216,7 @@ A harness that executes its own tools defeats the host's isolation boundary and 
 | `loop/` | the agent loop, `AgentKernel` and `AgentTurnRunner` |
 | `intake/` | the turn router and the decision planner |
 | `taskstate/` | the in-memory services over task runs, steps, events and artifacts |
+| `holdrecord/` | the approval hold events: typed bodies, the writers that open, decide and spend a hold, and the fold that reads them back |
 | `turnstream/` | a view of a turn's ledger events as they are appended |
 | `trace/` | one run's ledger rendered as a single JSON or Markdown file |
 | `bench/` | run metrics and a runner that measures any `Harness` |

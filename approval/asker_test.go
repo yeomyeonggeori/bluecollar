@@ -1,6 +1,7 @@
 package approval
 
 import (
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
 
@@ -53,7 +54,7 @@ func TestAnAskerIsHandedTheHoldWithTheWordedQuestion(t *testing.T) {
 
 	fixture.awaitOutcome(fixture.request())
 
-	if len(asker.holds) != 1 || asker.holds[0].Call.Confirmation != "일정을 지울까요?" || asker.holds[0].Call.ToolName != "event_delete" || asker.holds[0].state != holdPending {
+	if len(asker.holds) != 1 || asker.holds[0].Call.Confirmation != "일정을 지울까요?" || asker.holds[0].Call.ToolName != "event_delete" || asker.holds[0].State != holdrecord.StatePending {
 		t.Fatalf("the asker was handed %+v", asker.holds)
 	}
 }

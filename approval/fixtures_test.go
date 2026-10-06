@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"github.com/yeomyeonggeori/bluecollar/model"
 	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
@@ -59,14 +60,14 @@ func (fixture fixture) record(eventName string, body string) {
 	fixture.store.AppendTaskEvent(fixture.taskRun.TaskRunID, eventName, body)
 }
 
-func (fixture fixture) pendingHold(t *testing.T) Hold {
+func (fixture fixture) pendingHold(t *testing.T) holdrecord.Hold {
 	t.Helper()
-	holds := holdLedgerOf(fixture.events()).holds
+	holds := holdrecord.Holds(fixture.events())
 	if len(holds) == 0 {
 		t.Fatalf("expected a hold, got %v", fixture.eventNames())
 	}
 	hold := holds[len(holds)-1]
-	if hold.state != holdPending {
+	if hold.State != holdrecord.StatePending {
 		t.Fatalf("expected a hold waiting for an answer, got %v", fixture.eventNames())
 	}
 	return hold
@@ -74,7 +75,7 @@ func (fixture fixture) pendingHold(t *testing.T) Hold {
 
 func (fixture fixture) answer(t *testing.T, answer Answer, source string) outcomeKind {
 	t.Helper()
-	return fixture.gate.settle(fixture.pendingHold(t), answer, source)
+	return fixture.gate.settle(fixture.taskRun.TaskRunID, fixture.pendingHold(t), answer, source)
 }
 
 func (fixture fixture) taskStatus() agentcontract.TaskStatus {
@@ -156,11 +157,11 @@ func (languageModel *wordingLanguageModel) promptSeen() string {
 type scriptedAsker struct {
 	answer          Answer
 	askedCount      int
-	holds           []Hold
+	holds           []holdrecord.Hold
 	beforeAnswering func()
 }
 
-func (asker *scriptedAsker) Ask(_ context.Context, hold Hold) Answer {
+func (asker *scriptedAsker) Ask(_ context.Context, hold holdrecord.Hold) Answer {
 	asker.askedCount++
 	asker.holds = append(asker.holds, hold)
 	if asker.beforeAnswering != nil {
