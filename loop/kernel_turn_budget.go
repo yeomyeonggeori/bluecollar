@@ -162,10 +162,6 @@ func turnAnchorClampedEventBody(turnBudget turnBudgetContext) map[string]any {
 	}
 }
 
-// The budget is the level's step count at what a step measurably costs on this model, floored so
-// a fast model still gets a usable one and capped by the level's tier. The caller's deadline is a
-// ceiling on that, never the value: a number someone typed says what may be spent, not how long
-// the work takes.
 func withElapsedBudgetFromDeadline(ctx context.Context, turnOptions TurnOptions) TurnOptions {
 	deadline, hasDeadline := ctx.Deadline()
 	if !hasDeadline {

@@ -67,8 +67,6 @@ type reachableLimits struct {
 	MaxWorkDuration   time.Duration
 }
 
-// A run whose one-level grant is unspent stops at the granted level's ceilings, not the ones it
-// currently holds, and pressure measured against the smaller pair ends it before the grant fires.
 func (agentTurnRunner *AgentTurnRunner) reachableLimits(state agentTaskState) reachableLimits {
 	held := reachableLimits{
 		MaxIterationCount: agentTurnRunner.options.MaxIterationCount,

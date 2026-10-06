@@ -8,12 +8,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-// An image the agent read is carried to the model as bytes, and those bytes are
-// deliberately not written to the task ledger — the picture is already there
-// once, in the tool result that produced it. So a turn that comes back from an
-// approval pause or a restart holds the attachment without its content, and the
-// model would be told about a picture it cannot see. The file the tool read is
-// still where it was: this reads it again.
 type ToolResultImageSource interface {
 	LoadImageContentBase64(ctx context.Context, taskRunID string, devicePath string) (string, error)
 }

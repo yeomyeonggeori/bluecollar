@@ -217,8 +217,6 @@ func toolDefinitionForRecovery(toolSet *toolcontract.ToolSet, toolName string) (
 	return toolSet.ToolDefinition(strings.TrimSpace(toolName))
 }
 
-// Two tools are alternate routes when they serve the same namespace. Grouping them
-// by a shared name prefix put the grouping in the name, where a rename loses it.
 func isAlternateRouteToolPair(toolSet *toolcontract.ToolSet, firstToolName string, secondToolName string) bool {
 	firstNamespace := recoveryToolNamespace(toolSet, firstToolName)
 	secondNamespace := recoveryToolNamespace(toolSet, secondToolName)

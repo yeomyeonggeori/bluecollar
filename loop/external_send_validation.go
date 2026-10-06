@@ -77,9 +77,6 @@ func unrequestedPlatformMessageSendObservation(request AgentTurnRequest, actionD
 	return newFailureObservation(observationID, "policy", toolName, message, toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "policy"), true
 }
 
-// A send into the conversation the requester is already in has the blast radius
-// of a normal reply, so it needs neither an external-send outcome contract nor
-// runtime approval.
 func sendTargetsCurrentConversation(toolInput json.RawMessage) bool {
 	var document struct {
 		TargetType string `json:"targetType"`

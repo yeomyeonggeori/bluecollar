@@ -74,9 +74,6 @@ func terminalCommandTokens(command string) []string {
 	return strings.Fields(replacer.Replace(command))
 }
 
-// terminalRerunAfterWorkspaceMutation frees an identical shell command
-// from duplicate rejection once the workspace changed after the previous run —
-// a revise-then-rebuild loop legitimately repeats the same build command.
 func terminalRerunAfterWorkspaceMutation(actionDocument turnActionDocument, observations []turnObservation, duplicateObservation turnObservation) bool {
 	if strings.TrimSpace(actionDocument.ToolName) != toolcontract.BashToolName {
 		return false

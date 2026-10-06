@@ -60,11 +60,6 @@ func (observation turnObservation) Failed() bool {
 	return observation.Failure != nil
 }
 
-// Output.Data is what a result contract validates, so a tool that declares a schema
-// cannot return without it. Output.Content is the text the model reads and is elided
-// when the result is long, which is why nothing that wants fields should read it.
-// The fallback carries the observations this loop writes itself, which have no
-// contract and are never long enough to be elided.
 func (observation turnObservation) StructuredOutput() []byte {
 	if len(observation.Output.Data) > 0 {
 		return observation.Output.Data

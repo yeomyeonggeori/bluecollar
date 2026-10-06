@@ -70,11 +70,6 @@ func (agentTurnRunner *AgentTurnRunner) cancelledTaskResult(taskRunID string, at
 	return AgentTurnResult{TaskRun: taskRun, ReplySuppressed: true, Attachments: attachments}, true
 }
 
-// A turn that loses its context ends the task run, because nothing else will move it. The one
-// exception is a deliberate cancellation of a turn someone else can name: every canceller — stop,
-// supersede, revision, shutdown, admin — records the outcome itself, so claiming it here would
-// race the hand that took the turn away. A deadline has no such owner, and neither does a
-// delegated child, whose task run the parent's canceller never saw.
 func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context, taskRunID string, request AgentTurnRequest, cause error, reason string, attachments []toolcontract.FileAttachment) AgentTurnResult {
 	if result, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, attachments); isCancelled {
 		return result
@@ -106,10 +101,6 @@ func (agentTurnRunner *AgentTurnRunner) abandonedTurnResult(ctx context.Context,
 	return result
 }
 
-// A delegated child has no requester of its own. Its parent reads the failure reason on the run,
-// which delegatedFailureText prefers over any notice, so generating one buys nothing and — with
-// the parent blocked inside runDelegatedTurn and the queue worker holding the conversation — costs
-// the whole closing ceiling.
 func (agentTurnRunner *AgentTurnRunner) failTaskRunWithReason(taskRun agentcontract.TaskRun, reason string) agentcontract.TaskRun {
 	failedTaskRun, failError := agentTurnRunner.taskRunService.FailTaskRun(taskRun.TaskRunID, reason)
 	if failError == nil {
@@ -120,10 +111,6 @@ func (agentTurnRunner *AgentTurnRunner) failTaskRunWithReason(taskRun agentcontr
 	return taskRun
 }
 
-// A finished turn owns its reply. When the completing transition will not stick, the run is closed
-// as blocked and the reply is carried as the notice, because work the agent did and a reply the
-// judge accepted are not the repository's to discard. A run cancelled between the gate and the
-// commit is the exception: the requester asked for it to stop.
 func (agentTurnRunner *AgentTurnRunner) finishedTurnResult(taskRunID string, reply string, attachments []toolcontract.FileAttachment) AgentTurnResult {
 	completedTaskRun, completionError := agentTurnRunner.taskRunService.CompleteTaskRun(taskRunID, reply)
 	if completionError == nil {

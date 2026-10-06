@@ -2,15 +2,10 @@ package loop
 
 import "strings"
 
-// Dropping the middle of a long result costs no model call and loses nothing the ledger
-// did not keep, so it runs before the summarizer, which does cost one.
 const taskContextPruneThresholdCharacters = 8192
 
 const taskContextPruneKeepCharacters = 4096
 
-// This shrinks a projection, never the recorded observations: the ledger keeps every result
-// whole. The newest is left alone because it is the one the agent is acting on, and a pinned
-// observation is evidence something else already cites.
 func observationsWithLongToolResultsPruned(observations []turnObservation, pinnedObservationIDs map[string]bool) ([]turnObservation, bool) {
 	prunedObservations := make([]turnObservation, len(observations))
 	copy(prunedObservations, observations)

@@ -122,8 +122,6 @@ func recoveryWhyLikely(observation turnObservation, failureClass string) string 
 	}
 }
 
-// A summary is a label for the failure and the tool's own output is the diagnosis. shell
-// summarises as the exit status, so a recovery told only the summary is told a number.
 func summaryWithWhatTheToolPrinted(summary string, observation turnObservation) string {
 	printed := strings.TrimSpace(observation.ContentText())
 	if printed == "" || printed == summary {

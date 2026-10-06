@@ -98,8 +98,6 @@ func (agentTurnRunner *AgentTurnRunner) promptStateForAction(ctx context.Context
 	return agentTurnRunner.selectContextForAction(ctx, taskRunID, state, promptState, currentSummary, summary, plan, pinnedObservationIDs, taskEvents)
 }
 
-// A pass that does not actually shrink the prompt is discarded, so a turn never reports
-// progress it did not make and never sends a summarizer a projection it did not improve.
 func (agentTurnRunner *AgentTurnRunner) promptObservationsWithLongToolResultsPruned(taskRunID string, state agentTaskState, promptObservations []turnObservation, pinnedObservationIDs map[string]bool, estimatedTokenCount int) ([]turnObservation, int) {
 	prunedObservations, didPrune := observationsWithLongToolResultsPruned(promptObservations, pinnedObservationIDs)
 	if !didPrune {
