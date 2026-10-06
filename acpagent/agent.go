@@ -130,7 +130,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	stopObserving := openSession.taskEvents.RegisterTurnObserver(ledgerObserver(ctx, runningAgent.sessionUpdates, request.SessionId, openSession.rememberTaskRun))
 	defer stopObserving()
 
-	planned, errorValue := runningAgent.planTurn(ctx, openSession, turnRequest)
+	planned, errorValue := runningAgent.planTurn(ctx, openSession, routedAsThePersonWroteIt(turnRequest, request.Meta))
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
@@ -146,6 +146,15 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	}
 	openSession.recordPlanningCalls(turnResult.TaskRun.TaskRunID, planned.callRecords)
 	return promptResponseFor(turnResult), nil
+}
+
+func routedAsThePersonWroteIt(turnRequest agentcontract.AgentTurnRequest, promptMeta map[string]any) agentcontract.AgentTurnRequest {
+	handedOver, isPresent := turnRequestOfMeta(promptMeta)
+	if !isPresent || strings.TrimSpace(handedOver.Prompt) == "" {
+		return turnRequest
+	}
+	turnRequest.Prompt = handedOver.Prompt
+	return turnRequest
 }
 
 func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest) agentcontract.AgentTurnRequest {
