@@ -37,7 +37,7 @@ func DecisionFromFacts(taskEvents []agentcontract.TaskEvent, turnRequest agentco
 }
 
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
-	router := intake.NewTurnRouter(runningAgent.routingLanguageModel(), runningAgent.decisionPlanner, runningAgent.routingOptions())
+	router := intake.NewTurnRouter(runningAgent.routingLanguageModel(), runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
 	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 	decision, errorValue := router.PlanObserved(ctx, turnRequest.RoutingRequest(), turnclassification.Routing{}, callLedger)
 	return plannedTurn{decision: decision, callRecords: callLedger.Records}, errorValue
@@ -136,10 +136,4 @@ func (runningAgent *Agent) routingLanguageModel() model.LanguageModelProvider {
 		return runningAgent.options.RouterLanguageModel
 	}
 	return runningAgent.languageModel
-}
-
-func (runningAgent *Agent) routingOptions() agentcontract.IntakeOptions {
-	intakeOptions := runningAgent.options.IntakeOptions
-	intakeOptions.IsEnabled = true
-	return intakeOptions
 }
