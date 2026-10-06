@@ -119,7 +119,7 @@ func TestCompletionGateUsesTypedEvidenceInsteadOfParsingFinishMessage(t *testing
 		Output:        toolcontract.ToolOutput{Content: "file attached"},
 		Attachments: []toolcontract.FileAttachment{{
 			Filename:   "hermes-analysis.html",
-			DevicePath: "/root/.blueclaw/workspace/hermes-analysis.html",
+			DevicePath: "/workspace/hermes-analysis.html",
 		}},
 	}}
 
@@ -145,7 +145,7 @@ func TestCompletionGateDoesNotInferAttachmentsFromFinishMessage(t *testing.T) {
 		Output:        toolcontract.ToolOutput{Content: "file attached"},
 		Attachments: []toolcontract.FileAttachment{{
 			Filename:   "hermes-analysis.html",
-			DevicePath: "/root/.blueclaw/workspace/hermes-analysis.html",
+			DevicePath: "/workspace/hermes-analysis.html",
 		}},
 	}}
 

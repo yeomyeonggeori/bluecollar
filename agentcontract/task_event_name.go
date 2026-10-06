@@ -105,7 +105,6 @@ const (
 	TaskEventAskRequested                          = "ask.requested"
 	TaskEventAskResolved                           = "ask.resolved"
 	TaskEventAskSupersededByMessage                = "ask.superseded_by_message"
-	TaskEventBlueclawTaskExecutionDuration         = "blueclaw.task.execution_duration"
 	TaskEventCompletionChangeCheck                 = "completion.change_check"
 	TaskEventCompletionCheckDegraded               = "completion.check_degraded"
 	TaskEventCompletionExpectedChanges             = "completion.expected_changes"
