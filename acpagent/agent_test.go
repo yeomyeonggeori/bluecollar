@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -75,6 +76,11 @@ type hostToolCall struct {
 
 func publishedCatalog(t *testing.T, calls *[]hostToolCall) *mcp.Server {
 	t.Helper()
+	return publishedCatalogHoldingCallsUntil(t, calls, nil)
+}
+
+func publishedCatalogHoldingCallsUntil(t *testing.T, calls *[]hostToolCall, beforeCall func(callNumber int)) *mcp.Server {
+	t.Helper()
 	server := mcp.NewServer(&mcp.Implementation{Name: "host", Version: "test"}, nil)
 	server.AddTool(&mcp.Tool{
 		Name:        "note_write",
@@ -82,6 +88,9 @@ func publishedCatalog(t *testing.T, calls *[]hostToolCall) *mcp.Server {
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}}},
 		Meta:        mcp.Meta{toolcontract.MetaKeySideEffectClass: "state_change"},
 	}, func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		if beforeCall != nil {
+			beforeCall(len(*calls) + 1)
+		}
 		*calls = append(*calls, hostToolCall{toolName: "note_write"})
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "note written"}}}, nil
 	})
@@ -331,9 +340,37 @@ func (client *cancellingHostClient) SessionUpdate(ctx context.Context, notificat
 	return nil
 }
 
+func waitUntilTheAgentHasSeenTheCancel(t *testing.T, runningAgent *Agent) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if runningAgent.hasACancelledTurn() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Error("the host's cancel never reached the agent")
+}
+
+func (runningAgent *Agent) hasACancelledTurn() bool {
+	runningAgent.mutex.Lock()
+	defer runningAgent.mutex.Unlock()
+	for _, openSession := range runningAgent.sessionsByID {
+		if openSession.taskRuns.IsTaskRunCancelled(openSession.currentTaskRunID()) {
+			return true
+		}
+	}
+	return false
+}
+
 func TestACancelledTurnStopsCallingTools(t *testing.T) {
 	hostCalls := []hostToolCall{}
-	catalogServer := publishedCatalog(t, &hostCalls)
+	var runningAgent *Agent
+	catalogServer := publishedCatalogHoldingCallsUntil(t, &hostCalls, func(callNumber int) {
+		if callNumber > 1 {
+			waitUntilTheAgentHasSeenTheCancel(t, runningAgent)
+		}
+	})
 	catalogClientTransport, catalogServerTransport := mcp.NewInMemoryTransports()
 	go catalogServer.Run(t.Context(), catalogServerTransport)
 
@@ -346,7 +383,7 @@ func TestACancelledTurnStopsCallingTools(t *testing.T) {
 
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
-	runningAgent := newTestAgent(t, languageModel)
+	runningAgent = newTestAgent(t, languageModel)
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogClientTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)

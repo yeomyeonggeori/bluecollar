@@ -149,7 +149,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 		return acp.PromptResponse{}, errorValue
 	}
 	openSession.recordPlanningCalls(turnResult.TaskRun.TaskRunID, planned.callRecords)
-	return promptResponseFor(turnResult), nil
+	return promptResponseFor(ctx, turnResult), nil
 }
 
 func routedAsThePersonWroteIt(turnRequest agentcontract.AgentTurnRequest, promptMeta map[string]any) agentcontract.AgentTurnRequest {
