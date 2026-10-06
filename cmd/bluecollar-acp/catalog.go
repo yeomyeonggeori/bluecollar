@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,14 +12,6 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-)
-
-const (
-	sideEffectClassMetaKey      = "bluecollar/sideEffectClass"
-	requiresApprovalMetaKey     = "bluecollar/requiresApproval"
-	approvalScopeMetaKey        = "bluecollar/approvalScope"
-	approvalScopeSummaryMetaKey = "bluecollar/approvalScopeSummary"
-	approvalInputFieldsMetaKey  = "bluecollar/approvalInputFields"
 )
 
 type catalog struct {
@@ -120,11 +113,7 @@ func descriptorForTool(tool *mcp.Tool) toolcontract.ToolDescriptor {
 			Schema: json.RawMessage(`{"type":"object","additionalProperties":true}`),
 		},
 	}
-	readMetaString(tool.Meta, &descriptor.SideEffectClass, sideEffectClassMetaKey)
-	readMetaBool(tool.Meta, &descriptor.RequiresApproval, requiresApprovalMetaKey)
-	readMetaString(tool.Meta, &descriptor.ApprovalScope, approvalScopeMetaKey)
-	readMetaString(tool.Meta, &descriptor.ApprovalScopeSummary, approvalScopeSummaryMetaKey)
-	readMetaStrings(tool.Meta, &descriptor.ApprovalInputFields, approvalInputFieldsMetaKey)
+	toolcontract.ApplyDescriptorMeta(&descriptor, tool.Meta)
 	if descriptor.SideEffectClass == "" && tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
 		descriptor.SideEffectClass = toolcontract.ToolSideEffectRead
 	}
@@ -140,30 +129,6 @@ func encodedSchema(schema any) json.RawMessage {
 		return json.RawMessage(`{"type":"object"}`)
 	}
 	return encoded
-}
-
-func readMetaString(meta mcp.Meta, target *string, key string) {
-	if value, isPresent := meta[key].(string); isPresent && strings.TrimSpace(value) != "" {
-		*target = value
-	}
-}
-
-func readMetaBool(meta mcp.Meta, target *bool, key string) {
-	if value, isPresent := meta[key].(bool); isPresent {
-		*target = value
-	}
-}
-
-func readMetaStrings(meta mcp.Meta, target *[]string, key string) {
-	values, isList := meta[key].([]any)
-	if !isList {
-		return
-	}
-	for _, value := range values {
-		if text, isText := value.(string); isText && strings.TrimSpace(text) != "" {
-			*target = append(*target, text)
-		}
-	}
 }
 
 func callThroughCatalog(session *mcp.ClientSession, toolName string) toolcontract.ToolHandler {
@@ -183,7 +148,9 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string) toolcontrac
 			}
 			return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, toolName, summary), nil
 		}
-		return toolcontract.ToolSuccessData(summary, structuredOfResult(callResult)), nil
+		toolResult := toolcontract.ToolSuccessData(summary, structuredOfResult(callResult))
+		toolResult.Attachments = imageAttachmentsOfResult(callResult)
+		return toolResult, nil
 	}
 }
 
@@ -195,6 +162,20 @@ func textOfResult(callResult *mcp.CallToolResult) string {
 		}
 	}
 	return strings.TrimSpace(strings.Join(segments, "\n"))
+}
+
+func imageAttachmentsOfResult(callResult *mcp.CallToolResult) []toolcontract.FileAttachment {
+	attachments := []toolcontract.FileAttachment{}
+	for _, content := range callResult.Content {
+		if imageContent, isImage := content.(*mcp.ImageContent); isImage && len(imageContent.Data) > 0 {
+			attachments = append(attachments, toolcontract.FileAttachment{
+				ContentType:   imageContent.MIMEType,
+				SizeBytes:     int64(len(imageContent.Data)),
+				ContentBase64: base64.StdEncoding.EncodeToString(imageContent.Data),
+			})
+		}
+	}
+	return attachments
 }
 
 func structuredOfResult(callResult *mcp.CallToolResult) json.RawMessage {

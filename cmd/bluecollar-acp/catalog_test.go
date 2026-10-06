@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -137,7 +138,7 @@ func verifyCatalogFailureCleanup(t *testing.T, failureStage string) {
 
 func TestStructuredCatalogFailureReachesTheHostsLedger(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	server.AddTool(&mcp.Tool{Name: "note_write", InputSchema: map[string]any{"type": "object"}, Meta: mcp.Meta{"bluecollar/sideEffectClass": "state_change"}},
+	server.AddTool(&mcp.Tool{Name: "note_write", InputSchema: map[string]any{"type": "object"}, Meta: mcp.Meta{toolcontract.MetaKeySideEffectClass: "state_change"}},
 		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 			return &mcp.CallToolResult{
 				IsError:           true,
@@ -188,11 +189,11 @@ func assertCatalogSessionClosed(t *testing.T, session *mcp.ServerSession) {
 
 func TestADescriptorReadsWhatTheToolDeclaresAboutItsApproval(t *testing.T) {
 	tool := &mcp.Tool{Name: "event_delete", Meta: mcp.Meta{
-		"bluecollar/sideEffectClass":      "destructive",
-		"bluecollar/approvalScope":        "calendar",
-		"bluecollar/requiresApproval":     true,
-		"bluecollar/approvalScopeSummary": "every change to the team calendar",
-		"bluecollar/approvalInputFields":  []any{"eventHint", "reason"},
+		toolcontract.MetaKeySideEffectClass:      "destructive",
+		toolcontract.MetaKeyApprovalScope:        "calendar",
+		toolcontract.MetaKeyRequiresApproval:     true,
+		toolcontract.MetaKeyApprovalScopeSummary: "every change to the team calendar",
+		toolcontract.MetaKeyApprovalInputFields:  []any{"eventHint", "reason"},
 	}}
 
 	descriptor := descriptorForTool(tool)
@@ -202,5 +203,36 @@ func TestADescriptorReadsWhatTheToolDeclaresAboutItsApproval(t *testing.T) {
 	}
 	if !reflect.DeepEqual(descriptor.ApprovalInputFields, []string{"eventHint", "reason"}) {
 		t.Fatalf("the inputs that describe the action were not read: %v", descriptor.ApprovalInputFields)
+	}
+}
+
+func TestAnImageAToolReturnsReachesTheModelAsAnImageAttachment(t *testing.T) {
+	picture := []byte{0x89, 'P', 'N', 'G', 0x01, 0x02}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: "image_read", InputSchema: map[string]any{"type": "object"}},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{
+				&mcp.TextContent{Text: "a chart"},
+				&mcp.ImageContent{Data: picture, MIMEType: "image/png"},
+			}}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	result, errorValue := opened.toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "image_read", Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || len(result.Attachments) != 1 {
+		t.Fatalf("the image was dropped: %+v, %v", result, errorValue)
+	}
+	attachment := result.Attachments[0]
+	if attachment.ContentType != "image/png" || attachment.ContentBase64 != base64.StdEncoding.EncodeToString(picture) {
+		t.Fatalf("the image changed on the way: %+v", attachment)
+	}
+	if result.ContentText() != "a chart" {
+		t.Fatalf("the text beside the image changed: %q", result.ContentText())
 	}
 }

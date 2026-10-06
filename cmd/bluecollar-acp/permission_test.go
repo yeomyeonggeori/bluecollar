@@ -10,6 +10,7 @@ import (
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
 type questioningLanguageModel struct {
@@ -44,7 +45,7 @@ func gatedCatalog(t *testing.T, calls *[]hostToolCall) mcp.Transport {
 		Name:        "note_write",
 		Description: "write a note",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{"text": map[string]any{"type": "string"}}},
-		Meta:        mcp.Meta{"bluecollar/sideEffectClass": "state_change", "bluecollar/requiresApproval": true},
+		Meta:        mcp.Meta{toolcontract.MetaKeySideEffectClass: "state_change", toolcontract.MetaKeyRequiresApproval: true},
 	}, func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		*calls = append(*calls, hostToolCall{toolName: "note_write"})
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "note written"}}}, nil
