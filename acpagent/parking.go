@@ -1,0 +1,33 @@
+package acpagent
+
+import (
+	"context"
+	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+)
+
+type runParking struct {
+	taskRuns *taskstate.TaskRunService
+}
+
+func (parking *runParking) parkOnHostPause(ctx context.Context, toolName string, toolResult toolcontract.ToolResult) {
+	status, reason, isPause := hostPauseOf(toolName, toolResult)
+	taskRunID := strings.TrimSpace(toolcontract.TaskRunIDFromContext(ctx))
+	if parking.taskRuns == nil || !isPause || taskRunID == "" {
+		return
+	}
+	parking.taskRuns.PauseTaskRun(taskRunID, status, reason)
+}
+
+func hostPauseOf(toolName string, toolResult toolcontract.ToolResult) (agentcontract.TaskStatus, string, bool) {
+	if toolResult.Failure != nil && toolResult.Failure.RequiresApproval {
+		return agentcontract.TaskStatusWaitingApproval, toolResult.Failure.UserSafeSummary, true
+	}
+	if toolName == toolcontract.AskInputToolName && !toolResult.Failed() {
+		return agentcontract.TaskStatusWaitingUserInput, toolResult.ContentText(), true
+	}
+	return "", "", false
+}

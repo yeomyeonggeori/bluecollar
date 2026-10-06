@@ -12,6 +12,8 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -268,5 +270,138 @@ func TestAnImageAToolReturnsReachesTheModelAsAnImageAttachment(t *testing.T) {
 	}
 	if result.ContentText() != "a chart" {
 		t.Fatalf("the text beside the image changed: %q", result.ContentText())
+	}
+}
+
+func TestAToolResultTheHostDescribedArrivesWithItsEffectsAndFailure(t *testing.T) {
+	published := toolcontract.ToolResult{
+		Output:  toolcontract.ToolOutput{Content: "created task", Data: json.RawMessage(`{"taskID":"task-1"}`)},
+		Effects: []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "task-1"}},
+	}
+	descriptor := toolcontract.ToolDescriptor{Name: "task_add", ResultContract: &toolcontract.ToolResultContract{
+		Schema:  json.RawMessage(`{"type":"object"}`),
+		Effects: []toolcontract.ResourceEffectContract{{ObjectType: "task", Effect: "created", ResultField: "taskID", EffectIdentity: "id"}},
+	}}
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: "task_add", InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "created task"}}, Meta: toolcontract.ResultMeta(published)}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	result, errorValue := opened.toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "task_add", Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || len(result.Effects) != 1 || result.Effects[0].ID != "task-1" {
+		t.Fatalf("the completion gate reads effects, and they were lost in transit: %+v, %v", result, errorValue)
+	}
+}
+
+func TestAHiddenToolIsRegisteredButNotOfferedToTheModel(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	for _, descriptor := range []toolcontract.ToolDescriptor{
+		{Name: "task_add", Visibility: toolcontract.ToolVisibilityModel},
+		{Name: "ask_input", Visibility: toolcontract.ToolVisibilityInternal},
+	} {
+		server.AddTool(&mcp.Tool{Name: descriptor.Name, InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+			func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ok"}}}, nil
+			})
+	}
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	if !reflect.DeepEqual(opened.toolNames, []string{"task_add"}) {
+		t.Fatalf("a tool the host keeps hidden is the loop's to call, not the model's, got %v", opened.toolNames)
+	}
+	result, errorValue := opened.toolSet.AllowingInternalTool("ask_input").Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "ask_input", Input: json.RawMessage(`{}`)})
+	if errorValue != nil || result.Failed() {
+		t.Fatalf("the loop has to reach the hidden tool it calls on the model's behalf: %+v, %v", result, errorValue)
+	}
+}
+
+func openHostedTool(t *testing.T, descriptor toolcontract.ToolDescriptor, published toolcontract.ToolResult) *catalog {
+	t.Helper()
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	server.AddTool(&mcp.Tool{Name: descriptor.Name, InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{IsError: published.Failed(), Content: []mcp.Content{&mcp.TextContent{Text: published.ContentText()}}, Meta: toolcontract.ResultMeta(published)}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	t.Cleanup(opened.Close)
+	return opened
+}
+
+func TestAResultTheHostAlreadyCheckedIsNotCheckedAgainstTheSchemaItDescribes(t *testing.T) {
+	descriptor := toolcontract.ToolDescriptor{Name: "host_update", ResultContract: &toolcontract.ToolResultContract{
+		Schema: json.RawMessage(`{"type":"object","properties":{"status":{"type":"string"}},"additionalProperties":false}`),
+	}}
+	deferred := toolcontract.ToolSuccessData("scheduled for tonight", json.RawMessage(`{"scheduleID":"schedule-1"}`))
+
+	result, errorValue := openHostedTool(t, descriptor, deferred).toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: "host_update", Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || result.Failed() {
+		t.Fatalf("the host answered for the call, got %+v, %v", result, errorValue)
+	}
+}
+
+func TestACallTheHostHeldForApprovalParksTheRunTheAgentHolds(t *testing.T) {
+	held := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.InteractionRequired, "approval", "waiting for the requester")
+	held.Failure.RequiresApproval = true
+	opened := openHostedTool(t, toolcontract.ToolDescriptor{Name: "message_send", ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}, held)
+	taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	taskRun := taskRuns.CreateTaskRunWithOrigin("person-1", taskstate.TaskRunOrigin{}, "send it")
+	taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "default")
+	opened.parking.taskRuns = taskRuns
+
+	opened.toolSet.Invoke(toolcontract.WithTaskRunID(t.Context(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "message_send", Input: json.RawMessage(`{}`)})
+
+	parked, _ := taskRuns.FindTaskRun(taskRun.TaskRunID)
+	if parked.Status != agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("the loop ends its turn on a run that waits, and cannot see the host's store, got %q", parked.Status)
+	}
+}
+
+func TestACallTheHostRefusedDoesNotParkTheRun(t *testing.T) {
+	refused := toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", "the requester declined")
+	opened := openHostedTool(t, toolcontract.ToolDescriptor{Name: "message_send", ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}, refused)
+	taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	taskRun := taskRuns.CreateTaskRunWithOrigin("person-1", taskstate.TaskRunOrigin{}, "send it")
+	taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "default")
+	opened.parking.taskRuns = taskRuns
+
+	opened.toolSet.Invoke(toolcontract.WithTaskRunID(t.Context(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: "message_send", Input: json.RawMessage(`{}`)})
+
+	notParked, _ := taskRuns.FindTaskRun(taskRun.TaskRunID)
+	if notParked.Status == agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("a refusal is an answer, not a wait, got %q", notParked.Status)
+	}
+}
+
+func TestAQuestionTheHostAskedParksTheRunTheAgentHoldsForTheAnswer(t *testing.T) {
+	asked := toolcontract.ToolSuccess("which room?")
+	opened := openHostedTool(t, toolcontract.ToolDescriptor{Name: toolcontract.AskInputToolName, ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}, asked)
+	taskRuns := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	taskRun := taskRuns.CreateTaskRunWithOrigin("person-1", taskstate.TaskRunOrigin{}, "book a room")
+	taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "default")
+	opened.parking.taskRuns = taskRuns
+
+	opened.toolSet.Invoke(toolcontract.WithTaskRunID(t.Context(), taskRun.TaskRunID), toolcontract.ToolInvocation{ToolName: toolcontract.AskInputToolName, Input: json.RawMessage(`{}`)})
+
+	parked, _ := taskRuns.FindTaskRun(taskRun.TaskRunID)
+	if parked.Status != agentcontract.TaskStatusWaitingUserInput || parked.FailureReason != "which room?" {
+		t.Fatalf("the loop checks its own store to learn that the question is out, got %q %q", parked.Status, parked.FailureReason)
 	}
 }

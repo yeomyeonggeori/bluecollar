@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -464,4 +465,58 @@ func TestASkillRetrieverTheHostGivesDecidesWhichSkillIsOffered(t *testing.T) {
 	if containsSubstring(languageModel.actionPrompts, "minutes marker") {
 		t.Fatal("a skill the host's retriever did not pick must not be offered")
 	}
+}
+
+func TestATurnRequestTheHostHandsOverReachesTheLoopWithoutBeingRoutedAgain(t *testing.T) {
+	hostCalls := []hostToolCall{}
+	languageModel := &scriptedLanguageModel{level: "medium", contents: []string{
+		`{"action":"reply","final":true,"message":"봤습니다","goalSatisfied":true}`,
+	}}
+	decision := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, TaskShape: agentcontract.TaskShapeImmediateReply, TaskLevel: agentcontract.TaskLevelXLow, ResponseLanguage: "ko", Reason: "host routed"}
+	handedOver := agentcontract.AgentTurnRequest{
+		PrecomputedTurnDecision: &decision,
+		InputParts:              []agentcontract.AgentPart{{Type: agentcontract.AgentPartTypeFile, File: &agentcontract.AgentFilePart{Filename: "meeting-notes.csv", Path: "/workspace/inbox/meeting-notes.csv"}}},
+		VisibleContext: agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{
+			{Filename: "meeting-notes.csv", URL: "https://files.example.com/meeting-notes.csv", IsAvailable: true},
+		}},
+	}
+	routing := &routingProbeLanguageModel{scriptedLanguageModel: languageModel}
+	options := testOptions(routing)
+	options.LanguageModels.XLow = routing
+
+	host := openPipedHost(t, options, publishedCatalogTransport(t, &hostCalls), &hostClient{})
+	if _, errorValue := host.prompt(t, map[string]any{TurnRequestMetaKey: handedOver}, acp.TextBlock("첨부 요약해줘")); errorValue != nil {
+		t.Fatalf("session/prompt: %v", errorValue)
+	}
+
+	if routing.routingCalls != 0 {
+		t.Fatalf("the host already routed this turn, so the agent routing it again is a second opinion that can disagree, got %d routing calls", routing.routingCalls)
+	}
+	if !strings.Contains(strings.Join(routing.partTexts, "\n"), "/workspace/inbox/meeting-notes.csv") {
+		t.Fatalf("the attached file's path has to reach the model, got %v", routing.partTexts)
+	}
+	if len(languageModel.actionPrompts) == 0 {
+		t.Fatal("the loop never asked the model")
+	}
+	if !strings.Contains(languageModel.actionPrompts[0], "https://files.example.com/meeting-notes.csv") {
+		t.Fatalf("the context the host sees has to reach the model, got %v", languageModel.actionPrompts)
+	}
+}
+
+type routingProbeLanguageModel struct {
+	*scriptedLanguageModel
+	routingCalls int
+	partTexts    []string
+}
+
+func (languageModel *routingProbeLanguageModel) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	if request.StructuredOutputSchema.Name == "bluecollar_turn_router" {
+		languageModel.routingCalls++
+	}
+	for _, message := range request.Messages {
+		for _, part := range message.Parts {
+			languageModel.partTexts = append(languageModel.partTexts, part.Text)
+		}
+	}
+	return languageModel.scriptedLanguageModel.GenerateStructuredResponse(ctx, request)
 }

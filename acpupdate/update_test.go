@@ -1,6 +1,7 @@
 package acpupdate
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -78,5 +79,27 @@ func TestAnEventThatIsNotAToolCallIsOnlyAThoughtForTheLedger(t *testing.T) {
 	}
 	if update := ForEvent(rawTurnEvent); update.AgentThoughtChunk == nil {
 		t.Fatalf("a checkpoint became %+v, want a thought chunk", update)
+	}
+}
+
+func TestALedgerRecordKeepsTheBodyExactlyAsTheLoopWroteItAcrossTheWire(t *testing.T) {
+	body := `{"unmet":[],"carriedOut":{"expected0":0.1}}`
+	update := ForEvent(taskstate.RawTurnEvent{Name: "completion.change_check", Body: body})
+	sent, errorValue := json.Marshal(update.AgentThoughtChunk.Meta)
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	received := map[string]any{}
+	if errorValue := json.Unmarshal(sent, &received); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	again, _ := json.Marshal(received[agentcontract.LedgerMetaKey])
+	record := agentcontract.LedgerRecord{}
+	if errorValue := json.Unmarshal(again, &record); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if record.EventBody() != body {
+		t.Fatalf("a host that mirrors the ledger gets keys in the order the loop wrote them only from the text, got %q", record.EventBody())
 	}
 }

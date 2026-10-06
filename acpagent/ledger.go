@@ -67,6 +67,14 @@ func sendLedgerEvent(ctx context.Context, sender sessionUpdateSender, sessionID 
 	})
 }
 
+func ledgerObserver(ctx context.Context, sender sessionUpdateSender, sessionID acp.SessionId, rememberTaskRun func(string)) func(taskstate.RawTurnEvent) {
+	deliveryContext := context.WithoutCancel(ctx)
+	return func(rawTurnEvent taskstate.RawTurnEvent) {
+		rememberTaskRun(rawTurnEvent.TaskRunID)
+		sendLedgerEvent(deliveryContext, sender, sessionID, rawTurnEvent)
+	}
+}
+
 func replayLedger(openSession *session, promptMeta map[string]any) bool {
 	records, isPresent := ledgerRecordsOfMeta(promptMeta)
 	if !isPresent || len(records) == 0 {
@@ -75,7 +83,7 @@ func replayLedger(openSession *session, promptMeta map[string]any) bool {
 	taskRun := openSession.openTaskRun(promptMeta, "")
 	openSession.taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "")
 	for _, record := range records {
-		openSession.taskRuns.AppendTaskEvent(taskRun.TaskRunID, record.Name, string(record.Body))
+		openSession.taskRuns.AppendTaskEvent(taskRun.TaskRunID, record.Name, record.EventBody())
 	}
 	openSession.rememberTaskRun(taskRun.TaskRunID)
 	return true
