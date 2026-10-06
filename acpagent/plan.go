@@ -135,7 +135,7 @@ func highestRecordedTaskLevel(taskEvents []agentcontract.TaskEvent) agentcontrac
 }
 
 func NewToolSelector(decisionModel model.DecisionModel) agentcontract.ToolSelector {
-	return intake.NewDecisionPlanner(decisionModel, nil, nil)
+	return intake.NewDecisionPlanner(decisionModel, nil)
 }
 
 func (openSession *session) recordPlanningCalls(taskRunID string, callRecords []agentcontract.LLMCallRecord) {

@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 )
 
@@ -158,138 +157,6 @@ func TestRequiredAttachmentCannotBecomeAnImmediateReply(t *testing.T) {
 	decision := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{})
 	if decision.Classification != agentcontract.IntakeClassificationBoundedTask || decision.TaskShape == agentcontract.TaskShapeImmediateReply {
 		t.Fatalf("a required attachment became an immediate reply: %+v", decision)
-	}
-}
-
-func TestAnApprovalOnAPendingConfirmationContinuesTheTask(t *testing.T) {
-	request := agentcontract.AgentRequest{PendingConfirmation: agentcontract.PendingConfirmationContext{TaskRunID: "task-run-1", Question: "삭제할까요?"}}
-	approve := agentcontract.ApprovalSignalApprove
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationBoundedTask)
-	decidedFields.Approval = &approve
-
-	decision := normalizedTurnDecision(t, decidedFields, request)
-
-	if decision.Route != agentcontract.TurnRouteContinueTask {
-		t.Fatalf("expected an approval to continue the task, got %q", decision.Route)
-	}
-}
-
-func TestAnApprovedConfirmationIsNeverReopenedByItsOwnTurn(t *testing.T) {
-	answeredTurns := []struct {
-		name           string
-		route          agentcontract.TurnRoute
-		classification agentcontract.IntakeClassification
-		taskShape      agentcontract.TaskShape
-	}{
-		{"a clarify route on an approved confirmation", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TaskShapeApprovalGatedTask},
-		{"a continuing route the classification would reopen", agentcontract.TurnRouteContinueTask, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TaskShapeApprovalGatedTask},
-	}
-
-	for _, answeredTurn := range answeredTurns {
-		request := agentcontract.AgentRequest{PendingConfirmation: agentcontract.PendingConfirmationContext{TaskRunID: "task-run-1", Question: "정정할까요?"}}
-		approve := agentcontract.ApprovalSignalApprove
-		decidedFields := decidedTurnFields(answeredTurn.route, answeredTurn.classification)
-		decidedFields.TaskShape = answeredTurn.taskShape
-		decidedFields.Approval = &approve
-
-		decision := normalizedTurnDecision(t, decidedFields, request)
-
-		if decision.Route != agentcontract.TurnRouteContinueTask {
-			t.Fatalf("%s: expected the answered confirmation to continue the task, got %q", answeredTurn.name, decision.Route)
-		}
-		if decision.Classification != agentcontract.IntakeClassificationBoundedTask {
-			t.Fatalf("%s: expected the answered confirmation to be bounded work, got %q", answeredTurn.name, decision.Classification)
-		}
-		if decision.TaskShape != agentcontract.TaskShapeMaintenanceTask {
-			t.Fatalf("%s: expected the supplied input to leave the approval gate, got %q", answeredTurn.name, decision.TaskShape)
-		}
-		if decision.Approval == nil || *decision.Approval != agentcontract.ApprovalSignalApprove {
-			t.Fatalf("%s: expected the approval to survive, got %+v", answeredTurn.name, decision.Approval)
-		}
-		wordsShape, needsChatCall := turnWordsShapeFor(decision)
-		if !needsChatCall || wordsShape.systemPrompt != expectedResultsSystemPrompt {
-			t.Fatalf("%s: expected the words call to write the acceptance contract, got %v %q", answeredTurn.name, needsChatCall, wordsShape.systemPrompt)
-		}
-	}
-}
-
-func TestASelectedChoiceIsNeverReopenedByItsOwnTurn(t *testing.T) {
-	request := agentcontract.AgentRequest{PendingChoice: agentcontract.PendingChoiceContext{
-		TaskRunID: "task-run-1",
-		Question:  "어떤 형식으로 드릴까요?",
-		Options:   []agentcontract.ChoiceReplyOption{{Key: "table", Label: "표"}, {Key: "graph", Label: "그래프"}},
-	}}
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation)
-	decidedFields.Choices = []string{"1"}
-
-	decision := normalizedTurnDecision(t, decidedFields, request)
-
-	if len(decision.Choices) != 1 || decision.Choices[0] != "table" {
-		t.Fatalf("expected the selected option to survive, got %v", decision.Choices)
-	}
-	if decision.Route != agentcontract.TurnRouteContinueTask {
-		t.Fatalf("expected the answered choice to continue the task, got %q", decision.Route)
-	}
-	if decision.Classification != agentcontract.IntakeClassificationBoundedTask {
-		t.Fatalf("expected the answered choice to be bounded work, got %q", decision.Classification)
-	}
-}
-
-func TestARejectedApprovalLeavesTheRouteToTheDecision(t *testing.T) {
-	request := agentcontract.AgentRequest{PendingConfirmation: agentcontract.PendingConfirmationContext{TaskRunID: "task-run-1", Question: "정정할까요?"}}
-	reject := agentcontract.ApprovalSignalReject
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation)
-	decidedFields.Approval = &reject
-
-	decision := normalizedTurnDecision(t, decidedFields, request)
-
-	if decision.Route != agentcontract.TurnRouteClarify {
-		t.Fatalf("expected a rejected approval to leave the route alone, got %q", decision.Route)
-	}
-	if decision.Classification != agentcontract.IntakeClassificationNeedsConfirmation {
-		t.Fatalf("expected a rejected approval to leave the classification alone, got %q", decision.Classification)
-	}
-}
-
-func TestAnApprovalSignalWithoutAPendingConfirmationIsDropped(t *testing.T) {
-	approve := agentcontract.ApprovalSignalApprove
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
-	decidedFields.Approval = &approve
-
-	decision := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{})
-
-	if decision.Approval != nil {
-		t.Fatalf("expected no approval signal without a pending confirmation, got %q", *decision.Approval)
-	}
-}
-
-func TestAChoiceSelectedByItsNumberBecomesItsKey(t *testing.T) {
-	request := agentcontract.AgentRequest{PendingChoice: agentcontract.PendingChoiceContext{
-		TaskRunID: "task-run-1",
-		Options:   []agentcontract.ChoiceReplyOption{{Key: "table", Label: "표"}, {Key: "graph", Label: "그래프"}},
-	}}
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
-	decidedFields.Choices = []string{"2"}
-
-	decision := normalizedTurnDecision(t, decidedFields, request)
-
-	if len(decision.Choices) != 1 || decision.Choices[0] != "graph" {
-		t.Fatalf("expected the option number to become its key, got %v", decision.Choices)
-	}
-}
-
-func TestASingleSelectRefusesTwoSelections(t *testing.T) {
-	request := agentcontract.AgentRequest{PendingChoice: agentcontract.PendingChoiceContext{
-		TaskRunID: "task-run-1",
-		Options:   []agentcontract.ChoiceReplyOption{{Key: "table"}, {Key: "graph"}},
-	}}
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
-	decidedFields.Choices = []string{"table", "graph"}
-
-	decision := normalizedTurnDecision(t, decidedFields, request)
-
-	if len(decision.Choices) != 0 {
-		t.Fatalf("expected a single-select to refuse two selections, got %v", decision.Choices)
 	}
 }
 
@@ -523,27 +390,6 @@ func containsToolName(toolNames []string, toolName string) bool {
 		}
 	}
 	return false
-}
-
-func TestAMessageAimedAtAPersonIsNeverAnsweredInWords(t *testing.T) {
-	planner := NewDecisionPlanner(intaketest.NewDecisionModel(intaketest.Outcome{
-		Addressing: agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetHuman, ShouldRespond: true},
-	}), nil, func() float64 { return 1 })
-
-	decision := decideOnce(t, planner, addressedDecisionRequest("샘플님 이거 확인 부탁해요"))
-
-	if decision.Addressing.ShouldRespond {
-		t.Fatal("expected a message aimed at a person to go unanswered")
-	}
-}
-
-func TestAnEmojiOutsideTheAcceptedSetIsNoReaction(t *testing.T) {
-	if normalizeAddressingReactionEmoji("shrug") != "" {
-		t.Fatal("expected an emoji the runtime does not accept to be dropped")
-	}
-	if normalizeAddressingReactionEmoji("  EYES  ") != "eyes" {
-		t.Fatalf("expected an accepted emoji to be normalized, got %q", normalizeAddressingReactionEmoji("  EYES  "))
-	}
 }
 
 func TestAQuickReplyWhoseDeliverableIsAFileBecomesATask(t *testing.T) {

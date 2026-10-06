@@ -40,15 +40,12 @@ type AgentRequest struct {
 	PriorTask                  PriorTaskContext
 	ScheduledRun               ScheduledRunContext
 	ActiveTask                 ActiveTaskContext
-	PendingConfirmation        PendingConfirmationContext
-	PendingChoice              PendingChoiceContext
 	PendingInput               PendingInputContext
 	TaskShape                  TaskShape
 	AllowGiveUp                bool
 	AllowGiveUpReason          string
 	PrecomputedTurnDecision    *TurnDecision
 	IsPrecomputedDecisionExact bool
-	DecidedTurnFields          *TurnDecision
 	SkipSkillSelection         bool
 	TaskLevel                  TaskLevel
 	TurnStartedAt              time.Time
@@ -65,23 +62,6 @@ type ActiveTaskContext struct {
 	Prompt    string
 	Status    string
 	Summary   string
-}
-
-type PendingConfirmationContext struct {
-	TaskRunID      string
-	Prompt         string
-	Question       string
-	AskedAt        time.Time
-	ExchangesSince int
-}
-
-type PendingChoiceContext struct {
-	TaskRunID      string
-	Question       string
-	SelectionMode  string
-	Options        []ChoiceReplyOption
-	AskedAt        time.Time
-	ExchangesSince int
 }
 
 type PendingInputContext struct {
@@ -189,7 +169,6 @@ type AgentTurnRequest struct {
 type AgentTurnResult struct {
 	TaskRun                TaskRun
 	TurnRoute              TurnRoute
-	ReactionEmojiName      string
 	FinishMessage          string
 	UserNotice             string
 	FailureNotice          FailureNotice

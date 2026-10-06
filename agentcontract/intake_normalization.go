@@ -14,20 +14,6 @@ func NormalizeIntakeOptions(options IntakeOptions) IntakeOptions {
 	return options
 }
 
-func NormalizeReactionEmojiName(emojiName string) string {
-	normalizedEmojiName := strings.Trim(strings.TrimSpace(emojiName), ":")
-	if normalizedEmojiName == "" {
-		return DefaultReactionEmojiName
-	}
-	normalizedEmojiName = strings.ToLower(normalizedEmojiName)
-	for _, allowedEmojiName := range ReactionEmojiNames {
-		if normalizedEmojiName == allowedEmojiName {
-			return normalizedEmojiName
-		}
-	}
-	return DefaultReactionEmojiName
-}
-
 var RequestedOutputFormatNames = []string{"html", "pptx", "pdf", "txt", "docx", "xlsx", "csv", "json"}
 
 func IsRequestedOutputFormatName(format string) bool {

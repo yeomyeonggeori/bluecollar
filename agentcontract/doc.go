@@ -6,10 +6,9 @@
 //		RunTurn(context.Context, AgentTurnRequest) (AgentTurnResult, error)
 //	}
 //
-// It used to be nine. Routing, addressing, follow-up classification and one-shot
-// replies were verbs on the port until it became clear they are host policy
-// rather than harness behaviour, so a harness that implements only RunTurn is
-// complete.
+// It used to be nine. Routing and one-shot replies were verbs on the port until
+// it became clear they are host policy rather than harness behaviour, so a
+// harness that implements only RunTurn is complete.
 //
 // AgentTurnRequest is how a host tells the harness everything the harness
 // refuses to assume: who is asking, what identity the agent answers to, where

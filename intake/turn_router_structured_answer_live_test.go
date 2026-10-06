@@ -109,10 +109,9 @@ func routeOneInput(t *testing.T, apiKey string, arm string, exchanges *exchangeJ
 	provider.UseHTTPClient(&http.Client{Transport: transport, Timeout: 2 * time.Minute})
 	decisionModel := &intaketest.LanguageModelDecisionModel{
 		LanguageModel: provider,
-		Addressing:    agentcontract.AddressingDecision{Target: agentcontract.AddressingTargetBot, ShouldRespond: true},
 		ModelName:     routerEvaluationModel,
 	}
-	turnRouter := NewTurnRouter(provider, NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }), agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
+	turnRouter := NewTurnRouter(provider, NewDecisionPlanner(decisionModel, nil), agentcontract.IntakeOptions{IsEnabled: true, DefaultTaskLevel: agentcontract.TaskLevelLow})
 	startedAt := time.Now()
 	decision, planError := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{
 		Prompt:           input,

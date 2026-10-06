@@ -229,7 +229,7 @@ func TestATurnSelectsTheLikelyToolsRatherThanTheConfidentOnes(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.TurnDecision.InitialToolNames = nil
 	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.04}
-	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil)
 
 	decision := decideOnce(t, planner, request)
 
@@ -246,7 +246,7 @@ func TestTheLedgerCarriesTheProbabilitiesTheSelectionWasMadeFrom(t *testing.T) {
 	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
 	callLedger := &agentcontract.IntakeCallLedger{}
 
-	if _, errorValue := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil, func() float64 { return 1 }).Decide(context.Background(), request, callLedger); errorValue != nil {
+	if _, errorValue := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil).Decide(context.Background(), request, callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
 	}
 
@@ -337,7 +337,7 @@ func TestASplitDecisionMergesTheProbabilitiesOfEveryPart(t *testing.T) {
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88, "task_update": 0.77}
 	decisionModel := intaketest.NewDecisionModel(outcome)
 
-	decisions, errorValue := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }).Decide(context.Background(), request, nil)
+	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, nil)
 
 	if errorValue != nil {
 		t.Fatalf("expected the split decision to answer: %v", errorValue)
@@ -358,7 +358,7 @@ func TestAFailedSelectionStartsTheTaskWithNoLikelyToolsAndSaysSoOnTheLedger(t *t
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88}
 	callLedger := &agentcontract.IntakeCallLedger{}
 
-	decisions, errorValue := NewDecisionPlanner(&partFailingDecisionModel{outcome: outcome}, nil, func() float64 { return 1 }).Decide(context.Background(), request, callLedger)
+	decisions, errorValue := NewDecisionPlanner(&partFailingDecisionModel{outcome: outcome}, nil).Decide(context.Background(), request, callLedger)
 
 	if errorValue != nil {
 		t.Fatalf("expected a failed selection to leave the task startable: %v", errorValue)
@@ -454,7 +454,7 @@ func TestOnlyAMessageRoutedToWorkCostsAToolSelectionCall(t *testing.T) {
 			outcome.TurnDecision.InitialToolNames = nil
 			decisionModel := intaketest.NewDecisionModel(outcome)
 
-			if _, errorValue := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 }).Decide(context.Background(), request, nil); errorValue != nil {
+			if _, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, nil); errorValue != nil {
 				t.Fatalf("expected the decision to answer: %v", errorValue)
 			}
 
@@ -469,7 +469,7 @@ func TestASelectionForOneNeedLandsInTheCallLedger(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
 	callLedger := &agentcontract.IntakeCallLedger{}
-	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil, func() float64 { return 1 })
+	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil)
 
 	selectedTools, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
 		Need:       "이번 주 회의 일정을 읽는다",

@@ -145,7 +145,7 @@ request := agentcontract.AgentTurnRequest{
 	Prompt:            "What time is it in Paris right now?",
 	ToolSet:           tools,
 }
-planner := intake.NewDecisionPlanner(decisions.ConfiguredDecisionModel(os.Stderr), nil, nil)
+planner := intake.NewDecisionPlanner(decisions.ConfiguredDecisionModel(os.Stderr), nil)
 router := intake.NewTurnRouter(openaicompatible.NewProvider("http://127.0.0.1:11434/v1", "", "qwen3.5:4b"), planner, agentcontract.IntakeOptions{IsEnabled: true})
 decision, errorValue := router.Plan(ctx, agentcontract.AgentRequest{
 	RequesterPersonID: request.RequesterPersonID,
@@ -191,7 +191,7 @@ type Harness interface {
 }
 ```
 
-The port used to be nine methods. Routing, addressing, follow-up classification and one-shot replies moved off it once it was clear they are host policy: a host that answers its own messenger decides what an inbound message means before anything runs a turn. bluecollar still ships those pieces in `intake`, and a host is free to use them or bring its own. A harness that implements only `RunTurn` is complete.
+The port used to be nine methods. Routing and one-shot replies came off it, and the host decides whether a message is for the agent at all: who it is addressed to, whether to answer, react or ignore it, and what to do with a task already running. What remains for the harness is planning the work a turn starts, which `intake` does from the facts the host hands over. A harness that implements only `RunTurn` is complete.
 
 ### Who owns what
 
@@ -200,7 +200,7 @@ The port used to be nine methods. Routing, addressing, follow-up classification 
 | host | connectors and messengers, tool execution and its isolation boundary, the task store, approvals, the agent's identity, the workspace layout, company context |
 | `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events, approval holds |
 | `loop` | the turn: action schema, plan, tool exposure, completion gate and change check, recovery, budgets, context building and compaction |
-| `intake` | what a message means: route, addressing, follow-up, level, likely tools |
+| `intake` | what a turn asks for: route, level, task shape, expected tool count, likely tools |
 
 A harness that executes its own tools defeats the host's isolation boundary and is not a valid implementation of this contract. With no identity supplied the agent calls itself "the assistant" and knows nothing about where it runs.
 
@@ -226,7 +226,7 @@ A host can project each requester to a POSIX user and run every tool call as tha
 
 ### ACP
 
-`acpagent` runs the loop as an [Agent Client Protocol](https://agentclientprotocol.com) agent. It owns no tools: the tool catalog arrives on the MCP servers the host names when it opens a session, and a tool's `toolcontract/descriptor` metadata becomes its descriptor whole, hidden tools such as `ask_input` included (the approval facts also travel alone as `toolcontract/requiresApproval`, `toolcontract/sideEffectClass`, `toolcontract/approvalScope`, `toolcontract/approvalScopeSummary` and `toolcontract/approvalInputFields` for hosts that publish only those; the names live in `toolcontract/mcp_meta.go`), and a call's result arrives whole, effects and failure among it, from `toolcontract/result`, and an image a tool returns reaches the model as an image that reloads by its `toolcontract/attachmentDevicePath` after a replay. Ledger events go out on `session/update`, tool calls as the standard variants and every event's name, body and exact text in `_meta`. A host that kept those records hands them back in the prompt's `_meta`, and the turn resumes on the work they describe. The prompt's response carries the loop's whole turn result, the reply and the verdict among it, in `_meta` under `bluecollar.dev/turn-result`, because the reply is not a message the client renders. A host hands over the turn request it built, its routing decision and the context it shows people among it, under `bluecollar.dev/turn-request` in the prompt's `_meta`; a turn handed a routing decision is not routed again. A host steers a running turn with the `_bluecollar.dev/steer` extension notification, and names the run it wants with the `bluecollar.dev/task-run` key in the prompt's `_meta`.
+`acpagent` runs the loop as an [Agent Client Protocol](https://agentclientprotocol.com) agent. It owns no tools: the tool catalog arrives on the MCP servers the host names when it opens a session, and a tool's `toolcontract/descriptor` metadata becomes its descriptor whole, hidden tools such as `ask_input` included (the approval facts also travel alone as `toolcontract/requiresApproval`, `toolcontract/sideEffectClass`, `toolcontract/approvalScope`, `toolcontract/approvalScopeSummary` and `toolcontract/approvalInputFields` for hosts that publish only those; the names live in `toolcontract/mcp_meta.go`), and a call's result arrives whole, effects and failure among it, from `toolcontract/result`, and an image a tool returns reaches the model as an image that reloads by its `toolcontract/attachmentDevicePath` after a replay. Ledger events go out on `session/update`, tool calls as the standard variants and every event's name, body and exact text in `_meta`. A host that kept those records hands them back in the prompt's `_meta`, and the turn resumes on the work they describe. The prompt's response carries the loop's whole turn result, the reply and the verdict among it, in `_meta` under `bluecollar.dev/turn-result`, because the reply is not a message the client renders. A host hands over the facts of the turn it built, the active goal, the prior task, a scheduled run and the context it shows people among them, under `bluecollar.dev/turn-request` in the prompt's `_meta`. The agent plans the turn from them: a run the host resumes (`IsRuntimeRestartResume`) and a reply to the question the run asked (`PendingInput`) continue without a planning call, a `TaskLevel` the host pins replaces the planner's, and everything else goes through the turn router. A turn handed a `PrecomputedTurnDecision` is not planned again. A host steers a running turn with the `_bluecollar.dev/steer` extension notification, and names the run it wants with the `bluecollar.dev/task-run` key in the prompt's `_meta`.
 
 # Concepts
 
@@ -234,11 +234,9 @@ These pages follow one request through the loop. The names match the code, so ea
 
 ## Intake
 
-Decides what an inbound message means before a turn runs.
+Plans a turn from the facts the host hands over before it runs.
 
-`intake.DecisionPlanner` asks every closed question about a message in one call to a decision model. Each question is a `choice` among named options or a `noul`, a probability that a statement is true. The questions cover the route, the difficulty level, the expected number of tools, whether independent work is present, whether an external send is requested, the task shape, the deliverable kind, the language the message is mainly written in (asked only when the host names none), requested output formats and, when relevant, addressing, the reply to a pending choice or confirmation, and whether the message continues a running task. The chat model is asked only for words.
-
-A host that batches several messages into one decision asks `DecisionPlanner.FitsBurstBudget` whether the batched request stays within the planner's own byte budget, so the ceiling is written once, next to the request layout it measures.
+`intake.DecisionPlanner` asks every closed question about a message in one call to a decision model. Each question is a `choice` among named options or a `noul`, a probability that a statement is true. The questions cover the route, the difficulty level, the expected number of tools, whether independent work is present, whether an external send is requested, the task shape, the deliverable kind, the language the message is mainly written in (asked only when the host names none), requested output formats and, when a prior task is in the facts, how the message relates to it. The chat model is asked only for words. Whether a message is addressed to the agent, deserves a reaction, or belongs to a task that is already running belongs to the host and is not asked here.
 
 `intake.TurnRouter` turns those answers into a `TurnDecision`. The route is one of:
 
@@ -250,7 +248,7 @@ A host that batches several messages into one decision asks `DecisionPlanner.Fit
 | `answer_question` | answer in words now |
 | `answer_meta` | answer a question about the agent itself |
 | `clarify` | ask the one thing only the sender can resolve |
-| `consume` | acknowledge with an emoji and say nothing |
+| `consume` | say nothing |
 | `give_up` | the request is impossible or plainly improper on its face |
 
 Intake chooses the level from `low`, `medium` and `high`. A request for slides or another visual deliverable is raised to `xhigh`. When the route starts, continues or revises work, one chat call writes the expected results: what should exist when the work is done and which tool result, file or link proves it. The other routes that need words (`clarify`, `answer_question`, `answer_meta`, `give_up`) get them from the same kind of call.
@@ -534,7 +532,7 @@ CI runs `gofmt`, `go vet`, `go build` and `go test`, then the same inside the AC
 
 # Q&A
 
-**Why does the host have to route?** Deciding what a message means depends on the messenger, the running tasks and who is asking, and those belong to the host. `intake` is there for a host that wants bluecollar's answer to that question.
+**Why does the host not route?** It decides whether a message reaches the agent, because that depends on the messenger, the running tasks and who is asking. Once it does, planning the work is the harness's: `acpagent` plans a turn from the facts it is handed, and `intake` is there for a host that runs the loop in process.
 
 **Why a change check after a deterministic gate?** The gate can check that a required call succeeded. It cannot read whether the calls did what was asked. The check compares the request's own words against the recorded changes, and it never reads the reply, so a confident reply cannot pass it.
 

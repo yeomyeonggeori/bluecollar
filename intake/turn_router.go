@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-	"strconv"
 	"strings"
 	"time"
 
@@ -24,7 +23,6 @@ type TurnRouter struct {
 const turnWordsSystemPrompt = "You write the words for one turn of a workplace assistant. Every decision about this turn is already made and handed to you under \"Decided for this turn\"; do not re-decide it, do not argue with it, and do not mention it. Fill only the fields the schema asks for." +
 	"\n\nanswer_question and answer_meta: write the answer itself in userFacingReply, like a concise coworker. Answer jokes and casual addressed remarks in kind rather than ignoring them." +
 	"\n\ngive_up: say in userFacingReply that this cannot be done, and why, without blaming the requester." +
-	"\n\nbusyRoute steer: write busyInstruction as the correction to hand the task already running, in the requester's own terms." +
 	"\n\nreason is one short line for the log and is never shown to anybody. Leave every field a route does not need empty." +
 	"\n\nWhat this agent said earlier is its own, not the requester's. A subject it named, a title it guessed at, or a thing it reported failing to find is never what the latest message is about unless the requester's own words say so."
 
@@ -82,7 +80,7 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 		ctx = agentcontract.WithLLMCallObserver(ctx, callLedger.Observe)
 	}
 	turnWords, errorValue := observedRouter.writeTurnWords(ctx, request, decidedFields, wordsShape)
-	if decidedFields.BusyRoute != agentcontract.BusyRouteSteer && isMalformedAnswer(ctx, errorValue) {
+	if isMalformedAnswer(ctx, errorValue) {
 		return handToAgentLoop(decidedFields, errorValue), nil
 	}
 	if errorValue != nil {
@@ -119,47 +117,7 @@ func handToAgentLoop(decidedFields agentcontract.TurnDecision, malformedAnswer e
 }
 
 func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
-	if request.DecidedTurnFields != nil {
-		return *request.DecidedTurnFields, nil
-	}
-	if awaitsTypedReply(request) {
-		return pendingAnswerFields(PendingAnswer{IsAnswered: true}), nil
-	}
-	decisionRequest := TurnRequestDecisionRequest(request)
-	if !hasPendingAnswerQuestion(decisionRequest) {
-		return turnRouter.decideGeneralTurnFields(ctx, decisionRequest, callLedger)
-	}
-	pendingAnswer, errorValue := turnRouter.decisionPlanner.DecidePendingAnswer(ctx, decisionRequest, callLedger)
-	if errorValue != nil {
-		return agentcontract.TurnDecision{}, fmt.Errorf("turn router: %w", errorValue)
-	}
-	if pendingAnswer.IsAnswered {
-		return pendingAnswerFields(pendingAnswer), nil
-	}
-	return turnRouter.decideGeneralTurnFields(ctx, TurnRequestDecisionRequest(withoutPendingInteraction(request)), callLedger)
-}
-
-func awaitsTypedReply(request agentcontract.AgentRequest) bool {
-	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" || len(decisionChoiceKeys(pendingChoiceContext(request))) > 0 {
-		return false
-	}
-	return strings.TrimSpace(request.PendingChoice.TaskRunID) != "" || strings.TrimSpace(request.PendingInput.TaskRunID) != ""
-}
-
-func withoutPendingInteraction(request agentcontract.AgentRequest) agentcontract.AgentRequest {
-	request.PendingConfirmation = agentcontract.PendingConfirmationContext{}
-	request.PendingChoice = agentcontract.PendingChoiceContext{}
-	request.PendingInput = agentcontract.PendingInputContext{}
-	return request
-}
-
-func pendingAnswerFields(pendingAnswer PendingAnswer) agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
-		Route:            agentcontract.TurnRouteContinueTask,
-		RawDecisionRoute: agentcontract.TurnRouteContinueTask,
-		Approval:         pendingAnswer.Approval,
-		Choices:          pendingAnswer.Choices,
-	}
+	return turnRouter.decideGeneralTurnFields(ctx, TurnRequestDecisionRequest(request), callLedger)
 }
 
 func (turnRouter TurnRouter) decideGeneralTurnFields(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
@@ -177,7 +135,7 @@ func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontrac
 	return agentcontract.IntakeDecisionRequest{
 		Messages: []agentcontract.IntakeDecisionMessage{{
 			Prompt:       request.Prompt,
-			SenderName:   firstNonEmptyAddressingText(request.RequesterCallingName, request.RequesterName),
+			SenderName:   firstNonEmptyText(request.RequesterCallingName, request.RequesterName),
 			SenderHandle: request.RequesterHandle,
 			SentAt:       request.TurnStartedAt,
 			InputParts:   request.InputParts,
@@ -185,21 +143,18 @@ func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontrac
 
 			IsAttachmentsOnly: strings.TrimSpace(request.Prompt) == "" && len(agentcontract.ImagePartsOf(request.InputParts)) > 0,
 		}},
-		ConversationType:    request.ConversationType,
-		VisibleContext:      request.VisibleContext,
-		AgentIdentity:       request.AgentIdentity,
-		Company:             request.Company,
-		ActiveTask:          request.ActiveTask,
-		PendingConfirmation: request.PendingConfirmation,
-		PendingChoice:       pendingChoiceContext(request),
-		PriorTask:           request.PriorTask,
-		ScheduledRun:        request.ScheduledRun,
-		ActiveGoal:          request.ActiveGoal,
-		ToolSet:             request.ToolSet,
-		ResponseLanguage:    request.ResponseLanguage,
-		AllowGiveUp:         request.AllowGiveUp,
-		AllowGiveUpReason:   request.AllowGiveUpReason,
-		EnvironmentNow:      request.EnvironmentNow,
+		ConversationType:  request.ConversationType,
+		VisibleContext:    request.VisibleContext,
+		AgentIdentity:     request.AgentIdentity,
+		Company:           request.Company,
+		PriorTask:         request.PriorTask,
+		ScheduledRun:      request.ScheduledRun,
+		ActiveGoal:        request.ActiveGoal,
+		ToolSet:           request.ToolSet,
+		ResponseLanguage:  request.ResponseLanguage,
+		AllowGiveUp:       request.AllowGiveUp,
+		AllowGiveUpReason: request.AllowGiveUpReason,
+		EnvironmentNow:    request.EnvironmentNow,
 	}
 }
 
@@ -210,7 +165,7 @@ type turnWordsShape struct {
 
 func turnWordsShapeFor(decision agentcontract.TurnDecision) (turnWordsShape, bool) {
 	if isClarificationReview(decision) {
-		return turnWordsShape{systemPrompt: clarificationWordsSystemPromptFor(decision), schemaDocument: clarificationTurnWordsSchema()}, true
+		return turnWordsShape{systemPrompt: clarificationWordsSystemPrompt, schemaDocument: clarificationTurnWordsSchema()}, true
 	}
 	if turnRouteNeedsWords(decision) {
 		return turnWordsShape{systemPrompt: turnWordsSystemPrompt, schemaDocument: turnWordsSchema()}, true
@@ -221,21 +176,11 @@ func turnWordsShapeFor(decision agentcontract.TurnDecision) (turnWordsShape, boo
 	return turnWordsShape{}, false
 }
 
-func clarificationWordsSystemPromptFor(decision agentcontract.TurnDecision) string {
-	if decision.BusyRoute != agentcontract.BusyRouteSteer {
-		return clarificationWordsSystemPrompt
-	}
-	return clarificationWordsSystemPrompt + "\n\nThe message also steers the active task. Preserve that correction in busyInstruction using the requester's own terms."
-}
-
 func isClarificationReview(decision agentcontract.TurnDecision) bool {
 	return decision.Route == agentcontract.TurnRouteClarify || agentcontract.NormalizeIntakeClassification(decision.Classification) == agentcontract.IntakeClassificationNeedsConfirmation
 }
 
 func turnRouteNeedsWords(decision agentcontract.TurnDecision) bool {
-	if decision.BusyRoute == agentcontract.BusyRouteSteer {
-		return true
-	}
 	switch decision.Route {
 	case agentcontract.TurnRouteClarify, agentcontract.TurnRouteAnswerQuestion, agentcontract.TurnRouteAnswerMeta, agentcontract.TurnRouteGiveUp:
 		return true
@@ -383,7 +328,7 @@ func turnRouterCorrectionInstruction(correction model.StructuredOutputCorrection
 func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentRequest, decidedFields agentcontract.TurnDecision, systemPrompt string) []model.Message {
 	messages := []model.Message{
 		{Role: "system", Content: systemPrompt},
-		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(firstNonEmptyAddressingText(decidedFields.ResponseLanguage, request.ResponseLanguage))},
+		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(firstNonEmptyText(decidedFields.ResponseLanguage, request.ResponseLanguage))},
 		{Role: "system", Content: turnWordsFactsDescription(decidedFields)},
 	}
 	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
@@ -397,9 +342,6 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	}
 	if scheduledRunDescription := agentcontract.ScheduledRunDescriptionForPrompt(request.ScheduledRun); scheduledRunDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: scheduledRunDescription})
-	}
-	if pendingDescription := turnWordsPendingDescription(request); pendingDescription != "" {
-		messages = append(messages, model.Message{Role: "system", Content: pendingDescription})
 	}
 	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone); temporalContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: temporalContext})
@@ -417,9 +359,6 @@ func turnWordsFactsDescription(decidedFields agentcontract.TurnDecision) string 
 		"- proposed classification: " + string(decidedFields.Classification),
 		"- proposed task shape: " + string(decidedFields.TaskShape),
 		"- proposed level: " + string(decidedFields.TaskLevel),
-	}
-	if decidedFields.BusyRoute != "" {
-		lines = append(lines, "- proposed busy route: "+string(decidedFields.BusyRoute))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -443,29 +382,8 @@ func decidedTurnFactsDescription(decidedFields agentcontract.TurnDecision) strin
 		"- level: " + string(decidedFields.TaskLevel),
 		"- deliverableKind: " + string(decidedFields.DeliverableKind),
 	}
-	if decidedFields.BusyRoute != "" {
-		lines = append(lines, "- busyRoute: "+string(decidedFields.BusyRoute))
-	}
 	if len(decidedFields.InitialToolNames) > 0 {
 		lines = append(lines, "- likely tools: "+strings.Join(decidedFields.InitialToolNames, ", "))
-	}
-	return strings.Join(lines, "\n")
-}
-
-func turnWordsPendingDescription(request agentcontract.AgentRequest) string {
-	lines := []string{}
-	if strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "" {
-		lines = append(lines, "Pending confirmation:", "- Task: "+strings.TrimSpace(request.PendingConfirmation.Prompt), "- Question: "+strings.TrimSpace(request.PendingConfirmation.Question))
-	}
-	if pendingChoice := pendingChoiceContext(request); strings.TrimSpace(pendingChoice.TaskRunID) != "" {
-		optionLines := []string{}
-		for index, option := range pendingChoice.Options {
-			optionLines = append(optionLines, strconv.Itoa(index+1)+". "+strings.TrimSpace(option.Label))
-		}
-		lines = append(lines, "Pending question: "+strings.TrimSpace(pendingChoice.Question), "Options: "+strings.Join(optionLines, "; "))
-	}
-	if strings.TrimSpace(request.ActiveTask.TaskRunID) != "" {
-		lines = append(lines, "Task already running:", "- Original instruction: "+strings.TrimSpace(request.ActiveTask.Prompt), "- Current progress: "+strings.TrimSpace(request.ActiveTask.Summary))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -513,7 +431,6 @@ func turnWordsSchemaWithClarificationDisposition(requiresClarificationDispositio
 		"userFacingReply":       map[string]any{"type": "string", "maxLength": 512},
 		"clarificationQuestion": clarificationQuestionSchema,
 		"clarificationOptions":  clarificationOptionsSchema(),
-		"busyInstruction":       map[string]any{"type": "string", "maxLength": 512},
 		"expectedResults":       expectedResultsSchema(),
 	}
 	if requiresClarificationDisposition {
@@ -525,7 +442,7 @@ func turnWordsSchemaWithClarificationDisposition(requiresClarificationDispositio
 			},
 		}
 	}
-	required := []string{"reason", "userFacingReply", "clarificationQuestion", "clarificationOptions", "busyInstruction", "expectedResults"}
+	required := []string{"reason", "userFacingReply", "clarificationQuestion", "clarificationOptions", "expectedResults"}
 	if requiresClarificationDisposition {
 		required = append(required, "clarificationDisposition")
 	}
@@ -574,21 +491,6 @@ func expectedResultsSchema() map[string]any {
 			"required":             []string{"id", "type", "description", "required", "acceptanceHints"},
 			"additionalProperties": false,
 		},
-	}
-}
-
-func pendingChoiceContext(request agentcontract.AgentRequest) agentcontract.PendingChoiceContext {
-	if strings.TrimSpace(request.PendingChoice.TaskRunID) != "" {
-		return request.PendingChoice
-	}
-	if strings.TrimSpace(request.PendingInput.TaskRunID) == "" || len(request.PendingInput.Options) == 0 {
-		return agentcontract.PendingChoiceContext{}
-	}
-	return agentcontract.PendingChoiceContext{
-		TaskRunID:     request.PendingInput.TaskRunID,
-		Question:      request.PendingInput.Question,
-		SelectionMode: request.PendingInput.SelectionMode,
-		Options:       request.PendingInput.Options,
 	}
 }
 

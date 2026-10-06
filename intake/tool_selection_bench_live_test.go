@@ -270,7 +270,7 @@ func TestToolSelectionPolicyBenchmark(t *testing.T) {
 
 	for _, benchmark := range benchmarkCases {
 		recorder := &recordingDecisionModel{inner: endpoint.DecisionModel(), noulByQuestion: map[string]float64{}}
-		planner := NewDecisionPlanner(recorder, nil, nil)
+		planner := NewDecisionPlanner(recorder, nil)
 		callLedger := &agentcontract.IntakeCallLedger{}
 		if _, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
 			Need:              benchmark.task,

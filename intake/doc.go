@@ -1,11 +1,13 @@
-// Package intake decides what an inbound message means before anything runs.
+// Package intake plans a turn before the loop runs it.
 //
-// A turn router chooses whether a message becomes a task, a quick reply, or
-// nothing at all. A classifier answers the two questions a chat platform forces:
-// whether a message in a busy channel is addressed to the agent, and whether it
-// continues a task already running.
+// The decision planner asks every closed question about one message in a single
+// call to a decision model: the route, how many tools the work will call, its
+// task shape, level and deliverable, and which tools it is likely to need. The
+// turn router turns those answers into a TurnDecision and has a chat model write
+// only the words that decision needs.
 //
-// These are host policy rather than harness behaviour — a host that answers its
-// own messenger may bring its own — which is why they live beside the loop
-// instead of on the harness port.
+// The facts come from the host: the prompt, the visible context, the active
+// goal, the prior task and a scheduled run. Whether a message is for the agent
+// at all, whether to react to it, and what to do with a task already running
+// are the host's questions, and nothing here asks them.
 package intake

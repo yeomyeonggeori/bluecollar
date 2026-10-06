@@ -565,19 +565,17 @@ func (agentKernel *AgentKernel) selectInstructionBundleForResolvedRequest(ctx co
 
 func (agentKernel *AgentKernel) completeConsumedRequest(request AgentRequest, decision TurnDecision, routerCallRecords []llmCallRecord) (AgentTurnResult, error) {
 	taskRun := agentKernel.taskRunForRequest(request)
-	reactionEmojiName := NormalizeReactionEmojiName(decision.ReactionEmojiName)
 	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(decision.IntakeDecision()))
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentConsumed, marshalEventBody(map[string]string{
-		"route":             string(decision.Route),
-		"reason":            strings.TrimSpace(decision.Reason),
-		"reactionEmojiName": reactionEmojiName,
+		"route":  string(decision.Route),
+		"reason": strings.TrimSpace(decision.Reason),
 	}))
 	completedTaskRun, errorValue := agentKernel.taskRunService.CompleteTaskRun(taskRun.TaskRunID, "consumed")
 	if errorValue != nil {
 		return AgentTurnResult{}, errorValue
 	}
-	return AgentTurnResult{TaskRun: completedTaskRun, TurnRoute: TurnRouteConsume, ReactionEmojiName: reactionEmojiName, FinishMessage: strings.TrimSpace(decision.UserFacingReply), ReplySuppressed: true, ToolNames: toolNamesForEvent(request.ToolSet)}, nil
+	return AgentTurnResult{TaskRun: completedTaskRun, TurnRoute: TurnRouteConsume, FinishMessage: strings.TrimSpace(decision.UserFacingReply), ReplySuppressed: true, ToolNames: toolNamesForEvent(request.ToolSet)}, nil
 }
 
 type confirmationGatePlan struct {

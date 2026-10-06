@@ -32,7 +32,7 @@ func (languageModel *stallingThenAnsweringTurnWordsModel) GenerateStructuredResp
 }
 
 func patientTurnRouter(languageModel model.LanguageModelProvider) TurnRouter {
-	decisionPlanner := NewDecisionPlanner(intaketest.NewDecisionModel(clarifyOutcome()), nil, func() float64 { return 1 })
+	decisionPlanner := NewDecisionPlanner(intaketest.NewDecisionModel(clarifyOutcome()), nil)
 	return NewTurnRouter(languageModel, decisionPlanner, enabledIntakeOptions())
 }
 
@@ -97,7 +97,7 @@ func (decisionModel *stallingThenAnsweringDecisionModel) Decide(ctx context.Cont
 
 func TestAStalledDecisionCallIsCutAtTheMeasuredPatienceAndAskedAgain(t *testing.T) {
 	decisionModel := &stallingThenAnsweringDecisionModel{stalledCalls: 1, answering: intaketest.NewDecisionModel(clarifyOutcome())}
-	decisionPlanner := NewDecisionPlanner(decisionModel, nil, func() float64 { return 1 })
+	decisionPlanner := NewDecisionPlanner(decisionModel, nil)
 	decisionPlanner.callCost.record("a-decision-model", time.Millisecond)
 	callLedger := &agentcontract.IntakeCallLedger{}
 

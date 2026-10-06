@@ -46,20 +46,10 @@ func TestTheScriptedDecisionModelKnowsEveryQuestionIntakeAsks(t *testing.T) {
 }
 
 func requestsAskingEveryOptionalQuestion() map[string]agentcontract.IntakeDecisionRequest {
-	busyRequest := addressedDecisionRequest("그거 말고 다른 걸로 해줘")
-	busyRequest.ResponseLanguage = ""
-	busyRequest.ActiveTask = agentcontract.ActiveTaskContext{TaskRunID: "task-run-active", Prompt: "보고서 정리해줘"}
-	busyRequest.PendingConfirmation = agentcontract.PendingConfirmationContext{TaskRunID: "task-run-held", Question: "보낼까요?"}
-	busyRequest.PriorTask = agentcontract.PriorTaskContext{TaskRunID: "task-run-prior", Prompt: "지난번 보고서"}
-	busyRequest.PendingChoice = agentcontract.PendingChoiceContext{TaskRunID: "task-run-choice", Options: []agentcontract.ChoiceReplyOption{{Key: "first", Label: "첫째"}}}
-	severalChoiceRequest := addressedDecisionRequest("둘 다")
-	severalChoiceRequest.PendingChoice = agentcontract.PendingChoiceContext{
-		TaskRunID:     "task-run-choice",
-		SelectionMode: "multiple",
-		Options:       []agentcontract.ChoiceReplyOption{{Key: "first", Label: "첫째"}, {Key: "second", Label: "둘째"}},
-	}
+	request := addressedDecisionRequest("그거 말고 다른 걸로 해줘")
+	request.ResponseLanguage = ""
+	request.PriorTask = agentcontract.PriorTaskContext{TaskRunID: "task-run-prior", Prompt: "지난번 보고서"}
 	return map[string]agentcontract.IntakeDecisionRequest{
-		"a message while work is held and running": busyRequest,
-		"a message answering a multiple choice":    severalChoiceRequest,
+		"a message that follows a prior task in an unknown language": request,
 	}
 }

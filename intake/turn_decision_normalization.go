@@ -2,7 +2,6 @@ package intake
 
 import (
 	"errors"
-	"strconv"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -20,7 +19,7 @@ func normalizeTurnDecision(decision agentcontract.TurnDecision, request agentcon
 }
 
 func normalizeDecidedTurnFields(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	decision, errorValue := normalizeDecidedRoute(decision, request)
+	decision, errorValue := normalizeDecidedRoute(decision)
 	if errorValue != nil {
 		return agentcontract.TurnDecision{}, errorValue
 	}
@@ -31,31 +30,12 @@ func normalizeDecidedTurnFields(decision agentcontract.TurnDecision, request age
 	return normalizeDecidedExecution(decision, request)
 }
 
-func normalizeDecidedRoute(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+func normalizeDecidedRoute(decision agentcontract.TurnDecision) (agentcontract.TurnDecision, error) {
 	decision.Route = normalizeTurnRoute(decision.Route)
 	if decision.Route == "" {
 		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid route")
 	}
-	decision = answerPendingInteraction(decision, request)
-	decision.ReactionEmojiName = agentcontract.NormalizeReactionEmojiName(decision.ReactionEmojiName)
-	return normalizeBusyRoute(decision, request.ActiveTask)
-}
-
-func answerPendingInteraction(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) agentcontract.TurnDecision {
-	decision.Approval = normalizeApproval(decision.Approval, strings.TrimSpace(request.PendingConfirmation.TaskRunID) != "")
-	decision.Choices = normalizeChoiceSelections(decision.Choices, pendingChoiceContext(request))
-	if !pendingInteractionIsAnswered(decision) {
-		return decision
-	}
-	decision.Route = agentcontract.TurnRouteContinueTask
-	if isBareContinuation(decision) {
-		return decision
-	}
-	decision.Classification = agentcontract.IntakeClassificationBoundedTask
-	if decision.TaskShape == agentcontract.TaskShapeApprovalGatedTask {
-		decision.TaskShape = agentcontract.TaskShapeMaintenanceTask
-	}
-	return decision
+	return decision, nil
 }
 
 func isBareContinuation(decision agentcontract.TurnDecision) bool {
@@ -63,27 +43,6 @@ func isBareContinuation(decision agentcontract.TurnDecision) bool {
 		return false
 	}
 	return decision.Classification == "" && decision.TaskShape == "" && decision.TaskLevel == ""
-}
-
-func pendingInteractionIsAnswered(decision agentcontract.TurnDecision) bool {
-	if decision.Approval != nil && *decision.Approval == agentcontract.ApprovalSignalApprove {
-		return true
-	}
-	return len(decision.Choices) > 0
-}
-
-func normalizeBusyRoute(decision agentcontract.TurnDecision, activeTask agentcontract.ActiveTaskContext) (agentcontract.TurnDecision, error) {
-	if strings.TrimSpace(activeTask.TaskRunID) == "" {
-		decision.BusyRoute = ""
-		return decision, nil
-	}
-	if isBareContinuation(decision) && decision.BusyRoute == "" {
-		return decision, nil
-	}
-	if !agentcontract.IsBusyRouteName(string(decision.BusyRoute)) {
-		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid busy route")
-	}
-	return decision, nil
 }
 
 func normalizeDecidedWork(decision agentcontract.TurnDecision) (agentcontract.TurnDecision, error) {
@@ -199,7 +158,6 @@ func answerableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute 
 
 func normalizeTurnWords(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
 	decision.Reason = strings.TrimSpace(decision.Reason)
-	decision.BusyInstruction = strings.TrimSpace(decision.BusyInstruction)
 	decision.ClarificationQuestion = strings.TrimSpace(decision.ClarificationQuestion)
 	decision.ClarificationOptions = normalizeClarificationOptions(decision.ClarificationOptions)
 	decision.ExpectedResults = agentcontract.NormalizeExpectedResults(decision.ExpectedResults)
@@ -247,60 +205,6 @@ func normalizeTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
 		return route
 	}
 	return ""
-}
-
-func normalizeApproval(signal *agentcontract.ApprovalSignal, hasPendingApproval bool) *agentcontract.ApprovalSignal {
-	if !hasPendingApproval || signal == nil {
-		return nil
-	}
-	normalizedSignal := agentcontract.ApprovalSignal(strings.TrimSpace(string(*signal)))
-	if !agentcontract.IsApprovalSignalName(string(normalizedSignal)) {
-		return nil
-	}
-	return &normalizedSignal
-}
-
-func normalizeChoiceSelections(selections []string, pendingChoice agentcontract.PendingChoiceContext) []string {
-	if strings.TrimSpace(pendingChoice.TaskRunID) == "" {
-		return nil
-	}
-	selectedKeys := selectedChoiceKeys(selections, pendingChoice.Options)
-	if strings.TrimSpace(pendingChoice.SelectionMode) != "multiple" && len(selectedKeys) > 1 {
-		return nil
-	}
-	return selectedKeys
-}
-
-func selectedChoiceKeys(selections []string, options []agentcontract.ChoiceReplyOption) []string {
-	offeredKeys, keyByPosition := offeredChoiceKeys(options)
-	selectedKeys := []string{}
-	seenKeys := map[string]bool{}
-	for _, selection := range selections {
-		key := strings.TrimSpace(selection)
-		if keyAtPosition, isPosition := keyByPosition[key]; isPosition {
-			key = keyAtPosition
-		}
-		if !offeredKeys[key] || seenKeys[key] {
-			continue
-		}
-		seenKeys[key] = true
-		selectedKeys = append(selectedKeys, key)
-	}
-	return selectedKeys
-}
-
-func offeredChoiceKeys(options []agentcontract.ChoiceReplyOption) (map[string]bool, map[string]string) {
-	offeredKeys := map[string]bool{}
-	keyByPosition := map[string]string{}
-	for index, option := range options {
-		key := strings.TrimSpace(option.Key)
-		if key == "" {
-			continue
-		}
-		offeredKeys[key] = true
-		keyByPosition[strconv.Itoa(index+1)] = key
-	}
-	return offeredKeys, keyByPosition
 }
 
 func normalizeClarificationOptions(options []agentcontract.ClarificationOption) []agentcontract.ClarificationOption {

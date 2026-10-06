@@ -34,7 +34,6 @@ func decidedCallContext(callContext decisionCallContext, index int) decisionCall
 
 func decisionLLMCallRecord(call decisionCall, callContext decisionCallContext) agentcontract.LLMCallRecord {
 	record := agentcontract.DecisionCallRecord(call.request, call.response, call.latency, callContext.errorValue)
-	record.DecisionDraws = reactionDrawsOf(callContext.decisions)
 	record.ToolSelection = callContext.toolSelection
 	record.DecidedMessageIDs = callContext.messageIDs
 	record.AttachmentsDescribed = callContext.attachmentsDescribed
@@ -73,17 +72,6 @@ func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers m
 		}
 	}
 	return &record
-}
-
-func reactionDrawsOf(decisions agentcontract.IntakeDecisions) map[string]float64 {
-	draws := map[string]float64{}
-	for index, decision := range decisions.Messages {
-		draws[decisionMessageKey(index)+"."+agentcontract.IntakeQuestionReaction] = decision.ReactionDraw
-	}
-	if len(draws) == 0 {
-		return nil
-	}
-	return draws
 }
 
 func attachmentDescriptionsOf(decisions agentcontract.IntakeDecisions) []string {
