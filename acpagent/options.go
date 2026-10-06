@@ -27,7 +27,6 @@ type Options struct {
 	LLMCallRepository   taskstate.LLMCallRepository
 	Skills              Skills
 	TurnOptions         turnoptions.TurnOptions
-	IntakeOptions       agentcontract.IntakeOptions
 	CompanyProvider     func() agentcontract.CompanyContext
 	RouterLanguageModel model.LanguageModelProvider
 }
