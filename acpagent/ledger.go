@@ -1,8 +1,9 @@
-package main
+package acpagent
 
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/yeomyeonggeori/bluecollar/acpupdate"
@@ -71,7 +72,7 @@ func replayLedger(openSession *session, promptMeta map[string]any) bool {
 	if !isPresent || len(records) == 0 {
 		return false
 	}
-	taskRun := openSession.taskRuns.CreateTaskRunWithOrigin(requesterPersonID, taskstate.TaskRunOrigin{}, "")
+	taskRun := openSession.openTaskRun(promptMeta, "")
 	openSession.taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "")
 	for _, record := range records {
 		openSession.taskRuns.AppendTaskEvent(taskRun.TaskRunID, record.Name, string(record.Body))
@@ -110,4 +111,28 @@ func carriedOutCallsOfMeta(promptMeta map[string]any) []agentcontract.CarriedOut
 		return nil
 	}
 	return carriedOutCalls
+}
+
+func taskRunIDOfMeta(promptMeta map[string]any) string {
+	taskRunID, _ := promptMeta[TaskRunMetaKey].(string)
+	return strings.TrimSpace(taskRunID)
+}
+
+func (openSession *session) openTaskRun(promptMeta map[string]any, prompt string) agentcontract.TaskRun {
+	taskRunID := taskRunIDOfMeta(promptMeta)
+	if taskRunID == "" {
+		return openSession.taskRuns.CreateTaskRunWithOrigin(requesterPersonID, taskstate.TaskRunOrigin{}, prompt)
+	}
+	if existingTaskRun, isFound := openSession.taskRuns.FindTaskRun(taskRunID); isFound {
+		return existingTaskRun
+	}
+	taskRun, _ := openSession.taskRuns.CreateTaskRunWithID(taskRunID, requesterPersonID, taskstate.TaskRunOrigin{}, prompt)
+	return taskRun
+}
+
+func (openSession *session) adoptNamedTaskRun(promptMeta map[string]any, prompt string) {
+	if taskRunIDOfMeta(promptMeta) == "" {
+		return
+	}
+	openSession.rememberTaskRun(openSession.openTaskRun(promptMeta, prompt).TaskRunID)
 }

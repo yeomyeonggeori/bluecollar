@@ -1,8 +1,9 @@
-package main
+package acpagent
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,11 +27,10 @@ type session struct {
 	gate           *approval.Gate
 }
 
-type agent struct {
+type Agent struct {
+	options          Options
 	languageModel    model.LanguageModelProvider
-	decisionModel    model.DecisionModel
 	decisionPlanner  intake.DecisionPlanner
-	agentName        string
 	resolveTransport transportResolver
 	sessionUpdates   *deferredSessionUpdateSender
 	permissions      *deferredPermissionRequester
@@ -40,34 +40,37 @@ type agent struct {
 	nextSessionNumber int
 }
 
-func newAgent(languageModel model.LanguageModelProvider, decisionModel model.DecisionModel, agentName string) *agent {
-	return &agent{
-		languageModel:    languageModel,
-		decisionModel:    decisionModel,
-		decisionPlanner:  intake.NewDecisionPlanner(decisionModel, nil, nil),
-		agentName:        agentName,
+func New(options Options) (*Agent, error) {
+	if errorValue := options.validate(); errorValue != nil {
+		return nil, errorValue
+	}
+	return &Agent{
+		options:          options,
+		languageModel:    options.LanguageModels.Low,
+		decisionPlanner:  intake.NewDecisionPlanner(options.DecisionModel, nil, nil),
 		resolveTransport: transportForServer,
 		sessionUpdates:   &deferredSessionUpdateSender{ready: make(chan struct{})},
 		permissions:      &deferredPermissionRequester{ready: make(chan struct{})},
 		sessionsByID:     map[acp.SessionId]*session{},
-	}
+	}, nil
 }
 
-func (runningAgent *agent) connect(connection *acp.AgentSideConnection) {
+func (runningAgent *Agent) Connect(connection *acp.AgentSideConnection) {
 	runningAgent.sessionUpdates.connect(connection)
 	runningAgent.permissions.connect(connection)
 }
 
-func (runningAgent *agent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
+func (runningAgent *Agent) Initialize(context.Context, acp.InitializeRequest) (acp.InitializeResponse, error) {
 	return acp.InitializeResponse{
 		ProtocolVersion: acp.ProtocolVersionNumber,
 		AgentCapabilities: acp.AgentCapabilities{
-			McpCapabilities: acp.McpCapabilities{Http: true},
+			McpCapabilities:    acp.McpCapabilities{Http: true},
+			PromptCapabilities: acp.PromptCapabilities{Image: true},
 		},
 	}, nil
 }
 
-func (runningAgent *agent) NewSession(ctx context.Context, request acp.NewSessionRequest) (acp.NewSessionResponse, error) {
+func (runningAgent *Agent) NewSession(ctx context.Context, request acp.NewSessionRequest) (acp.NewSessionResponse, error) {
 	openedCatalog, errorValue := openCatalog(ctx, request.McpServers, runningAgent.resolveTransport)
 	if errorValue != nil {
 		return acp.NewSessionResponse{}, errorValue
@@ -76,8 +79,16 @@ func (runningAgent *agent) NewSession(ctx context.Context, request acp.NewSessio
 	taskRuns := taskstate.NewTaskRunService(taskEvents)
 	kernel := loop.NewAgentKernel(taskRuns, taskstate.NewTaskStepService())
 	kernel.UseLanguageModelProvider(runningAgent.languageModel)
-	kernel.UseDecisionModel(runningAgent.decisionModel)
+	kernel.UseTaskTierLanguageModels(runningAgent.options.LanguageModels)
+	kernel.UseDecisionModel(runningAgent.options.DecisionModel)
 	kernel.UseToolResultImageSource(openedCatalog)
+	kernel.UseInstructionBundleLoader(instructionBundleLoaderFor(runningAgent.options.Skills, request.Cwd))
+	if runningAgent.options.Skills.Retriever != nil {
+		kernel.UseSkillRetriever(runningAgent.options.Skills.Retriever)
+	}
+	if runningAgent.options.LLMCallRepository != nil {
+		taskEvents.UseLLMCallRepository(runningAgent.options.LLMCallRepository)
+	}
 
 	runningAgent.mutex.Lock()
 	defer runningAgent.mutex.Unlock()
@@ -93,23 +104,21 @@ func (runningAgent *agent) NewSession(ctx context.Context, request acp.NewSessio
 	return acp.NewSessionResponse{SessionId: sessionID}, nil
 }
 
-func (runningAgent *agent) Prompt(ctx context.Context, request acp.PromptRequest) (acp.PromptResponse, error) {
+func (runningAgent *Agent) Prompt(ctx context.Context, request acp.PromptRequest) (promptResponse acp.PromptResponse, errorValue error) {
 	openSession, isKnown := runningAgent.session(request.SessionId)
 	if !isKnown {
 		return acp.PromptResponse{}, errors.New("bluecollar has no session by that id; open one with session/new first")
 	}
+	defer failTurnOnPanic(openSession, &promptResponse, &errorValue)
+	return runningAgent.runPrompt(ctx, openSession, request)
+}
+
+func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, request acp.PromptRequest) (acp.PromptResponse, error) {
 	isResumedFromHostLedger := replayLedger(openSession, request.Meta)
-	turnRequest := agentcontract.AgentTurnRequest{
-		RequesterPersonID:      requesterPersonID,
-		IsRuntimeRestartResume: isResumedFromHostLedger,
-		ConversationID:         string(request.SessionId),
-		ExistingTaskRunID:      openSession.currentTaskRunID(),
-		Prompt:                 promptText(request.Prompt),
-		AgentIdentity:          agentcontract.AgentIdentity{Name: runningAgent.agentName},
-		ToolSet:                openSession.catalog.toolSet,
-		PinnedToolNames:        openSession.catalog.toolNames,
-		CarriedOutCalls:        carriedOutCallsOfMeta(request.Meta),
+	if !isResumedFromHostLedger {
+		openSession.adoptNamedTaskRun(request.Meta, promptText(request.Prompt))
 	}
+	turnRequest := runningAgent.turnRequestFor(openSession, request, isResumedFromHostLedger)
 	stopObserving := openSession.taskEvents.RegisterTurnObserver(func(rawTurnEvent taskstate.RawTurnEvent) {
 		openSession.rememberTaskRun(rawTurnEvent.TaskRunID)
 		sendLedgerEvent(ctx, runningAgent.sessionUpdates, request.SessionId, rawTurnEvent)
@@ -121,10 +130,10 @@ func (runningAgent *agent) Prompt(ctx context.Context, request acp.PromptRequest
 		return acp.PromptResponse{}, errorValue
 	}
 	turnRequest.PrecomputedTurnDecision = &turnDecision
-	openSession.catalog.toolSet.UseToolCallGate(openSession.gate.TurnGate(approval.Turn{
+	openSession.catalog.toolSet.UseToolCallGate(newHostCheckedGate(openSession.gate.TurnGate(approval.Turn{
 		ResponseLanguage: turnDecision.ResponseLanguage,
 		Prompt:           turnRequest.Prompt,
-	}))
+	}), runningAgent.options.HostCheckedToolNames))
 
 	turnResult, errorValue := openSession.kernel.RunTurn(ctx, turnRequest)
 	if errorValue != nil {
@@ -133,24 +142,55 @@ func (runningAgent *agent) Prompt(ctx context.Context, request acp.PromptRequest
 	return acp.PromptResponse{StopReason: stopReasonForStatus(turnResult.TaskRun.Status)}, nil
 }
 
-func (runningAgent *agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
+func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest, isResumedFromHostLedger bool) agentcontract.AgentTurnRequest {
+	return agentcontract.AgentTurnRequest{
+		RequesterPersonID:      requesterPersonID,
+		IsRuntimeRestartResume: isResumedFromHostLedger,
+		ConversationID:         string(request.SessionId),
+		ExistingTaskRunID:      openSession.currentTaskRunID(),
+		Prompt:                 promptText(request.Prompt),
+		InputParts:             imagePartsOf(request.Prompt),
+		AgentIdentity:          agentcontract.AgentIdentity{Name: runningAgent.options.AgentName},
+		ToolSet:                openSession.catalog.toolSet,
+		PinnedToolNames:        openSession.catalog.toolNames,
+		PinnedSkillNames:       runningAgent.options.Skills.PinnedSkillNames,
+		CarriedOutCalls:        carriedOutCallsOfMeta(request.Meta),
+		CheckpointSender:       checkpointSender(runningAgent.sessionUpdates, request.SessionId),
+	}
+}
+
+func failTurnOnPanic(openSession *session, promptResponse *acp.PromptResponse, errorValue *error) {
+	recovered := recover()
+	if recovered == nil {
+		return
+	}
+	reason := fmt.Sprintf("the bluecollar turn panicked: %v", recovered)
+	if taskRunID := openSession.currentTaskRunID(); taskRunID != "" {
+		openSession.taskRuns.FailTaskRun(taskRunID, reason)
+	}
+	*promptResponse = acp.PromptResponse{}
+	*errorValue = errors.New(reason)
+}
+
+func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
 	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: turnRequest.RequesterPersonID,
 		ConversationID:    turnRequest.ConversationID,
 		Prompt:            turnRequest.Prompt,
+		InputParts:        turnRequest.InputParts,
 		ToolSet:           turnRequest.ToolSet,
 	})
 }
 
-func (runningAgent *agent) session(sessionID acp.SessionId) (*session, bool) {
+func (runningAgent *Agent) session(sessionID acp.SessionId) (*session, bool) {
 	runningAgent.mutex.Lock()
 	defer runningAgent.mutex.Unlock()
 	openSession, isKnown := runningAgent.sessionsByID[sessionID]
 	return openSession, isKnown
 }
 
-func (runningAgent *agent) CloseSession(_ context.Context, request acp.CloseSessionRequest) (acp.CloseSessionResponse, error) {
+func (runningAgent *Agent) CloseSession(_ context.Context, request acp.CloseSessionRequest) (acp.CloseSessionResponse, error) {
 	runningAgent.mutex.Lock()
 	defer runningAgent.mutex.Unlock()
 	if openSession, isKnown := runningAgent.sessionsByID[request.SessionId]; isKnown {
@@ -171,6 +211,19 @@ func stopReasonForStatus(status agentcontract.TaskStatus) acp.StopReason {
 	}
 }
 
+func imagePartsOf(contentBlocks []acp.ContentBlock) []agentcontract.AgentPart {
+	imageParts := []agentcontract.AgentPart{}
+	for _, contentBlock := range contentBlocks {
+		if image := contentBlock.Image; image != nil {
+			imageParts = append(imageParts, agentcontract.AgentPart{
+				Type:  agentcontract.AgentPartTypeImage,
+				Image: &agentcontract.AgentImagePart{MimeType: image.MimeType, DataBase64: image.Data},
+			})
+		}
+	}
+	return imageParts
+}
+
 func promptText(contentBlocks []acp.ContentBlock) string {
 	segments := []string{}
 	for _, contentBlock := range contentBlocks {
@@ -181,7 +234,7 @@ func promptText(contentBlocks []acp.ContentBlock) string {
 	return strings.TrimSpace(strings.Join(segments, "\n"))
 }
 
-func (runningAgent *agent) Cancel(_ context.Context, notification acp.CancelNotification) error {
+func (runningAgent *Agent) Cancel(_ context.Context, notification acp.CancelNotification) error {
 	openSession, isKnown := runningAgent.session(notification.SessionId)
 	if !isKnown {
 		return nil
@@ -209,26 +262,26 @@ func (openSession *session) currentTaskRunID() string {
 	return openSession.taskRunID
 }
 
-func (runningAgent *agent) Authenticate(context.Context, acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
+func (runningAgent *Agent) Authenticate(context.Context, acp.AuthenticateRequest) (acp.AuthenticateResponse, error) {
 	return acp.AuthenticateResponse{}, nil
 }
 
-func (runningAgent *agent) Logout(context.Context, acp.LogoutRequest) (acp.LogoutResponse, error) {
+func (runningAgent *Agent) Logout(context.Context, acp.LogoutRequest) (acp.LogoutResponse, error) {
 	return acp.LogoutResponse{}, nil
 }
 
-func (runningAgent *agent) ResumeSession(context.Context, acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
+func (runningAgent *Agent) ResumeSession(context.Context, acp.ResumeSessionRequest) (acp.ResumeSessionResponse, error) {
 	return acp.ResumeSessionResponse{}, errors.New("bluecollar keeps no conversation history of its own; the host owns it")
 }
 
-func (runningAgent *agent) ListSessions(context.Context, acp.ListSessionsRequest) (acp.ListSessionsResponse, error) {
+func (runningAgent *Agent) ListSessions(context.Context, acp.ListSessionsRequest) (acp.ListSessionsResponse, error) {
 	return acp.ListSessionsResponse{}, errors.New("bluecollar keeps no session list of its own; the host owns it")
 }
 
-func (runningAgent *agent) SetSessionMode(context.Context, acp.SetSessionModeRequest) (acp.SetSessionModeResponse, error) {
+func (runningAgent *Agent) SetSessionMode(context.Context, acp.SetSessionModeRequest) (acp.SetSessionModeResponse, error) {
 	return acp.SetSessionModeResponse{}, nil
 }
 
-func (runningAgent *agent) SetSessionConfigOption(context.Context, acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {
+func (runningAgent *Agent) SetSessionConfigOption(context.Context, acp.SetSessionConfigOptionRequest) (acp.SetSessionConfigOptionResponse, error) {
 	return acp.SetSessionConfigOptionResponse{}, nil
 }
