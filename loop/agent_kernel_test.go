@@ -180,7 +180,6 @@ func TestExistingTaskRequestIsNotFresh(t *testing.T) {
 	turnDecision := TurnDecision{Route: TurnRouteStartTask}
 	for _, request := range []AgentRequest{
 		{ExistingTaskRunID: "task-run-1"},
-		{IsApprovalContinuation: true},
 		{IsRuntimeRestartResume: true},
 	} {
 		if requestStartsFreshTask(turnDecision, request) {
@@ -461,7 +460,7 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 
 	request := kernelTestRequest("응 확인했어, 진행해줘")
 	request.ToolSet = toolSet
-	request.IsApprovalContinuation = true
+	request.IsRuntimeRestartResume = true
 	request.ActiveGoal = ActiveGoal{
 		GoalID:              "goal-approval-continuation",
 		TaskRunID:           "task-approval-continuation",

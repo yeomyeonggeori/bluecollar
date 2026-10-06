@@ -1371,13 +1371,9 @@ func TestUserResumeClearsInheritedFailureDebt(t *testing.T) {
 		t.Fatal("setup expected active failure debt before resume")
 	}
 
-	userResume := AgentTurnRequest{IsRuntimeRestartResume: true, IsApprovalContinuation: false}
+	userResume := AgentTurnRequest{IsRuntimeRestartResume: true}
 	if !userResumeClearsInheritedFailureDebt(userResume, observations) {
 		t.Fatal("expected user-driven resume to clear inherited failure debt")
-	}
-	approvalResume := AgentTurnRequest{IsRuntimeRestartResume: true, IsApprovalContinuation: true}
-	if userResumeClearsInheritedFailureDebt(approvalResume, observations) {
-		t.Fatal("expected approval continuation to retain failure debt")
 	}
 	autoStart := AgentTurnRequest{IsRuntimeRestartResume: false}
 	if userResumeClearsInheritedFailureDebt(autoStart, observations) {

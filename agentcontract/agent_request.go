@@ -16,7 +16,6 @@ type AgentRequest struct {
 	RequesterHandle            string
 	RequesterCircles           []string
 	SourceReference            string
-	IsApprovalContinuation     bool
 	IsRuntimeRestartResume     bool
 	ExistingTaskRunID          string
 	IsTaskRunOpenedForThisTurn bool
@@ -123,7 +122,6 @@ type AgentTurnRequest struct {
 	RequesterName                string
 	RequesterPlatformUserID      string
 	SourceReference              string
-	IsApprovalContinuation       bool
 	IsRuntimeRestartResume       bool
 	ExistingTaskRunID            string
 	IsTaskRunOpenedForThisTurn   bool

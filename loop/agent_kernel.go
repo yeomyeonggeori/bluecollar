@@ -141,7 +141,6 @@ func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request
 		RequesterHandle:            request.RequesterHandle,
 		RequesterCircles:           append([]string{}, request.RequesterCircles...),
 		SourceReference:            request.SourceReference,
-		IsApprovalContinuation:     request.IsApprovalContinuation,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
 		ExistingTaskRunID:          request.ExistingTaskRunID,
 		IsTaskRunOpenedForThisTurn: request.IsTaskRunOpenedForThisTurn,
@@ -254,7 +253,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	request = restorePersistedToolSelection(request)
 	persistedPinnedToolNames := append([]string{}, request.PinnedToolNames...)
 	intakeRequest = request
-	if turnDecision.Route == TurnRouteStartTask && !request.IsApprovalContinuation {
+	if turnDecision.Route == TurnRouteStartTask {
 		if strings.TrimSpace(request.ExistingTaskRunID) == strings.TrimSpace(request.ActiveGoal.TaskRunID) {
 			request.ExistingTaskRunID = ""
 			request.IsRuntimeRestartResume = false
@@ -381,7 +380,6 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		RequesterHandle:            request.RequesterHandle,
 		RequesterCircles:           append([]string{}, request.RequesterCircles...),
 		SourceReference:            request.SourceReference,
-		IsApprovalContinuation:     request.IsApprovalContinuation,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
 		ExistingTaskRunID:          request.ExistingTaskRunID,
 		OriginReplyTargetID:        request.OriginReplyTargetID,
@@ -463,7 +461,6 @@ func (agentKernel *AgentKernel) appendCompanyTimeZoneFallbackEvent(taskRunID str
 
 func requestStartsFreshTask(turnDecision TurnDecision, request AgentRequest) bool {
 	return turnDecision.Route == TurnRouteStartTask &&
-		!request.IsApprovalContinuation &&
 		!request.IsRuntimeRestartResume &&
 		strings.TrimSpace(request.ExistingTaskRunID) == ""
 }
@@ -487,16 +484,12 @@ type taskLifecycleMode string
 
 const (
 	taskLifecycleFresh            taskLifecycleMode = "fresh"
-	taskLifecycleApprovalResume   taskLifecycleMode = "approval_resume"
 	taskLifecycleRuntimeResume    taskLifecycleMode = "runtime_resume"
 	taskLifecycleSemanticRevision taskLifecycleMode = "semantic_revision"
 	taskLifecycleContinuation     taskLifecycleMode = "continuation"
 )
 
 func taskLifecycleModeForRequest(turnDecision TurnDecision, request AgentRequest) taskLifecycleMode {
-	if request.IsApprovalContinuation {
-		return taskLifecycleApprovalResume
-	}
 	if request.IsRuntimeRestartResume {
 		return taskLifecycleRuntimeResume
 	}
@@ -595,7 +588,7 @@ type confirmationGatePlan struct {
 }
 
 func (agentKernel *AgentKernel) planConfirmationGate(responseContext context.Context, request AgentRequest, intakeDecision IntakeDecision, evidenceHints []string) (confirmationGatePlan, error) {
-	if request.IsApprovalContinuation || request.IsRuntimeRestartResume {
+	if request.IsRuntimeRestartResume {
 		return confirmationGatePlan{}, nil
 	}
 	if !shouldBuildExecutionPlanForConfirmation(request, intakeDecision, evidenceHints) {

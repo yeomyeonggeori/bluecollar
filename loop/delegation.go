@@ -33,7 +33,6 @@ func childTurnRequest(request AgentTurnRequest, actionDocument turnActionDocumen
 	childRequest.InputParts = nil
 	childRequest.CarriedOutCalls = nil
 	childRequest.PrecomputedTurnDecision = nil
-	childRequest.IsApprovalContinuation = false
 	childRequest.IsRuntimeRestartResume = false
 	childRequest.ExistingTaskRunID = ""
 	childRequest.ActiveGoal = ActiveGoal{OriginalInstruction: strings.TrimSpace(actionDocument.Instruction)}
