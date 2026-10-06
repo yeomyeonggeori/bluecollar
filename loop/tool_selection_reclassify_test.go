@@ -1,8 +1,8 @@
 package loop
 
-import ()
-
-import "testing"
+import (
+	"testing"
+)
 
 func TestSelectToolsReclassifiesSkillNameThatIsRegisteredTool(t *testing.T) {
 	request := AgentTurnRequest{ToolSet: testToolSet([]string{"message_send"})}

@@ -1391,7 +1391,6 @@ type turnRunnerTestServices struct {
 
 type failingAttemptStartRepository struct {
 	errorValue error
-	taskRuns   map[string]agentcontract.TaskRun
 }
 
 func (repository failingAttemptStartRepository) SaveTaskRun(taskRun agentcontract.TaskRun) error {

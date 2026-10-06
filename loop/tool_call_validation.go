@@ -594,14 +594,3 @@ func stringValue(value any) string {
 	}
 	return typedValue
 }
-
-func numberValue(value any) float64 {
-	switch typedValue := value.(type) {
-	case float64:
-		return typedValue
-	case int:
-		return float64(typedValue)
-	default:
-		return 0
-	}
-}
