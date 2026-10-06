@@ -7,14 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
-func addressedDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest {
-	return agentcontract.IntakeDecisionRequest{
-		Messages: []agentcontract.IntakeDecisionMessage{{
+func addressedDecisionRequest(prompt string) turnclassification.IntakeDecisionRequest {
+	return turnclassification.IntakeDecisionRequest{
+		Messages: []turnclassification.IntakeDecisionMessage{{
 			MessageID:    "message-1",
 			Prompt:       prompt,
 			SenderName:   "이샘플",
@@ -31,7 +33,7 @@ func addressedDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest
 
 func startTaskOutcome() intaketest.Outcome {
 	return intaketest.Outcome{
-		TurnDecision: agentcontract.TurnDecision{
+		TurnDecision: turnclassification.TurnDecision{
 			Route:                  agentcontract.TurnRouteStartTask,
 			Classification:         agentcontract.IntakeClassificationBoundedTask,
 			TaskShape:              agentcontract.TaskShapeResearchTask,
@@ -45,7 +47,7 @@ func startTaskOutcome() intaketest.Outcome {
 	}
 }
 
-func decideOnce(t *testing.T, planner DecisionPlanner, request agentcontract.IntakeDecisionRequest) agentcontract.IntakeMessageDecision {
+func decideOnce(t *testing.T, planner DecisionPlanner, request turnclassification.IntakeDecisionRequest) turnclassification.IntakeMessageDecision {
 	t.Helper()
 	decisions, errorValue := planner.Decide(context.Background(), request, nil)
 	if errorValue != nil {
@@ -180,7 +182,7 @@ func TestDecisionPlannerFailsWithoutADecisionModel(t *testing.T) {
 
 func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
 	planner := NewDecisionPlanner(intaketest.NewDecisionModel(startTaskOutcome()), nil)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
 	if _, errorValue := planner.Decide(context.Background(), addressedDecisionRequest("보고서 정리해줘"), callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
@@ -210,7 +212,7 @@ func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
 func TestDecisionPlannerDecidesEveryMessageOfABurstInOneCall(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	request := addressedDecisionRequest("보고서 정리해줘")
-	request.Messages = append(request.Messages, agentcontract.IntakeDecisionMessage{MessageID: "message-2", Prompt: "아 그리고 표도 넣어줘", SenderName: "이샘플"})
+	request.Messages = append(request.Messages, turnclassification.IntakeDecisionMessage{MessageID: "message-2", Prompt: "아 그리고 표도 넣어줘", SenderName: "이샘플"})
 	planner := NewDecisionPlanner(decisionModel, nil)
 
 	decisions, errorValue := planner.Decide(context.Background(), request, nil)
@@ -278,7 +280,7 @@ func (describer *scriptedAttachmentDescriber) DescribeAttachments(context.Contex
 	return describer.descriptions, nil
 }
 
-func imageDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest {
+func imageDecisionRequest(prompt string) turnclassification.IntakeDecisionRequest {
 	request := addressedDecisionRequest(prompt)
 	imagePart := agentcontract.AgentPart{
 		Type:  agentcontract.AgentPartTypeImage,
@@ -294,7 +296,7 @@ func TestDecisionPlannerDescribesAnAttachmentsOnlyMessageBeforeDeciding(t *testi
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	describer := &scriptedAttachmentDescriber{descriptions: []string{"화이트보드에 적힌 다음 주 배포 일정 사진."}}
 	planner := NewDecisionPlanner(decisionModel, describer)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
 	if _, errorValue := planner.Decide(context.Background(), imageDecisionRequest(""), callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
@@ -342,7 +344,7 @@ func TestDecisionPlannerDecidesAnImageWithTextFromFactsAlone(t *testing.T) {
 func TestDecisionPlannerSendsFactsAloneWithoutADescriber(t *testing.T) {
 	decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
 	planner := NewDecisionPlanner(decisionModel, nil)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
 	if _, errorValue := planner.Decide(context.Background(), imageDecisionRequest(""), callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)

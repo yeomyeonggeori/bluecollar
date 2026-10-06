@@ -1,8 +1,9 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func namespacedToolDefinition(toolName string, namespace string, sideEffectClass string) toolcontract.ToolDefinition {

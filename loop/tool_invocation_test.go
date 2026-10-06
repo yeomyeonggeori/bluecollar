@@ -3,9 +3,10 @@ package loop
 import (
 	"context"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestAgentTurnRunnerRecordsToolRequestedEvent(t *testing.T) {

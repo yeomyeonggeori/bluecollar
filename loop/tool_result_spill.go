@@ -2,9 +2,10 @@ package loop
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"strconv"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 type ToolResultSpill struct {

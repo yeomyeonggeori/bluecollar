@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 func (fixture fixture) recordHold(holdID string, toolName string, toolInput string) {

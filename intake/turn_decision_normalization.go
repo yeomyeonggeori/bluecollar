@@ -4,66 +4,68 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const maximumClarificationOptionCount = 5
 
-func normalizeTurnDecision(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+func normalizeTurnDecision(decision turnclassification.TurnDecision, request agentcontract.AgentRequest) (turnclassification.TurnDecision, error) {
 	decidedFields, errorValue := normalizeDecidedTurnFields(decision, request)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	return normalizeTurnWords(decidedFields), nil
 }
 
-func normalizeDecidedTurnFields(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+func normalizeDecidedTurnFields(decision turnclassification.TurnDecision, request agentcontract.AgentRequest) (turnclassification.TurnDecision, error) {
 	decision, errorValue := normalizeDecidedRoute(decision)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	decision, errorValue = normalizeDecidedWork(decision)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	return normalizeDecidedExecution(decision, request)
 }
 
-func normalizeDecidedRoute(decision agentcontract.TurnDecision) (agentcontract.TurnDecision, error) {
+func normalizeDecidedRoute(decision turnclassification.TurnDecision) (turnclassification.TurnDecision, error) {
 	decision.Route = normalizeTurnRoute(decision.Route)
 	if decision.Route == "" {
-		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid route")
+		return turnclassification.TurnDecision{}, errors.New("turn router returned an invalid route")
 	}
 	return decision, nil
 }
 
-func isBareContinuation(decision agentcontract.TurnDecision) bool {
+func isBareContinuation(decision turnclassification.TurnDecision) bool {
 	if decision.Route != agentcontract.TurnRouteContinueTask {
 		return false
 	}
 	return decision.Classification == "" && decision.TaskShape == "" && decision.TaskLevel == ""
 }
 
-func normalizeDecidedWork(decision agentcontract.TurnDecision) (agentcontract.TurnDecision, error) {
+func normalizeDecidedWork(decision turnclassification.TurnDecision) (turnclassification.TurnDecision, error) {
 	if isBareContinuation(decision) {
 		return decision, nil
 	}
 	decision.Classification = agentcontract.NormalizeIntakeClassification(decision.Classification)
 	if decision.Classification == "" {
-		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid classification")
+		return turnclassification.TurnDecision{}, errors.New("turn router returned an invalid classification")
 	}
 	decision.TaskShape = normalizeTaskShape(decision.TaskShape)
 	if decision.TaskShape == "" {
-		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid task shape")
+		return turnclassification.TurnDecision{}, errors.New("turn router returned an invalid task shape")
 	}
-	decision.RequestedOutputFormats = agentcontract.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)
+	decision.RequestedOutputFormats = turnclassification.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)
 	decision = normalizeDeliverableTools(decision)
 	decision = liftFileDeliverableToBoundedTask(decision)
 	return liftBoundedImmediateReplyToMaintenance(decision), nil
 }
 
-func liftFileDeliverableToBoundedTask(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func liftFileDeliverableToBoundedTask(decision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	if decision.Classification != agentcontract.IntakeClassificationQuickReply {
 		return decision
 	}
@@ -74,11 +76,11 @@ func liftFileDeliverableToBoundedTask(decision agentcontract.TurnDecision) agent
 	return decision
 }
 
-func normalizeDeliverableTools(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func normalizeDeliverableTools(decision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	return removeFileDeliveryToolWithoutFileDeliverable(decision)
 }
 
-func liftBoundedImmediateReplyToMaintenance(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func liftBoundedImmediateReplyToMaintenance(decision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	if decision.Classification != agentcontract.IntakeClassificationBoundedTask || decision.TaskShape != agentcontract.TaskShapeImmediateReply {
 		return decision
 	}
@@ -86,7 +88,7 @@ func liftBoundedImmediateReplyToMaintenance(decision agentcontract.TurnDecision)
 	return decision
 }
 
-func normalizeDecidedExecution(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
+func normalizeDecidedExecution(decision turnclassification.TurnDecision, request agentcontract.AgentRequest) (turnclassification.TurnDecision, error) {
 	decision = canonicalizeTurnDecision(decision)
 	if decision.Route == agentcontract.TurnRouteConsume {
 		decision.InitialToolNames = nil
@@ -96,19 +98,19 @@ func normalizeDecidedExecution(decision agentcontract.TurnDecision, request agen
 	}
 	decision.TaskLevel = agentcontract.NormalizeTaskLevel(string(decision.TaskLevel))
 	if decision.TaskLevel == "" {
-		return agentcontract.TurnDecision{}, errors.New("turn router returned an invalid task level")
+		return turnclassification.TurnDecision{}, errors.New("turn router returned an invalid task level")
 	}
-	decision.InitialToolNames = agentcontract.RegisteredToolNamesOnly(request.ToolSet, toolcontract.AppendUniqueStrings(decision.InitialToolNames))
-	decision.PriorTaskReference = agentcontract.NormalizePriorTaskReference(decision.PriorTaskReference)
+	decision.InitialToolNames = turnclassification.RegisteredToolNamesOnly(request.ToolSet, toolcontract.AppendUniqueStrings(decision.InitialToolNames))
+	decision.PriorTaskReference = turnclassification.NormalizePriorTaskReference(decision.PriorTaskReference)
 	return normalizeDecidedLanguage(decision, request), nil
 }
 
-func normalizeDecidedLanguage(decision agentcontract.TurnDecision, request agentcontract.AgentRequest) agentcontract.TurnDecision {
+func normalizeDecidedLanguage(decision turnclassification.TurnDecision, request agentcontract.AgentRequest) turnclassification.TurnDecision {
 	decision.ResponseLanguage = toolcontract.ResolveResponseLanguage(request.ResponseLanguage, decision.ResponseLanguage)
 	return decision
 }
 
-func canonicalizeTurnDecision(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func canonicalizeTurnDecision(decision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	switch decision.Classification {
 	case agentcontract.IntakeClassificationQuickReply:
 		decision.Route = answerableTurnRoute(decision.Route)
@@ -156,15 +158,15 @@ func answerableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute 
 	}
 }
 
-func normalizeTurnWords(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func normalizeTurnWords(decision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	decision.Reason = strings.TrimSpace(decision.Reason)
 	decision.ClarificationQuestion = strings.TrimSpace(decision.ClarificationQuestion)
 	decision.ClarificationOptions = normalizeClarificationOptions(decision.ClarificationOptions)
-	decision.ExpectedResults = agentcontract.NormalizeExpectedResults(decision.ExpectedResults)
+	decision.ExpectedResults = turnclassification.NormalizeExpectedResults(decision.ExpectedResults)
 	return decision
 }
 
-func startClarifiedWork(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func startClarifiedWork(decision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	decision.Route = agentcontract.TurnRouteStartTask
 	decision.Classification = agentcontract.IntakeClassificationBoundedTask
 	decision.TaskShape = agentcontract.TaskShapeMaintenanceTask
@@ -173,7 +175,7 @@ func startClarifiedWork(decision agentcontract.TurnDecision) agentcontract.TurnD
 	return decision
 }
 
-func removeFileDeliveryToolWithoutFileDeliverable(decision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func removeFileDeliveryToolWithoutFileDeliverable(decision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	if hasFileDeliverable(decision) {
 		return decision
 	}
@@ -181,11 +183,11 @@ func removeFileDeliveryToolWithoutFileDeliverable(decision agentcontract.TurnDec
 	return decision
 }
 
-func hasFileDeliverable(decision agentcontract.TurnDecision) bool {
-	if len(agentcontract.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)) > 0 {
+func hasFileDeliverable(decision turnclassification.TurnDecision) bool {
+	if len(turnclassification.NormalizeRequestedOutputFormats(decision.RequestedOutputFormats)) > 0 {
 		return true
 	}
-	for _, result := range agentcontract.NormalizeExpectedResults(decision.ExpectedResults) {
+	for _, result := range turnclassification.NormalizeExpectedResults(decision.ExpectedResults) {
 		if result.Type == agentcontract.ExpectedResultTypeFile && result.Required {
 			return true
 		}
@@ -253,7 +255,7 @@ func clarificationOptionKey(index int) string {
 func removeToolName(toolNames []string, removedToolName string) []string {
 	values := []string{}
 	for _, toolName := range toolNames {
-		if !toolcontract.ToolNamesMatch(toolName, removedToolName) {
+		if !toolexposure.ToolNamesMatch(toolName, removedToolName) {
 			values = toolcontract.AppendUniqueStrings(values, toolName)
 		}
 	}

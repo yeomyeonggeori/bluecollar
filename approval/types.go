@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type Turn struct {

@@ -1,10 +1,10 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-)
+	"strings"
 
-import "strings"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
+)
 
 const artifactContractKindFile = "file"
 const artifactContractKindLink = "link"

@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const defaultCompactionTriggerTokens = 96000
@@ -394,7 +395,7 @@ func pinnedPromptObservationIDs(observations []turnObservation, events []agentco
 	pinnedObservationIDs := completionEvidenceObservationIDs(events)
 	pinActiveFailureDebtObservations(pinnedObservationIDs, observations)
 	for _, observation := range observations {
-		if len(observation.Effects) > 0 || toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+		if len(observation.Effects) > 0 || toolexposure.IsArtifactDeliveryTool(observation.Tool) {
 			pinnedObservationIDs[observation.ObservationID] = true
 		}
 	}

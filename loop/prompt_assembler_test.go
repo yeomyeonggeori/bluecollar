@@ -1,12 +1,12 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestPromptAssemblerIncludesTemporalContext(t *testing.T) {

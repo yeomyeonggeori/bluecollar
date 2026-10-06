@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type planDocument struct {
@@ -16,7 +17,7 @@ type planDocument struct {
 }
 
 func planFromObservation(observation turnObservation) (planDocument, bool) {
-	if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.PlanToolName) {
+	if observation.Action != "continue" || observation.Failed() || !toolexposure.ToolNamesMatch(observation.Tool, toolcontract.PlanToolName) {
 		return planDocument{}, false
 	}
 	var document planDocument
@@ -65,7 +66,7 @@ func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context
 		Need:              stepTitle,
 		ToolSet:           state.Request.ToolSet,
 		CallableToolNames: planStepCandidateToolNames(state),
-		CountLimit:        toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CountLimit:        toolexposure.MaxLikelyToolCountForOnePlanStep,
 		CallObserver:      callLedger.Observe,
 	})
 	agentTurnRunner.appendCallRecords(taskRunID, callLedger.Records)
@@ -79,7 +80,7 @@ func (agentTurnRunner *AgentTurnRunner) selectToolsForActivePlanStep(ctx context
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentStepToolsSelected, marshalEventBody(planStepSelection{
 		Step:       stepTitle,
 		ToolNames:  state.PlanStepToolNames,
-		CountLimit: toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CountLimit: toolexposure.MaxLikelyToolCountForOnePlanStep,
 	}))
 }
 

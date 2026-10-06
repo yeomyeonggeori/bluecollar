@@ -9,8 +9,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func invokeTerminalRun(t *testing.T, workspacePath string, input string) toolcontract.ToolResult {
@@ -146,7 +147,7 @@ func TestAWrappedShellRunsTheCommandThroughTheSandboxItWasGiven(t *testing.T) {
 }
 
 func TestAClassifierCannotTalkTheRunnerOutOfTheTaskItWasGiven(t *testing.T) {
-	refused := agentcontract.TurnDecision{
+	refused := turnclassification.TurnDecision{
 		Route:            agentcontract.TurnRouteGiveUp,
 		Classification:   agentcontract.IntakeClassificationUnsupported,
 		TaskShape:        agentcontract.TaskShapeImmediateReply,
@@ -164,7 +165,7 @@ func TestAClassifierCannotTalkTheRunnerOutOfTheTaskItWasGiven(t *testing.T) {
 }
 
 func TestAClassifierThatAlreadyWantsToStartIsLeftAlone(t *testing.T) {
-	planned := agentcontract.TurnDecision{
+	planned := turnclassification.TurnDecision{
 		Route:          agentcontract.TurnRouteStartTask,
 		Classification: agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:      agentcontract.TaskShapeResearchTask,

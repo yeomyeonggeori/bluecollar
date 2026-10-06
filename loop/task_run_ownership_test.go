@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 func quickReplyKernel(t *testing.T) (*AgentKernel, *taskstate.TaskRunService) {
@@ -27,7 +27,7 @@ func TestAHostSuppliedTaskRunIsUsedRatherThanASecondOne(t *testing.T) {
 
 	request := kernelTestRequest("고마워!")
 	request.ExistingTaskRunID = hostTaskRun.TaskRunID
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 	if errorValue != nil {
 		t.Fatalf("expected the consumed request to complete: %v", errorValue)
 	}

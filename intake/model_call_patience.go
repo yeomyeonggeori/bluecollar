@@ -5,15 +5,15 @@ import (
 	"errors"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/iterationcost"
 )
 
 type modelCallCost struct {
-	observer *agentcontract.IterationCostObserver
+	observer *iterationcost.IterationCostObserver
 }
 
 func newModelCallCost() modelCallCost {
-	return modelCallCost{observer: agentcontract.NewIterationCostObserver()}
+	return modelCallCost{observer: iterationcost.NewIterationCostObserver()}
 }
 
 func (cost modelCallCost) record(modelName string, latency time.Duration) {
@@ -21,7 +21,7 @@ func (cost modelCallCost) record(modelName string, latency time.Duration) {
 }
 
 func askPatiently[Answer any](ctx context.Context, cost modelCallCost, ask func(context.Context) (Answer, error)) (Answer, bool, error) {
-	patience, isMeasured := agentcontract.ModelCallPatience(cost.observer.CostOfModelInUse())
+	patience, isMeasured := iterationcost.ModelCallPatience(cost.observer.CostOfModelInUse())
 	if !isMeasured {
 		answer, errorValue := ask(ctx)
 		return answer, false, errorValue

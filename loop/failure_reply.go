@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type limitReplyStatus struct {

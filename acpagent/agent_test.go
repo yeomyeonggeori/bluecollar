@@ -10,10 +10,10 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func scriptedDecisionModel(languageModel model.LanguageModelProvider) *intaketest.LanguageModelDecisionModel {

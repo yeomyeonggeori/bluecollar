@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 type SteerNotification struct {

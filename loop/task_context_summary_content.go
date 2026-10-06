@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type taskSummarySchemaDefinition struct {

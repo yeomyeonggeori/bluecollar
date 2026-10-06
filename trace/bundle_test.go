@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestBothRenderingsComeFromOneSnapshot(t *testing.T) {

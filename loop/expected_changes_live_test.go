@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/evaltest"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/evaltest"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type expectedChangesLiveCase struct {

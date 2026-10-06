@@ -1,8 +1,9 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func repeatedTaskUpdateFailure(observationID string, taskInput string) turnObservation {

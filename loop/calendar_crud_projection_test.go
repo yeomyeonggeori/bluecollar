@@ -1,10 +1,10 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-)
+	"testing"
 
-import "testing"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
+)
 
 func TestCalendarFullCrudFinishIsBackedByObservedFacts(t *testing.T) {
 	goalSatisfied := true

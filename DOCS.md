@@ -108,7 +108,7 @@ func main() {
 		},
 	})
 
-	startTask := agentcontract.TurnDecision{
+	startTask := turnclassification.TurnDecision{
 		Route:             agentcontract.TurnRouteStartTask,
 		Classification:    agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:         agentcontract.TaskShapeMaintenanceTask,
@@ -116,14 +116,13 @@ func main() {
 		InitialToolNames:  []string{"time_get"},
 		ExpectedToolCount: agentcontract.ExpectedToolCountOne,
 	}
-	result, errorValue := kernel.RunTurn(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID:       "person-1",
-		RequesterName:           "Alex",
-		ConversationID:          "conversation-1",
-		Prompt:                  "What time is it in Paris right now?",
-		ToolSet:                 tools,
-		PrecomputedTurnDecision: &startTask,
-	})
+	result, errorValue := kernel.RunPlannedTurn(ctx, agentcontract.AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		RequesterName:     "Alex",
+		ConversationID:    "conversation-1",
+		Prompt:            "What time is it in Paris right now?",
+		ToolSet:           tools,
+	}, turnclassification.Routing{Decision: &startTask})
 	if errorValue != nil {
 		log.Fatal(errorValue)
 	}
@@ -132,7 +131,7 @@ func main() {
 ```
 
 - A tool reaches the model only when its descriptor is `visible` and carries a `ResultContract`, and the result is a JSON object.
-- `RunTurn` refuses a turn without `PrecomputedTurnDecision`. The example fills one in by hand, naming the tool the work needs; the next section has intake decide it.
+- `RunTurn` refuses a turn that arrives without a routing decision; `RunPlannedTurn` takes one as an argument. The example fills one in by hand, naming the tool the work needs; the next section has intake decide it.
 - The `taskstate` services keep everything in memory until a host that needs durability gives each one a repository through `UseRepository`.
 
 ### Route, then run
@@ -155,7 +154,7 @@ decision, errorValue := router.Plan(ctx, agentcontract.AgentRequest{
 	ToolSet:           request.ToolSet,
 })
 if errorValue != nil {
-	decision = agentcontract.TurnDecision{
+	decision = turnclassification.TurnDecision{
 		Route:            agentcontract.TurnRouteStartTask,
 		Classification:   agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
@@ -163,12 +162,10 @@ if errorValue != nil {
 		InitialToolNames: []string{"time_get"},
 	}
 }
-request.PrecomputedTurnDecision = &decision
-
-result, errorValue := kernel.RunTurn(ctx, request)
+result, errorValue := kernel.RunPlannedTurn(ctx, request, turnclassification.Routing{Decision: &decision})
 ```
 
-`RunTurn` fails a turn that arrives without `PrecomputedTurnDecision`: the host routes before it hands a turn to the harness. `result.TaskRun.Status` is where the task ended and `result.FinishMessage` is what the requester reads.
+`RunTurn` fails a turn that arrives without a routing decision: the host routes before it hands a turn to the harness, and `RunPlannedTurn` is the entry for a turn that is already planned. `result.TaskRun.Status` is where the task ended and `result.FinishMessage` is what the requester reads.
 
 # Architecture
 
@@ -198,7 +195,7 @@ The port used to be nine methods. Routing and one-shot replies came off it, and 
 | layer | owns |
 | --- | --- |
 | host | connectors and messengers, tool execution and its isolation boundary, the task store, approvals, the agent's identity, the workspace layout, company context |
-| `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events, approval holds |
+| blueprotocol: `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events, approval holds |
 | `loop` | the turn: action schema, plan, tool exposure, completion gate and change check, recovery, budgets, context building and compaction |
 | `intake` | what a turn asks for: route, level, task shape, expected tool count, likely tools |
 
@@ -208,15 +205,21 @@ A host can project each requester to a POSIX user and run every tool call as tha
 
 ### Packages
 
+The contract packages come from the blueprotocol module, pinned as the `.dependency/blueprotocol` submodule.
+
 | path | holds |
 | --- | --- |
-| `agentcontract/` | the harness port, turn requests and results, task runs, statuses and event names |
-| `toolcontract/` | tool descriptors, tool sets, results, the kernel tool names |
-| `model/` | the language model and decision model ports; `openaicompatible`, `decisions` and `tape` implement them |
+| `.dependency/blueprotocol/` | the contract packages `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord`, `acpupdate` and `evaltest`, shared with the host as the blueprotocol submodule |
+| `turnclassification/` | the names and normalization of a turn's route, task shape, task level and deliverable, shared by `intake` and `loop` |
+| `iterationcost/` | what one iteration costs, the patience a model call is given and the budget profile of each task level |
+| `llmcalls/` | the schema names of the model calls bluecollar makes |
+| `toolexposure/` | how many tools a plan step is expected to expose |
+| `messageimages/` | the image parts of a message |
+| `contextdescription/` | the prompt text that describes the active goal and the prior task |
+| `decisionconfig/` | the decision model, configured from `BLUECOLLAR_DECISION_ENDPOINT`, `BLUECOLLAR_DECISION_API_KEY` and `BLUECOLLAR_DECISION_MODEL` |
+| `model/tape/` | recording and replaying model calls |
 | `loop/` | the agent loop, `AgentKernel` and `AgentTurnRunner` |
 | `intake/` | the turn router and the decision planner |
-| `taskstate/` | the in-memory services over task runs, steps, events and artifacts |
-| `holdrecord/` | the approval hold events: typed bodies, the writers that open, decide and spend a hold, and the fold that reads them back |
 | `turnstream/` | a view of a turn's ledger events as they are appended |
 | `trace/` | one run's ledger rendered as a single JSON or Markdown file |
 | `bench/` | run metrics and a runner that measures any `Harness` |
@@ -259,7 +262,7 @@ Records the goal, its steps and the task's level, and settles which tools the mo
 
 `plan` is a kernel tool whose input is a goal, a list of steps with statuses, and a `level`. A level above the current one widens the budget to that level's profile; a plan never narrows it. Tasks at `medium` and above are expected to plan, and a state-changing call made before any plan exists gets one nudge to record one.
 
-When the step marked `in_progress` changes, the loop asks the tool selector for the tools that step needs, capped at `toolcontract.ToolNamesOnePlanStepIsExpectedToNeed` (five). Every iteration inside one step then sends a byte-identical system instruction, tool catalog and unchanging context, which `loop/step_tool_selection_test.go` asserts.
+When the step marked `in_progress` changes, the loop asks the tool selector for the tools that step needs, capped at `toolexposure.ToolNamesOnePlanStepIsExpectedToNeed` (five). Every iteration inside one step then sends a byte-identical system instruction, tool catalog and unchanging context, which `loop/step_tool_selection_test.go` asserts.
 
 ## Tools and the kernel
 
@@ -267,7 +270,7 @@ The fixed tool names every host is expected to provide, plus whatever else the h
 
 The model's kernel is `read`, `write`, `edit`, `bash`, `plan` and `equip`. The first four are the work. `plan` sizes and steps the task. `equip` takes a sentence describing a need and answers with the tools that serve it, through the same `agentcontract.ToolSelector` used by intake, which `intake.DecisionPlanner` implements; the tools it names are pinned for the next turn.
 
-The names are constants in `toolcontract/kernel_tools.go`. The descriptors behind them belong to the host, which marks a tool as kernel by setting its `ProviderID` to `kernel`. Kernel tools stay callable, and stay valid as required evidence, even when the host marks their availability denied; a command the actor may not run fails at execution. `toolcontract` also names tools the runtime calls on the model's behalf: `ask_input` and `file_deliver` run behind a reply, and `file_read`, `file_preview`, `file_delete`, `image_read`, `skill_search` and `conversation_history` are available to hosts that register them. Records written under the retired names `shell`, `file_write`, `file_edit` and `find_tools` are read as `bash`, `write`, `edit` and `equip`.
+The names are constants in blueprotocol's `toolcontract/kernel_tools.go`. The descriptors behind them belong to the host, which marks a tool as kernel by setting its `ProviderID` to `kernel`. Kernel tools stay callable, and stay valid as required evidence, even when the host marks their availability denied; a command the actor may not run fails at execution. `toolcontract` also names tools the runtime calls on the model's behalf: `ask_input` and `file_deliver` run behind a reply, and `file_read`, `file_preview`, `file_delete`, `image_read`, `skill_search` and `conversation_history` are available to hosts that register them. Records written under the retired names `shell`, `file_write`, `file_edit` and `find_tools` are read as `bash`, `write`, `edit` and `equip`.
 
 Beyond the kernel, each turn exposes at most `MaxExtensionCallableToolCount` (15) host tools, filled in order from recovery tools, the pending required tool, required evidence, pinned tools, selected skills and evidence alternatives.
 
@@ -386,7 +389,7 @@ type DecisionModel interface {
 }
 ```
 
-A request carries a state document and a map of named questions. Each answer carries the chosen option with its probabilities, or a `noul` value between 0 and 1. `model/decisions` implements it against a decisions endpoint configured by `BLUECOLLAR_DECISION_ENDPOINT`, `BLUECOLLAR_DECISION_API_KEY` and `BLUECOLLAR_DECISION_MODEL`. A request may also carry `Images`, each a media type and its bytes. When it does, `model/decisions` sends `state` as a list of content parts, the state as one text part followed by one `image_url` data URL per image, because the endpoint ignores an image placed inside a JSON state. Tool selection splits a catalog too large for one request into byte-balanced batches that never ask about a tool twice.
+A request carries a state document and a map of named questions. Each answer carries the chosen option with its probabilities, or a `noul` value between 0 and 1. `model/decisions` in blueprotocol implements it against a decisions endpoint, which `decisionconfig` configures from `BLUECOLLAR_DECISION_ENDPOINT`, `BLUECOLLAR_DECISION_API_KEY` and `BLUECOLLAR_DECISION_MODEL`. A request may also carry `Images`, each a media type and its bytes. When it does, `model/decisions` sends `state` as a list of content parts, the state as one text part followed by one `image_url` data URL per image, because the endpoint ignores an image placed inside a JSON state. Tool selection splits a catalog too large for one request into byte-balanced batches that never ask about a tool twice.
 
 ## Ledger
 
@@ -396,7 +399,7 @@ Each model call, tool call, decision, grant, rejection and failure is a `TaskEve
 
 # Contract
 
-The types a host fills in or implements. They live in `agentcontract`, `toolcontract`, `model` and `taskstate`, so a host can depend on them without depending on the loop.
+The types a host fills in or implements. They live in blueprotocol (`agentcontract`, `toolcontract`, `model` and `taskstate`), so a host can depend on them without depending on the loop or on bluecollar.
 
 ## AgentTurnRequest
 
@@ -413,7 +416,6 @@ Everything the harness refuses to assume about a turn.
 | `ToolSet`, `PinnedToolNames`, `LikelyToolNames`, `AvailableSkills` | what the agent may call and read |
 | `WorkspaceRootPath`, `WorkspaceDefaultPath`, `ActivePaths` | where files live |
 | `ActiveGoal`, `PriorTask`, `ScheduledRun`, `CarriedOutCalls` | work already in flight or on record |
-| `PrecomputedTurnDecision` | the host's routing decision, required |
 | `TurnStartedAt`, `ExecutionStartedAt`, `EnvironmentNow` | the clocks |
 | `CheckpointSender` | where progress updates go |
 
@@ -540,4 +542,4 @@ CI runs `gofmt`, `go vet`, `go build` and `go test`, then the same inside the AC
 
 **Does the loop escalate to a stronger model when it runs out?** No. It extends the budget one level once, and the model chosen at the start stays.
 
-**Can I run it without a decision model?** The loop runs; intake does not. `cmd/bluecollar` starts a `low` task when intake is unavailable, and a host can do the same by setting `PrecomputedTurnDecision` itself.
+**Can I run it without a decision model?** The loop runs; intake does not. `cmd/bluecollar` starts a `low` task when intake is unavailable, and a host can do the same by handing the loop a routing decision of its own through `RunPlannedTurn`.

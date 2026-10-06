@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 // An image the agent read is carried to the model as bytes, and those bytes are

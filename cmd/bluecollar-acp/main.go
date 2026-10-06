@@ -9,10 +9,11 @@ import (
 	"os"
 
 	"github.com/yeomyeonggeori/bluecollar/acpagent"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/bluecollar/attribution"
+	"github.com/yeomyeonggeori/bluecollar/decisionconfig"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
 )
 
 func main() {
@@ -27,14 +28,14 @@ func main() {
 		log.Fatal("bluecollar-acp: no model named; pass -model or set BLUECOLLAR_LLM_MODEL")
 	}
 
-	var languageModel model.LanguageModelProvider = openaicompatible.NewProvider(*endpointURL, flagOrEnvironment(*apiKey, "BLUECOLLAR_LLM_API_KEY"), *modelName)
+	var languageModel model.LanguageModelProvider = openaicompatible.NewProvider(*endpointURL, flagOrEnvironment(*apiKey, "BLUECOLLAR_LLM_API_KEY"), *modelName).WithAttribution(attribution.Self)
 	if *isStructuredOutputOnly {
 		languageModel = structuredOutputOnly{languageModel}
 	}
 	errorValue := acpagent.Serve(acpagent.Options{
 		AgentName:      *agentName,
 		LanguageModels: agentcontract.TaskTierLanguageModels{Low: languageModel},
-		DecisionModel:  decisions.ConfiguredDecisionModel(os.Stderr),
+		DecisionModel:  decisionconfig.ConfiguredDecisionModel(os.Stderr),
 	}, os.Stdout, os.Stdin)
 	if errorValue != nil {
 		log.Fatal(errorValue)

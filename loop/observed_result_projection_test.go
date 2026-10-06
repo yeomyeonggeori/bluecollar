@@ -3,8 +3,9 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestObservedResultProjectionAcceptsCalendarClaimWithCalendarFact(t *testing.T) {

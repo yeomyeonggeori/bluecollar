@@ -11,11 +11,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/iterationcost"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const maximumElapsedClosingDuration = time.Minute
@@ -1215,7 +1216,7 @@ func (agentTurnRunner *AgentTurnRunner) actionStateForIteration(iterationRequest
 }
 
 func (agentTurnRunner *AgentTurnRunner) decideActionPatiently(ctx context.Context, taskRunID string, state agentTaskState) (turnActionDocument, error) {
-	patience, isMeasured := agentcontract.ModelCallPatience(agentTurnRunner.iterationCostObserver.CostOfModelInUse())
+	patience, isMeasured := iterationcost.ModelCallPatience(agentTurnRunner.iterationCostObserver.CostOfModelInUse())
 	if !isMeasured {
 		return DecideAgentAction(ctx, agentTurnRunner.languageModel, state)
 	}
@@ -1455,7 +1456,7 @@ func withOwningSkillDecisions(decisions []SkillSelectionDecision, availableSkill
 func foundToolNamesFromObservations(observations []turnObservation) []string {
 	toolNames := []string{}
 	for _, observation := range observations {
-		if observation.Action != "continue" || observation.Failed() || !toolcontract.ToolNamesMatch(observation.Tool, toolcontract.EquipToolName) {
+		if observation.Action != "continue" || observation.Failed() || !toolexposure.ToolNamesMatch(observation.Tool, toolcontract.EquipToolName) {
 			continue
 		}
 		var foundTools agentcontract.EquippedTools
@@ -1486,7 +1487,7 @@ func availableFileDeliveryToolNames(request AgentTurnRequest) []string {
 
 func hasSuccessfulArtifactDeliveryObservation(observations []turnObservation) bool {
 	for _, observation := range observations {
-		if !observation.Failed() && toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+		if !observation.Failed() && toolexposure.IsArtifactDeliveryTool(observation.Tool) {
 			return true
 		}
 	}
@@ -2048,7 +2049,7 @@ func toolChangesSomething(toolSet *toolcontract.ToolSet, toolName string) bool {
 		return false
 	}
 	toolDefinition, isKnown := toolSet.ToolDefinition(strings.TrimSpace(toolName))
-	return isKnown && toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition)
+	return isKnown && ToolDefinitionRequiresSideEffectEvidence(toolDefinition)
 }
 
 func (agentTurnRunner *AgentTurnRunner) currentEffortContext(parentContext context.Context, effortStartedAt time.Time) (context.Context, context.CancelFunc) {

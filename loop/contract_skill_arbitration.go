@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const maxContractSkillArbitrationCandidates = 8

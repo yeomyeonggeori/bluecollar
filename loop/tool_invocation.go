@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func earlierObservationWithIdenticalOutput(observations []turnObservation, observation turnObservation) string {
@@ -95,7 +96,7 @@ func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegi
 		toolResult = toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, trimmedToolName, errorValue.Error())
 	}
 	agentTurnRunner.recordToolCrash(taskRunID, observationID, trimmedToolName, toolResult)
-	observation := agentTurnRunner.saveToolObservation(ctx, taskRunID, observationID, assistantText, modelReasoning, modelReasoningField, trimmedToolName, toolDefinition.ID, toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolResult, !toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition), workspaceRootPath, minimumModifiedAt, time.Since(invocationStartedAt).Milliseconds())
+	observation := agentTurnRunner.saveToolObservation(ctx, taskRunID, observationID, assistantText, modelReasoning, modelReasoningField, trimmedToolName, toolDefinition.ID, toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolResult, !ToolDefinitionRequiresSideEffectEvidence(toolDefinition), workspaceRootPath, minimumModifiedAt, time.Since(invocationStartedAt).Milliseconds())
 	return observation
 }
 
@@ -122,7 +123,7 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 	if !isError {
 		attachments = append(attachments, toolResult.Attachments...)
 	}
-	if !isError && toolcontract.IsArtifactDeliveryTool(toolName) && len(attachments) > 0 {
+	if !isError && toolexposure.IsArtifactDeliveryTool(toolName) && len(attachments) > 0 {
 		validityState := buildAttachmentValidityState(workspaceRootPath, attachments)
 		if !validityState.Passed {
 			content = validityFailureMessage(validityState)

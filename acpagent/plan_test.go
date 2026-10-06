@@ -8,8 +8,9 @@ import (
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type routingStateLanguageModel struct {
@@ -20,7 +21,7 @@ type routingStateLanguageModel struct {
 }
 
 func (languageModel *routingStateLanguageModel) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	if request.StructuredOutputSchema.Name == agentcontract.TurnRouterSchemaName {
+	if request.StructuredOutputSchema.Name == llmcalls.TurnRouterSchemaName {
 		languageModel.mutex.Lock()
 		languageModel.routingSchemas++
 		languageModel.routingStates = append(languageModel.routingStates, allMessageContent(request))
@@ -192,8 +193,7 @@ func recordedCallCount(t *testing.T, handedOver agentcontract.AgentTurnRequest) 
 }
 
 func TestThePlanningCallsAreRecordedUnderTheRunTheyPlanned(t *testing.T) {
-	decided := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, Classification: agentcontract.IntakeClassificationBoundedTask, TaskShape: agentcontract.TaskShapeMaintenanceTask, TaskLevel: agentcontract.TaskLevelXLow, ResponseLanguage: "ko"}
-	withoutPlanning := recordedCallCount(t, agentcontract.AgentTurnRequest{PrecomputedTurnDecision: &decided})
+	withoutPlanning := recordedCallCount(t, agentcontract.AgentTurnRequest{IsRuntimeRestartResume: true})
 	withPlanning := recordedCallCount(t, agentcontract.AgentTurnRequest{})
 
 	if withPlanning <= withoutPlanning {

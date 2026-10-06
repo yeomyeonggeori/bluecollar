@@ -6,7 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/bluecollar/attribution"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
 )
 
 func TestReplayNeedsNoEndpointAndRecordingWritesOnlyForItsOwner(t *testing.T) {
@@ -25,7 +26,7 @@ func TestReplayNeedsNoEndpointAndRecordingWritesOnlyForItsOwner(t *testing.T) {
 	}
 
 	recordPath := filepath.Join(t.TempDir(), "recorded.tape")
-	_, closeRecorder, errorValue := turnLanguageModel(runOptions{recordTapePath: recordPath}, openaicompatible.NewProvider("http://127.0.0.1:1/v1", "", "model"))
+	_, closeRecorder, errorValue := turnLanguageModel(runOptions{recordTapePath: recordPath}, openaicompatible.NewProvider("http://127.0.0.1:1/v1", "", "model").WithAttribution(attribution.Self))
 	if errorValue != nil {
 		t.Fatalf("opening the tape for recording failed: %v", errorValue)
 	}

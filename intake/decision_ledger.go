@@ -3,20 +3,22 @@ package intake
 import (
 	"encoding/json"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type decisionCallContext struct {
 	errorValue           error
-	decisions            agentcontract.IntakeDecisions
+	decisions            turnclassification.IntakeDecisions
 	messageIDs           []string
 	input                json.RawMessage
 	attachmentsDescribed bool
 	toolSelection        *agentcontract.ToolSelectionRecord
 }
 
-func observerOf(callLedger *agentcontract.IntakeCallLedger) agentcontract.LLMCallObserver {
+func observerOf(callLedger *llmcalls.IntakeCallLedger) agentcontract.LLMCallObserver {
 	if callLedger == nil {
 		return nil
 	}
@@ -81,7 +83,7 @@ func toolSelectionRecord(messageKeys []string, plan toolSelectionPlan, answers m
 	return &record
 }
 
-func attachmentDescriptionsOf(decisions agentcontract.IntakeDecisions) []string {
+func attachmentDescriptionsOf(decisions turnclassification.IntakeDecisions) []string {
 	descriptions := []string{}
 	for _, decision := range decisions.Messages {
 		descriptions = append(descriptions, decision.AttachmentDescriptions()...)
@@ -92,7 +94,7 @@ func attachmentDescriptionsOf(decisions agentcontract.IntakeDecisions) []string 
 	return descriptions
 }
 
-func decidedMessageIDs(messages []agentcontract.IntakeDecisionMessage) []string {
+func decidedMessageIDs(messages []turnclassification.IntakeDecisionMessage) []string {
 	messageIDs := make([]string, 0, len(messages))
 	for _, message := range messages {
 		messageIDs = append(messageIDs, message.MessageID)
@@ -100,7 +102,7 @@ func decidedMessageIDs(messages []agentcontract.IntakeDecisionMessage) []string 
 	return messageIDs
 }
 
-func decisionInput(request agentcontract.IntakeDecisionRequest) json.RawMessage {
+func decisionInput(request turnclassification.IntakeDecisionRequest) json.RawMessage {
 	document, errorValue := json.Marshal(request)
 	if errorValue != nil {
 		return nil

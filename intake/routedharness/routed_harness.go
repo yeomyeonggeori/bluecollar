@@ -5,37 +5,38 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/acpagent"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
+type PlannedTurnRunner interface {
+	RunPlannedTurn(context.Context, agentcontract.AgentTurnRequest, turnclassification.Routing) (agentcontract.AgentTurnResult, error)
+}
+
 type Harness struct {
-	Inner    agentcontract.Harness
+	Inner    PlannedTurnRunner
 	taskRuns taskstate.TaskRunStore
 	router   intake.TurnRouter
 }
 
-func New(inner agentcontract.Harness, taskRuns taskstate.TaskRunStore, languageModel model.LanguageModelProvider, decisionModel model.DecisionModel) Harness {
+func New(inner PlannedTurnRunner, taskRuns taskstate.TaskRunStore, languageModel model.LanguageModelProvider, decisionModel model.DecisionModel) Harness {
 	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(decisionModel, nil), agentcontract.IntakeOptions{IsEnabled: true})
 	return Harness{Inner: inner, taskRuns: taskRuns, router: router}
 }
 
 func (routed Harness) RunTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.AgentTurnResult, error) {
-	if turnRequest.PrecomputedTurnDecision == nil {
-		decision, isFromFacts := acpagent.DecisionFromFacts(routed.recordedEvents(turnRequest), turnRequest)
-		if isFromFacts {
-			turnRequest.PrecomputedTurnDecision = &decision
-			return routed.Inner.RunTurn(ctx, turnRequest)
-		}
-		decision, errorValue := routed.router.Plan(ctx, turnRequest.RoutingRequest())
+	decision, isFromFacts := acpagent.DecisionFromFacts(routed.recordedEvents(turnRequest), turnRequest)
+	if !isFromFacts {
+		var errorValue error
+		decision, errorValue = routed.router.Plan(ctx, turnRequest.RoutingRequest())
 		if errorValue != nil {
 			return agentcontract.AgentTurnResult{}, errorValue
 		}
-		turnRequest.PrecomputedTurnDecision = &decision
 	}
-	return routed.Inner.RunTurn(ctx, turnRequest)
+	return routed.Inner.RunPlannedTurn(ctx, turnRequest, turnclassification.Routing{Decision: &decision})
 }
 
 func (routed Harness) recordedEvents(turnRequest agentcontract.AgentTurnRequest) []agentcontract.TaskEvent {

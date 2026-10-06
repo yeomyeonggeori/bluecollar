@@ -3,9 +3,9 @@ package loop
 import (
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/messageimages"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type AgentMessage struct {
@@ -75,7 +75,7 @@ func AgentPartsToLLMParts(parts []AgentPart) []model.MessagePart {
 }
 
 func agentImageToLLMPart(part AgentPart) model.MessagePart {
-	return agentcontract.AgentImageToMessagePart(part)
+	return messageimages.AgentImageToMessagePart(part)
 }
 
 func agentFileContextText(part AgentPart) string {

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func observationSatisfiesEvidenceCondition(toolSet *toolcontract.ToolSet, observation turnObservation) bool {
@@ -42,7 +42,7 @@ func isOneShotCompletionEvidenceTool(toolSet *toolcontract.ToolSet, toolName str
 	if !isFound || toolDefinition.Completion.Mode != toolcontract.ToolCompletionObservation {
 		return false
 	}
-	return toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition)
+	return ToolDefinitionRequiresSideEffectEvidence(toolDefinition)
 }
 
 func relativeWorkspacePath(workspaceRootPath string, path string) string {
@@ -74,5 +74,5 @@ func requiredEvidenceToolNeedsSuccessfulSideEffect(toolSet *toolcontract.ToolSet
 		return false
 	}
 	toolDefinition, isFound := toolSet.ToolDefinition(toolName)
-	return isFound && toolcontract.ToolDefinitionRequiresSideEffectEvidence(toolDefinition)
+	return isFound && ToolDefinitionRequiresSideEffectEvidence(toolDefinition)
 }

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const (
@@ -330,7 +330,7 @@ func unrecordedWork(toolSet *toolcontract.ToolSet, observations []turnObservatio
 	calls := []unrecordedCall{}
 	for _, observation := range successfulToolObservations(observations) {
 		definition, isFound := toolSet.ToolDefinition(observation.Tool)
-		if !isFound || len(observation.Effects) > 0 || !toolcontract.ToolDefinitionRequiresSideEffectEvidence(definition) {
+		if !isFound || len(observation.Effects) > 0 || !ToolDefinitionRequiresSideEffectEvidence(definition) {
 			continue
 		}
 		calls = append(calls, unrecordedCall{

@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -13,7 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestSelectInstructionBundleIncludesPresentationForKoreanPPTRequest(t *testing.T) {
@@ -289,12 +289,12 @@ func TestAgentKernelActionSchemaExposesTypedInitialTools(t *testing.T) {
 		return toolcontract.ToolResult{}, nil
 	})
 
-	_, errorValue := services.kernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), services.kernel, AgentRequest{
+	_, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "repeat this 10번",
 		ToolSet:           toolRegistry,
-	}))
+	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to complete: %v", errorValue)
 	}

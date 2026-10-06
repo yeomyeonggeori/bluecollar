@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type imageSourceHolding struct {

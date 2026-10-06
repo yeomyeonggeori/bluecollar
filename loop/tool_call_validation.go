@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func (agentTurnRunner *AgentTurnRunner) rejectUnavailableToolCall(taskRunID string, stepID string, request AgentTurnRequest, state *agentTaskState, actionDocument turnActionDocument, stopForNoProgress func(string) (AgentTurnResult, bool)) toolCallActionOutcome {
@@ -499,7 +499,7 @@ func observationSendRecipientKey(observation turnObservation) string {
 
 func requiredEvidenceContains(requiredEvidenceTools []string, expectedToolName string) bool {
 	for _, toolName := range requiredEvidenceTools {
-		if toolcontract.ToolNamesMatch(toolName, expectedToolName) {
+		if toolexposure.ToolNamesMatch(toolName, expectedToolName) {
 			return true
 		}
 	}
@@ -544,12 +544,12 @@ func requestRequiresExternalSendTool(request AgentTurnRequest, toolName string) 
 		return true
 	}
 	for _, requiredToolName := range outcomeContractRequiredToolNames(request.OutcomeContract) {
-		if toolcontract.ToolNamesMatch(requiredToolName, toolName) {
+		if toolexposure.ToolNamesMatch(requiredToolName, toolName) {
 			return true
 		}
 	}
 	for _, requiredToolName := range outcomeContractRequiredToolNames(request.ActiveGoal.OutcomeContract) {
-		if toolcontract.ToolNamesMatch(requiredToolName, toolName) {
+		if toolexposure.ToolNamesMatch(requiredToolName, toolName) {
 			return true
 		}
 	}

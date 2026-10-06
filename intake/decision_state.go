@@ -5,8 +5,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const visibleContextMessageBudget = 8
@@ -79,7 +80,7 @@ type decisionActiveGoal struct {
 	MissingInformation  []string `json:"missingInformation,omitempty"`
 }
 
-func buildDecisionState(request agentcontract.IntakeDecisionRequest, toolDescriptions []decisionTool) decisionState {
+func buildDecisionState(request turnclassification.IntakeDecisionRequest, toolDescriptions []decisionTool) decisionState {
 	state := decisionState{
 		Agent:            decisionAgent{Name: request.AgentIdentity.DisplayName(), Mention: request.AgentIdentity.MentionExample()},
 		Company:          decisionCompany{Name: request.Company.Name, TimeZone: request.Company.TimeZone},
@@ -124,7 +125,7 @@ func decisionActiveGoalOf(activeGoal agentcontract.ActiveGoal) (decisionActiveGo
 	return goal, true
 }
 
-func decisionContextMessages(request agentcontract.IntakeDecisionRequest) []decisionContextMessage {
+func decisionContextMessages(request turnclassification.IntakeDecisionRequest) []decisionContextMessage {
 	messages := recentVisibleMessages(request.VisibleContext.Messages, visibleContextMessageBudget)
 	contextMessages := make([]decisionContextMessage, 0, len(messages))
 	for _, message := range messages {
@@ -137,7 +138,7 @@ func decisionContextMessages(request agentcontract.IntakeDecisionRequest) []deci
 	return contextMessages
 }
 
-func decisionMessages(request agentcontract.IntakeDecisionRequest) []decisionMessage {
+func decisionMessages(request turnclassification.IntakeDecisionRequest) []decisionMessage {
 	messages := make([]decisionMessage, 0, len(request.Messages))
 	for index, message := range request.Messages {
 		messages = append(messages, decisionMessage{
@@ -197,7 +198,7 @@ func decisionMessageKey(index int) string {
 	return "m" + strconv.Itoa(index+1)
 }
 
-func hasPriorTask(request agentcontract.IntakeDecisionRequest) bool {
+func hasPriorTask(request turnclassification.IntakeDecisionRequest) bool {
 	return strings.TrimSpace(request.PriorTask.Prompt) != ""
 }
 

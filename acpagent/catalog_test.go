@@ -12,9 +12,9 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func connectCatalogServer(t *testing.T, server *mcp.Server) (mcp.Transport, *mcp.ServerSession) {

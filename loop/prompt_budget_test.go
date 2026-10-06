@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const promptBudgetPath = "testdata/prompt-budget.json"

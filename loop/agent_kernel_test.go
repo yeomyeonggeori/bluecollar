@@ -4,20 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type intakeDecisionLanguageModel struct {
 	decision                 TurnDecision
-	clarificationDisposition agentcontract.ClarificationDisposition
+	clarificationDisposition turnclassification.ClarificationDisposition
 }
 
 func (languageModel intakeDecisionLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -27,7 +28,7 @@ func (languageModel intakeDecisionLanguageModel) GenerateResponse(context.Contex
 func (languageModel intakeDecisionLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
 	var response any = languageModel.decision
 	if strings.Contains(request.StructuredOutputSchema.Document, `"clarificationDisposition"`) {
-		response = agentcontract.TurnWords{
+		response = turnclassification.TurnWords{
 			Reason:                   languageModel.decision.Reason,
 			UserFacingReply:          languageModel.decision.UserFacingReply,
 			ClarificationDisposition: languageModel.clarificationDisposition,
@@ -203,7 +204,7 @@ func TestAgentKernelConsumeRouteSuppressesReply(t *testing.T) {
 		Reason:           "lightweight acknowledgement",
 	}})
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, kernelTestRequest("고마워!")))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, kernelTestRequest("고마워!"))
 	if errorValue != nil {
 		t.Fatalf("expected consume route to complete: %v", errorValue)
 	}
@@ -243,7 +244,7 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 
 	request := kernelTestRequest("업무 등록해줘.\n\n- 메일 페이지 앱 비밀번호 개선")
 	request.ToolSet = toolSet
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 	if errorValue != nil {
 		t.Fatalf("expected the repaired decision to run: %v", errorValue)
 	}
@@ -260,7 +261,7 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 
 func TestAgentKernelPausesNeedsConfirmationDisambiguation(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
-	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{clarificationDisposition: agentcontract.ClarificationDispositionAsk, decision: TurnDecision{
+	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{clarificationDisposition: turnclassification.ClarificationDispositionAsk, decision: TurnDecision{
 		Route:                 TurnRouteClarify,
 		Classification:        IntakeClassificationNeedsConfirmation,
 		TaskShape:             TaskShapeApprovalGatedTask,
@@ -274,7 +275,7 @@ func TestAgentKernelPausesNeedsConfirmationDisambiguation(t *testing.T) {
 		},
 	}})
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, kernelTestRequest("보고서 삭제해줘")))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, kernelTestRequest("보고서 삭제해줘"))
 	if errorValue != nil {
 		t.Fatalf("expected disambiguation pause to complete: %v", errorValue)
 	}
@@ -377,10 +378,9 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 			request := kernelTestRequest("Research a short company profile and ask me which domain to use before publishing.")
 			request.ToolSet = toolSet
 			request.SkipSkillSelection = true
-			request.PrecomputedTurnDecision = &decision
-			request.IsPrecomputedDecisionExact = true
+			decidedRouting := turnclassification.Routing{Decision: &decision, IsExact: true}
 
-			result, errorValue := agentKernel.RunAgentRequest(context.Background(), request)
+			result, errorValue := agentKernel.RunAgentRequest(context.Background(), decidedRouting, request)
 			if errorValue != nil {
 				t.Fatalf("expected the confirmation path to complete: %v", errorValue)
 			}
@@ -420,7 +420,7 @@ func TestAgentKernelBlocksUnsupportedIntake(t *testing.T) {
 		UserFacingReply:  "이 요청은 현재 권한 범위 밖이라 진행할 수 없어요.",
 	}})
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, kernelTestRequest("서버 루트 비밀번호 바꿔줘")))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, kernelTestRequest("서버 루트 비밀번호 바꿔줘"))
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
 	}
@@ -471,7 +471,7 @@ func TestAgentKernelPreservesActiveContractOnApprovalContinuation(t *testing.T) 
 		},
 	}
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 	if errorValue != nil {
 		t.Fatalf("expected approval continuation to run: %v", errorValue)
 	}
@@ -508,7 +508,7 @@ func TestExistingTaskRunIDDoesNotAuthorizeConfirmationBypass(t *testing.T) {
 	request.ToolSet = toolSet
 	request.ExistingTaskRunID = existingTaskRun.TaskRunID
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 
 	if errorValue != nil {
 		t.Fatalf("expected runtime approval gate: %v", errorValue)
@@ -552,7 +552,7 @@ func TestExternalSendPlanReachesApprovalGateBeforeEffect(t *testing.T) {
 	request.ToolSet = toolSet
 	request.SkipSkillSelection = true
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 	if errorValue != nil {
 		t.Fatalf("expected the requested send to reach the runtime approval gate: %v", errorValue)
 	}
@@ -601,7 +601,7 @@ func TestSemanticRevisionStartsNewTaskRun(t *testing.T) {
 		},
 	}
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 
 	if errorValue != nil {
 		t.Fatalf("expected semantic revision to run: %v", errorValue)
@@ -639,7 +639,7 @@ func TestSemanticRevisionKeepsTheRunTheHostOpenedForThisTurn(t *testing.T) {
 	request.ExistingTaskRunID = hostTaskRun.TaskRunID
 	request.IsTaskRunOpenedForThisTurn = true
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 
 	if errorValue != nil {
 		t.Fatalf("expected semantic revision to run: %v", errorValue)
@@ -667,7 +667,7 @@ func TestInvalidPersistedActiveGoalBlocksBeforeToolHandler(t *testing.T) {
 	request.ToolSet = toolSet
 	request.ActiveGoal = ActiveGoal{RestoreError: "latest active goal event is invalid"}
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 
 	if errorValue != nil {
 		t.Fatalf("expected fail-closed result: %v", errorValue)
@@ -719,7 +719,7 @@ func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *test
 	request := kernelTestRequest("서버에 배포 스크립트 실행해줘")
 	request.ToolSet = toolSet
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 	if errorValue != nil {
 		t.Fatalf("expected side-effect task without predicted evidence to proceed: %v", errorValue)
 	}
@@ -783,7 +783,7 @@ func TestAgentKernelGeneratesIntakeNoticeWhenRouterReplyMissing(t *testing.T) {
 	}})
 	agentKernel.UseLanguageModelProvider(&recoveryChatNoticeProvider{chatReply: "지금 실행 범위에서는 안전하게 처리할 수 없어요. 요청을 좁혀주시면 도와드릴게요."})
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, kernelTestRequest("시스템 패키지 전부 지워줘")))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, kernelTestRequest("시스템 패키지 전부 지워줘"))
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
 	}
@@ -804,7 +804,7 @@ func TestAgentKernelFallsBackToReasonWhenIntakeNoticeModelsFail(t *testing.T) {
 	}})
 	agentKernel.UseLanguageModelProvider(failingLanguageModel{})
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, kernelTestRequest("시스템 패키지 전부 지워줘")))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, kernelTestRequest("시스템 패키지 전부 지워줘"))
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
 	}
@@ -825,7 +825,7 @@ func TestAgentKernelRunsBoundedTaskThroughTurnRunner(t *testing.T) {
 	}})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{finishMessageDocument("오늘은 수요일이에요.")}})
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, kernelTestRequest("오늘 무슨 요일이야?")))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, kernelTestRequest("오늘 무슨 요일이야?"))
 	if errorValue != nil {
 		t.Fatalf("expected bounded run to complete: %v", errorValue)
 	}
@@ -853,7 +853,7 @@ func TestAgentKernelSkillDeadlinePersistsOneBlockedTask(t *testing.T) {
 	workDuration := workDurationWithinTotal(elapsedBudgetForProfile(TaskLevelProfileForLevel(TaskLevelXLow), agentKernel.iterationCostObserver.CostOfModelInUse()))
 	request.TurnStartedAt = time.Now().Add(-workDuration + time.Second)
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 
 	if errorValue != nil {
 		t.Fatalf("expected persisted max elapsed result: %v", errorValue)
@@ -880,7 +880,7 @@ func TestAgentKernelCallerCancellationIsNotMaxElapsed(t *testing.T) {
 	responseContext, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	result, errorValue := agentKernel.RunAgentRequest(responseContext, routedRequest(t, responseContext, agentKernel, kernelTestRequest("고객지원 업무를 정리해줘")))
+	result, errorValue := runRoutedRequest(t, responseContext, agentKernel, kernelTestRequest("고객지원 업무를 정리해줘"))
 
 	if errorValue != nil {
 		t.Fatalf("expected persisted cancellation result: %v", errorValue)
@@ -987,13 +987,12 @@ func TestAgentKernelXHighTaskKeepsHourBudgetWithLowExecutionModel(t *testing.T) 
 		TaskLevel:      TaskLevelXHigh,
 	}
 	request := kernelTestRequest("업무를 만들어줘")
-	request.PrecomputedTurnDecision = &precomputedDecision
-	request.IsPrecomputedDecisionExact = true
+	decidedRouting := turnclassification.Routing{Decision: &precomputedDecision, IsExact: true}
 	request.SkipSkillSelection = true
 	request.ToolSet = newTestToolSet(nil)
 	request.TurnStartedAt = time.Now().Add(-15 * time.Minute)
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := agentKernel.RunAgentRequest(context.Background(), decidedRouting, request)
 
 	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected xhigh task to complete with low execution model: result=%+v error=%v", result, errorValue)
@@ -1019,13 +1018,12 @@ func TestAgentKernelClampsStaleNonResumeAnchorInsteadOfInstantElapsing(t *testin
 		PriorTaskReference: PriorTaskReferenceNone,
 	}
 	request := kernelTestRequest("진단해줘")
-	request.PrecomputedTurnDecision = &precomputedDecision
-	request.IsPrecomputedDecisionExact = true
+	decidedRouting := turnclassification.Routing{Decision: &precomputedDecision, IsExact: true}
 	request.SkipSkillSelection = true
 	request.ToolSet = newTestToolSet(nil)
 	request.TurnStartedAt = time.Now().Add(-TaskLevelProfileForLevel(TaskLevelLow).Duration - time.Second)
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := agentKernel.RunAgentRequest(context.Background(), decidedRouting, request)
 
 	if errorValue != nil {
 		t.Fatalf("expected a completed task result: %v", errorValue)
@@ -1046,9 +1044,8 @@ func TestAgentKernelClampsStaleNonResumeAnchorInsteadOfInstantElapsing(t *testin
 }
 
 func TestExactPrecomputedDecisionSkipsArtifactTaskLevelPromotion(t *testing.T) {
-	intakeDecision := promoteArtifactTaskLevelForRequest(AgentRequest{
-		Prompt:                     "Create and share a PDF report",
-		IsPrecomputedDecisionExact: true,
+	intakeDecision := promoteArtifactTaskLevelForRequest(turnclassification.Routing{IsExact: true}, AgentRequest{
+		Prompt: "Create and share a PDF report",
 	}, IntakeDecision{TaskLevel: TaskLevelLow})
 
 	if intakeDecision.TaskLevel != TaskLevelLow {
@@ -1069,12 +1066,11 @@ func TestAgentKernelPreservesExactPrecomputedTaskLevel(t *testing.T) {
 		Reason:             "LLMD topology diagnostic",
 	}
 	request := kernelTestRequest("Create and share a PDF report")
-	request.PrecomputedTurnDecision = &precomputedDecision
-	request.IsPrecomputedDecisionExact = true
+	decidedRouting := turnclassification.Routing{Decision: &precomputedDecision, IsExact: true}
 	request.SkipSkillSelection = true
 	request.ToolSet = newTestToolSet(nil)
 
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	result, errorValue := agentKernel.RunAgentRequest(context.Background(), decidedRouting, request)
 	if errorValue != nil {
 		t.Fatalf("expected exact low-tier diagnostic run: %v", errorValue)
 	}

@@ -1,11 +1,11 @@
 package approval
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const relocationNoticeRequest = "거래처에 보낼 사무실 이전 안내문을 pdf로 만들어 주세요.\n이전일: 2026년 11월 9일 (월)\n새 주소: 서울특별시 예시구 샘플로 12, 견본빌딩 7층"

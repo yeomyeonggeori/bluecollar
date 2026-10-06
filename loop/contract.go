@@ -1,15 +1,20 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/contextdescription"
+	"github.com/yeomyeonggeori/bluecollar/iterationcost"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/bluecollar/turnoptions"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 var _ agentcontract.Harness = (*AgentKernel)(nil)
 
 type (
-	IterationCostObserver     = agentcontract.IterationCostObserver
-	IterationCost             = agentcontract.IterationCost
+	IterationCostObserver     = iterationcost.IterationCostObserver
+	IterationCost             = iterationcost.IterationCost
 	AgentIdentity             = agentcontract.AgentIdentity
 	ActiveGoal                = agentcontract.ActiveGoal
 	ActiveGoalStatus          = agentcontract.ActiveGoalStatus
@@ -22,7 +27,6 @@ type (
 	AgentPartSource           = agentcontract.AgentPartSource
 	AgentRequest              = agentcontract.AgentRequest
 	AgentTurnRequest          = agentcontract.AgentTurnRequest
-	SystemInstruction         = agentcontract.SystemInstruction
 	CarriedOutCall            = agentcontract.CarriedOutCall
 	AgentTurnResult           = agentcontract.AgentTurnResult
 	ApprovalSignal            = agentcontract.ApprovalSignal
@@ -32,7 +36,6 @@ type (
 	CompanyContext            = agentcontract.CompanyContext
 	PlanStep                  = toolcontract.PlanStep
 	ToolSelector              = agentcontract.ToolSelector
-	ConfirmationReplyDecision = agentcontract.ConfirmationReplyDecision
 	ContractToolWorkingSet    = agentcontract.ContractToolWorkingSet
 	DeliverableKind           = agentcontract.DeliverableKind
 	ExecutionPlan             = agentcontract.ExecutionPlan
@@ -51,7 +54,7 @@ type (
 	PendingInputContext       = agentcontract.PendingInputContext
 	PriorTaskContext          = agentcontract.PriorTaskContext
 	PriorTaskReference        = agentcontract.PriorTaskReference
-	RecoveryBudget            = agentcontract.RecoveryBudget
+	RecoveryBudget            = turnoptions.RecoveryBudget
 	ScheduledRunContext       = agentcontract.ScheduledRunContext
 	SkillCandidate            = agentcontract.SkillCandidate
 	SkillInstruction          = agentcontract.SkillInstruction
@@ -65,8 +68,8 @@ type (
 	TaskLevel                 = agentcontract.TaskLevel
 	TaskShape                 = agentcontract.TaskShape
 	ToolExposureEvent         = agentcontract.ToolExposureEvent
-	TurnDecision              = agentcontract.TurnDecision
-	TurnOptions               = agentcontract.TurnOptions
+	TurnDecision              = turnclassification.TurnDecision
+	TurnOptions               = turnoptions.TurnOptions
 	TurnRoute                 = agentcontract.TurnRoute
 	VisibleContext            = agentcontract.VisibleContext
 	VisibleContextMaterial    = agentcontract.VisibleContextMaterial
@@ -76,8 +79,8 @@ type (
 
 const (
 	ActiveGoalStatusActive           = agentcontract.ActiveGoalStatusActive
-	ElapsedBudgetFromCaller          = agentcontract.ElapsedBudgetFromCaller
-	ElapsedBudgetFromLevel           = agentcontract.ElapsedBudgetFromLevel
+	ElapsedBudgetFromCaller          = turnoptions.ElapsedBudgetFromCaller
+	ElapsedBudgetFromLevel           = turnoptions.ElapsedBudgetFromLevel
 	ActiveGoalStatusBlocked          = agentcontract.ActiveGoalStatusBlocked
 	ActiveGoalStatusCompleted        = agentcontract.ActiveGoalStatusCompleted
 	ActiveGoalStatusWaitingApproval  = agentcontract.ActiveGoalStatusWaitingApproval
@@ -107,7 +110,7 @@ const (
 
 	ExpectedResultTypeFile    = agentcontract.ExpectedResultTypeFile
 	ExpectedResultTypeLink    = agentcontract.ExpectedResultTypeLink
-	ExpectedResultTypeMessage = agentcontract.ExpectedResultTypeMessage
+	ExpectedResultTypeMessage = turnclassification.ExpectedResultTypeMessage
 
 	IntakeClassificationBoundedTask       = agentcontract.IntakeClassificationBoundedTask
 	IntakeClassificationNeedsConfirmation = agentcontract.IntakeClassificationNeedsConfirmation
@@ -148,7 +151,7 @@ var (
 	buildFailureNoticePrompt             = agentcontract.BuildFailureNoticePrompt
 	failureReportAttachmentFilenames     = agentcontract.FailureReportAttachmentFilenames
 	redactRawFailureNotice               = agentcontract.RedactRawFailureNotice
-	LargerTaskLevel                      = agentcontract.LargerTaskLevel
+	LargerTaskLevel                      = turnclassification.LargerTaskLevel
 	NormalizeResponseLanguage            = toolcontract.NormalizeResponseLanguage
 	NormalizeTaskLevel                   = agentcontract.NormalizeTaskLevel
 	OutcomeContractHasRequirements       = agentcontract.OutcomeContractHasRequirements
@@ -167,10 +170,10 @@ var (
 	WithUserFacingMessage        = toolcontract.WithUserFacingMessage
 
 	appendUniqueStrings         = toolcontract.AppendUniqueStrings
-	taskLevelRank               = agentcontract.TaskLevelRank
+	taskLevelRank               = turnclassification.TaskLevelRank
 	normalizeClassification     = agentcontract.NormalizeIntakeClassification
-	normalizeExpectedResults    = agentcontract.NormalizeExpectedResults
-	normalizePriorTaskReference = agentcontract.NormalizePriorTaskReference
+	normalizeExpectedResults    = turnclassification.NormalizeExpectedResults
+	normalizePriorTaskReference = turnclassification.NormalizePriorTaskReference
 )
 
 var formatContextTimestamp = agentcontract.FormatContextTimestamp
@@ -178,9 +181,7 @@ var formatContextTimestamp = agentcontract.FormatContextTimestamp
 var buildVisibleContextDescription = agentcontract.BuildVisibleContextDescription
 
 const (
-	MemoryScopePerson    = agentcontract.MemoryScopePerson
 	MemoryScopeWorkspace = agentcontract.MemoryScopeWorkspace
-	MemoryScopeCircle    = agentcontract.MemoryScopeCircle
 )
 
 var buildMemoryContext = agentcontract.BuildMemoryContext
@@ -192,7 +193,7 @@ var (
 
 var (
 	responseLanguageInstruction = agentcontract.ResponseLanguageInstruction
-	redactUnsafeText            = agentcontract.RedactUnsafeText
+	redactUnsafeText            = RedactUnsafeText
 )
 
 type (
@@ -209,57 +210,57 @@ var (
 )
 
 var (
-	elapsedLimitRawErrorSummary            = agentcontract.ElapsedLimitRawErrorSummary
+	elapsedLimitRawErrorSummary            = ElapsedLimitRawErrorSummary
 	textExceedsCharacterBudget             = agentcontract.TextExceedsCharacterBudget
 	finishMessageMaximumCharacters         = agentcontract.FinishMessageMaximumCharacters
-	buildFinishMessageCompressionPrompt    = agentcontract.BuildFinishMessageCompressionPrompt
+	buildFinishMessageCompressionPrompt    = BuildFinishMessageCompressionPrompt
 	generateRecoveryChatText               = agentcontract.GenerateRecoveryChatText
 	recoveryContextError                   = agentcontract.RecoveryContextError
 	generateLocalRecoveryChatText          = agentcontract.GenerateLocalRecoveryChatText
 	recoveryChatCompletionRequest          = agentcontract.RecoveryChatCompletionRequest
-	buildElapsedLimitRawErrorFailureNotice = agentcontract.BuildElapsedLimitRawErrorFailureNotice
+	buildElapsedLimitRawErrorFailureNotice = BuildElapsedLimitRawErrorFailureNotice
 	failureNoticeRequiresReview            = agentcontract.FailureNoticeRequiresReview
 	normalizeFailureReport                 = agentcontract.NormalizeFailureReport
 	buildFailureNotice                     = agentcontract.BuildFailureNotice
 )
 
 var (
-	activeGoalDescription          = agentcontract.ActiveGoalDescription
-	activeGoalDescriptionForPrompt = agentcontract.ActiveGoalDescriptionForPrompt
+	activeGoalDescription          = contextdescription.ActiveGoalDescription
+	activeGoalDescriptionForPrompt = contextdescription.ActiveGoalDescriptionForPrompt
 )
 
 var scheduledRunDescriptionForPrompt = agentcontract.ScheduledRunDescriptionForPrompt
 
 var (
-	normalizeIntakeOptions          = agentcontract.NormalizeIntakeOptions
-	normalizeRequestedOutputFormats = agentcontract.NormalizeRequestedOutputFormats
-	registeredToolNamesOnly         = agentcontract.RegisteredToolNamesOnly
-	hasAllTools                     = agentcontract.HasAllTools
-	hasTool                         = agentcontract.HasTool
+	normalizeIntakeOptions          = turnclassification.NormalizeIntakeOptions
+	normalizeRequestedOutputFormats = turnclassification.NormalizeRequestedOutputFormats
+	registeredToolNamesOnly         = turnclassification.RegisteredToolNamesOnly
+	hasAllTools                     = turnclassification.HasAllTools
+	hasTool                         = turnclassification.HasTool
 )
 
 type (
-	TaskLevelProfile = agentcontract.TaskLevelProfile
+	TaskLevelProfile = iterationcost.TaskLevelProfile
 )
 
 var (
-	TaskLevelProfileForLevel          = agentcontract.TaskLevelProfileForLevel
-	NewIterationCostObserver          = agentcontract.NewIterationCostObserver
-	DurationForIterationCount         = agentcontract.DurationForIterationCount
-	nextTaskLevel                     = agentcontract.NextTaskLevel
-	taskLevelRequiresPlan             = agentcontract.TaskLevelRequiresPlan
-	taskLevelWantsSingleFinalReply    = agentcontract.TaskLevelWantsSingleFinalReply
-	taskLevelWantsProgressCheckpoints = agentcontract.TaskLevelWantsProgressCheckpoints
+	TaskLevelProfileForLevel          = iterationcost.TaskLevelProfileForLevel
+	NewIterationCostObserver          = iterationcost.NewIterationCostObserver
+	DurationForIterationCount         = iterationcost.DurationForIterationCount
+	nextTaskLevel                     = iterationcost.NextTaskLevel
+	taskLevelRequiresPlan             = iterationcost.TaskLevelRequiresPlan
+	taskLevelWantsSingleFinalReply    = iterationcost.TaskLevelWantsSingleFinalReply
+	taskLevelWantsProgressCheckpoints = iterationcost.TaskLevelWantsProgressCheckpoints
 )
 
 type (
 	llmCallRecord    = agentcontract.LLMCallRecord
 	llmCallObserver  = agentcontract.LLMCallObserver
-	intakeCallLedger = agentcontract.IntakeCallLedger
+	intakeCallLedger = llmcalls.IntakeCallLedger
 )
 
 var observeLanguageModel = agentcontract.ObserveLanguageModel
 
-const agentActionSchemaName = agentcontract.AgentActionSchemaName
+const agentActionSchemaName = llmcalls.AgentActionSchemaName
 
-const turnRouterSchemaName = agentcontract.TurnRouterSchemaName
+const turnRouterSchemaName = llmcalls.TurnRouterSchemaName

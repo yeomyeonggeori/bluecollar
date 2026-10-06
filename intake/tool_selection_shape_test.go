@@ -6,9 +6,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type questionRecordingDecisionModel struct {
@@ -71,7 +72,7 @@ func selectedToolNamesOfFirstMessage(t *testing.T, decisionModel model.DecisionM
 	t.Helper()
 	request := addressedDecisionRequest("이번 주 할 일 목록 보여줘")
 	request.ToolSet = newTestToolSet(toolNames)
-	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, &agentcontract.IntakeCallLedger{})
+	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames})
 	if errorValue != nil {
 		t.Fatalf("decide: %v", errorValue)
 	}

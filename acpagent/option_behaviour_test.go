@@ -13,9 +13,9 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 type recordedLLMCall struct {
@@ -464,15 +464,14 @@ func TestASkillRetrieverTheHostGivesDecidesWhichSkillIsOffered(t *testing.T) {
 	}
 }
 
-func TestATurnRequestTheHostHandsOverReachesTheLoopWithoutBeingRoutedAgain(t *testing.T) {
+func TestATurnRequestTheHostHandsOverReachesTheLoopWithItsAttachmentsAndContext(t *testing.T) {
 	hostCalls := []hostToolCall{}
 	languageModel := &scriptedLanguageModel{level: "medium", contents: []string{
 		`{"action":"reply","final":true,"message":"봤습니다","goalSatisfied":true}`,
 	}}
-	decision := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, TaskShape: agentcontract.TaskShapeImmediateReply, TaskLevel: agentcontract.TaskLevelXLow, ResponseLanguage: "ko", Reason: "host routed"}
 	handedOver := agentcontract.AgentTurnRequest{
-		PrecomputedTurnDecision: &decision,
-		InputParts:              []agentcontract.AgentPart{{Type: agentcontract.AgentPartTypeFile, File: &agentcontract.AgentFilePart{Filename: "meeting-notes.csv", Path: "/workspace/inbox/meeting-notes.csv"}}},
+		IsRuntimeRestartResume: true,
+		InputParts:             []agentcontract.AgentPart{{Type: agentcontract.AgentPartTypeFile, File: &agentcontract.AgentFilePart{Filename: "meeting-notes.csv", Path: "/workspace/inbox/meeting-notes.csv"}}},
 		VisibleContext: agentcontract.VisibleContext{CurrentMaterials: []agentcontract.VisibleContextMaterial{
 			{Filename: "meeting-notes.csv", URL: "https://files.example.com/meeting-notes.csv", IsAvailable: true},
 		}},

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func delegationIsAllowed(options TurnOptions) bool {
@@ -32,7 +32,6 @@ func childTurnRequest(request AgentTurnRequest, actionDocument turnActionDocumen
 	childRequest.Prompt = childPrompt(actionDocument)
 	childRequest.InputParts = nil
 	childRequest.CarriedOutCalls = nil
-	childRequest.PrecomputedTurnDecision = nil
 	childRequest.IsRuntimeRestartResume = false
 	childRequest.ExistingTaskRunID = ""
 	childRequest.ActiveGoal = ActiveGoal{OriginalInstruction: strings.TrimSpace(actionDocument.Instruction)}

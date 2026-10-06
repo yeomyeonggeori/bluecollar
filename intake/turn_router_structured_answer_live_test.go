@@ -16,10 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/evaltest"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/evaltest"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
 )
 
 const (
@@ -133,7 +134,7 @@ func routeOneInput(t *testing.T, apiKey string, arm string, exchanges *exchangeJ
 	return outcome
 }
 
-func routingFallbackReasonOf(decision agentcontract.TurnDecision) string {
+func routingFallbackReasonOf(decision turnclassification.TurnDecision) string {
 	document, _ := json.Marshal(decision)
 	var fields map[string]any
 	_ = json.Unmarshal(document, &fields)

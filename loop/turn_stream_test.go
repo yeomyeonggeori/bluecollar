@@ -2,12 +2,12 @@ package loop
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
 	"github.com/yeomyeonggeori/bluecollar/turnstream"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func continueWithMessageDocument(operationName string, message string) string {

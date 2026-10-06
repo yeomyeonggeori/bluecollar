@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type revisedTurn struct {
@@ -46,7 +46,7 @@ func revisingTurn(t *testing.T, isHostRunOpenedForThisTurn bool) revisedTurn {
 	revised.hostTaskRunID = hostTaskRun.TaskRunID
 
 	var errorValue error
-	revised.result, errorValue = agentKernel.RunAgentRequest(context.Background(), routedRequest(t, context.Background(), agentKernel, request))
+	revised.result, errorValue = runRoutedRequest(t, context.Background(), agentKernel, request)
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)
 	}

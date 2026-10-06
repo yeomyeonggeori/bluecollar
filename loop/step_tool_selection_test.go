@@ -6,9 +6,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type recordingToolSelector struct {
@@ -75,7 +76,7 @@ func TestAPlanStepChangeReselectsTheShortlist(t *testing.T) {
 		t.Fatalf("expected one selection per active step, got %+v", selector.needs)
 	}
 	for _, countLimit := range selector.countLimits {
-		if countLimit != toolcontract.MaxLikelyToolCountForOnePlanStep {
+		if countLimit != toolexposure.MaxLikelyToolCountForOnePlanStep {
 			t.Fatalf("expected the step-sized cap, got %d", countLimit)
 		}
 	}

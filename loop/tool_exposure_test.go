@@ -3,9 +3,11 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"testing"
+
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func newHybridKernelCapabilityToolSet(kernelToolNames []string, operationNames []string) *toolcontract.ToolSet {
@@ -278,7 +280,7 @@ func TestPinnedDirectToolWinsSelectedSkillBudget(t *testing.T) {
 	if !filteredToolSet.IsAllowed("bash") {
 		t.Fatalf("expected pinned direct tool inside budget, got %+v", filteredToolSet.ListToolNames())
 	}
-	expectedToolCount := len(testBuiltInToolNames()) + toolcontract.MaxExtensionCallableToolCount
+	expectedToolCount := len(testBuiltInToolNames()) + toolexposure.MaxExtensionCallableToolCount
 	if len(filteredToolSet.ListToolNames()) != expectedToolCount {
 		t.Fatalf("expected %d tools, got %+v", expectedToolCount, filteredToolSet.ListToolNames())
 	}
@@ -545,9 +547,9 @@ func TestThePinnedGroupLeavesOneSlotForEveryGroupRankedAfterIt(t *testing.T) {
 		{Name: "selected skills", ToolIDs: []string{"selected_skill_tool"}},
 		{Name: "evidence alternatives", ToolIDs: []string{"evidence_alternative_tool"}},
 	}
-	pinnedGroup := toolExposureGroup{Name: "pinned tools", ToolIDs: numberedToolNames(toolcontract.MaxExtensionCallableToolCount - len(groupsRankedAfterPinned))}
+	pinnedGroup := toolExposureGroup{Name: "pinned tools", ToolIDs: numberedToolNames(toolexposure.MaxExtensionCallableToolCount - len(groupsRankedAfterPinned))}
 
-	exposedToolIDs, droppedGroups := selectToolGroups(append([]toolExposureGroup{pinnedGroup}, groupsRankedAfterPinned...), toolcontract.MaxExtensionCallableToolCount)
+	exposedToolIDs, droppedGroups := selectToolGroups(append([]toolExposureGroup{pinnedGroup}, groupsRankedAfterPinned...), toolexposure.MaxExtensionCallableToolCount)
 
 	if len(droppedGroups) != 0 {
 		t.Fatalf("expected a pinned group of this size to starve nothing, got %+v", droppedGroups)

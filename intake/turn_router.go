@@ -5,12 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/contextdescription"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/messageimages"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type TurnRouter struct {
@@ -43,32 +47,32 @@ func NewTurnRouter(languageModel model.LanguageModelProvider, decisionPlanner De
 	return TurnRouter{
 		languageModel:   languageModel,
 		decisionPlanner: decisionPlanner,
-		options:         agentcontract.NormalizeIntakeOptions(options),
+		options:         turnclassification.NormalizeIntakeOptions(options),
 		callCost:        newModelCallCost(),
 	}
 }
 
-func (turnRouter TurnRouter) Plan(ctx context.Context, request agentcontract.AgentRequest) (agentcontract.TurnDecision, error) {
-	return turnRouter.PlanObserved(ctx, request, nil)
+func (turnRouter TurnRouter) Plan(ctx context.Context, request agentcontract.AgentRequest) (turnclassification.TurnDecision, error) {
+	return turnRouter.PlanObserved(ctx, request, turnclassification.Routing{}, nil)
 }
 
-func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
-	if request.PrecomputedTurnDecision != nil {
-		if request.IsPrecomputedDecisionExact {
-			return *request.PrecomputedTurnDecision, nil
+func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcontract.AgentRequest, routing turnclassification.Routing, callLedger *llmcalls.IntakeCallLedger) (turnclassification.TurnDecision, error) {
+	if routing.Decision != nil {
+		if routing.IsExact {
+			return *routing.Decision, nil
 		}
-		return normalizeTurnDecision(*request.PrecomputedTurnDecision, request)
+		return normalizeTurnDecision(*routing.Decision, request)
 	}
 	if !turnRouter.options.IsEnabled {
-		return agentcontract.TurnDecision{}, ErrTurnRouterDisabled
+		return turnclassification.TurnDecision{}, ErrTurnRouterDisabled
 	}
 	decidedFields, errorValue := turnRouter.decideTurnFields(ctx, request, callLedger)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	decidedFields, errorValue = normalizeDecidedTurnFields(decidedFields, request)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	wordsShape, needsChatCall := turnWordsShapeFor(decidedFields)
 	if !needsChatCall {
@@ -84,10 +88,10 @@ func (turnRouter TurnRouter) PlanObserved(ctx context.Context, request agentcont
 		return handToAgentLoop(decidedFields, errorValue), nil
 	}
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, fmt.Errorf("turn router words: %w", errorValue)
+		return turnclassification.TurnDecision{}, fmt.Errorf("turn router words: %w", errorValue)
 	}
 	decision := decidedFields.WithTurnWords(turnWords)
-	if isClarificationReview(decidedFields) && turnWords.ClarificationDisposition == agentcontract.ClarificationDispositionStartWork {
+	if isClarificationReview(decidedFields) && turnWords.ClarificationDisposition == turnclassification.ClarificationDispositionStartWork {
 		decision = startClarifiedWork(decision)
 	}
 	return normalizeTurnWords(decision), nil
@@ -105,7 +109,7 @@ func isMalformedAnswer(ctx context.Context, errorValue error) bool {
 	return isCorrectable
 }
 
-func handToAgentLoop(decidedFields agentcontract.TurnDecision, malformedAnswer error) agentcontract.TurnDecision {
+func handToAgentLoop(decidedFields turnclassification.TurnDecision, malformedAnswer error) turnclassification.TurnDecision {
 	decidedFields.RoutingFallbackReason = malformedAnswer.Error()
 	if turnRouteStartsWork(decidedFields) {
 		return normalizeTurnWords(decidedFields)
@@ -116,24 +120,24 @@ func handToAgentLoop(decidedFields agentcontract.TurnDecision, malformedAnswer e
 	return normalizeTurnWords(decidedFields)
 }
 
-func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agentcontract.AgentRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
+func (turnRouter TurnRouter) decideTurnFields(ctx context.Context, request agentcontract.AgentRequest, callLedger *llmcalls.IntakeCallLedger) (turnclassification.TurnDecision, error) {
 	return turnRouter.decideGeneralTurnFields(ctx, TurnRequestDecisionRequest(request), callLedger)
 }
 
-func (turnRouter TurnRouter) decideGeneralTurnFields(ctx context.Context, decisionRequest agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.TurnDecision, error) {
+func (turnRouter TurnRouter) decideGeneralTurnFields(ctx context.Context, decisionRequest turnclassification.IntakeDecisionRequest, callLedger *llmcalls.IntakeCallLedger) (turnclassification.TurnDecision, error) {
 	decisions, errorValue := turnRouter.decisionPlanner.Decide(ctx, decisionRequest, callLedger)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, fmt.Errorf("turn router: %w", errorValue)
+		return turnclassification.TurnDecision{}, fmt.Errorf("turn router: %w", errorValue)
 	}
 	if len(decisions.Messages) == 0 {
-		return agentcontract.TurnDecision{}, errors.New("turn router: the decision model answered about no message")
+		return turnclassification.TurnDecision{}, errors.New("turn router: the decision model answered about no message")
 	}
 	return decisions.Messages[0].TurnFields, nil
 }
 
-func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontract.IntakeDecisionRequest {
-	return agentcontract.IntakeDecisionRequest{
-		Messages: []agentcontract.IntakeDecisionMessage{{
+func TurnRequestDecisionRequest(request agentcontract.AgentRequest) turnclassification.IntakeDecisionRequest {
+	return turnclassification.IntakeDecisionRequest{
+		Messages: []turnclassification.IntakeDecisionMessage{{
 			Prompt:       request.Prompt,
 			SenderName:   firstNonEmptyText(request.RequesterCallingName, request.RequesterName),
 			SenderHandle: request.RequesterHandle,
@@ -141,7 +145,7 @@ func TurnRequestDecisionRequest(request agentcontract.AgentRequest) agentcontrac
 			InputParts:   request.InputParts,
 			Attachments:  agentcontract.AttachmentFactsFromParts(request.InputParts),
 
-			IsAttachmentsOnly: strings.TrimSpace(request.Prompt) == "" && len(agentcontract.ImagePartsOf(request.InputParts)) > 0,
+			IsAttachmentsOnly: strings.TrimSpace(request.Prompt) == "" && len(messageimages.ImagePartsOf(request.InputParts)) > 0,
 		}},
 		ConversationType:  request.ConversationType,
 		VisibleContext:    request.VisibleContext,
@@ -163,7 +167,7 @@ type turnWordsShape struct {
 	schemaDocument string
 }
 
-func turnWordsShapeFor(decision agentcontract.TurnDecision) (turnWordsShape, bool) {
+func turnWordsShapeFor(decision turnclassification.TurnDecision) (turnWordsShape, bool) {
 	if isClarificationReview(decision) {
 		return turnWordsShape{systemPrompt: clarificationWordsSystemPrompt, schemaDocument: clarificationTurnWordsSchema()}, true
 	}
@@ -176,11 +180,11 @@ func turnWordsShapeFor(decision agentcontract.TurnDecision) (turnWordsShape, boo
 	return turnWordsShape{}, false
 }
 
-func isClarificationReview(decision agentcontract.TurnDecision) bool {
+func isClarificationReview(decision turnclassification.TurnDecision) bool {
 	return decision.Route == agentcontract.TurnRouteClarify || agentcontract.NormalizeIntakeClassification(decision.Classification) == agentcontract.IntakeClassificationNeedsConfirmation
 }
 
-func turnRouteNeedsWords(decision agentcontract.TurnDecision) bool {
+func turnRouteNeedsWords(decision turnclassification.TurnDecision) bool {
 	switch decision.Route {
 	case agentcontract.TurnRouteClarify, agentcontract.TurnRouteAnswerQuestion, agentcontract.TurnRouteAnswerMeta, agentcontract.TurnRouteGiveUp:
 		return true
@@ -189,7 +193,7 @@ func turnRouteNeedsWords(decision agentcontract.TurnDecision) bool {
 	}
 }
 
-func turnRouteStartsWork(decision agentcontract.TurnDecision) bool {
+func turnRouteStartsWork(decision turnclassification.TurnDecision) bool {
 	switch decision.Route {
 	case agentcontract.TurnRouteStartTask, agentcontract.TurnRouteContinueTask, agentcontract.TurnRouteReviseTask:
 		return true
@@ -198,9 +202,9 @@ func turnRouteStartsWork(decision agentcontract.TurnDecision) bool {
 	}
 }
 
-func (turnRouter TurnRouter) writeTurnWords(ctx context.Context, request agentcontract.AgentRequest, decidedFields agentcontract.TurnDecision, wordsShape turnWordsShape) (agentcontract.TurnWords, error) {
+func (turnRouter TurnRouter) writeTurnWords(ctx context.Context, request agentcontract.AgentRequest, decidedFields turnclassification.TurnDecision, wordsShape turnWordsShape) (turnclassification.TurnWords, error) {
 	if turnRouter.languageModel == nil {
-		return agentcontract.TurnWords{}, ErrTurnRouterLanguageModelUnavailable
+		return turnclassification.TurnWords{}, ErrTurnRouterLanguageModelUnavailable
 	}
 	messages := turnRouter.buildWordsMessages(request, decidedFields, wordsShape.systemPrompt)
 	turnWords, errorValue := turnRouter.generateTurnWordsPatiently(ctx, turnWordsRequest(messages, wordsShape), decidedFields)
@@ -208,11 +212,11 @@ func (turnRouter TurnRouter) writeTurnWords(ctx context.Context, request agentco
 		return turnWords, nil
 	}
 	if errors.Is(errorValue, context.Canceled) || errors.Is(errorValue, context.DeadlineExceeded) || ctx.Err() != nil {
-		return agentcontract.TurnWords{}, errorValue
+		return turnclassification.TurnWords{}, errorValue
 	}
 	correctionInstruction, isCorrectable := turnRouterCorrectionInstructionForError(errorValue)
 	if !isCorrectable {
-		return agentcontract.TurnWords{}, errorValue
+		return turnclassification.TurnWords{}, errorValue
 	}
 	correctionMessages := append([]model.Message{}, messages...)
 	if previousWords := previousTurnRouterDecision(errorValue); previousWords != "" {
@@ -222,26 +226,26 @@ func (turnRouter TurnRouter) writeTurnWords(ctx context.Context, request agentco
 	return turnRouter.generateTurnWordsPatiently(ctx, turnWordsRequest(correctionMessages, wordsShape), decidedFields)
 }
 
-func (turnRouter TurnRouter) generateTurnWordsPatiently(ctx context.Context, request model.StructuredResponseRequest, decidedFields agentcontract.TurnDecision) (agentcontract.TurnWords, error) {
-	turnWords, _, errorValue := askPatiently(ctx, turnRouter.callCost, func(callContext context.Context) (agentcontract.TurnWords, error) {
+func (turnRouter TurnRouter) generateTurnWordsPatiently(ctx context.Context, request model.StructuredResponseRequest, decidedFields turnclassification.TurnDecision) (turnclassification.TurnWords, error) {
+	turnWords, _, errorValue := askPatiently(ctx, turnRouter.callCost, func(callContext context.Context) (turnclassification.TurnWords, error) {
 		return turnRouter.generateTurnWords(callContext, request, decidedFields)
 	})
 	return turnWords, errorValue
 }
 
-func (turnRouter TurnRouter) generateTurnWords(ctx context.Context, request model.StructuredResponseRequest, decidedFields agentcontract.TurnDecision) (agentcontract.TurnWords, error) {
+func (turnRouter TurnRouter) generateTurnWords(ctx context.Context, request model.StructuredResponseRequest, decidedFields turnclassification.TurnDecision) (turnclassification.TurnWords, error) {
 	startedAt := time.Now()
 	structuredResponse, errorValue := turnRouter.languageModel.GenerateStructuredResponse(ctx, request)
 	if errorValue != nil {
-		return agentcontract.TurnWords{}, errorValue
+		return turnclassification.TurnWords{}, errorValue
 	}
 	turnRouter.callCost.record(structuredResponse.ModelName, time.Since(startedAt))
-	var turnWords agentcontract.TurnWords
+	var turnWords turnclassification.TurnWords
 	if parseError := json.Unmarshal([]byte(structuredResponse.Content), &turnWords); parseError != nil {
-		return agentcontract.TurnWords{}, turnRouterDecisionError{cause: parseError, content: structuredResponse.Content}
+		return turnclassification.TurnWords{}, turnRouterDecisionError{cause: parseError, content: structuredResponse.Content}
 	}
 	if validationError := validateClarificationQuestion(decidedFields, turnWords); validationError != nil {
-		return agentcontract.TurnWords{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
+		return turnclassification.TurnWords{}, turnRouterDecisionError{cause: validationError, content: structuredResponse.Content}
 	}
 	return turnWords, nil
 }
@@ -250,23 +254,23 @@ func turnWordsRequest(messages []model.Message, wordsShape turnWordsShape) model
 	return model.StructuredResponseRequest{
 		Messages: messages,
 		StructuredOutputSchema: model.StructuredOutputSchema{
-			Name:               agentcontract.TurnRouterSchemaName,
+			Name:               llmcalls.TurnRouterSchemaName,
 			Document:           wordsShape.schemaDocument,
 			IsStrictlyEnforced: true,
 		},
 	}
 }
 
-func validateClarificationQuestion(decidedFields agentcontract.TurnDecision, turnWords agentcontract.TurnWords) error {
+func validateClarificationQuestion(decidedFields turnclassification.TurnDecision, turnWords turnclassification.TurnWords) error {
 	if !isClarificationReview(decidedFields) {
 		return nil
 	}
 	switch turnWords.ClarificationDisposition {
-	case agentcontract.ClarificationDispositionAsk:
+	case turnclassification.ClarificationDispositionAsk:
 		if strings.TrimSpace(turnWords.ClarificationQuestion) == "" {
 			return errors.New("an ask disposition requires a nonempty clarification question")
 		}
-	case agentcontract.ClarificationDispositionStartWork:
+	case turnclassification.ClarificationDispositionStartWork:
 		if strings.TrimSpace(turnWords.ClarificationQuestion) != "" || len(turnWords.ClarificationOptions) > 0 {
 			return errors.New("a start_work disposition requires no clarification question or options")
 		}
@@ -325,7 +329,7 @@ func turnRouterCorrectionInstruction(correction model.StructuredOutputCorrection
 	return strings.Join(messageParts, " ")
 }
 
-func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentRequest, decidedFields agentcontract.TurnDecision, systemPrompt string) []model.Message {
+func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentRequest, decidedFields turnclassification.TurnDecision, systemPrompt string) []model.Message {
 	messages := []model.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(firstNonEmptyText(decidedFields.ResponseLanguage, request.ResponseLanguage))},
@@ -334,10 +338,10 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	if contextDescription := agentcontract.BuildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: contextDescription})
 	}
-	if goalDescription := agentcontract.ActiveGoalDescriptionForPrompt(request.ActiveGoal, request.Prompt); goalDescription != "" {
+	if goalDescription := contextdescription.ActiveGoalDescriptionForPrompt(request.ActiveGoal, request.Prompt); goalDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: goalDescription})
 	}
-	if priorTaskDescription := agentcontract.PriorTaskContextDescription(request.PriorTask); priorTaskDescription != "" {
+	if priorTaskDescription := contextdescription.PriorTaskContextDescription(request.PriorTask); priorTaskDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: priorTaskDescription})
 	}
 	if scheduledRunDescription := agentcontract.ScheduledRunDescriptionForPrompt(request.ScheduledRun); scheduledRunDescription != "" {
@@ -349,7 +353,7 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	return append(messages, turnWordsUserMessage(request))
 }
 
-func turnWordsFactsDescription(decidedFields agentcontract.TurnDecision) string {
+func turnWordsFactsDescription(decidedFields turnclassification.TurnDecision) string {
 	if !isClarificationReview(decidedFields) {
 		return decidedTurnFactsDescription(decidedFields)
 	}
@@ -365,7 +369,7 @@ func turnWordsFactsDescription(decidedFields agentcontract.TurnDecision) string 
 
 func turnWordsUserMessage(request agentcontract.AgentRequest) model.Message {
 	message := model.Message{Role: "user", Content: request.Prompt}
-	imageParts := agentcontract.ImageMessageParts(request.InputParts)
+	imageParts := messageimages.ImageMessageParts(request.InputParts)
 	if len(imageParts) == 0 {
 		return message
 	}
@@ -373,7 +377,7 @@ func turnWordsUserMessage(request agentcontract.AgentRequest) model.Message {
 	return message
 }
 
-func decidedTurnFactsDescription(decidedFields agentcontract.TurnDecision) string {
+func decidedTurnFactsDescription(decidedFields turnclassification.TurnDecision) string {
 	lines := []string{
 		"Decided for this turn:",
 		"- route: " + string(decidedFields.Route),
@@ -398,7 +402,7 @@ func turnRouterCallableToolNames(request agentcontract.AgentRequest) []string {
 		}
 		for _, toolDefinition := range request.ToolSet.ListRegisteredToolDefinitions() {
 			toolName := strings.TrimSpace(toolDefinition.Name)
-			if toolIsSelectableForTurn(request.ToolSet, toolName) && agentcontract.RequiredEvidenceToolCanBeSatisfied(request.ToolSet, toolName) {
+			if toolIsSelectableForTurn(request.ToolSet, toolName) && turnclassification.RequiredEvidenceToolCanBeSatisfied(request.ToolSet, toolName) {
 				callableToolNames = toolcontract.AppendUniqueStrings(callableToolNames, toolName)
 			}
 		}
@@ -436,9 +440,9 @@ func turnWordsSchemaWithClarificationDisposition(requiresClarificationDispositio
 	if requiresClarificationDisposition {
 		properties["clarificationDisposition"] = map[string]any{
 			"type": "string",
-			"enum": []agentcontract.ClarificationDisposition{
-				agentcontract.ClarificationDispositionAsk,
-				agentcontract.ClarificationDispositionStartWork,
+			"enum": []turnclassification.ClarificationDisposition{
+				turnclassification.ClarificationDispositionAsk,
+				turnclassification.ClarificationDispositionStartWork,
 			},
 		}
 	}
@@ -481,7 +485,7 @@ func expectedResultsSchema() map[string]any {
 				"id": map[string]any{"type": "string", "maxLength": 128},
 				"type": map[string]any{
 					"type":        "string",
-					"enum":        []string{agentcontract.ExpectedResultTypeMessage, agentcontract.ExpectedResultTypeFile, agentcontract.ExpectedResultTypeLink},
+					"enum":        []string{turnclassification.ExpectedResultTypeMessage, agentcontract.ExpectedResultTypeFile, agentcontract.ExpectedResultTypeLink},
 					"description": "message means an answer the final reply itself delivers — never add a second message result for the reply, or the agent sends the same answer twice. A separate message result is only for a message that must exist apart from the reply: a standalone channel post, or a direct message to somebody else.",
 				},
 				"description":     map[string]any{"type": "string", "maxLength": 256},

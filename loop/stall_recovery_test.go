@@ -2,10 +2,11 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestStalledOnRedundantInspectionDetectsCacheHit(t *testing.T) {

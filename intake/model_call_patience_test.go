@@ -5,9 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type stallingThenAnsweringTurnWordsModel struct {
@@ -99,10 +101,10 @@ func TestAStalledDecisionCallIsCutAtTheMeasuredPatienceAndAskedAgain(t *testing.
 	decisionModel := &stallingThenAnsweringDecisionModel{stalledCalls: 1, answering: intaketest.NewDecisionModel(clarifyOutcome())}
 	decisionPlanner := NewDecisionPlanner(decisionModel, nil)
 	decisionPlanner.callCost.record("a-decision-model", time.Millisecond)
-	callLedger := &agentcontract.IntakeCallLedger{}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
-	decisions, errorValue := decisionPlanner.Decide(context.Background(), agentcontract.IntakeDecisionRequest{
-		Messages: []agentcontract.IntakeDecisionMessage{{MessageID: "message-1", Prompt: "보고서 하나 만들어줘"}},
+	decisions, errorValue := decisionPlanner.Decide(context.Background(), turnclassification.IntakeDecisionRequest{
+		Messages: []turnclassification.IntakeDecisionMessage{{MessageID: "message-1", Prompt: "보고서 하나 만들어줘"}},
 	}, callLedger)
 
 	if errorValue != nil || len(decisions.Messages) != 1 {

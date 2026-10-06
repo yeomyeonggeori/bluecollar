@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 func TestTerminalFallbackCannotCompleteAnUnrecordedAttachment(t *testing.T) {

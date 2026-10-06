@@ -9,12 +9,13 @@ import (
 	"sync"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/approval"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/loop"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 type session struct {
@@ -133,14 +134,13 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
-	turnRequest.PrecomputedTurnDecision = &planned.decision
 	turnRequest.IsRuntimeRestartResume = turnRequest.IsRuntimeRestartResume || isResumedFromHostLedger
 	openSession.catalog.toolSet.UseToolCallGate(newHostCheckedGate(openSession.gate.TurnGate(approval.Turn{
 		ResponseLanguage: planned.decision.ResponseLanguage,
 		Prompt:           turnRequest.Prompt,
 	})))
 
-	turnResult, errorValue := openSession.kernel.RunTurn(ctx, turnRequest)
+	turnResult, errorValue := openSession.kernel.RunPlannedTurn(ctx, turnRequest, turnclassification.Routing{Decision: &planned.decision})
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}

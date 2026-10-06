@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func (agentTurnRunner *AgentTurnRunner) buildActionSchema(toolRegistry *toolcontract.ToolSet, allowQualityCriteria bool, hasFailureDebt bool) string {
