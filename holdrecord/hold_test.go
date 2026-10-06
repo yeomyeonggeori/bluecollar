@@ -258,3 +258,15 @@ func TestAHoldCarriesTheChoicesItWasOpenedWith(t *testing.T) {
 		t.Fatalf("expected the offered choices in their order, got %+v", holds)
 	}
 }
+
+func TestAnAnswerAHoldOffersKeepsItsLabelInTheLedger(t *testing.T) {
+	ledger := taskstate.NewTaskRunService(taskstate.NewTaskEventService())
+	taskRunID := ledger.CreateTaskRun("person-1", "conversation-1", "book a room").TaskRunID
+	Open(ledger, taskRunID, agentcontract.HeldCall{ToolName: "ask_input"}, []Choice{{Key: "1", Label: "회의실 A"}, {Key: "2", Label: "회의실 B"}})
+
+	choices := Holds(ledger.ListTaskEvent(taskRunID))[0].Choices
+
+	if len(choices) != 2 || choices[1].Label != "회의실 B" || !choices[1].IsAnAnswer() || choices[1].DefersTheCall() {
+		t.Fatalf("a choice that carries a label is an answer to a question, and one that starts later is not, got %+v", choices)
+	}
+}

@@ -28,6 +28,11 @@ const (
 type Choice struct {
 	Key      string `json:"key"`
 	StartsAt string `json:"startsAt,omitempty"`
+	Label    string `json:"label,omitempty"`
+}
+
+func (choice Choice) IsAnAnswer() bool {
+	return strings.TrimSpace(choice.Label) != ""
 }
 
 func (choice Choice) DefersTheCall() bool {
