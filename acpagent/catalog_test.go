@@ -461,7 +461,7 @@ func TestAToolOfferedOnRequestIsRegisteredForSelectionButNotPinnedToTheTurn(t *t
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ran"}}}, nil
 	}
 	server.AddTool(&mcp.Tool{Name: "event_add", InputSchema: map[string]any{"type": "object"}}, handler)
-	server.AddTool(&mcp.Tool{Name: "message_send", InputSchema: map[string]any{"type": "object"}, Meta: mcp.Meta{OfferedOnRequestMetaKey: true}}, handler)
+	server.AddTool(&mcp.Tool{Name: "message_send", InputSchema: map[string]any{"type": "object"}, Meta: mcp.Meta(toolcontract.DescriptorMeta(toolcontract.ToolDescriptor{Name: "message_send", IsOfferedOnRequest: true}))}, handler)
 	transport, _ := connectCatalogServer(t, server)
 
 	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
