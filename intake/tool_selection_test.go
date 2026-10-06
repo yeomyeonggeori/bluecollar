@@ -7,10 +7,12 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 func measurementToolNames() []string {
@@ -64,11 +66,11 @@ func TestTheSelectionStopsAtTheCountLimitAndKeepsTheLikeliestTools(t *testing.T)
 }
 
 func TestTheLikelyToolLimitIsTakenFromTheExposureCapRatherThanDeclaredBesideIt(t *testing.T) {
-	if likelyToolCountLimit >= toolcontract.MaxExtensionCallableToolCount {
-		t.Fatalf("expected the likely tools to fit under the exposure cap of %d, got a limit of %d", toolcontract.MaxExtensionCallableToolCount, likelyToolCountLimit)
+	if likelyToolCountLimit >= toolexposure.MaxExtensionCallableToolCount {
+		t.Fatalf("expected the likely tools to fit under the exposure cap of %d, got a limit of %d", toolexposure.MaxExtensionCallableToolCount, likelyToolCountLimit)
 	}
-	if spareSlots := toolcontract.MaxExtensionCallableToolCount - likelyToolCountLimit; spareSlots != toolcontract.ToolExposureGroupsRankedBelowTheLikelyTools {
-		t.Fatalf("expected one exposure slot for each of the %d groups ranked below the pinned tools, got %d spare", toolcontract.ToolExposureGroupsRankedBelowTheLikelyTools, spareSlots)
+	if spareSlots := toolexposure.MaxExtensionCallableToolCount - likelyToolCountLimit; spareSlots != toolexposure.ToolExposureGroupsRankedBelowTheLikelyTools {
+		t.Fatalf("expected one exposure slot for each of the %d groups ranked below the pinned tools, got %d spare", toolexposure.ToolExposureGroupsRankedBelowTheLikelyTools, spareSlots)
 	}
 }
 
@@ -153,11 +155,11 @@ func decisionRequestDocument(t *testing.T, request model.DecisionRequest) string
 	return string(document)
 }
 
-func toolQuestionsFor(request agentcontract.IntakeDecisionRequest, toolNames []string) map[string]model.DecisionQuestion {
+func toolQuestionsFor(request turnclassification.IntakeDecisionRequest, toolNames []string) map[string]model.DecisionQuestion {
 	return newQuestionBuilder(request).toolQuestions([]string{decisionMessageKey(0)}, toolNames)
 }
 
-func toolSelectionRequestFor(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
+func toolSelectionRequestFor(request turnclassification.IntakeDecisionRequest) model.DecisionRequest {
 	candidateToolNames := resolveCallableToolNames(request)
 	return toolSelectionRequestPart(request, []string{decisionMessageKey(0)}, decisionToolDescriptions(request.ToolSet, candidateToolNames).tools)
 }
@@ -244,7 +246,7 @@ func TestTheLedgerCarriesTheProbabilitiesTheSelectionWasMadeFrom(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.TurnDecision.InitialToolNames = nil
 	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
-	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
 	if _, errorValue := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil).Decide(context.Background(), request, callLedger); errorValue != nil {
 		t.Fatalf("expected the decision call to answer: %v", errorValue)
@@ -301,7 +303,7 @@ func TestToolQuestionsSplitAcrossRequestsWhenOneWouldOverflowTheBudget(t *testin
 	}
 }
 
-func burstMessageKeys(request agentcontract.IntakeDecisionRequest) []string {
+func burstMessageKeys(request turnclassification.IntakeDecisionRequest) []string {
 	messageKeys := []string{}
 	for index := range request.Messages {
 		messageKeys = append(messageKeys, decisionMessageKey(index))
@@ -356,7 +358,7 @@ func TestAFailedSelectionStartsTheTaskWithNoLikelyToolsAndSaysSoOnTheLedger(t *t
 	request := burstDecisionRequest(burstMessageCountThatOverflowsTheBudget, measurementToolNames())
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88}
-	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
 	decisions, errorValue := NewDecisionPlanner(&partFailingDecisionModel{outcome: outcome}, nil).Decide(context.Background(), request, callLedger)
 
@@ -376,7 +378,7 @@ func TestAFailedSelectionStartsTheTaskWithNoLikelyToolsAndSaysSoOnTheLedger(t *t
 	}
 }
 
-func hasFailedSelectionRecord(callLedger *agentcontract.IntakeCallLedger) bool {
+func hasFailedSelectionRecord(callLedger *llmcalls.IntakeCallLedger) bool {
 	for _, record := range callLedger.Records {
 		if record.IsError && len(record.DecidedMessageIDs) == 0 {
 			return true
@@ -404,7 +406,7 @@ func (decisionModel *partFailingDecisionModel) Decide(_ context.Context, request
 
 const burstMessageCountThatOverflowsTheBudget = 14
 
-func burstDecisionRequest(messageCount int, toolNames []string) agentcontract.IntakeDecisionRequest {
+func burstDecisionRequest(messageCount int, toolNames []string) turnclassification.IntakeDecisionRequest {
 	request := addressedDecisionRequest("지난 분기 매출 정리해서 덱 만들어줘")
 	request.ToolSet = newTestToolSet(toolNames)
 	for index := 1; index < messageCount; index++ {
@@ -421,7 +423,7 @@ func toolNameOfQuestion(questionName string) (string, bool) {
 	return questionName[separatorIndex+len("."+agentcontract.IntakeQuestionPrefixTool):], true
 }
 
-func recordedToolSelection(callLedger *agentcontract.IntakeCallLedger) *agentcontract.ToolSelectionRecord {
+func recordedToolSelection(callLedger *llmcalls.IntakeCallLedger) *agentcontract.ToolSelectionRecord {
 	for _, record := range callLedger.Records {
 		if record.ToolSelection != nil {
 			return record.ToolSelection
@@ -468,13 +470,13 @@ func TestOnlyAMessageRoutedToWorkCostsAToolSelectionCall(t *testing.T) {
 func TestASelectionForOneNeedLandsInTheCallLedger(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"event_list": 0.94, "message_send": 0.44, "web_search": 0.01}
-	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 	planner := NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil)
 
 	selectedTools, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
 		Need:         "이번 주 회의 일정을 읽는다",
 		ToolSet:      newTestToolSet([]string{"event_list", "message_send", "web_search"}),
-		CountLimit:   toolcontract.MaxLikelyToolCountForOnePlanStep,
+		CountLimit:   toolexposure.MaxLikelyToolCountForOnePlanStep,
 		CallObserver: callLedger.Observe,
 	})
 	if errorValue != nil {
@@ -490,7 +492,7 @@ func TestASelectionForOneNeedLandsInTheCallLedger(t *testing.T) {
 	if toolSelection == nil {
 		t.Fatal("expected the recorded call to carry what the selection was made from")
 	}
-	if toolSelection.CountLimit != toolcontract.MaxLikelyToolCountForOnePlanStep {
+	if toolSelection.CountLimit != toolexposure.MaxLikelyToolCountForOnePlanStep {
 		t.Fatalf("expected the need's own cap to be recorded, got %d", toolSelection.CountLimit)
 	}
 	if toolSelection.Probabilities["m1.event_list"] != 0.94 {

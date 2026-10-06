@@ -5,7 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestExecutionBudgetStartsAfterCompletedRouting(t *testing.T) {
@@ -22,7 +23,7 @@ func TestExecutionBudgetStartsAfterCompletedRouting(t *testing.T) {
 		TaskLevel:        TaskLevelXLow,
 		ResponseLanguage: "en",
 	}
-	result, errorValue := agentKernel.RunAgentRequest(context.Background(), agentcontract.Routing{Decision: &routedDecision}, request)
+	result, errorValue := agentKernel.RunAgentRequest(context.Background(), turnclassification.Routing{Decision: &routedDecision}, request)
 	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("completed routing must leave an execution budget: result=%+v error=%v", result, errorValue)
 	}

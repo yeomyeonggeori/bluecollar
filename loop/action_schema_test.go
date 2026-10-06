@@ -8,9 +8,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
 	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestActionSchemasRecursivelyCloseEveryObject(t *testing.T) {

@@ -3,13 +3,14 @@ package loop
 import (
 	"context"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type AgentKernel struct {
@@ -133,10 +134,10 @@ func (agentKernel *AgentKernel) RefreshSkillIndex(ctx context.Context, instructi
 }
 
 func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request AgentTurnRequest) (AgentTurnResult, error) {
-	return agentKernel.RunPlannedTurn(responseContext, request, agentcontract.Routing{})
+	return agentKernel.RunPlannedTurn(responseContext, request, turnclassification.Routing{})
 }
 
-func (agentKernel *AgentKernel) RunPlannedTurn(responseContext context.Context, request AgentTurnRequest, routing agentcontract.Routing) (AgentTurnResult, error) {
+func (agentKernel *AgentKernel) RunPlannedTurn(responseContext context.Context, request AgentTurnRequest, routing turnclassification.Routing) (AgentTurnResult, error) {
 	return agentKernel.RunAgentRequest(responseContext, routing, AgentRequest{
 		RequesterPersonID:          request.RequesterPersonID,
 		RequesterName:              request.RequesterName,
@@ -219,7 +220,7 @@ func (agentKernel *AgentKernel) taskRunForLaunchFailure(request AgentTurnRequest
 	}, request.Prompt)
 }
 
-func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context, routing agentcontract.Routing, request AgentRequest) (AgentTurnResult, error) {
+func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context, routing turnclassification.Routing, request AgentRequest) (AgentTurnResult, error) {
 	requestReceivedAt := time.Now()
 	routerCallLedger := &intakeCallLedger{}
 	request.ActiveGoal = normalizePersistedActiveGoal(request.ActiveGoal)
@@ -651,7 +652,7 @@ func (agentKernel *AgentKernel) ResumeTask(taskRunID string) (agentcontract.Task
 	return agentKernel.taskRunService.ResumeTaskRun(taskRunID)
 }
 
-func (agentKernel *AgentKernel) completeIntakeOnlyRequest(responseContext context.Context, routing agentcontract.Routing, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus, routerCallRecords []llmCallRecord) (AgentTurnResult, error) {
+func (agentKernel *AgentKernel) completeIntakeOnlyRequest(responseContext context.Context, routing turnclassification.Routing, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus, routerCallRecords []llmCallRecord) (AgentTurnResult, error) {
 	taskRun := agentKernel.taskRunForRequest(request)
 	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
 	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(intakeDecision))
@@ -787,7 +788,7 @@ func (turnBudget turnBudgetContext) didWorkExpire() bool {
 	return turnBudget.parentContext.Err() == nil && errors.Is(turnBudget.workContext.Err(), context.DeadlineExceeded)
 }
 
-func (agentKernel *AgentKernel) completeIntakeIfElapsed(turnBudget turnBudgetContext, routing agentcontract.Routing, request AgentRequest, intakeDecision IntakeDecision, turnRoute TurnRoute, routerCallRecords []llmCallRecord) (AgentTurnResult, bool) {
+func (agentKernel *AgentKernel) completeIntakeIfElapsed(turnBudget turnBudgetContext, routing turnclassification.Routing, request AgentRequest, intakeDecision IntakeDecision, turnRoute TurnRoute, routerCallRecords []llmCallRecord) (AgentTurnResult, bool) {
 	if !turnBudget.didWorkExpire() {
 		return AgentTurnResult{}, false
 	}
@@ -796,7 +797,7 @@ func (agentKernel *AgentKernel) completeIntakeIfElapsed(turnBudget turnBudgetCon
 	return result, true
 }
 
-func (agentKernel *AgentKernel) completeIntakeElapsed(turnBudget turnBudgetContext, routing agentcontract.Routing, request AgentRequest, intakeDecision IntakeDecision, routerCallRecords []llmCallRecord) AgentTurnResult {
+func (agentKernel *AgentKernel) completeIntakeElapsed(turnBudget turnBudgetContext, routing turnclassification.Routing, request AgentRequest, intakeDecision IntakeDecision, routerCallRecords []llmCallRecord) AgentTurnResult {
 	taskRun := agentKernel.taskRunForRequest(request)
 	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
 	if intakeDecision.TaskLevel != "" {
@@ -914,7 +915,7 @@ func promoteArtifactTaskLevel(request AgentRequest, intakeDecision IntakeDecisio
 	return intakeDecision
 }
 
-func promoteArtifactTaskLevelForRequest(routing agentcontract.Routing, request AgentRequest, intakeDecision IntakeDecision) IntakeDecision {
+func promoteArtifactTaskLevelForRequest(routing turnclassification.Routing, request AgentRequest, intakeDecision IntakeDecision) IntakeDecision {
 	if routing.IsExact {
 		return intakeDecision
 	}
@@ -974,7 +975,7 @@ func restorePersistedToolSelection(request AgentRequest) AgentRequest {
 	return request
 }
 
-func routedTurnDecision(routing agentcontract.Routing) (TurnDecision, error) {
+func routedTurnDecision(routing turnclassification.Routing) (TurnDecision, error) {
 	if routing.Decision == nil {
 		return TurnDecision{}, errors.New("turn request carries no routing decision; the host routes before handing a turn to the harness")
 	}

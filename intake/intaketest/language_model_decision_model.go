@@ -7,8 +7,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type LanguageModelDecisionModel struct {
@@ -39,7 +41,7 @@ func (decisionModel *LanguageModelDecisionModel) Decide(ctx context.Context, req
 	if errorValue != nil {
 		return model.DecisionResponse{}, errorValue
 	}
-	var turnDecision agentcontract.TurnDecision
+	var turnDecision turnclassification.TurnDecision
 	if errorValue := json.Unmarshal([]byte(strings.TrimSpace(response.Content)), &turnDecision); errorValue != nil {
 		return model.DecisionResponse{}, errorValue
 	}
@@ -88,7 +90,7 @@ func turnDecisionRequest(state any) (model.StructuredResponseRequest, error) {
 			{Role: "user", Content: string(stateDocument)},
 		},
 		StructuredOutputSchema: model.StructuredOutputSchema{
-			Name:               agentcontract.TurnRouterSchemaName,
+			Name:               llmcalls.TurnRouterSchemaName,
 			Document:           schemaDocument,
 			IsStrictlyEnforced: true,
 		},

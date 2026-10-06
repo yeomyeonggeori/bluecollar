@@ -3,7 +3,7 @@ package loop
 import (
 	"context"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type staticReplyProvider struct {

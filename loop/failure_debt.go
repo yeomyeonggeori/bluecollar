@@ -2,9 +2,10 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strconv"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const (

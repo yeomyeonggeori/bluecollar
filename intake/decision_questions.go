@@ -1,17 +1,18 @@
 package intake
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type questionBuilder struct {
-	request   agentcontract.IntakeDecisionRequest
+	request   turnclassification.IntakeDecisionRequest
 	toolNames []string
 }
 
-func newQuestionBuilder(request agentcontract.IntakeDecisionRequest) questionBuilder {
+func newQuestionBuilder(request turnclassification.IntakeDecisionRequest) questionBuilder {
 	return questionBuilder{request: request, toolNames: request.CallableToolNames}
 }
 
@@ -104,7 +105,7 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	if hasPriorTask(builder.request) {
 		questions[agentcontract.IntakeQuestionPriorTaskReference] = builder.priorTaskReferenceQuestion(messageKey)
 	}
-	for _, formatName := range agentcontract.RequestedOutputFormatNames {
+	for _, formatName := range turnclassification.RequestedOutputFormatNames {
 		questions[agentcontract.IntakeQuestionPrefixFormat+formatName] = builder.outputFormatQuestion(messageKey, formatName)
 	}
 	return questions
@@ -215,7 +216,7 @@ func (builder questionBuilder) likelyToolQuestion(messageKey string, toolName st
 	}.Question()
 }
 
-func needsResponseLanguage(request agentcontract.IntakeDecisionRequest) bool {
+func needsResponseLanguage(request turnclassification.IntakeDecisionRequest) bool {
 	return toolcontract.ResolveResponseLanguage(request.ResponseLanguage) == ""
 }
 

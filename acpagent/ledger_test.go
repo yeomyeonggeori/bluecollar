@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 func TestSessionUpdateWaitingForConnectionCanBeCancelled(t *testing.T) {

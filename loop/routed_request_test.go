@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const routedRequestRoutingTimeout = 30 * time.Second
@@ -22,7 +22,7 @@ func runRoutedRequest(t *testing.T, responseContext context.Context, agentKernel
 	return agentKernel.RunAgentRequest(responseContext, routingFor(t, responseContext, agentKernel, request), request)
 }
 
-func routingFor(t *testing.T, responseContext context.Context, agentKernel *AgentKernel, request AgentRequest) agentcontract.Routing {
+func routingFor(t *testing.T, responseContext context.Context, agentKernel *AgentKernel, request AgentRequest) turnclassification.Routing {
 	t.Helper()
 	boundedRoutingContext, cancelRouting := context.WithTimeout(responseContext, routedRequestRoutingTimeout)
 	defer cancelRouting()
@@ -30,7 +30,7 @@ func routingFor(t *testing.T, responseContext context.Context, agentKernel *Agen
 	decisionPlanner := intake.NewDecisionPlanner(scriptedRouterDecisionModel(languageModel), nil)
 	turnDecision, errorValue := intake.NewTurnRouter(languageModel, decisionPlanner, agentKernel.intakeOptions).Plan(boundedRoutingContext, request)
 	if errorValue != nil {
-		return agentcontract.Routing{}
+		return turnclassification.Routing{}
 	}
-	return agentcontract.Routing{Decision: &turnDecision}
+	return turnclassification.Routing{Decision: &turnDecision}
 }

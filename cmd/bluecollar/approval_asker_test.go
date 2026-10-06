@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/approval"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 func askWith(typed string, typingError error) (approval.Answer, string, string) {

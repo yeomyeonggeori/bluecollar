@@ -8,14 +8,16 @@ import (
 	"time"
 
 	"github.com/ergochat/readline"
-
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/approval"
+	"github.com/yeomyeonggeori/bluecollar/attribution"
+	"github.com/yeomyeonggeori/bluecollar/decisionconfig"
 	"github.com/yeomyeonggeori/bluecollar/loop"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/bluecollar/turnoptions"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 const conversationHistoryLimit = 12
@@ -34,7 +36,7 @@ type conversationSession struct {
 }
 
 func newConversationSession(ctx context.Context, options runOptions) (*conversationSession, error) {
-	endpointModel := openaicompatible.NewProvider(options.endpointURL, options.apiKey, options.modelName)
+	endpointModel := openaicompatible.NewProvider(options.endpointURL, options.apiKey, options.modelName).WithAttribution(attribution.Self)
 	taskEventService := taskstate.NewTaskEventService()
 	taskRunService := taskstate.NewTaskRunService(taskEventService)
 	kernel := loop.NewAgentKernel(taskRunService, taskstate.NewTaskStepService())
@@ -44,12 +46,12 @@ func newConversationSession(ctx context.Context, options runOptions) (*conversat
 		return nil, tapeError
 	}
 	kernel.UseLanguageModelProvider(languageModel)
-	kernel.UseDecisionModel(decisions.ConfiguredDecisionModel(os.Stderr))
+	kernel.UseDecisionModel(decisionconfig.ConfiguredDecisionModel(os.Stderr))
 	toolSelector := configuredToolSelector()
 	if toolSelector != nil {
 		kernel.UseToolSelector(toolSelector)
 	}
-	kernel.UseTurnOptions(agentcontract.TurnOptions{ContextWindowTokens: contextWindowTokens(ctx, options, endpointModel)})
+	kernel.UseTurnOptions(turnoptions.TurnOptions{ContextWindowTokens: contextWindowTokens(ctx, options, endpointModel)})
 
 	runningShell := turnShellWithInterpreter(ctx, options)
 	kernel.UseToolResultSpillStore(shellSpillStore{runningShell: runningShell})
@@ -93,7 +95,7 @@ func (session *conversationSession) runPrompt(ctx context.Context, prompt string
 	defer unregisterLedgerPrinter()
 	printLedgerEvent(taskstate.RawTurnEvent{TaskRunID: taskRun.TaskRunID, Name: agentcontract.TaskEventTaskCreated, Body: prompt})
 
-	result, errorValue := session.kernel.RunPlannedTurn(ctx, request, agentcontract.Routing{Decision: &turnDecision})
+	result, errorValue := session.kernel.RunPlannedTurn(ctx, request, turnclassification.Routing{Decision: &turnDecision})
 	writeMetrics(session.options.metricsPath, session.taskRunService, result.TaskRun.TaskRunID)
 	writeTrace(session.options.tracePath, session.taskRunService, result)
 	session.remember(prompt, result)

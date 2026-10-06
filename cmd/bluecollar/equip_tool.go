@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/decisionconfig"
 	"github.com/yeomyeonggeori/bluecollar/intake"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 var equipInputSchema = json.RawMessage(`{
@@ -46,7 +46,7 @@ type equipInput struct {
 }
 
 func configuredToolSelector() agentcontract.ToolSelector {
-	decisionModel := decisions.ConfiguredDecisionModel(os.Stderr)
+	decisionModel := decisionconfig.ConfiguredDecisionModel(os.Stderr)
 	if decisionModel == nil {
 		return nil
 	}

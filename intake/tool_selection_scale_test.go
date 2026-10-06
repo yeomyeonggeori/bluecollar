@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
 )
 
 func TestAThousandToolsAreSelectedFromInBatchesTheModelAccepts(t *testing.T) {
@@ -18,7 +18,7 @@ func TestAThousandToolsAreSelectedFromInBatchesTheModelAccepts(t *testing.T) {
 	outcome.TurnDecision.InitialToolNames = nil
 	outcome.ToolProbabilities = map[string]float64{"provider_0_tool_0": 0.91, "provider_29_tool_49": 0.77}
 	decisionModel := &concurrencyCountingDecisionModel{outcome: outcome}
-	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
 	startedAt := time.Now()
 	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, callLedger)

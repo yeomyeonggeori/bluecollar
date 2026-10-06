@@ -2,8 +2,10 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type toolExposureGroup struct {
@@ -34,7 +36,7 @@ func toolSetForAgentTurnWithExposure(toolSet *toolcontract.ToolSet, instructionB
 	if hasAuthoritativeWorkingSet {
 		groups = []toolExposureGroup{recoveryGroup, pendingGroup, requiredEvidenceGroup, pinnedGroup, requiredNextGroup, selectedSkillGroup, evidenceAlternativesGroup}
 	}
-	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(toolSet, groups), toolcontract.MaxExtensionCallableToolCount)
+	extensionToolIDs, droppedGroups := selectToolGroups(extensionToolGroups(toolSet, groups), toolexposure.MaxExtensionCallableToolCount)
 	kernelToolIDs := []string{}
 	if requestNeedsToolAccess(request, groups) {
 		kernelToolIDs = filterGroupTools(toolSet, toolExposureGroup{ToolIDs: toolSet.BuiltInToolNames()}).ToolIDs

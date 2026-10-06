@@ -9,16 +9,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/bench"
+	"github.com/yeomyeonggeori/bluecollar/decisionconfig"
 	"github.com/yeomyeonggeori/bluecollar/intake"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
 	"github.com/yeomyeonggeori/bluecollar/model/tape"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"github.com/yeomyeonggeori/bluecollar/trace"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func main() {
@@ -129,8 +130,8 @@ func collapsedWhitespace(text string) string {
 	return strings.Join(strings.Fields(text), " ")
 }
 
-func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(decisions.ConfiguredDecisionModel(os.Stderr), nil), agentcontract.IntakeOptions{IsEnabled: true})
+func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest) (turnclassification.TurnDecision, error) {
+	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(decisionconfig.ConfiguredDecisionModel(os.Stderr), nil), agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: request.RequesterPersonID,
 		RequesterName:     request.RequesterName,
@@ -275,7 +276,7 @@ func contextWindowTokens(ctx context.Context, options runOptions, endpointModel 
 	return endpointModel.ContextWindowTokens(ctx)
 }
 
-func decideTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest, options runOptions) agentcontract.TurnDecision {
+func decideTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest, options runOptions) turnclassification.TurnDecision {
 	if options.withoutIntake {
 		return boundedTaskDecision()
 	}
@@ -290,7 +291,7 @@ func decideTurn(ctx context.Context, languageModel model.LanguageModelProvider, 
 	return startingTheTaskItWasGiven(turnDecision)
 }
 
-func startingTheTaskItWasGiven(turnDecision agentcontract.TurnDecision) agentcontract.TurnDecision {
+func startingTheTaskItWasGiven(turnDecision turnclassification.TurnDecision) turnclassification.TurnDecision {
 	if turnDecision.Route == agentcontract.TurnRouteStartTask || turnDecision.Route == agentcontract.TurnRouteContinueTask {
 		return turnDecision
 	}
@@ -303,8 +304,8 @@ func startingTheTaskItWasGiven(turnDecision agentcontract.TurnDecision) agentcon
 	return turnDecision
 }
 
-func boundedTaskDecision() agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
+func boundedTaskDecision() turnclassification.TurnDecision {
+	return turnclassification.TurnDecision{
 		Route:          agentcontract.TurnRouteStartTask,
 		Classification: agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:      agentcontract.TaskShapeMaintenanceTask,

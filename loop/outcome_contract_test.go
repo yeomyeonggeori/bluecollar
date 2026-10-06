@@ -2,10 +2,11 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestSelectedRequiredAttachmentSuffixesStayAdvisoryForSlides(t *testing.T) {

@@ -3,9 +3,10 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func planUpdateSuccessObservation(observationID string, planDocument string) turnObservation {

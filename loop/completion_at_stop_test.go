@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const deletionReply = "오래된 작업을 삭제했습니다."

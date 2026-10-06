@@ -3,7 +3,7 @@ package loop
 import (
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func screenshotDeliveryObservations() []turnObservation {

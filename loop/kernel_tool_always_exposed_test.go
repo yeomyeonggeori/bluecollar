@@ -2,8 +2,9 @@ package loop
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 // Regression guard for a device incident: a legitimate artifact task

@@ -4,7 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 // The first run length delivers a short nudge and every later one names the call, so an
@@ -16,7 +17,7 @@ var toolRepeatReminderRunLengths = []int{3, 5, 8}
 const toolRepeatArgumentsPreviewLimit = 500
 
 func chainTransparentToolName(toolName string) bool {
-	return toolcontract.ToolNamesMatch(toolName, toolcontract.PlanToolName)
+	return toolexposure.ToolNamesMatch(toolName, toolcontract.PlanToolName)
 }
 
 func consecutiveIdenticalToolCallCount(observations []turnObservation, toolInputKey string) int {

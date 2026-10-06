@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestConfirmationPolicyAllowsLowRiskDailyReport(t *testing.T) {
@@ -317,13 +317,13 @@ func TestARiskyEffectTheRequesterNamedDoesNotHoldTheTask(t *testing.T) {
 	deleteWhatTheyAskedFor := ExecutionPlan{
 		Summary:                "delete the three temp files the requester listed",
 		Destructive:            true,
-		RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit,
+		RequesterAuthorization: RequesterAuthorizationExplicit,
 	}
 	if EvaluateConfirmationPolicy(deleteWhatTheyAskedFor).RequiresConfirmation {
 		t.Fatal("nobody is watching this run, so holding work the requester asked for in plain words costs hours and buys nothing")
 	}
 
-	for _, authorization := range []string{agentcontract.RequesterAuthorizationImplied, agentcontract.RequesterAuthorizationAbsent, ""} {
+	for _, authorization := range []string{RequesterAuthorizationImplied, RequesterAuthorizationAbsent, ""} {
 		deleteNobodyAskedFor := ExecutionPlan{Summary: "delete the build directory", Destructive: true, RequesterAuthorization: authorization}
 		if !EvaluateConfirmationPolicy(deleteNobodyAskedFor).RequiresConfirmation {
 			t.Fatalf("authorization %q is not the requester naming the effect, so the hold stays", authorization)
@@ -333,10 +333,10 @@ func TestARiskyEffectTheRequesterNamedDoesNotHoldTheTask(t *testing.T) {
 
 func TestAuthorizationDoesNotUnlockAnEffectThatReachesPastTheWorkspace(t *testing.T) {
 	explicitAndWide := []ExecutionPlan{
-		{Summary: "message every customer", ThirdPartyExternalSend: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
-		{Summary: "publish the price list publicly", PublicDeploy: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
-		{Summary: "buy the plan", PaidAction: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
-		{Summary: "grant them admin", PermissionChange: true, RequesterAuthorization: agentcontract.RequesterAuthorizationExplicit},
+		{Summary: "message every customer", ThirdPartyExternalSend: true, RequesterAuthorization: RequesterAuthorizationExplicit},
+		{Summary: "publish the price list publicly", PublicDeploy: true, RequesterAuthorization: RequesterAuthorizationExplicit},
+		{Summary: "buy the plan", PaidAction: true, RequesterAuthorization: RequesterAuthorizationExplicit},
+		{Summary: "grant them admin", PermissionChange: true, RequesterAuthorization: RequesterAuthorizationExplicit},
 	}
 	for _, executionPlan := range explicitAndWide {
 		if !EvaluateConfirmationPolicy(executionPlan).RequiresConfirmation {

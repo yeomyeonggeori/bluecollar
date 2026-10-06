@@ -1,10 +1,11 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestContractEvidenceUsesOnlySelectedRegisteredTools(t *testing.T) {

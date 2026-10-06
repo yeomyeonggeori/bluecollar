@@ -3,7 +3,7 @@ package loop
 import (
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/contextdescription"
 )
 
 func normalizePriorTaskContext(context PriorTaskContext) PriorTaskContext {
@@ -18,7 +18,7 @@ func normalizePriorTaskContext(context PriorTaskContext) PriorTaskContext {
 }
 
 func priorTaskContextDescription(context PriorTaskContext) string {
-	return agentcontract.PriorTaskContextDescription(normalizePriorTaskContext(context))
+	return contextdescription.PriorTaskContextDescription(normalizePriorTaskContext(context))
 }
 
 func priorTaskContextHasContent(context PriorTaskContext) bool {

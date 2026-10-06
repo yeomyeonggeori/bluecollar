@@ -8,14 +8,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/evaltest"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
+	"github.com/yeomyeonggeori/bluecollar/decisionconfig"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/evaltest"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
 )
 
 func TestRoutedSelectionReachesEveryToolTheWorkNeeds(t *testing.T) {
 	toolSet, toolNames := catalogToolSet(t)
-	endpoint, errorValue := decisions.EndpointFromEnvironment(decisions.DecisionEnvironmentNames)
+	endpoint, errorValue := decisions.EndpointFromEnvironment(decisionconfig.DecisionEnvironmentNames)
 	evaltest.RequireConfigured(t, "the decision model", errorValue)
 	planner := NewDecisionPlanner(endpoint.DecisionModel(), nil)
 
@@ -31,7 +33,7 @@ func TestRoutedSelectionReachesEveryToolTheWorkNeeds(t *testing.T) {
 			request := addressedDecisionRequest(task)
 			request.ToolSet = toolSet
 			request.CallableToolNames = toolNames
-			decisions, errorValue := planner.Decide(context.Background(), request, &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames})
+			decisions, errorValue := planner.Decide(context.Background(), request, &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames})
 			if errorValue != nil {
 				t.Errorf("%q: %v", task, errorValue)
 				return

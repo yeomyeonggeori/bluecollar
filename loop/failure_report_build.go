@@ -2,10 +2,11 @@ package loop
 
 import (
 	"context"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func buildFailureReport(request AgentTurnRequest, taskRunID string, phase string, stopReason string, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState, decision recoveryDecision) FailureReport {
@@ -52,7 +53,7 @@ func filesHandedToDelivery(observations []turnObservation) []toolcontract.FileAt
 	files := []toolcontract.FileAttachment{}
 	seenPaths := map[string]bool{}
 	for _, observation := range successfulToolObservations(observations) {
-		if !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+		if !toolexposure.IsArtifactDeliveryTool(observation.Tool) {
 			continue
 		}
 		for _, attachment := range observation.Attachments {

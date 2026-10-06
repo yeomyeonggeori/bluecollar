@@ -5,9 +5,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type toolSelectionPlan struct {
@@ -16,7 +18,7 @@ type toolSelectionPlan struct {
 	clippedDescriptionCount int
 }
 
-func (planner DecisionPlanner) withLikelyTools(ctx context.Context, request agentcontract.IntakeDecisionRequest, decisions agentcontract.IntakeDecisions, callLedger *agentcontract.IntakeCallLedger) agentcontract.IntakeDecisions {
+func (planner DecisionPlanner) withLikelyTools(ctx context.Context, request turnclassification.IntakeDecisionRequest, decisions turnclassification.IntakeDecisions, callLedger *llmcalls.IntakeCallLedger) turnclassification.IntakeDecisions {
 	messageKeys := messageKeysThatStartWork(decisions)
 	candidateToolNames := resolveCallableToolNames(request)
 	if len(messageKeys) == 0 || len(candidateToolNames) == 0 {
@@ -34,7 +36,7 @@ func (planner DecisionPlanner) withLikelyTools(ctx context.Context, request agen
 	return withLikelyToolNames(decisions, selectedToolNames)
 }
 
-func messageKeysBySelectionShape(decisions agentcontract.IntakeDecisions, messageKeys []string) (singleToolKeys []string, severalToolKeys []string) {
+func messageKeysBySelectionShape(decisions turnclassification.IntakeDecisions, messageKeys []string) (singleToolKeys []string, severalToolKeys []string) {
 	for _, messageKey := range messageKeys {
 		if expectedToolCountOfMessage(decisions, messageKey) == agentcontract.ExpectedToolCountOne {
 			singleToolKeys = append(singleToolKeys, messageKey)
@@ -45,7 +47,7 @@ func messageKeysBySelectionShape(decisions agentcontract.IntakeDecisions, messag
 	return singleToolKeys, severalToolKeys
 }
 
-func expectedToolCountOfMessage(decisions agentcontract.IntakeDecisions, messageKey string) agentcontract.ExpectedToolCount {
+func expectedToolCountOfMessage(decisions turnclassification.IntakeDecisions, messageKey string) agentcontract.ExpectedToolCount {
 	for index, decision := range decisions.Messages {
 		if decisionMessageKey(index) == messageKey {
 			return decision.TurnFields.ExpectedToolCount
@@ -54,7 +56,7 @@ func expectedToolCountOfMessage(decisions agentcontract.IntakeDecisions, message
 	return ""
 }
 
-func planToolSelectionForShapes(request agentcontract.IntakeDecisionRequest, singleToolKeys []string, severalToolKeys []string, candidateToolNames []string) toolSelectionPlan {
+func planToolSelectionForShapes(request turnclassification.IntakeDecisionRequest, singleToolKeys []string, severalToolKeys []string, candidateToolNames []string) toolSelectionPlan {
 	plan := toolSelectionPlan{candidateToolNames: candidateToolNames}
 	if len(severalToolKeys) > 0 {
 		plan = planToolSelection(request, severalToolKeys, candidateToolNames)
@@ -63,7 +65,7 @@ func planToolSelectionForShapes(request agentcontract.IntakeDecisionRequest, sin
 	return plan
 }
 
-func singleToolChoiceRequests(request agentcontract.IntakeDecisionRequest, messageKeys []string, candidateToolNames []string) []model.DecisionRequest {
+func singleToolChoiceRequests(request turnclassification.IntakeDecisionRequest, messageKeys []string, candidateToolNames []string) []model.DecisionRequest {
 	if len(messageKeys) == 0 {
 		return nil
 	}
@@ -111,7 +113,7 @@ func toolNamesCoveringBelief(probabilityByToolName map[string]float64, countLimi
 	return selected
 }
 
-func messageKeysThatStartWork(decisions agentcontract.IntakeDecisions) []string {
+func messageKeysThatStartWork(decisions turnclassification.IntakeDecisions) []string {
 	messageKeys := []string{}
 	for index, decision := range decisions.Messages {
 		if turnRouteStartsWork(canonicalizeTurnDecision(decision.TurnFields)) {
@@ -137,14 +139,14 @@ func likelyToolNamesByMessageKey(messageKeys []string, candidateToolNames []stri
 	return selectedToolNames, nil
 }
 
-func withLikelyToolNames(decisions agentcontract.IntakeDecisions, selectedToolNames map[string][]string) agentcontract.IntakeDecisions {
+func withLikelyToolNames(decisions turnclassification.IntakeDecisions, selectedToolNames map[string][]string) turnclassification.IntakeDecisions {
 	for index := range decisions.Messages {
 		decisions.Messages[index].TurnFields.InitialToolNames = selectedToolNames[decisionMessageKey(index)]
 	}
 	return decisions
 }
 
-func planToolSelection(request agentcontract.IntakeDecisionRequest, messageKeys []string, candidateToolNames []string) toolSelectionPlan {
+func planToolSelection(request turnclassification.IntakeDecisionRequest, messageKeys []string, candidateToolNames []string) toolSelectionPlan {
 	described := decisionToolDescriptions(request.ToolSet, candidateToolNames)
 	plan := toolSelectionPlan{candidateToolNames: candidateToolNames, clippedDescriptionCount: described.clippedDescriptionCount}
 	wholeRequest := toolSelectionRequestPart(request, messageKeys, described.tools)
@@ -165,7 +167,7 @@ func planToolSelection(request agentcontract.IntakeDecisionRequest, messageKeys 
 	return plan
 }
 
-func toolSelectionRequests(request agentcontract.IntakeDecisionRequest, messageKeys []string, batches [][]decisionTool) []model.DecisionRequest {
+func toolSelectionRequests(request turnclassification.IntakeDecisionRequest, messageKeys []string, batches [][]decisionTool) []model.DecisionRequest {
 	requests := make([]model.DecisionRequest, 0, len(batches))
 	for _, batch := range batches {
 		requests = append(requests, toolSelectionRequestPart(request, messageKeys, batch))
@@ -173,7 +175,7 @@ func toolSelectionRequests(request agentcontract.IntakeDecisionRequest, messageK
 	return requests
 }
 
-func toolSelectionRequestPart(request agentcontract.IntakeDecisionRequest, messageKeys []string, tools []decisionTool) model.DecisionRequest {
+func toolSelectionRequestPart(request turnclassification.IntakeDecisionRequest, messageKeys []string, tools []decisionTool) model.DecisionRequest {
 	return model.DecisionRequest{
 		State:     buildDecisionState(request, tools),
 		Questions: newQuestionBuilder(request).toolQuestions(messageKeys, toolNamesOf(tools)),
@@ -205,9 +207,9 @@ func (planner DecisionPlanner) SelectToolNames(ctx context.Context, need agentco
 	return describedSelectedTools(need.ToolSet, selectedToolNames[messageKeys[0]]), nil
 }
 
-func toolSelectionNeedRequest(need agentcontract.ToolSelectionNeed) agentcontract.IntakeDecisionRequest {
-	return agentcontract.IntakeDecisionRequest{
-		Messages:          []agentcontract.IntakeDecisionMessage{{MessageID: "tool-need", Prompt: strings.TrimSpace(need.Need)}},
+func toolSelectionNeedRequest(need agentcontract.ToolSelectionNeed) turnclassification.IntakeDecisionRequest {
+	return turnclassification.IntakeDecisionRequest{
+		Messages:          []turnclassification.IntakeDecisionMessage{{MessageID: "tool-need", Prompt: strings.TrimSpace(need.Need)}},
 		ToolSet:           need.ToolSet,
 		CallableToolNames: need.CallableToolNames,
 	}

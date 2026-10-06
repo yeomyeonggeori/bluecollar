@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type completionEvidenceReference struct {
@@ -163,7 +163,7 @@ func undeliveredFailedDelivery(observations []turnObservation) (turnObservation,
 	var failedDelivery turnObservation
 	isUndelivered := false
 	for _, observation := range observations {
-		if !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+		if !toolexposure.IsArtifactDeliveryTool(observation.Tool) {
 			continue
 		}
 		isUndelivered = observation.Failed()
@@ -434,7 +434,7 @@ func findSuccessfulObservation(observations []turnObservation, reference complet
 		if strings.TrimSpace(observation.ObservationID) != strings.TrimSpace(reference.ObservationID) {
 			continue
 		}
-		if strings.TrimSpace(reference.ToolName) != "" && !toolcontract.ToolNamesMatch(observation.Tool, reference.ToolName) {
+		if strings.TrimSpace(reference.ToolName) != "" && !toolexposure.ToolNamesMatch(observation.Tool, reference.ToolName) {
 			continue
 		}
 		return observation, true
@@ -446,7 +446,7 @@ func collectReferenceDeliveryAttachments(observations []turnObservation, referen
 	attachments := []toolcontract.FileAttachment{}
 	for _, reference := range references {
 		observation, isFound := findSuccessfulObservation(observations, reference)
-		if !isFound || !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+		if !isFound || !toolexposure.IsArtifactDeliveryTool(observation.Tool) {
 			continue
 		}
 		attachments = appendUniqueAttachments(attachments, attachmentsForReference(observation, reference))
@@ -457,7 +457,7 @@ func collectReferenceDeliveryAttachments(observations []turnObservation, referen
 func deliveredAttachments(observations []turnObservation) []toolcontract.FileAttachment {
 	attachments := []toolcontract.FileAttachment{}
 	for _, observation := range observations {
-		if observation.Failed() || !toolcontract.IsArtifactDeliveryTool(observation.Tool) {
+		if observation.Failed() || !toolexposure.IsArtifactDeliveryTool(observation.Tool) {
 			continue
 		}
 		attachments = appendUniqueAttachments(attachments, observation.Attachments)

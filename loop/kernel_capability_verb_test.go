@@ -2,16 +2,18 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
+
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestToolNamesMatchRequiresExactCanonicalIdentity(t *testing.T) {
-	if !toolcontract.ToolNamesMatch(" file_deliver ", toolcontract.FileDeliverToolName) {
+	if !toolexposure.ToolNamesMatch(" file_deliver ", toolcontract.FileDeliverToolName) {
 		t.Fatal("expected surrounding whitespace to be ignored")
 	}
 	for _, legacyToolName := range []string{"ask_choice", "artifact.deliver", "file.attach", "terminal.session"} {
-		if toolcontract.ToolNamesMatch(legacyToolName, normalizePersistedToolName(legacyToolName)) {
+		if toolexposure.ToolNamesMatch(legacyToolName, normalizePersistedToolName(legacyToolName)) {
 			t.Fatalf("expected legacy tool %q not to match its canonical replacement", legacyToolName)
 		}
 	}

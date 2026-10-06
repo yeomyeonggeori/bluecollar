@@ -3,7 +3,7 @@ package loop
 import (
 	"encoding/json"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type ProbedAgentAction struct {

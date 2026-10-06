@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const workingDirectorySkillsPath = ".agents/skills"

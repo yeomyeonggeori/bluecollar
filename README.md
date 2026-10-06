@@ -26,13 +26,17 @@ The documentation is [DOCS.md](DOCS.md), published at [bluecollar.intern.kim](ht
 
 | path | holds |
 |---|---|
-| `agentcontract/` | the harness port, turn requests and results, task runs and ledger event names |
-| `toolcontract/` | tool descriptors, tool sets, results, the kernel tool names |
-| `model/` | the language model and decision model ports, with OpenAI-compatible, decisions and tape implementations |
+| `.dependency/blueprotocol/` | the contract packages `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord`, `acpupdate` and `evaltest`, shared with the host as the blueprotocol submodule |
+| `turnclassification/` | the names and normalization of a turn's route, task shape, task level and deliverable, shared by `intake` and `loop` |
+| `iterationcost/` | what one iteration costs, the patience a model call is given and the budget profile of each task level |
+| `llmcalls/` | the schema names of the model calls bluecollar makes |
+| `toolexposure/` | how many tools a plan step is expected to expose |
+| `messageimages/` | the image parts of a message |
+| `contextdescription/` | the prompt text that describes the active goal and the prior task |
+| `decisionconfig/` | the decision model, configured from `BLUECOLLAR_DECISION_ENDPOINT`, `BLUECOLLAR_DECISION_API_KEY` and `BLUECOLLAR_DECISION_MODEL` |
+| `model/tape/` | recording and replaying model calls |
 | `loop/` | the agent loop |
 | `intake/` | the turn router and the decision planner |
-| `taskstate/` | the services over task runs, steps, events and artifacts |
-| `holdrecord/` | the approval hold events, their writers and the fold that reads them |
 | `turnstream/`, `trace/` | a live view of a turn's ledger, and one run rendered as a file |
 | `bench/` | run metrics, a harness runner, and the Terminal-Bench adapter |
 | `cmd/bluecollar/` | the command-line runner |

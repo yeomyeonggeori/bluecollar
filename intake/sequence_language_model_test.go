@@ -3,7 +3,7 @@ package intake
 import (
 	"context"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type sequenceLanguageModel struct {

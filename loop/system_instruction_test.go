@@ -1,9 +1,10 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestCapabilitiesNameEachNamespaceTheModelCanReachOnce(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func taskEventAt(second int, name string, body string) agentcontract.TaskEvent {

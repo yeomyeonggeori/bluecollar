@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/yeomyeonggeori/bluecollar/approval"
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
 const (

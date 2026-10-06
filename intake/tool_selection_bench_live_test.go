@@ -13,11 +13,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/evaltest"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/decisionconfig"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/evaltest"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const catalogPathEnvironmentName = "BLUECOLLAR_SELECTION_BENCH_CATALOG"
@@ -249,7 +251,7 @@ func rankOf(toolName string, ranked []string) int {
 }
 
 func TestToolSelectionPolicyBenchmark(t *testing.T) {
-	endpoint, errorValue := decisions.EndpointFromEnvironment(decisions.DecisionEnvironmentNames)
+	endpoint, errorValue := decisions.EndpointFromEnvironment(decisionconfig.DecisionEnvironmentNames)
 	evaltest.RequireConfigured(t, "the decision model", errorValue)
 	toolSet, toolNames := catalogToolSet(t)
 	inCatalog := map[string]bool{}
@@ -271,7 +273,7 @@ func TestToolSelectionPolicyBenchmark(t *testing.T) {
 	for _, benchmark := range benchmarkCases {
 		recorder := &recordingDecisionModel{inner: endpoint.DecisionModel(), noulByQuestion: map[string]float64{}}
 		planner := NewDecisionPlanner(recorder, nil)
-		callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
+		callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 		if _, errorValue := planner.SelectToolNames(context.Background(), agentcontract.ToolSelectionNeed{
 			Need:              benchmark.task,
 			ToolSet:           toolSet,

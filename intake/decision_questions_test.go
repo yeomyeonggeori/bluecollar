@@ -5,11 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
-func questionsFor(request agentcontract.IntakeDecisionRequest) map[string]model.DecisionQuestion {
+func questionsFor(request turnclassification.IntakeDecisionRequest) map[string]model.DecisionQuestion {
 	builder := newQuestionBuilder(request)
 	questions := builder.questionsWithoutTools()
 	for questionName, question := range toolQuestionsFor(request, resolveCallableToolNames(request)) {
@@ -135,7 +136,7 @@ func TestThePriorTaskQuestionIsAskedOnlyForAPriorTask(t *testing.T) {
 	}
 }
 
-func firingDecisionRequest(prompt string) agentcontract.IntakeDecisionRequest {
+func firingDecisionRequest(prompt string) turnclassification.IntakeDecisionRequest {
 	request := addressedDecisionRequest(prompt)
 	request.ScheduledRun = agentcontract.ScheduledRunContext{
 		ScheduleID:   "schedule-1",
@@ -202,7 +203,7 @@ func TestTheRouteQuestionDoesNotRepeatTheFiringFact(t *testing.T) {
 
 func TestTheStateNamesEachMessageTheQuestionsAskAbout(t *testing.T) {
 	request := addressedDecisionRequest("보고서 정리해줘")
-	request.Messages = append(request.Messages, agentcontract.IntakeDecisionMessage{MessageID: "message-2", Prompt: "표도 넣어줘"})
+	request.Messages = append(request.Messages, turnclassification.IntakeDecisionMessage{MessageID: "message-2", Prompt: "표도 넣어줘"})
 
 	state := buildDecisionState(request, nil)
 

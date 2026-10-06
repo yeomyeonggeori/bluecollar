@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/trace"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestTheTraceFormatFollowsThePathItIsWrittenTo(t *testing.T) {

@@ -2,10 +2,10 @@ package loop
 
 import (
 	"encoding/json"
-
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestRecoveryPacketDoesNotHardCodeToolAllowedList(t *testing.T) {

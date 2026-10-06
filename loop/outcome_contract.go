@@ -3,8 +3,10 @@ package loop
 import (
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func shouldBuildExecutionPlanForConfirmation(request AgentRequest, intakeDecision IntakeDecision, requiredEvidenceTools []string) bool {
@@ -414,7 +416,7 @@ func dischargeExpectedResultTool(results []ExpectedResult, toolName string) []Ex
 
 func expectedResultRequiresNamedTool(result ExpectedResult, toolName string) bool {
 	for _, hint := range result.AcceptanceHints {
-		if toolcontract.ToolNamesMatch(hint, toolName) {
+		if toolexposure.ToolNamesMatch(hint, toolName) {
 			return true
 		}
 	}
@@ -424,7 +426,7 @@ func expectedResultRequiresNamedTool(result ExpectedResult, toolName string) boo
 func removeToolName(toolNames []string, removedToolName string) []string {
 	values := []string{}
 	for _, toolName := range toolNames {
-		if !toolcontract.ToolNamesMatch(toolName, removedToolName) {
+		if !toolexposure.ToolNamesMatch(toolName, removedToolName) {
 			values = appendUniqueStrings(values, toolName)
 		}
 	}
@@ -517,7 +519,7 @@ func outcomeContractRequiresPublicLinkOnly(contract OutcomeContract) bool {
 func evidenceAnyOfContainsTool(groups [][]string, toolName string) bool {
 	for _, group := range groups {
 		for _, candidateToolName := range group {
-			if toolcontract.ToolNamesMatch(candidateToolName, toolName) {
+			if toolexposure.ToolNamesMatch(candidateToolName, toolName) {
 				return true
 			}
 		}
@@ -527,7 +529,7 @@ func evidenceAnyOfContainsTool(groups [][]string, toolName string) bool {
 
 func evidenceToolsContainArtifactDelivery(toolNames []string) bool {
 	for _, toolName := range toolNames {
-		if toolcontract.IsArtifactDeliveryTool(toolName) {
+		if toolexposure.IsArtifactDeliveryTool(toolName) {
 			return true
 		}
 	}
@@ -636,7 +638,7 @@ func evidenceHintMatchesOutcome(toolName string, request AgentRequest, intakeDec
 	if activeGoalRequiresTool(request.ActiveGoal, trimmedToolName) {
 		return true
 	}
-	if toolcontract.IsArtifactDeliveryTool(trimmedToolName) {
+	if toolexposure.IsArtifactDeliveryTool(trimmedToolName) {
 		return len(requiredAttachmentSuffixes) > 0
 	}
 	if toolIsInNamespace(request.ToolSet, trimmedToolName, "schedule") {
@@ -686,7 +688,7 @@ func activeGoalMentionsTool(activeGoal ActiveGoal, toolName string) bool {
 		return false
 	}
 	for _, activeToolName := range outcomeContractToolNames(activeGoal.OutcomeContract) {
-		if toolcontract.ToolNamesMatch(activeToolName, normalizedToolName) {
+		if toolexposure.ToolNamesMatch(activeToolName, normalizedToolName) {
 			return true
 		}
 	}
@@ -699,7 +701,7 @@ func activeGoalRequiresTool(activeGoal ActiveGoal, toolName string) bool {
 		return false
 	}
 	for _, activeToolName := range outcomeContractRequiredToolNames(activeGoal.OutcomeContract) {
-		if toolcontract.ToolNamesMatch(activeToolName, normalizedToolName) {
+		if toolexposure.ToolNamesMatch(activeToolName, normalizedToolName) {
 			return true
 		}
 	}
@@ -785,7 +787,7 @@ func activeGoalFromExecutionPlan(taskRunID string, executionPlan ExecutionPlan, 
 	}
 }
 
-func activeGoalFromIntakeOnly(routing agentcontract.Routing, taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
+func activeGoalFromIntakeOnly(routing turnclassification.Routing, taskRunID string, request AgentRequest, intakeDecision IntakeDecision, status agentcontract.TaskStatus) ActiveGoal {
 	goal := ActiveGoal{}
 	if canPreserveIntakeGoal(routing, taskRunID, request) {
 		goal = request.ActiveGoal
@@ -796,7 +798,7 @@ func activeGoalFromIntakeOnly(routing agentcontract.Routing, taskRunID string, r
 	goal.CurrentObjective = firstNonEmptyString(intakeDecision.Reason, goal.CurrentObjective)
 	goal.Status = activeGoalStatusForTaskStatus(status)
 	if !OutcomeContractHasRequirements(goal.OutcomeContract) {
-		goal.OutcomeContract.ExpectedResults = agentcontract.NormalizeExpectedResults(intakeDecision.ExpectedResults)
+		goal.OutcomeContract.ExpectedResults = turnclassification.NormalizeExpectedResults(intakeDecision.ExpectedResults)
 		goal.OutcomeContract.RequiredAttachmentSuffixes = attachmentSuffixesForRequestedOutputFormats(intakeDecision.RequestedOutputFormats)
 	}
 	goal.SelectedToolNames = appendUniqueStrings(goal.SelectedToolNames, registeredToolNamesOnly(request.ToolSet, request.PinnedToolNames)...)
@@ -804,7 +806,7 @@ func activeGoalFromIntakeOnly(routing agentcontract.Routing, taskRunID string, r
 	return goal
 }
 
-func canPreserveIntakeGoal(routing agentcontract.Routing, taskRunID string, request AgentRequest) bool {
+func canPreserveIntakeGoal(routing turnclassification.Routing, taskRunID string, request AgentRequest) bool {
 	if strings.TrimSpace(request.ActiveGoal.TaskRunID) != strings.TrimSpace(taskRunID) {
 		return false
 	}

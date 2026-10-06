@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/evaltest"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/evaltest"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type recoveryRecordedTransport struct {

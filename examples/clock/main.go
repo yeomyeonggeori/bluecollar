@@ -7,11 +7,13 @@ import (
 	"log"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/bluecollar/attribution"
 	"github.com/yeomyeonggeori/bluecollar/loop"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type clockInput struct {
@@ -26,7 +28,7 @@ func main() {
 	ctx := context.Background()
 
 	kernel := loop.NewAgentKernel(taskstate.NewTaskRunService(taskstate.NewTaskEventService()), taskstate.NewTaskStepService())
-	kernel.UseLanguageModelProvider(openaicompatible.NewProvider("http://127.0.0.1:11434/v1", "", "qwen3.5:4b"))
+	kernel.UseLanguageModelProvider(openaicompatible.NewProvider("http://127.0.0.1:11434/v1", "", "qwen3.5:4b").WithAttribution(attribution.Self))
 
 	tools := toolcontract.NewToolSet(nil)
 	toolcontract.RegisterToolFunction(tools, toolcontract.ToolFunction[clockInput, clockOutput]{
@@ -49,7 +51,7 @@ func main() {
 		},
 	})
 
-	startTask := agentcontract.TurnDecision{
+	startTask := turnclassification.TurnDecision{
 		Route:             agentcontract.TurnRouteStartTask,
 		Classification:    agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:         agentcontract.TaskShapeMaintenanceTask,
@@ -63,7 +65,7 @@ func main() {
 		ConversationID:    "conversation-1",
 		Prompt:            "What time is it in Paris right now?",
 		ToolSet:           tools,
-	}, agentcontract.Routing{Decision: &startTask})
+	}, turnclassification.Routing{Decision: &startTask})
 	if errorValue != nil {
 		log.Fatal(errorValue)
 	}

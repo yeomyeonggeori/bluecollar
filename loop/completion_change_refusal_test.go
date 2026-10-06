@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 func TestTheChangeCheckDoesNotRefuseTheRecordedWorkbookAgainOverTheSameState(t *testing.T) {

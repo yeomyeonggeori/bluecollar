@@ -5,9 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 func enabledIntakeOptions() agentcontract.IntakeOptions {
@@ -21,7 +22,7 @@ func turnRouterWith(languageModel *sequenceLanguageModel, outcome intaketest.Out
 
 func clarifyOutcome() intaketest.Outcome {
 	return intaketest.Outcome{
-		TurnDecision: agentcontract.TurnDecision{
+		TurnDecision: turnclassification.TurnDecision{
 			Route:              agentcontract.TurnRouteClarify,
 			Classification:     agentcontract.IntakeClassificationNeedsConfirmation,
 			TaskShape:          agentcontract.TaskShapeApprovalGatedTask,

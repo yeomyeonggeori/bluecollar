@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type failingLanguageModel struct{}

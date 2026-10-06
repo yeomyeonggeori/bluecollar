@@ -4,7 +4,7 @@ import (
 	"context"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func checkpointSender(sender sessionUpdateSender, sessionID acp.SessionId) agentcontract.AgentCheckpointSender {

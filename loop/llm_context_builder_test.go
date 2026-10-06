@@ -1,11 +1,12 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestLLMContextBuilderStatesAuthenticatedRequesterBeforeMemory(t *testing.T) {

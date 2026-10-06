@@ -1,9 +1,10 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
 	"time"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type LLMContextBuilder struct{}

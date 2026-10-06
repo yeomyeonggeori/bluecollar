@@ -3,7 +3,7 @@ package bench
 import (
 	"encoding/json"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 type Verdict string

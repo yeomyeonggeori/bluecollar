@@ -1,10 +1,11 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
-)
+	"strings"
 
-import "strings"
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
+)
 
 const (
 	requiredEvidenceToolKindCapabilityOperation = "capability_operation"
@@ -76,5 +77,5 @@ func requiredEvidenceIncludesSideEffect(toolSet *toolcontract.ToolSet, toolNames
 }
 
 func evidenceToolChangesSomething(toolSet *toolcontract.ToolSet, toolName string) bool {
-	return toolcontract.IsArtifactDeliveryTool(toolName) || requiredEvidenceToolNeedsSuccessfulSideEffect(toolSet, toolName)
+	return toolexposure.IsArtifactDeliveryTool(toolName) || requiredEvidenceToolNeedsSuccessfulSideEffect(toolSet, toolName)
 }

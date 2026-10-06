@@ -1,9 +1,10 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"regexp"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 var observedURLPattern = regexp.MustCompile(`https?://[^\s"'<>]+`)

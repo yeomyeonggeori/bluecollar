@@ -1,8 +1,9 @@
 package loop
 
 import (
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func normalizePersistedActiveGoal(activeGoal ActiveGoal) ActiveGoal {

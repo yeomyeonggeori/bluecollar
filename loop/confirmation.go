@@ -6,8 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type ConfirmationPolicyDecision struct {
@@ -70,7 +69,7 @@ func EvaluateConfirmationPolicy(executionPlan ExecutionPlan) ConfirmationPolicyD
 }
 
 func requesterNamedTheEffect(executionPlan ExecutionPlan) bool {
-	return strings.TrimSpace(executionPlan.RequesterAuthorization) == agentcontract.RequesterAuthorizationExplicit
+	return strings.TrimSpace(executionPlan.RequesterAuthorization) == RequesterAuthorizationExplicit
 }
 
 func (agentKernel *AgentKernel) GenerateClarificationMessage(responseContext context.Context, request AgentRequest, executionPlan ExecutionPlan, decision ConfirmationPolicyDecision) (string, error) {

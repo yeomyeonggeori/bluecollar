@@ -3,9 +3,9 @@ package approval
 import (
 	"context"
 
-	"github.com/yeomyeonggeori/bluecollar/holdrecord"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 const askerSource = "asker"

@@ -3,8 +3,9 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"strings"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func newTestToolSet(allowedToolNames []string) *toolcontract.ToolSet {

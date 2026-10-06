@@ -3,9 +3,11 @@ package loop
 import (
 	"context"
 	"fmt"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"os"
 	"strings"
+
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func selectedSkillInstructionList(instructionBundle InstructionBundle) []SkillInstruction {
@@ -155,7 +157,7 @@ func selectedSkillToolNameSet(selectedSkills []SkillInstruction) map[string]bool
 
 func arbitrationHasSelectedSideEffect(toolNames []string, selectedToolNames map[string]bool, request AgentRequest) bool {
 	for _, toolName := range appendUniqueStrings(toolNames) {
-		if selectedToolNames[toolName] && requestHasToolName(request, toolName) && (toolcontract.IsArtifactDeliveryTool(toolName) || requiredEvidenceToolNeedsSuccessfulSideEffect(request.ToolSet, toolName)) {
+		if selectedToolNames[toolName] && requestHasToolName(request, toolName) && (toolexposure.IsArtifactDeliveryTool(toolName) || requiredEvidenceToolNeedsSuccessfulSideEffect(request.ToolSet, toolName)) {
 			return true
 		}
 	}
@@ -168,7 +170,7 @@ func validateArbitratedToolNames(toolNames []string, selectedToolNames map[strin
 		if !selectedToolNames[toolName] || !requestHasToolName(request, toolName) {
 			continue
 		}
-		if requiresSideEffect && !toolcontract.IsArtifactDeliveryTool(toolName) && !requiredEvidenceToolNeedsSuccessfulSideEffect(request.ToolSet, toolName) {
+		if requiresSideEffect && !toolexposure.IsArtifactDeliveryTool(toolName) && !requiredEvidenceToolNeedsSuccessfulSideEffect(request.ToolSet, toolName) {
 			continue
 		}
 		validatedToolNames = append(validatedToolNames, toolName)

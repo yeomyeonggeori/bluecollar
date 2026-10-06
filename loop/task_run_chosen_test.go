@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type revisedTurn struct {

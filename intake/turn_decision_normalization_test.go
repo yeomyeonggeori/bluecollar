@@ -5,11 +5,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func normalizedTurnDecision(t *testing.T, decision agentcontract.TurnDecision, request agentcontract.AgentRequest) agentcontract.TurnDecision {
+func normalizedTurnDecision(t *testing.T, decision turnclassification.TurnDecision, request agentcontract.AgentRequest) turnclassification.TurnDecision {
 	t.Helper()
 	normalizedDecision, errorValue := normalizeTurnDecision(decision, request)
 	if errorValue != nil {
@@ -18,8 +19,8 @@ func normalizedTurnDecision(t *testing.T, decision agentcontract.TurnDecision, r
 	return normalizedDecision
 }
 
-func decidedTurnFields(route agentcontract.TurnRoute, classification agentcontract.IntakeClassification) agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
+func decidedTurnFields(route agentcontract.TurnRoute, classification agentcontract.IntakeClassification) turnclassification.TurnDecision {
+	return turnclassification.TurnDecision{
 		Route:              route,
 		Classification:     classification,
 		TaskShape:          agentcontract.TaskShapeImmediateReply,
@@ -84,7 +85,7 @@ func TestAnUnsupportedTurnIsGivenUpOnStructurally(t *testing.T) {
 }
 
 func TestAnInvalidClosedFieldIsAnError(t *testing.T) {
-	invalidDecisions := map[string]agentcontract.TurnDecision{
+	invalidDecisions := map[string]turnclassification.TurnDecision{
 		"route":          {Route: "sideways", Classification: agentcontract.IntakeClassificationQuickReply, TaskShape: agentcontract.TaskShapeImmediateReply, TaskLevel: agentcontract.TaskLevelLow},
 		"classification": {Route: agentcontract.TurnRouteAnswerQuestion, Classification: "vibes", TaskShape: agentcontract.TaskShapeImmediateReply, TaskLevel: agentcontract.TaskLevelLow},
 		"taskShape":      {Route: agentcontract.TurnRouteAnswerQuestion, Classification: agentcontract.IntakeClassificationQuickReply, TaskShape: "blob", TaskLevel: agentcontract.TaskLevelLow},
@@ -131,7 +132,7 @@ func TestRequiredAttachmentSurvivesWithoutAnArtifactFormat(t *testing.T) {
 	decidedFields.InitialToolNames = []string{toolcontract.FileDeliverToolName}
 	decidedFields.ExpectedResults = []agentcontract.ExpectedResult{
 		{ID: "screenshot", Type: agentcontract.ExpectedResultTypeFile, Description: "Attach a screenshot", Required: true},
-		{ID: "reply", Type: agentcontract.ExpectedResultTypeMessage, Description: "답", Required: true},
+		{ID: "reply", Type: turnclassification.ExpectedResultTypeMessage, Description: "답", Required: true},
 	}
 
 	withoutFormat := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{ToolSet: toolSet})
@@ -190,47 +191,47 @@ func TestClarificationOptionsAreKeyedAndKeptAboveOne(t *testing.T) {
 
 func TestAClarifyTurnRequiresAQuestion(t *testing.T) {
 	clarifyRoute := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask)
-	if validateClarificationQuestion(clarifyRoute, agentcontract.TurnWords{ClarificationDisposition: agentcontract.ClarificationDispositionAsk}) == nil {
+	if validateClarificationQuestion(clarifyRoute, turnclassification.TurnWords{ClarificationDisposition: turnclassification.ClarificationDispositionAsk}) == nil {
 		t.Fatal("expected a clarify route with no question to be refused")
 	}
 	needsConfirmation := decidedTurnFields(agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationNeedsConfirmation)
-	if validateClarificationQuestion(needsConfirmation, agentcontract.TurnWords{ClarificationDisposition: agentcontract.ClarificationDispositionAsk}) == nil {
+	if validateClarificationQuestion(needsConfirmation, turnclassification.TurnWords{ClarificationDisposition: turnclassification.ClarificationDispositionAsk}) == nil {
 		t.Fatal("expected a needs_confirmation turn with no question to be refused")
 	}
 	answering := decidedTurnFields(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply)
-	if errorValue := validateClarificationQuestion(answering, agentcontract.TurnWords{}); errorValue != nil {
+	if errorValue := validateClarificationQuestion(answering, turnclassification.TurnWords{}); errorValue != nil {
 		t.Fatalf("expected an answering turn to need no clarification question: %v", errorValue)
 	}
 }
 
 func TestClarificationDispositionRequiresConsistentQuestionAndOptions(t *testing.T) {
 	clarify := decidedTurnFields(agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation)
-	validAsk := agentcontract.TurnWords{
-		ClarificationDisposition: agentcontract.ClarificationDispositionAsk,
+	validAsk := turnclassification.TurnWords{
+		ClarificationDisposition: turnclassification.ClarificationDispositionAsk,
 		ClarificationQuestion:    "어느 기간으로 볼까요?",
 	}
 	if errorValue := validateClarificationQuestion(clarify, validAsk); errorValue != nil {
 		t.Fatalf("expected a nonempty ask question to be valid: %v", errorValue)
 	}
-	if errorValue := validateClarificationQuestion(clarify, agentcontract.TurnWords{
-		ClarificationDisposition: agentcontract.ClarificationDispositionStartWork,
+	if errorValue := validateClarificationQuestion(clarify, turnclassification.TurnWords{
+		ClarificationDisposition: turnclassification.ClarificationDispositionStartWork,
 	}); errorValue != nil {
 		t.Fatalf("expected start_work with no question or options to be valid: %v", errorValue)
 	}
-	if validateClarificationQuestion(clarify, agentcontract.TurnWords{
-		ClarificationDisposition: agentcontract.ClarificationDispositionStartWork,
+	if validateClarificationQuestion(clarify, turnclassification.TurnWords{
+		ClarificationDisposition: turnclassification.ClarificationDispositionStartWork,
 		ClarificationOptions:     []agentcontract.ClarificationOption{{Label: "선택지"}},
 	}) == nil {
 		t.Fatal("expected start_work with clarification options to be refused")
 	}
-	if validateClarificationQuestion(clarify, agentcontract.TurnWords{
-		ClarificationDisposition: agentcontract.ClarificationDispositionStartWork,
+	if validateClarificationQuestion(clarify, turnclassification.TurnWords{
+		ClarificationDisposition: turnclassification.ClarificationDispositionStartWork,
 		ClarificationQuestion:    "null",
 	}) == nil {
 		t.Fatal("expected start_work with a nonempty question to be refused")
 	}
-	if validateClarificationQuestion(clarify, agentcontract.TurnWords{
-		ClarificationDisposition: agentcontract.ClarificationDisposition("unknown"),
+	if validateClarificationQuestion(clarify, turnclassification.TurnWords{
+		ClarificationDisposition: turnclassification.ClarificationDisposition("unknown"),
 		ClarificationQuestion:    "어느 기간으로 볼까요?",
 	}) == nil {
 		t.Fatal("expected an unknown disposition to be refused")
@@ -238,10 +239,10 @@ func TestClarificationDispositionRequiresConsistentQuestionAndOptions(t *testing
 }
 
 func TestAnExactPrecomputedDecisionIsUsedAsItStands(t *testing.T) {
-	precomputedDecision := agentcontract.TurnDecision{Route: agentcontract.TurnRouteStartTask, Classification: "vibes", TaskShape: "blob"}
+	precomputedDecision := turnclassification.TurnDecision{Route: agentcontract.TurnRouteStartTask, Classification: "vibes", TaskShape: "blob"}
 	turnRouter := NewTurnRouter(nil, DecisionPlanner{}, enabledIntakeOptions())
 
-	exactDecision, errorValue := turnRouter.PlanObserved(context.Background(), agentcontract.AgentRequest{}, agentcontract.Routing{Decision: &precomputedDecision, IsExact: true}, nil)
+	exactDecision, errorValue := turnRouter.PlanObserved(context.Background(), agentcontract.AgentRequest{}, turnclassification.Routing{Decision: &precomputedDecision, IsExact: true}, nil)
 	if errorValue != nil {
 		t.Fatalf("expected an exact decision to be used as it stands: %v", errorValue)
 	}
@@ -249,7 +250,7 @@ func TestAnExactPrecomputedDecisionIsUsedAsItStands(t *testing.T) {
 		t.Fatalf("expected the exact decision untouched, got %+v", exactDecision)
 	}
 
-	if _, errorValue := turnRouter.PlanObserved(context.Background(), agentcontract.AgentRequest{}, agentcontract.Routing{Decision: &precomputedDecision}, nil); errorValue == nil {
+	if _, errorValue := turnRouter.PlanObserved(context.Background(), agentcontract.AgentRequest{}, turnclassification.Routing{Decision: &precomputedDecision}, nil); errorValue == nil {
 		t.Fatal("expected an inexact precomputed decision to be normalized and refused")
 	}
 }
@@ -361,7 +362,7 @@ func TestClarificationReviewCarriesAStablePrefixEndingInTheClock(t *testing.T) {
 
 func TestEveryReachableToolIsOfferedToTheDecision(t *testing.T) {
 	toolSet := newTestToolSet([]string{"task_add", "task_list"})
-	request := agentcontract.IntakeDecisionRequest{ToolSet: toolSet}
+	request := turnclassification.IntakeDecisionRequest{ToolSet: toolSet}
 
 	callableToolNames := resolveCallableToolNames(request)
 	for _, toolName := range toolSet.ListToolNames() {

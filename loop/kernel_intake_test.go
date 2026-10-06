@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func TestAgentKernelPreservesScheduledIntakeRefusalAfterSkillSelection(t *testing.T) {
@@ -444,7 +445,7 @@ func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 			checkpoints = append(checkpoints, checkpoint)
 			return nil
 		},
-	}, agentcontract.Routing{Decision: &precomputedDecision, IsExact: true})
+	}, turnclassification.Routing{Decision: &precomputedDecision, IsExact: true})
 	if errorValue != nil {
 		t.Fatalf("expected task to complete: %v", errorValue)
 	}
@@ -592,7 +593,7 @@ func TestAgentKernelQuickReplyAsksWithExpectsAnswerForExplicitChoiceRequest(t *t
 		return testToolSuccess(`{"kind":"choice_single","question":"아래 세 가지 중 하나를 선택해 주세요."}`), nil
 	})
 
-	result, errorValue := services.kernel.RunAgentRequest(context.Background(), agentcontract.Routing{Decision: &routedDecision}, AgentRequest{
+	result, errorValue := services.kernel.RunAgentRequest(context.Background(), turnclassification.Routing{Decision: &routedDecision}, AgentRequest{
 		RequesterPersonID: "person-1",
 		ConversationID:    "conversation-1",
 		Prompt:            "나한테 1 2 3 선택지 줘봐. 잘 동작하는지 테스트해보게",

@@ -3,7 +3,7 @@ package loop
 import (
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func buildIntakeFailureReport(turnBudget turnBudgetContext, request AgentRequest, intakeDecision IntakeDecision, taskRunID string) agentcontract.FailureReport {
@@ -15,7 +15,7 @@ func buildIntakeFailureReport(turnBudget turnBudgetContext, request AgentRequest
 	for _, carriedOutCall := range request.CarriedOutCalls {
 		carriedOutToolNames = append(carriedOutToolNames, carriedOutCall.ToolName)
 	}
-	return agentcontract.BuildIntakeFailureReport(agentcontract.IntakeFailureReportInput{
+	return BuildIntakeFailureReport(IntakeFailureReportInput{
 		OriginalRequest:           request.Prompt,
 		ResponseLanguage:          request.ResponseLanguage,
 		DiagnosticEventID:         taskRunID + ":intake_limit",

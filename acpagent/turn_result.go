@@ -2,7 +2,7 @@ package acpagent
 
 import (
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func promptResponseFor(turnResult agentcontract.AgentTurnResult) acp.PromptResponse {

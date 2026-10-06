@@ -2,8 +2,9 @@ package loop
 
 import (
 	"encoding/json"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"testing"
+
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 func failureDebtForFailedCall(toolName string, inputDocument string) FailureDebt {

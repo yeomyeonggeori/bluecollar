@@ -4,20 +4,21 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type intakeDecisionLanguageModel struct {
 	decision                 TurnDecision
-	clarificationDisposition agentcontract.ClarificationDisposition
+	clarificationDisposition turnclassification.ClarificationDisposition
 }
 
 func (languageModel intakeDecisionLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -27,7 +28,7 @@ func (languageModel intakeDecisionLanguageModel) GenerateResponse(context.Contex
 func (languageModel intakeDecisionLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
 	var response any = languageModel.decision
 	if strings.Contains(request.StructuredOutputSchema.Document, `"clarificationDisposition"`) {
-		response = agentcontract.TurnWords{
+		response = turnclassification.TurnWords{
 			Reason:                   languageModel.decision.Reason,
 			UserFacingReply:          languageModel.decision.UserFacingReply,
 			ClarificationDisposition: languageModel.clarificationDisposition,
@@ -260,7 +261,7 @@ func TestAgentKernelRunsExecutableConsumeContradiction(t *testing.T) {
 
 func TestAgentKernelPausesNeedsConfirmationDisambiguation(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
-	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{clarificationDisposition: agentcontract.ClarificationDispositionAsk, decision: TurnDecision{
+	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{clarificationDisposition: turnclassification.ClarificationDispositionAsk, decision: TurnDecision{
 		Route:                 TurnRouteClarify,
 		Classification:        IntakeClassificationNeedsConfirmation,
 		TaskShape:             TaskShapeApprovalGatedTask,
@@ -377,7 +378,7 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 			request := kernelTestRequest("Research a short company profile and ask me which domain to use before publishing.")
 			request.ToolSet = toolSet
 			request.SkipSkillSelection = true
-			decidedRouting := agentcontract.Routing{Decision: &decision, IsExact: true}
+			decidedRouting := turnclassification.Routing{Decision: &decision, IsExact: true}
 
 			result, errorValue := agentKernel.RunAgentRequest(context.Background(), decidedRouting, request)
 			if errorValue != nil {
@@ -986,7 +987,7 @@ func TestAgentKernelXHighTaskKeepsHourBudgetWithLowExecutionModel(t *testing.T) 
 		TaskLevel:      TaskLevelXHigh,
 	}
 	request := kernelTestRequest("업무를 만들어줘")
-	decidedRouting := agentcontract.Routing{Decision: &precomputedDecision, IsExact: true}
+	decidedRouting := turnclassification.Routing{Decision: &precomputedDecision, IsExact: true}
 	request.SkipSkillSelection = true
 	request.ToolSet = newTestToolSet(nil)
 	request.TurnStartedAt = time.Now().Add(-15 * time.Minute)
@@ -1017,7 +1018,7 @@ func TestAgentKernelClampsStaleNonResumeAnchorInsteadOfInstantElapsing(t *testin
 		PriorTaskReference: PriorTaskReferenceNone,
 	}
 	request := kernelTestRequest("진단해줘")
-	decidedRouting := agentcontract.Routing{Decision: &precomputedDecision, IsExact: true}
+	decidedRouting := turnclassification.Routing{Decision: &precomputedDecision, IsExact: true}
 	request.SkipSkillSelection = true
 	request.ToolSet = newTestToolSet(nil)
 	request.TurnStartedAt = time.Now().Add(-TaskLevelProfileForLevel(TaskLevelLow).Duration - time.Second)
@@ -1043,7 +1044,7 @@ func TestAgentKernelClampsStaleNonResumeAnchorInsteadOfInstantElapsing(t *testin
 }
 
 func TestExactPrecomputedDecisionSkipsArtifactTaskLevelPromotion(t *testing.T) {
-	intakeDecision := promoteArtifactTaskLevelForRequest(agentcontract.Routing{IsExact: true}, AgentRequest{
+	intakeDecision := promoteArtifactTaskLevelForRequest(turnclassification.Routing{IsExact: true}, AgentRequest{
 		Prompt: "Create and share a PDF report",
 	}, IntakeDecision{TaskLevel: TaskLevelLow})
 
@@ -1065,7 +1066,7 @@ func TestAgentKernelPreservesExactPrecomputedTaskLevel(t *testing.T) {
 		Reason:             "LLMD topology diagnostic",
 	}
 	request := kernelTestRequest("Create and share a PDF report")
-	decidedRouting := agentcontract.Routing{Decision: &precomputedDecision, IsExact: true}
+	decidedRouting := turnclassification.Routing{Decision: &precomputedDecision, IsExact: true}
 	request.SkipSkillSelection = true
 	request.ToolSet = newTestToolSet(nil)
 

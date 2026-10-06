@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
 )
 
 type deliveredFileLiveCase struct {

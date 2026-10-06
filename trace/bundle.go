@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/bench"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 const PrivacyNotice = "This trace carries whatever the task carried: message text, file contents and tool inputs, none of it removed. Read it before you send it anywhere."

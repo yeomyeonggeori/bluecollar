@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake/intaketest"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type concurrencyCountingDecisionModel struct {
@@ -85,7 +85,7 @@ func TestOneFailedBatchCancelsTheRestAndSelectsNothing(t *testing.T) {
 	outcome := startTaskOutcome()
 	outcome.ToolProbabilities = map[string]float64{"web_search": 0.88}
 	decisionModel := &concurrencyCountingDecisionModel{outcome: outcome, failSelectionBatches: true}
-	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
 	startedAt := time.Now()
 	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, callLedger)

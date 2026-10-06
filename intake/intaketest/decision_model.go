@@ -6,12 +6,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type Outcome struct {
-	TurnDecision      agentcontract.TurnDecision
+	TurnDecision      turnclassification.TurnDecision
 	ToolProbabilities map[string]float64
 }
 
@@ -165,14 +166,14 @@ func containsValue(values []string, value string) bool {
 	return false
 }
 
-func firstScriptedToolName(decision agentcontract.TurnDecision) string {
+func firstScriptedToolName(decision turnclassification.TurnDecision) string {
 	if len(decision.InitialToolNames) == 0 {
 		return agentcontract.IntakeChoiceOptionNone
 	}
 	return decision.InitialToolNames[0]
 }
 
-func scriptedExpectedToolCount(decision agentcontract.TurnDecision) agentcontract.ExpectedToolCount {
+func scriptedExpectedToolCount(decision turnclassification.TurnDecision) agentcontract.ExpectedToolCount {
 	if decision.ExpectedToolCount != "" {
 		return decision.ExpectedToolCount
 	}

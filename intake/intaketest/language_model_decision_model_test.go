@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type recordingLanguageModel struct {
@@ -35,7 +35,7 @@ func TestTheLanguageModelStandInAsksARealStructuredQuestion(t *testing.T) {
 	}
 
 	request := languageModel.request
-	if request.StructuredOutputSchema.Name != agentcontract.TurnRouterSchemaName || !strings.Contains(request.StructuredOutputSchema.Document, `"enum":["consume"`) {
+	if request.StructuredOutputSchema.Name != llmcalls.TurnRouterSchemaName || !strings.Contains(request.StructuredOutputSchema.Document, `"enum":["consume"`) {
 		t.Fatalf("expected the router schema with the route options, got %+v", request.StructuredOutputSchema)
 	}
 	if len(request.Messages) != 2 || !strings.Contains(request.Messages[1].Content, "안녕") {

@@ -15,11 +15,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/model/openaicompatible"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/bluecollar/attribution"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
+	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type compactionLiveCase struct {
@@ -96,7 +97,7 @@ func TestLiveStructuredCompactionSelection(t *testing.T) {
 	if errorValue := os.MkdirAll(artifactDirectory, 0700); errorValue != nil {
 		t.Fatal(errorValue)
 	}
-	provider := openaicompatible.NewProvider("https://openrouter.ai/api/v1", apiKey, "google/gemini-3.1-flash-lite")
+	provider := openaicompatible.NewProvider("https://openrouter.ai/api/v1", apiKey, "google/gemini-3.1-flash-lite").WithAttribution(attribution.Self)
 	httpClient := &http.Client{Transport: &compactionEvidenceTransport{directory: artifactDirectory}, Timeout: 40 * time.Second}
 	provider.UseHTTPClient(httpClient)
 	decisionModel := &recordedCompactionDecisionModel{DecisionModel: decisions.Endpoint{URL: decisions.DefaultEndpointURL, ModelName: "typesafe/jev-1.13", APIKey: apiKey, HTTPClient: httpClient}.DecisionModel()}

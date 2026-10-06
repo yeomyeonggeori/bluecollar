@@ -5,7 +5,7 @@ import (
 	"math"
 	"sort"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type toolSelectionRun struct {

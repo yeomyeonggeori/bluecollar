@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 func quickReplyKernel(t *testing.T) (*AgentKernel, *taskstate.TaskRunService) {

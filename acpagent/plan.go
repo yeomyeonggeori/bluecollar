@@ -5,13 +5,15 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type plannedTurn struct {
-	decision    agentcontract.TurnDecision
+	decision    turnclassification.TurnDecision
 	callRecords []agentcontract.LLMCallRecord
 }
 
@@ -24,20 +26,20 @@ func (runningAgent *Agent) planTurn(ctx context.Context, openSession *session, t
 	return routed, errorValue
 }
 
-func DecisionFromFacts(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, bool) {
+func DecisionFromFacts(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest) (turnclassification.TurnDecision, bool) {
 	switch {
 	case turnRequest.IsRuntimeRestartResume:
 		return withHostTaskLevel(resumedTurnDecision(taskEvents, turnRequest), turnRequest), true
 	case isReplyToAskedQuestion(turnRequest):
 		return withHostTaskLevel(answeredQuestionDecision(turnRequest), turnRequest), true
 	}
-	return agentcontract.TurnDecision{}, false
+	return turnclassification.TurnDecision{}, false
 }
 
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (plannedTurn, error) {
 	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
-	callLedger := &agentcontract.IntakeCallLedger{SchemaNames: agentcontract.IntakeSchemaNames}
-	decision, errorValue := router.PlanObserved(ctx, turnRequest.RoutingRequest(), agentcontract.Routing{}, callLedger)
+	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
+	decision, errorValue := router.PlanObserved(ctx, turnRequest.RoutingRequest(), turnclassification.Routing{}, callLedger)
 	return plannedTurn{decision: decision, callRecords: callLedger.Records}, errorValue
 }
 
@@ -45,18 +47,18 @@ func isReplyToAskedQuestion(turnRequest agentcontract.AgentTurnRequest) bool {
 	return strings.TrimSpace(turnRequest.PendingInput.TaskRunID) != ""
 }
 
-func resumedTurnDecision(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest) agentcontract.TurnDecision {
+func resumedTurnDecision(taskEvents []agentcontract.TaskEvent, turnRequest agentcontract.AgentTurnRequest) turnclassification.TurnDecision {
 	decision := continuedTurnDecision(turnRequest, "the host resumes a run the runtime had stopped").WithRestoredIntakeState(latestIntakeDecision(taskEvents))
 	decision.TaskLevel = highestRecordedTaskLevel(taskEvents)
 	return decision
 }
 
-func answeredQuestionDecision(turnRequest agentcontract.AgentTurnRequest) agentcontract.TurnDecision {
+func answeredQuestionDecision(turnRequest agentcontract.AgentTurnRequest) turnclassification.TurnDecision {
 	return continuedTurnDecision(turnRequest, "a reply to the question the run asked")
 }
 
-func continuedTurnDecision(turnRequest agentcontract.AgentTurnRequest, reason string) agentcontract.TurnDecision {
-	return agentcontract.TurnDecision{
+func continuedTurnDecision(turnRequest agentcontract.AgentTurnRequest, reason string) turnclassification.TurnDecision {
+	return turnclassification.TurnDecision{
 		Route:            agentcontract.TurnRouteContinueTask,
 		Classification:   agentcontract.IntakeClassificationBoundedTask,
 		TaskShape:        agentcontract.TaskShapeMaintenanceTask,
@@ -65,7 +67,7 @@ func continuedTurnDecision(turnRequest agentcontract.AgentTurnRequest, reason st
 	}
 }
 
-func withHostTaskLevel(decision agentcontract.TurnDecision, turnRequest agentcontract.AgentTurnRequest) agentcontract.TurnDecision {
+func withHostTaskLevel(decision turnclassification.TurnDecision, turnRequest agentcontract.AgentTurnRequest) turnclassification.TurnDecision {
 	if hostTaskLevel := agentcontract.NormalizeTaskLevel(string(turnRequest.TaskLevel)); hostTaskLevel != "" {
 		decision.TaskLevel = hostTaskLevel
 	}
@@ -110,7 +112,7 @@ func highestRecordedTaskLevel(taskEvents []agentcontract.TaskEvent) agentcontrac
 			continue
 		}
 		for _, level := range []string{recorded.Level, recorded.NewTaskLevel, recorded.EffortLevel, recorded.NewEffortLevel, recorded.TaskComplexity} {
-			taskLevel = agentcontract.LargerTaskLevel(taskLevel, agentcontract.NormalizeTaskLevel(level))
+			taskLevel = turnclassification.LargerTaskLevel(taskLevel, agentcontract.NormalizeTaskLevel(level))
 		}
 	}
 	return taskLevel

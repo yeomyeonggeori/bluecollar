@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const defaultEmbeddingModelName = "embedding_create"

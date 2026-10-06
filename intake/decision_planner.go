@@ -10,8 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/messageimages"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 type AttachmentDescriber interface {
@@ -30,12 +33,12 @@ func NewDecisionPlanner(decisionModel model.DecisionModel, attachmentDescriber A
 	return DecisionPlanner{decisionModel: decisionModel, attachmentDescriber: attachmentDescriber, callCost: newModelCallCost()}
 }
 
-func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract.IntakeDecisionRequest, callLedger *agentcontract.IntakeCallLedger) (agentcontract.IntakeDecisions, error) {
+func (planner DecisionPlanner) Decide(ctx context.Context, request turnclassification.IntakeDecisionRequest, callLedger *llmcalls.IntakeCallLedger) (turnclassification.IntakeDecisions, error) {
 	if planner.decisionModel == nil {
-		return agentcontract.IntakeDecisions{}, ErrDecisionModelUnavailable
+		return turnclassification.IntakeDecisions{}, ErrDecisionModelUnavailable
 	}
 	if len(request.Messages) == 0 {
-		return agentcontract.IntakeDecisions{}, errors.New("intake decision request carries no message")
+		return turnclassification.IntakeDecisions{}, errors.New("intake decision request carries no message")
 	}
 	describedRequest, hasDescribedAttachments := planner.describeAttachmentsOnlyMessages(ctx, request)
 	calls := planner.decideEveryRequest(ctx, []model.DecisionRequest{buildIntakeDecisionRequest(describedRequest)})
@@ -50,10 +53,10 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request agentcontract
 		input:                decisionInput(request),
 	})
 	if callError != nil {
-		return agentcontract.IntakeDecisions{}, callError
+		return turnclassification.IntakeDecisions{}, callError
 	}
 	if readError != nil {
-		return agentcontract.IntakeDecisions{}, readError
+		return turnclassification.IntakeDecisions{}, readError
 	}
 	return planner.withLikelyTools(ctx, describedRequest, decisions, callLedger), nil
 }
@@ -150,7 +153,7 @@ func decisionRequestByteCount(request model.DecisionRequest) int {
 	return len(document)
 }
 
-func buildIntakeDecisionRequest(request agentcontract.IntakeDecisionRequest) model.DecisionRequest {
+func buildIntakeDecisionRequest(request turnclassification.IntakeDecisionRequest) model.DecisionRequest {
 	return model.DecisionRequest{
 		State:     buildDecisionState(request, nil),
 		Questions: newQuestionBuilder(request).questionsWithoutTools(),
@@ -167,7 +170,7 @@ func largestDecisionRequestByteCount(requests []model.DecisionRequest) int {
 	return largestByteCount
 }
 
-func resolveCallableToolNames(request agentcontract.IntakeDecisionRequest) []string {
+func resolveCallableToolNames(request turnclassification.IntakeDecisionRequest) []string {
 	if len(request.CallableToolNames) > 0 {
 		return sortedToolNames(request.CallableToolNames)
 	}
@@ -183,17 +186,17 @@ func sortedToolNames(toolNames []string) []string {
 	return sortedNames
 }
 
-func (planner DecisionPlanner) describeAttachmentsOnlyMessages(ctx context.Context, request agentcontract.IntakeDecisionRequest) (agentcontract.IntakeDecisionRequest, bool) {
+func (planner DecisionPlanner) describeAttachmentsOnlyMessages(ctx context.Context, request turnclassification.IntakeDecisionRequest) (turnclassification.IntakeDecisionRequest, bool) {
 	if planner.attachmentDescriber == nil {
 		return request, false
 	}
-	describedMessages := append([]agentcontract.IntakeDecisionMessage{}, request.Messages...)
+	describedMessages := append([]turnclassification.IntakeDecisionMessage{}, request.Messages...)
 	hasDescription := false
 	for index, message := range describedMessages {
 		if !messageNeedsAttachmentDescription(message) {
 			continue
 		}
-		descriptions, errorValue := planner.attachmentDescriber.DescribeAttachments(ctx, agentcontract.ImagePartsOf(message.InputParts))
+		descriptions, errorValue := planner.attachmentDescriber.DescribeAttachments(ctx, messageimages.ImagePartsOf(message.InputParts))
 		if errorValue != nil || len(descriptions) == 0 {
 			continue
 		}
@@ -204,11 +207,11 @@ func (planner DecisionPlanner) describeAttachmentsOnlyMessages(ctx context.Conte
 	return request, hasDescription
 }
 
-func messageNeedsAttachmentDescription(message agentcontract.IntakeDecisionMessage) bool {
+func messageNeedsAttachmentDescription(message turnclassification.IntakeDecisionMessage) bool {
 	if strings.TrimSpace(message.Prompt) != "" {
 		return false
 	}
-	return len(agentcontract.ImagePartsOf(message.InputParts)) > 0
+	return len(messageimages.ImagePartsOf(message.InputParts)) > 0
 }
 
 func withAttachmentDescriptions(facts []agentcontract.IntakeAttachmentFact, descriptions []string) []agentcontract.IntakeAttachmentFact {
@@ -224,35 +227,35 @@ func withAttachmentDescriptions(facts []agentcontract.IntakeAttachmentFact, desc
 	return describedFacts
 }
 
-func (planner DecisionPlanner) readDecisions(request agentcontract.IntakeDecisionRequest, answers map[string]model.DecisionAnswer, callError error) (agentcontract.IntakeDecisions, error) {
+func (planner DecisionPlanner) readDecisions(request turnclassification.IntakeDecisionRequest, answers map[string]model.DecisionAnswer, callError error) (turnclassification.IntakeDecisions, error) {
 	if callError != nil {
-		return agentcontract.IntakeDecisions{}, nil
+		return turnclassification.IntakeDecisions{}, nil
 	}
-	decisions := agentcontract.IntakeDecisions{}
+	decisions := turnclassification.IntakeDecisions{}
 	for index, message := range request.Messages {
 		reader := answerReader{answers: answers, messageKey: decisionMessageKey(index)}
 		decision, errorValue := planner.readMessageDecision(request, message, reader)
 		if errorValue != nil {
-			return agentcontract.IntakeDecisions{}, errorValue
+			return turnclassification.IntakeDecisions{}, errorValue
 		}
 		decisions.Messages = append(decisions.Messages, decision)
 	}
 	return decisions, nil
 }
 
-func (planner DecisionPlanner) readMessageDecision(request agentcontract.IntakeDecisionRequest, message agentcontract.IntakeDecisionMessage, reader answerReader) (agentcontract.IntakeMessageDecision, error) {
+func (planner DecisionPlanner) readMessageDecision(request turnclassification.IntakeDecisionRequest, message turnclassification.IntakeDecisionMessage, reader answerReader) (turnclassification.IntakeMessageDecision, error) {
 	turnFields, errorValue := readTurnFields(request, reader)
 	if errorValue != nil {
-		return agentcontract.IntakeMessageDecision{}, errorValue
+		return turnclassification.IntakeMessageDecision{}, errorValue
 	}
-	return agentcontract.IntakeMessageDecision{
+	return turnclassification.IntakeMessageDecision{
 		MessageID:   strings.TrimSpace(message.MessageID),
 		TurnFields:  turnFields,
 		Attachments: message.Attachments,
 	}, nil
 }
 
-func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerReader) (agentcontract.TurnDecision, error) {
+func readTurnFields(request turnclassification.IntakeDecisionRequest, reader answerReader) (turnclassification.TurnDecision, error) {
 	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionExpectedToolCount, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind}
 	if needsResponseLanguage(request) {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionResponseLanguage)
@@ -262,24 +265,24 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	}
 	choices, errorValue := reader.choices(choiceNames)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	expectedToolCount := agentcontract.ExpectedToolCount(choices[agentcontract.IntakeQuestionExpectedToolCount])
 	needsTool := expectedToolCount != agentcontract.ExpectedToolCountNone
 	hasIndependentWork, errorValue := reader.noul(agentcontract.IntakeQuestionHasIndependentWork)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	isExternalSendRequested, errorValue := reader.noul(agentcontract.IntakeQuestionIsExternalSendRequested)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	route := agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute])
 	classification := classificationOf(route, needsTool)
 	if route == agentcontract.TurnRouteClarify && needsTool && hasIndependentWork {
 		classification = agentcontract.IntakeClassificationBoundedTask
 	}
-	turnFields := agentcontract.TurnDecision{
+	turnFields := turnclassification.TurnDecision{
 		Route:                   route,
 		RawDecisionRoute:        route,
 		Classification:          classification,
@@ -295,9 +298,9 @@ func readTurnFields(request agentcontract.IntakeDecisionRequest, reader answerRe
 	if priorTaskChoice, isAsked := choices[agentcontract.IntakeQuestionPriorTaskReference]; isAsked {
 		turnFields.PriorTaskReference = agentcontract.PriorTaskReference(priorTaskChoice)
 	}
-	turnFields.RequestedOutputFormats, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, agentcontract.RequestedOutputFormatNames)
+	turnFields.RequestedOutputFormats, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, turnclassification.RequestedOutputFormatNames)
 	if errorValue != nil {
-		return agentcontract.TurnDecision{}, errorValue
+		return turnclassification.TurnDecision{}, errorValue
 	}
 	return turnFields, nil
 }

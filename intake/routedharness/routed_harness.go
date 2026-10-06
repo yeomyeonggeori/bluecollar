@@ -5,14 +5,15 @@ import (
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/acpagent"
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
 	"github.com/yeomyeonggeori/bluecollar/intake"
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/taskstate"
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
 type PlannedTurnRunner interface {
-	RunPlannedTurn(context.Context, agentcontract.AgentTurnRequest, agentcontract.Routing) (agentcontract.AgentTurnResult, error)
+	RunPlannedTurn(context.Context, agentcontract.AgentTurnRequest, turnclassification.Routing) (agentcontract.AgentTurnResult, error)
 }
 
 type Harness struct {
@@ -35,7 +36,7 @@ func (routed Harness) RunTurn(ctx context.Context, turnRequest agentcontract.Age
 			return agentcontract.AgentTurnResult{}, errorValue
 		}
 	}
-	return routed.Inner.RunPlannedTurn(ctx, turnRequest, agentcontract.Routing{Decision: &decision})
+	return routed.Inner.RunPlannedTurn(ctx, turnRequest, turnclassification.Routing{Decision: &decision})
 }
 
 func (routed Harness) recordedEvents(turnRequest agentcontract.AgentTurnRequest) []agentcontract.TaskEvent {

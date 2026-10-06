@@ -6,8 +6,10 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/yeomyeonggeori/bluecollar/agentcontract"
-	"github.com/yeomyeonggeori/bluecollar/model"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
+	"github.com/yeomyeonggeori/bluecollar/messageimages"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
 const attachmentDescriptionSystemPrompt = "Describe each picture the way somebody would describe it to a colleague who cannot see it: what it is, what is written on it, and what it appears to be for. One or two sentences each, in the order the pictures arrive. Describe only what is there."
@@ -30,7 +32,7 @@ func NewAttachmentDescriber(languageModel model.LanguageModelProvider) Attachmen
 }
 
 func (describer *languageModelAttachmentDescriber) DescribeAttachments(ctx context.Context, parts []agentcontract.AgentPart) ([]string, error) {
-	imageParts := agentcontract.ImageMessageParts(parts)
+	imageParts := messageimages.ImageMessageParts(parts)
 	if len(imageParts) == 0 {
 		return nil, nil
 	}
@@ -40,7 +42,7 @@ func (describer *languageModelAttachmentDescriber) DescribeAttachments(ctx conte
 			{Role: "user", Parts: imageParts},
 		},
 		StructuredOutputSchema: model.StructuredOutputSchema{
-			Name:               agentcontract.AttachmentDescriptionSchemaName,
+			Name:               llmcalls.AttachmentDescriptionSchemaName,
 			Document:           attachmentDescriptionSchema,
 			IsStrictlyEnforced: true,
 		},

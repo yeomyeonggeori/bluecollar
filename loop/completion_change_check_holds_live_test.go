@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/yeomyeonggeori/bluecollar/model"
-	"github.com/yeomyeonggeori/bluecollar/model/decisions"
-	"github.com/yeomyeonggeori/bluecollar/toolcontract"
+	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/model/decisions"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 const holdsLiveAttempts = 3
