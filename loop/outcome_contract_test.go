@@ -684,8 +684,7 @@ func TestOutcomeContractRequiresActiveGoalRequiredEvidenceForContinuation(t *tes
 
 func TestOutcomeContractPreservesGoalDuringApprovalContinuation(t *testing.T) {
 	request := AgentRequest{
-		Prompt:                 "check",
-		IsApprovalContinuation: true,
+		Prompt: "check",
 		ActiveGoal: ActiveGoal{OutcomeContract: OutcomeContract{
 			RequiredEvidenceTools: []string{"task_delete"},
 			SelectedEvidenceHints: []string{"task_delete"},

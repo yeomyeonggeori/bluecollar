@@ -120,15 +120,14 @@ func TestAResumedTurnKeepsWhatItLearnedBeforeThePause(t *testing.T) {
 	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.message_search.result", `{"observationID":"obs-001","action":"continue","tool":"message_search","output":{"content":"{\"messageIDs\":[\"message-1\"]}"}}`)
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:      "person-1",
-		ExistingTaskRunID:      taskRun.TaskRunID,
-		IsApprovalContinuation: true,
-		ConversationID:         "conversation-1",
-		Prompt:                 "승인",
-		ResponseLanguage:       ResponseLanguageKorean,
-		ToolSet:                toolRegistry,
-		PinnedToolNames:        toolRegistry.ListToolNames(),
-		WorkspaceRootPath:      t.TempDir(),
+		RequesterPersonID: "person-1",
+		ExistingTaskRunID: taskRun.TaskRunID,
+		ConversationID:    "conversation-1",
+		Prompt:            "승인",
+		ResponseLanguage:  ResponseLanguageKorean,
+		ToolSet:           toolRegistry,
+		PinnedToolNames:   toolRegistry.ListToolNames(),
+		WorkspaceRootPath: t.TempDir(),
 		CarriedOutCalls: []CarriedOutCall{{
 			ToolName:  "message_delete",
 			ToolInput: json.RawMessage(`{"messageIDs":["message-1"]}`),

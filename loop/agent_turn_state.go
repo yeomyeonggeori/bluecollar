@@ -95,7 +95,7 @@ func buildInitialAgentTaskState(request AgentTurnRequest, options TurnOptions, t
 }
 
 func agentTaskStateForTurn(request AgentTurnRequest, options TurnOptions, taskRun agentcontract.TaskRun, events []agentcontract.TaskEvent, isPausedTaskResume bool) (agentTaskState, error) {
-	if !request.IsRuntimeRestartResume && !request.IsApprovalContinuation && !isPausedTaskResume {
+	if !request.IsRuntimeRestartResume && !isPausedTaskResume {
 		state := buildInitialAgentTaskState(request, options, taskRun.TaskRunID)
 		state.Status = taskRun.Status
 		return state, nil
@@ -146,7 +146,7 @@ func taskEventsExcept(events []agentcontract.TaskEvent, excludedTaskEventIDs []s
 }
 
 func userResumeClearsInheritedFailureDebt(request AgentTurnRequest, observations []turnObservation) bool {
-	if !request.IsRuntimeRestartResume || request.IsApprovalContinuation {
+	if !request.IsRuntimeRestartResume {
 		return false
 	}
 	_, hasFailureDebt := activeFailureDebt(observations)
