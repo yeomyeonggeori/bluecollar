@@ -25,6 +25,9 @@ type Options struct {
 	LLMCallRepository    taskstate.LLMCallRepository
 	Skills               Skills
 	HostCheckedToolNames []string
+	TurnOptions          agentcontract.TurnOptions
+	IntakeOptions        agentcontract.IntakeOptions
+	CompanyProvider      func() agentcontract.CompanyContext
 }
 
 type Skills struct {

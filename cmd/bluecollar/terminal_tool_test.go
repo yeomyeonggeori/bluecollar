@@ -397,3 +397,21 @@ func TestTruncatedOutputTellsTheModelWhereTheFullCopyIs(t *testing.T) {
 		t.Fatalf("expected the spilled copy to hold the whole output, got %d bytes", len(spilled))
 	}
 }
+
+func TestASpillThatCannotBeWrittenIsNotPromisedToTheModel(t *testing.T) {
+	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "no-such-directory"))
+	runningShell := shell{workingDirectoryPath: t.TempDir()}.withInterpreterFound(context.Background())
+
+	result := shellResult(context.Background(), runningShell, 0, strings.Repeat("x", maximumCapturedOutput+2000), nil)
+
+	var output shellOutput
+	if errorValue := json.Unmarshal(result.Output.Data, &output); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if !output.Truncated || output.OutputPath != "" {
+		t.Fatalf("a spill that was never written has to hand the model no path, got truncated=%v path=%q", output.Truncated, output.OutputPath)
+	}
+	if !strings.Contains(result.Output.Content, "[output truncated") || strings.Contains(result.Output.Content, "the full output is in") {
+		t.Fatalf("the cut still has to be announced, and without a location nobody can read: %q", result.Output.Content[len(result.Output.Content)-120:])
+	}
+}

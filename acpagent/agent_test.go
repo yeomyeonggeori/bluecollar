@@ -29,6 +29,7 @@ type scriptedLanguageModel struct {
 	actionPrompts []string
 	level         string
 	sawImageData  []string
+	generation    []model.GenerationOptions
 }
 
 func (languageModel *scriptedLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -40,6 +41,7 @@ func (languageModel *scriptedLanguageModel) GenerateStructuredResponse(_ context
 		return model.StructuredResponse{Content: `{"route":"start_task","classification":"bounded_task","taskShape":"maintenance_task","level":"` + languageModel.routedLevel() + `","responseLanguage":"en","reason":"test"}`}, nil
 	}
 	languageModel.actionPrompts = append(languageModel.actionPrompts, allMessageContent(request))
+	languageModel.generation = append(languageModel.generation, request.GenerationOptions)
 	languageModel.sawImageData = append(languageModel.sawImageData, imageDataOf(request)...)
 	if languageModel.callCount >= len(languageModel.contents) {
 		return model.StructuredResponse{Content: `{"action":"reply","final":true,"message":"done","goalSatisfied":true}`}, nil
@@ -195,9 +197,14 @@ func driveOneTurn(t *testing.T, catalogTransport mcp.Transport, languageModel *s
 
 func driveOneTurnWithMeta(t *testing.T, catalogTransport mcp.Transport, languageModel *scriptedLanguageModel, promptMeta map[string]any) (*hostClient, acp.PromptResponse) {
 	t.Helper()
+	return driveOneTurnWithOptions(t, catalogTransport, testOptions(languageModel), promptMeta)
+}
+
+func driveOneTurnWithOptions(t *testing.T, catalogTransport mcp.Transport, options Options, promptMeta map[string]any) (*hostClient, acp.PromptResponse) {
+	t.Helper()
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
-	runningAgent := newTestAgent(t, languageModel)
+	runningAgent := newAgentFromOptions(t, options)
 	runningAgent.resolveTransport = func(acp.McpServer) (mcp.Transport, error) { return catalogTransport, nil }
 	go func() {
 		agentConnection := acp.NewAgentSideConnection(runningAgent, agentOutputWriter, agentInputReader)

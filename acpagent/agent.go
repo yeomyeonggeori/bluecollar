@@ -82,6 +82,11 @@ func (runningAgent *Agent) NewSession(ctx context.Context, request acp.NewSessio
 	kernel.UseLanguageModelProvider(runningAgent.languageModel)
 	kernel.UseTaskTierLanguageModels(runningAgent.options.LanguageModels)
 	kernel.UseDecisionModel(runningAgent.options.DecisionModel)
+	kernel.UseTurnOptions(runningAgent.options.TurnOptions)
+	kernel.UseIntakeOptions(runningAgent.routingOptions())
+	if runningAgent.options.CompanyProvider != nil {
+		kernel.UseCompanyProvider(runningAgent.options.CompanyProvider)
+	}
 	kernel.UseToolResultImageSource(openedCatalog)
 	kernel.UseInstructionBundleLoader(instructionBundleLoaderFor(runningAgent.options.Skills, request.Cwd))
 	if runningAgent.options.Skills.Retriever != nil {
@@ -178,7 +183,7 @@ func failTurnOnPanic(openSession *session, promptResponse *acp.PromptResponse, e
 }
 
 func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontract.AgentTurnRequest) (agentcontract.TurnDecision, error) {
-	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, agentcontract.IntakeOptions{IsEnabled: true})
+	router := intake.NewTurnRouter(runningAgent.languageModel, runningAgent.decisionPlanner, runningAgent.routingOptions())
 	return router.Plan(ctx, agentcontract.AgentRequest{
 		RequesterPersonID: turnRequest.RequesterPersonID,
 		ConversationID:    turnRequest.ConversationID,
@@ -186,6 +191,12 @@ func (runningAgent *Agent) routeTurn(ctx context.Context, turnRequest agentcontr
 		InputParts:        turnRequest.InputParts,
 		ToolSet:           turnRequest.ToolSet,
 	})
+}
+
+func (runningAgent *Agent) routingOptions() agentcontract.IntakeOptions {
+	intakeOptions := runningAgent.options.IntakeOptions
+	intakeOptions.IsEnabled = true
+	return intakeOptions
 }
 
 func (runningAgent *Agent) session(sessionID acp.SessionId) (*session, bool) {
