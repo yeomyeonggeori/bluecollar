@@ -2,6 +2,7 @@ package acpagent
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/agentcontract"
@@ -26,8 +27,15 @@ func hostPauseOf(toolName string, toolResult toolcontract.ToolResult) (agentcont
 	if toolResult.Failure != nil && toolResult.Failure.RequiresApproval {
 		return agentcontract.TaskStatusWaitingApproval, toolResult.Failure.UserSafeSummary, true
 	}
-	if toolName == toolcontract.AskInputToolName && !toolResult.Failed() {
+	if toolName == toolcontract.AskInputToolName && !toolResult.Failed() && isWaitingForAnswer(toolResult) {
 		return agentcontract.TaskStatusWaitingUserInput, toolResult.ContentText(), true
 	}
 	return "", "", false
+}
+
+func isWaitingForAnswer(toolResult toolcontract.ToolResult) bool {
+	result := struct {
+		Status string `json:"status"`
+	}{}
+	return json.Unmarshal(toolResult.Output.Data, &result) == nil && result.Status == string(agentcontract.TaskStatusWaitingUserInput)
 }
