@@ -259,8 +259,16 @@ func (runningAgent *Agent) Cancel(_ context.Context, notification acp.CancelNoti
 	if taskRunID == "" {
 		return nil
 	}
+	if openSession.isRunParked(taskRunID) {
+		return nil
+	}
 	openSession.taskRuns.CancelTaskRunWithReason(taskRunID, requesterPersonID, "the host cancelled this turn")
 	return nil
+}
+
+func (openSession *session) isRunParked(taskRunID string) bool {
+	taskRun, isFound := openSession.taskRuns.FindTaskRun(taskRunID)
+	return isFound && (taskRun.Status == agentcontract.TaskStatusWaitingUserInput || taskRun.Status == agentcontract.TaskStatusWaitingApproval)
 }
 
 func (openSession *session) rememberTaskRun(taskRunID string) {
