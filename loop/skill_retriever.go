@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -31,6 +32,11 @@ type SkillSearchDocument struct {
 	IndexedAt      time.Time `json:"indexedAt"`
 }
 
+type inputTypedEmbeddingProvider interface {
+	EmbedQuery(ctx context.Context, text string) ([]float32, error)
+	EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error)
+}
+
 type EmbeddingSkillRetriever struct {
 	EmbeddingProvider model.EmbeddingProvider
 	IndexPath         string
@@ -46,6 +52,29 @@ func NewEmbeddingSkillRetriever(embeddingProvider model.EmbeddingProvider, index
 		IndexPath:         strings.TrimSpace(indexPath),
 		EmbeddingModel:    defaultEmbeddingModelName,
 	}
+}
+
+func (skillRetriever *EmbeddingSkillRetriever) embedQuery(ctx context.Context, text string) ([]float32, error) {
+	typedProvider, isTyped := skillRetriever.EmbeddingProvider.(inputTypedEmbeddingProvider)
+	if !isTyped {
+		return skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, text)
+	}
+	return typedProvider.EmbedQuery(ctx, text)
+}
+
+func (skillRetriever *EmbeddingSkillRetriever) embedDocument(ctx context.Context, text string) ([]float32, error) {
+	typedProvider, isTyped := skillRetriever.EmbeddingProvider.(inputTypedEmbeddingProvider)
+	if !isTyped {
+		return skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, text)
+	}
+	embeddings, errorValue := typedProvider.EmbedDocuments(ctx, []string{text})
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	if len(embeddings) != 1 {
+		return nil, errors.New("document embedding returned " + strconv.Itoa(len(embeddings)) + " vectors for one skill")
+	}
+	return embeddings[0], nil
 }
 
 func (skillRetriever *EmbeddingSkillRetriever) Available(request AgentRequest, skillInstructions []SkillInstruction) []SkillInstruction {
@@ -138,7 +167,7 @@ func (skillRetriever *EmbeddingSkillRetriever) refresh(ctx context.Context, skil
 			nextDocuments = append(nextDocuments, document)
 			continue
 		}
-		embedding, errorValue := skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, searchText)
+		embedding, errorValue := skillRetriever.embedDocument(ctx, searchText)
 		if errorValue != nil {
 			return errorValue
 		}
@@ -201,7 +230,7 @@ func (skillRetriever *EmbeddingSkillRetriever) queryEmbeddings(ctx context.Conte
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			embedding, errorValue := skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, query.Description)
+			embedding, errorValue := skillRetriever.embedQuery(ctx, query.Description)
 			if errorValue == nil {
 				embeddingByQuery[queryIndex] = embedding
 			}
