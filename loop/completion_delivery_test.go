@@ -197,3 +197,15 @@ func TestAFinishWithoutDeliveryNotesSendsItsReplyAsWritten(t *testing.T) {
 		t.Fatalf("expected the reply unchanged, got %q", reply)
 	}
 }
+
+func TestAnUnmetRewriteSpeaksOfTheWorkAndNeverOfARecord(t *testing.T) {
+	attachment := toolcontract.FileAttachment{Filename: "memo.docx"}
+	prompt := buildFinishReplyRewritePrompt(AgentTurnRequest{Prompt: "메모를 docx로 써 주세요."}, "메모를 첨부했습니다.", finishReplyRewrite{unmet: []expectedChange{{Change: "file created", Asked: "메모를 docx로 써 주세요."}}, carried: []toolcontract.FileAttachment{attachment}})
+
+	if strings.Contains(prompt, "the record does not show") {
+		t.Fatalf("expected the rewrite to describe the work, not a record, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "records") {
+		t.Fatalf("expected the rewrite told not to speak of records, got %q", prompt)
+	}
+}
