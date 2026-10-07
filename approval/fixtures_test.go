@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"strings"
 	"testing"
 
@@ -48,7 +49,7 @@ func (fixture fixture) requestWithInput(toolInput string) approvalRequest {
 	return request
 }
 
-func (fixture fixture) awaitOutcome(request approvalRequest) outcome {
+func (fixture fixture) awaitOutcome(request approvalRequest) approvalcore.Outcome {
 	return fixture.gate.awaitApproval(context.Background(), request)
 }
 
@@ -73,7 +74,7 @@ func (fixture fixture) pendingHold(t *testing.T) holdrecord.Hold {
 	return hold
 }
 
-func (fixture fixture) answer(t *testing.T, answer Answer, source string) outcomeKind {
+func (fixture fixture) answer(t *testing.T, answer approvalcore.Verdict, source string) approvalcore.Verdict {
 	t.Helper()
 	return fixture.gate.settle(fixture.taskRun.TaskRunID, fixture.pendingHold(t), answer, source)
 }
@@ -155,13 +156,13 @@ func (languageModel *wordingLanguageModel) promptSeen() string {
 }
 
 type scriptedAsker struct {
-	answer          Answer
+	answer          approvalcore.Verdict
 	askedCount      int
 	holds           []holdrecord.Hold
 	beforeAnswering func()
 }
 
-func (asker *scriptedAsker) Ask(_ context.Context, hold holdrecord.Hold) Answer {
+func (asker *scriptedAsker) Ask(_ context.Context, hold holdrecord.Hold) approvalcore.Verdict {
 	asker.askedCount++
 	asker.holds = append(asker.holds, hold)
 	if asker.beforeAnswering != nil {

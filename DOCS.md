@@ -195,7 +195,7 @@ The port used to be nine methods. Routing and one-shot replies came off it, and 
 | layer | owns |
 | --- | --- |
 | host | connectors and messengers, tool execution and its isolation boundary, the task store, approvals, the agent's identity, the workspace layout, company context |
-| blueprotocol: `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events, approval holds |
+| blueprotocol: `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord`, `approvalcore` | the vocabulary both sides speak: requests and results, tool descriptors and results, model ports, task runs and ledger events, approval holds and the sequence that spends them |
 | `loop` | the turn: action schema, plan, tool exposure, completion gate and change check, recovery, budgets, context building and compaction |
 | `intake` | what a turn asks for: route, level, task shape, expected tool count, likely tools |
 

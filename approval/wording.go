@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log/slog"
 	"strings"
 
-	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -63,35 +61,6 @@ func (worder Worder) WordQuestion(ctx context.Context, facts holdrecord.Question
 		return holdrecord.QuestionWording{Text: rawApprovalSummary(facts), Failure: errorValue}
 	}
 	return holdrecord.QuestionWording{Text: text}
-}
-
-func (gate *Gate) wordQuestion(ctx context.Context, request approvalRequest) string {
-	wording := NewWorder(gate.languageModel).WordQuestion(ctx, request.questionFacts())
-	if wording.Failure != nil {
-		gate.recordWordingFailure(request, wording.Failure)
-	}
-	return wording.Text
-}
-
-func (request approvalRequest) questionFacts() holdrecord.QuestionFacts {
-	return holdrecord.QuestionFacts{
-		ResponseLanguage: request.turn.ResponseLanguage,
-		OriginalRequest:  request.turn.Prompt,
-		Tool:             request.toolDefinition,
-		Input:            request.toolInput,
-	}
-}
-
-func (gate *Gate) recordWordingFailure(request approvalRequest, errorValue error) {
-	taskRunID := strings.TrimSpace(request.taskRunID)
-	slog.Warn("approval.wording_failed", "taskRunID", taskRunID, "toolName", request.toolName(), "error", errorValue.Error())
-	if taskRunID == "" {
-		return
-	}
-	gate.taskRuns.AppendTaskEvent(taskRunID, agentcontract.TaskEventAgentApprovalWordingFailed, marshalEventBody(map[string]string{
-		"toolName": request.toolName(),
-		"error":    errorValue.Error(),
-	}))
 }
 
 func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.QuestionFacts) (string, error) {

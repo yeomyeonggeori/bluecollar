@@ -6,12 +6,12 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/yeomyeonggeori/bluecollar/approval"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
-func askWith(typed string, typingError error) (approval.Answer, string, string) {
+func askWith(typed string, typingError error) (approvalcore.Verdict, string, string) {
 	output := &bytes.Buffer{}
 	shownPrompt := ""
 	asker := terminalAsker{output: output, readLine: func(prompt string) (string, error) {
@@ -31,27 +31,27 @@ func TestTheTerminalShowsTheQuestionAndOffersAllowAndReject(t *testing.T) {
 }
 
 func TestTypingTheAllowChoiceApproves(t *testing.T) {
-	if answer, _, _ := askWith("1", nil); answer != approval.Approved {
+	if answer, _, _ := askWith("1", nil); answer != approvalcore.Approved {
 		t.Fatalf("got %q", answer)
 	}
 }
 
 func TestTypingTheRejectChoiceRejects(t *testing.T) {
-	if answer, _, _ := askWith("2", nil); answer != approval.Rejected {
+	if answer, _, _ := askWith("2", nil); answer != approvalcore.Rejected {
 		t.Fatalf("got %q", answer)
 	}
 }
 
 func TestAnythingElseTypedIsNoAnswer(t *testing.T) {
 	for _, typed := range []string{"", "yes", "3", "1 2"} {
-		if answer, _, _ := askWith(typed, nil); answer != approval.NoAnswer {
+		if answer, _, _ := askWith(typed, nil); answer != approvalcore.Unanswered {
 			t.Fatalf("%q decided %q; only a listed choice answers", typed, answer)
 		}
 	}
 }
 
 func TestAnInterruptedPromptIsNoAnswer(t *testing.T) {
-	if answer, _, _ := askWith("1", errors.New("interrupted")); answer != approval.NoAnswer {
+	if answer, _, _ := askWith("1", errors.New("interrupted")); answer != approvalcore.Unanswered {
 		t.Fatalf("a prompt that failed decides nothing, got %q", answer)
 	}
 }

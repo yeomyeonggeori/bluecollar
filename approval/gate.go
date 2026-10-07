@@ -3,6 +3,7 @@ package approval
 import (
 	"context"
 
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -10,52 +11,49 @@ import (
 
 const askerSource = "asker"
 
+var eventNames = approvalcore.EventNames{
+	ConfirmationRequested: "agent.approval_confirmation_requested",
+	AskRequested:          "agent.approval_ask_requested",
+	WordingFailed:         "agent.approval_wording_failed",
+}
+
 type Gate struct {
-	taskRuns      taskstate.TaskRunStore
-	languageModel model.LanguageModelProvider
-	asker         Asker
+	core     approvalcore.Core
+	taskRuns taskstate.TaskRunStore
+	worder   holdrecord.QuestionWorder
+	asker    Asker
 }
 
 func New(taskRuns taskstate.TaskRunStore, languageModel model.LanguageModelProvider, asker Asker) *Gate {
-	return &Gate{taskRuns: taskRuns, languageModel: languageModel, asker: asker}
+	return &Gate{core: approvalcore.New(taskRuns, eventNames), taskRuns: taskRuns, worder: NewWorder(languageModel), asker: asker}
 }
 
-func (gate *Gate) awaitApproval(ctx context.Context, request approvalRequest) outcome {
-	if gate.asker == nil || request.taskRunID == "" {
-		return outcome{kind: outcomeUnanswerable}
+func (gate *Gate) awaitApproval(ctx context.Context, request approvalRequest) approvalcore.Outcome {
+	if gate.asker == nil {
+		return approvalcore.Outcome{Verdict: approvalcore.Unanswerable}
 	}
-	ledger := holdrecord.LedgerOf(gate.taskRuns.ListTaskEvent(request.taskRunID))
-	if ledger.GrantsScope(request.approvalScope()) {
-		return gate.spend(request, "")
-	}
-	if hold, isApproved := holdrecord.ApprovedHoldForCall(ledger.Holds, request.toolName(), request.toolInput); isApproved {
-		return gate.spend(request, hold.ID)
-	}
-	return gate.holdAndAsk(ctx, request)
+	return gate.core.Await(ctx, request.call(), askerHost{gate: gate, request: request})
 }
 
-func (gate *Gate) holdAndAsk(ctx context.Context, request approvalRequest) outcome {
-	hold := gate.recordHold(request, gate.wordQuestion(ctx, request))
-	answer := gate.asker.Ask(ctx, hold)
-	if !answer.isGiven() {
-		return outcome{kind: outcomeUnanswered}
-	}
-	if gate.settle(request.taskRunID, hold, answer, askerSource) == outcomeApproved {
-		return gate.spend(request, hold.ID)
-	}
-	return outcome{kind: outcomeRejected}
+type askerHost struct {
+	gate    *Gate
+	request approvalRequest
 }
 
-func (gate *Gate) settle(taskRunID string, hold holdrecord.Hold, answer Answer, source string) outcomeKind {
-	if answer == Rejected {
+func (host askerHost) Prepare(ctx context.Context, call approvalcore.Call) (approvalcore.Question, bool) {
+	return approvalcore.Question{Text: host.gate.core.Word(ctx, host.gate.worder, call, host.request.questionFacts())}, true
+}
+
+func (host askerHost) Ask(ctx context.Context, hold holdrecord.Hold) approvalcore.Verdict {
+	return host.gate.settle(host.request.taskRunID, hold, host.gate.asker.Ask(ctx, hold), askerSource)
+}
+
+func (gate *Gate) settle(taskRunID string, hold holdrecord.Hold, verdict approvalcore.Verdict, source string) approvalcore.Verdict {
+	switch verdict {
+	case approvalcore.Approved:
+		holdrecord.Decide(gate.taskRuns, taskRunID, hold.ID, holdrecord.DecisionApprove, source)
+	case approvalcore.Rejected:
 		holdrecord.Decide(gate.taskRuns, taskRunID, hold.ID, holdrecord.DecisionReject, source)
-		return outcomeRejected
 	}
-	holdrecord.Decide(gate.taskRuns, taskRunID, hold.ID, holdrecord.DecisionApprove, source)
-	return outcomeApproved
-}
-
-func (gate *Gate) spend(request approvalRequest, holdID string) outcome {
-	holdrecord.Spend(gate.taskRuns, request.taskRunID, holdID, request.toolDefinition.Name, request.toolInput)
-	return outcome{kind: outcomeApproved, holdID: holdID}
+	return verdict
 }

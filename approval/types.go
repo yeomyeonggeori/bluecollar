@@ -3,8 +3,8 @@ package approval
 import (
 	"context"
 	"encoding/json"
-	"strings"
 
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -15,19 +15,7 @@ type Turn struct {
 }
 
 type Asker interface {
-	Ask(context.Context, holdrecord.Hold) Answer
-}
-
-type Answer string
-
-const (
-	NoAnswer Answer = ""
-	Approved Answer = "approved"
-	Rejected Answer = "rejected"
-)
-
-func (answer Answer) isGiven() bool {
-	return answer == Approved || answer == Rejected
+	Ask(context.Context, holdrecord.Hold) approvalcore.Verdict
 }
 
 type approvalRequest struct {
@@ -37,24 +25,22 @@ type approvalRequest struct {
 	toolInput      json.RawMessage
 }
 
-func (request approvalRequest) toolName() string {
-	return strings.TrimSpace(request.toolDefinition.Name)
+func (request approvalRequest) call() approvalcore.Call {
+	return approvalcore.Call{
+		TaskRunID:        request.taskRunID,
+		ToolName:         request.toolDefinition.Name,
+		ToolInput:        request.toolInput,
+		ApprovalScope:    request.toolDefinition.ApprovalScope,
+		SideEffectClass:  request.toolDefinition.SideEffectClass,
+		ResponseLanguage: request.turn.ResponseLanguage,
+	}
 }
 
-func (request approvalRequest) approvalScope() string {
-	return strings.TrimSpace(request.toolDefinition.ApprovalScope)
-}
-
-type outcomeKind string
-
-const (
-	outcomeApproved     outcomeKind = "approved"
-	outcomeRejected     outcomeKind = "rejected"
-	outcomeUnanswered   outcomeKind = "unanswered"
-	outcomeUnanswerable outcomeKind = "unanswerable"
-)
-
-type outcome struct {
-	kind   outcomeKind
-	holdID string
+func (request approvalRequest) questionFacts() holdrecord.QuestionFacts {
+	return holdrecord.QuestionFacts{
+		ResponseLanguage: request.turn.ResponseLanguage,
+		OriginalRequest:  request.turn.Prompt,
+		Tool:             request.toolDefinition,
+		Input:            request.toolInput,
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -21,7 +22,7 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 		return toolcontract.ToolCallReview{MayProceed: true}, nil
 	}
 	if toolcontract.IsDelegatedTurn(ctx) {
-		return toolcontract.ToolCallReview{Result: delegatedTurnUnanswerableResult()}, nil
+		return toolcontract.ToolCallReview{Result: approvalcore.DelegatedTurn()}, nil
 	}
 	return reviewForOutcome(turnGate.gate.awaitApproval(ctx, approvalRequest{
 		turn:           turnGate.turn,
@@ -31,34 +32,22 @@ func (turnGate turnToolCallGate) ReviewToolCall(ctx context.Context, toolInvocat
 	})), nil
 }
 
-func reviewForOutcome(decided outcome) toolcontract.ToolCallReview {
-	switch decided.kind {
-	case outcomeApproved:
-		return toolcontract.ToolCallReview{MayProceed: true, HoldID: decided.holdID}
-	case outcomeRejected:
-		return toolcontract.ToolCallReview{Result: rejectedCallResult()}
-	case outcomeUnanswered:
+func reviewForOutcome(decided approvalcore.Outcome) toolcontract.ToolCallReview {
+	switch decided.Verdict {
+	case approvalcore.Approved:
+		return toolcontract.ToolCallReview{MayProceed: true, HoldID: decided.HoldID}
+	case approvalcore.Rejected:
+		return toolcontract.ToolCallReview{Result: approvalcore.Declined()}
+	case approvalcore.Unanswered:
 		return toolcontract.ToolCallReview{Result: unansweredCallResult()}
 	}
 	return toolcontract.ToolCallReview{Result: unanswerableCallResult()}
 }
 
 func unansweredCallResult() toolcontract.ToolResult {
-	return approvalFailureResult("The requester did not answer the approval question, so this call did not run. Do not retry it now; ask again later if it is still needed, or take another route.")
+	return approvalcore.Refusal("The requester did not answer the approval question, so this call did not run. Do not retry it now; ask again later if it is still needed, or take another route.")
 }
 
 func unanswerableCallResult() toolcontract.ToolResult {
-	return approvalFailureResult("This call needs the requester's approval and there is no one to ask, so it cannot run. Do not wait for an approval; take another route or tell them what you could not do.")
-}
-
-func delegatedTurnUnanswerableResult() toolcontract.ToolResult {
-	return approvalFailureResult("This call needs the requester's approval, and a delegated turn has no one to ask: only the turn that was asked for the work can hold a call for approval. Do not wait for an approval; take another route, or report this back as the part you could not do.")
-}
-
-func rejectedCallResult() toolcontract.ToolResult {
-	return approvalFailureResult("The requester declined this call. Do not retry it; choose another way or stop.")
-}
-
-func approvalFailureResult(notice string) toolcontract.ToolResult {
-	return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.PolicyBlocked, "approval", notice)
+	return approvalcore.Refusal("This call needs the requester's approval and there is no one to ask, so it cannot run. Do not wait for an approval; take another route or tell them what you could not do.")
 }

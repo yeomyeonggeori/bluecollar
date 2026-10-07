@@ -2,6 +2,7 @@ package approval
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"strings"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 )
 
 func TestAToolNeedingApprovalRunsOnlyOnceTheAskerApproves(t *testing.T) {
-	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Approved})
+	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: approvalcore.Approved})
 
 	executed, result := invokeThroughGate(t, withTaskRun(fixture), fixture.gate.TurnGate(Turn{}), "file_delete")
 
@@ -20,7 +21,7 @@ func TestAToolNeedingApprovalRunsOnlyOnceTheAskerApproves(t *testing.T) {
 }
 
 func TestACallTheAskerRejectsNeverRunsAndSaysItWasRejected(t *testing.T) {
-	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Rejected})
+	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: approvalcore.Rejected})
 
 	executed, result := invokeThroughGate(t, withTaskRun(fixture), fixture.gate.TurnGate(Turn{}), "file_delete")
 
@@ -69,7 +70,7 @@ func TestAToolNeedingApprovalWithNoAskerCannotRun(t *testing.T) {
 }
 
 func TestACallWithNoTaskRunCannotRun(t *testing.T) {
-	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Approved})
+	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: approvalcore.Approved})
 
 	executed, result := invokeThroughGate(t, context.Background(), fixture.gate.TurnGate(Turn{}), "file_delete")
 
@@ -90,7 +91,7 @@ func TestAToolThatNeedsNoApprovalNeverReachesTheAsker(t *testing.T) {
 }
 
 func TestADelegatedTurnIsDeniedRatherThanAsked(t *testing.T) {
-	asker := &scriptedAsker{answer: Approved}
+	asker := &scriptedAsker{answer: approvalcore.Approved}
 	fixture := newFixtureWith(t, nil, asker)
 	delegatedContext := toolcontract.WithDelegatedTurn(withTaskRun(fixture))
 

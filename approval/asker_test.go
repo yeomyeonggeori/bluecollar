@@ -1,6 +1,7 @@
 package approval
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"strings"
 	"testing"
 
@@ -9,13 +10,13 @@ import (
 )
 
 func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T) {
-	asker := &scriptedAsker{answer: Approved}
+	asker := &scriptedAsker{answer: approvalcore.Approved}
 	fixture := newFixtureWith(t, nil, asker)
 
 	outcome := fixture.awaitOutcome(fixture.request())
 
-	if outcome.kind != outcomeApproved {
-		t.Fatalf("the answered call decided %q, expected approved", outcome.kind)
+	if outcome.Verdict != approvalcore.Approved {
+		t.Fatalf("the answered call decided %q, expected approved", outcome.Verdict)
 	}
 	if asker.askedCount != 1 {
 		t.Fatalf("the person was asked %d times, expected once", asker.askedCount)
@@ -36,12 +37,12 @@ func TestAnAnsweredCallRunsInsideTheTurnAndReadsTheSameOnTheLedger(t *testing.T)
 }
 
 func TestARejectedCallIsNotRecordedAsExecuted(t *testing.T) {
-	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Rejected})
+	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: approvalcore.Rejected})
 
 	outcome := fixture.awaitOutcome(fixture.request())
 
-	if outcome.kind != outcomeRejected {
-		t.Fatalf("the declined call decided %q, expected rejected", outcome.kind)
+	if outcome.Verdict != approvalcore.Rejected {
+		t.Fatalf("the declined call decided %q, expected rejected", outcome.Verdict)
 	}
 	if fixture.hasEvent(agentcontract.TaskEventApprovalHoldSpent) {
 		t.Fatal("a declined call was recorded as executed")
@@ -60,7 +61,7 @@ func TestAnAskerIsHandedTheHoldWithTheWordedQuestion(t *testing.T) {
 }
 
 func TestApprovingAScopedCallGrantsItsScopeForTheRestOfTheTask(t *testing.T) {
-	asker := &scriptedAsker{answer: Approved}
+	asker := &scriptedAsker{answer: approvalcore.Approved}
 	fixture := newFixtureWith(t, nil, asker)
 	fixture.awaitOutcome(fixture.scopedRequest())
 	nextCall := fixture.scopedRequest()
@@ -71,13 +72,13 @@ func TestApprovingAScopedCallGrantsItsScopeForTheRestOfTheTask(t *testing.T) {
 	if !strings.Contains(fixture.eventBody(t, agentcontract.TaskEventApprovalScopeGranted), `"scope":"calendar"`) {
 		t.Fatal("approving a call that declares an approval scope approves that scope")
 	}
-	if nextOutcome.kind != outcomeApproved || asker.askedCount != 1 {
+	if nextOutcome.Verdict != approvalcore.Approved || asker.askedCount != 1 {
 		t.Fatalf("a call inside the granted scope runs without a second question, got %+v after %d questions", nextOutcome, asker.askedCount)
 	}
 }
 
 func TestApprovingAnUnscopedCallGrantsNothing(t *testing.T) {
-	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Approved})
+	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: approvalcore.Approved})
 
 	fixture.awaitOutcome(fixture.request())
 
@@ -87,11 +88,11 @@ func TestApprovingAnUnscopedCallGrantsNothing(t *testing.T) {
 }
 
 func TestAnAnswerThatIsNoAnswerDecidesNothing(t *testing.T) {
-	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: NoAnswer})
+	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: approvalcore.Unanswered})
 
 	outcome := fixture.awaitOutcome(fixture.request())
 
-	if outcome.kind != outcomeUnanswered || fixture.hasEvent(agentcontract.TaskEventApprovalDecided) {
+	if outcome.Verdict != approvalcore.Unanswered || fixture.hasEvent(agentcontract.TaskEventApprovalDecided) {
 		t.Fatalf("an unread reply is not an answer, got %+v with %v", outcome, fixture.eventNames())
 	}
 }

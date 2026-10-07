@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/yeomyeonggeori/bluecollar/approval"
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
@@ -19,17 +19,17 @@ type terminalAsker struct {
 	readLine func(prompt string) (string, error)
 }
 
-func (asker terminalAsker) Ask(_ context.Context, hold holdrecord.Hold) approval.Answer {
+func (asker terminalAsker) Ask(_ context.Context, hold holdrecord.Hold) approvalcore.Verdict {
 	fmt.Fprintln(asker.output, hold.Call.Confirmation)
 	choice, errorValue := asker.readLine("1) Allow  2) Reject ❯ ")
 	if errorValue != nil {
-		return approval.NoAnswer
+		return approvalcore.Unanswered
 	}
 	switch choice {
 	case approveChoice:
-		return approval.Approved
+		return approvalcore.Approved
 	case rejectChoice:
-		return approval.Rejected
+		return approvalcore.Rejected
 	}
-	return approval.NoAnswer
+	return approvalcore.Unanswered
 }

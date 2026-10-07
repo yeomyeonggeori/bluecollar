@@ -4,7 +4,7 @@ import (
 	"context"
 
 	acp "github.com/coder/acp-go-sdk"
-	"github.com/yeomyeonggeori/bluecollar/approval"
+	"github.com/yeomyeonggeori/blueprotocol/approvalcore"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
@@ -18,7 +18,7 @@ type permissionAsker struct {
 	sessionID acp.SessionId
 }
 
-func (asker permissionAsker) Ask(ctx context.Context, hold holdrecord.Hold) approval.Answer {
+func (asker permissionAsker) Ask(ctx context.Context, hold holdrecord.Hold) approvalcore.Verdict {
 	response, errorValue := asker.requester.RequestPermission(ctx, acp.RequestPermissionRequest{
 		SessionId: asker.sessionID,
 		ToolCall:  permissionToolCall(hold),
@@ -28,7 +28,7 @@ func (asker permissionAsker) Ask(ctx context.Context, hold holdrecord.Hold) appr
 		},
 	})
 	if errorValue != nil || response.Outcome.Selected == nil {
-		return approval.NoAnswer
+		return approvalcore.Unanswered
 	}
 	return answerForOption(response.Outcome.Selected.OptionId)
 }
@@ -38,12 +38,12 @@ func permissionToolCall(hold holdrecord.Hold) acp.ToolCallUpdate {
 	return acp.ToolCallUpdate{ToolCallId: acp.ToolCallId(hold.ID), Title: &title, RawInput: hold.Call.ToolInput}
 }
 
-func answerForOption(optionID acp.PermissionOptionId) approval.Answer {
+func answerForOption(optionID acp.PermissionOptionId) approvalcore.Verdict {
 	switch optionID {
 	case approveOptionID:
-		return approval.Approved
+		return approvalcore.Approved
 	case rejectOptionID:
-		return approval.Rejected
+		return approvalcore.Rejected
 	}
-	return approval.NoAnswer
+	return approvalcore.Unanswered
 }
