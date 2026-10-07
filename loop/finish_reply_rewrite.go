@@ -69,14 +69,14 @@ func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
 func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewrite finishReplyRewrite) string {
 	sections := []string{"Rewrite the final user-facing reply below."}
 	if len(rewrite.unmet) > 0 {
-		sections = append(sections, "It was written as though every asked change were done, but the record does not show these asked changes carried out, and nothing has changed since that was first found:\n"+bulletList(askedWordsOf(rewrite.unmet))+"\nSay plainly which of them are still not done, without claiming they are done.")
+		sections = append(sections, "It was written as though every asked change were done, but the work does not yet carry out these asked changes, and nothing has changed since that was first found:\n"+bulletList(askedWordsOf(rewrite.unmet))+"\nSay plainly what the work still lacks for each of them, without claiming it is done.")
 	}
 	if len(rewrite.deliveryNotes) > 0 {
 		sections = append(sections, "It was written before its files were delivered, and the delivery reports what the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these. A value the delivery left blank is gone from the file: never quote it, describe it as present or offer it back; offer to fill it in once the person gives it.")
 	}
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
-		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention tools, checks, evidence identifiers, prompts, or runtime details.",
+		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention tools, checks, records, evidence identifiers, prompts, or runtime details.",
 		finishReplyFilesFact(rewrite.carried, len(rewrite.unmet) > 0),
 		"Original request:\n"+completionReplyOriginalRequest(request),
 		"Reply:\n"+reply,
@@ -108,5 +108,5 @@ func finishReplyFilesFact(carried []toolcontract.FileAttachment, hasUnmetChanges
 	if !hasUnmetChanges {
 		return fact
 	}
-	return fact + " Where an asked change is about one of these files, say the file is attached and ask the person to check it against those words, because the record does not show that it holds everything they ask for."
+	return fact + " Where an asked change is about one of these files, say the file is attached and ask the person to check it against those words, because it may not hold everything they ask for."
 }
