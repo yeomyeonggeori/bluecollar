@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1603,5 +1604,51 @@ func TestContractSkillArbitrationHearsNothingAboutAFiringWithoutOne(t *testing.T
 
 	if len(firingMessages) != 0 {
 		t.Fatalf("expected no system message about a firing, got %d", len(firingMessages))
+	}
+}
+
+type inputTypeRecordingEmbeddingProvider struct {
+	mutex      sync.Mutex
+	inputTypes []string
+}
+
+func (provider *inputTypeRecordingEmbeddingProvider) GenerateEmbedding(context.Context, string) ([]float32, error) {
+	provider.record("untyped")
+	return []float32{1, 0}, nil
+}
+
+func (provider *inputTypeRecordingEmbeddingProvider) EmbedQuery(context.Context, string) ([]float32, error) {
+	provider.record("query")
+	return []float32{1, 0}, nil
+}
+
+func (provider *inputTypeRecordingEmbeddingProvider) EmbedDocuments(_ context.Context, texts []string) ([][]float32, error) {
+	provider.record("document")
+	return make([][]float32, len(texts)), nil
+}
+
+func (provider *inputTypeRecordingEmbeddingProvider) record(inputType string) {
+	provider.mutex.Lock()
+	defer provider.mutex.Unlock()
+	provider.inputTypes = append(provider.inputTypes, inputType)
+}
+
+func TestSkillRetrieverEmbedsDescriptionsAsDocumentsAndRequestsAsQueries(t *testing.T) {
+	provider := &inputTypeRecordingEmbeddingProvider{}
+	retriever := NewEmbeddingSkillRetriever(provider, filepath.Join(t.TempDir(), "skill-index.json"))
+	skillInstructions := []SkillInstruction{{
+		Name:        "presentation",
+		Description: "Create presentation slides.",
+		Source:      InstructionSource{Path: "/srv/agent/skills/presentation/SKILL.md", SHA256: "one", SkillName: "presentation"},
+	}}
+
+	retriever.Refresh(context.Background(), skillInstructions)
+	_, queryError := retriever.embedQuery(context.Background(), "make slides")
+
+	if queryError != nil {
+		t.Fatal(queryError)
+	}
+	if strings.Join(provider.inputTypes, ",") != "document,query" {
+		t.Fatalf("expected a document embedding then a query embedding, got %v", provider.inputTypes)
 	}
 }
