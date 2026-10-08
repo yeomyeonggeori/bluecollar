@@ -420,7 +420,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			}
 			continue
 		case "finish":
-			deliveredDocument, delivery, isDelivered := agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
+			deliveredDocument, _, isDelivered := agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
 			if !isDelivered {
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "reply", lastObservationText(state.Observations))
 				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
@@ -462,7 +462,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "finish", "empty final reply message")
 				return agentTurnRunner.finalizeIfSatisfiedOrFail(taskContext, request, "empty final reply message", &state, iteration)
 			}
-			reply, carried := agentTurnRunner.replyForFinish(workContext, taskRun.TaskRunID, request, &state, completionGateResult, reply, delivery.ReplyNotes)
+			reply, carried := agentTurnRunner.replyForFinish(workContext, taskRun.TaskRunID, request, &state, completionGateResult, reply)
 			reply = agentTurnRunner.prepareFinishMessageForPlatform(workContext, request, reply)
 			if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRun.TaskRunID, state.Attachments); isCancelled {
 				return cancelledResult, nil

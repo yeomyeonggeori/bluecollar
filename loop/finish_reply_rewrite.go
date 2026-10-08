@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -27,8 +28,9 @@ func (rewrite finishReplyRewrite) schemaName() string {
 	return deliveryNotesReplySchemaName
 }
 
-func (agentTurnRunner *AgentTurnRunner) replyForFinish(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, completionGateResult completionGateResult, reply string, deliveryNotes []string) (string, []toolcontract.FileAttachment) {
-	rewrite := finishReplyRewrite{deliveryNotes: deliveryNotes, carried: attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths)}
+func (agentTurnRunner *AgentTurnRunner) replyForFinish(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, completionGateResult completionGateResult, reply string) (string, []toolcontract.FileAttachment) {
+	carried := attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths)
+	rewrite := finishReplyRewrite{deliveryNotes: latestDeliveryNotes(state.Observations, carried), carried: carried}
 	if completionGateResult.leavesChangesUnmet() {
 		rewrite.unmet = completionGateResult.ChangeCheck.Unmet
 	}
@@ -58,6 +60,26 @@ func (agentTurnRunner *AgentTurnRunner) rewriteFinishReply(ctx context.Context, 
 	return strings.TrimSpace(rewritten)
 }
 
+func latestDeliveryNotes(observations []turnObservation, carried []toolcontract.FileAttachment) []string {
+	notes := []string{}
+	for _, attachment := range carried {
+		if delivery, isFound := latestDeliveryOf(observations, attachment.DevicePath); isFound {
+			notes = appendUniqueStrings(notes, delivery.ReplyNotes...)
+		}
+	}
+	return notes
+}
+
+func latestDeliveryOf(observations []turnObservation, devicePath string) (turnObservation, bool) {
+	for index := len(observations) - 1; index >= 0; index-- {
+		observation := observations[index]
+		if toolexposure.IsArtifactDeliveryTool(observation.Tool) && !observation.Failed() && hasAttachmentDevicePath(observation.Attachments, devicePath) {
+			return observation, true
+		}
+	}
+	return turnObservation{}, false
+}
+
 func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
 	sections := []string{reply}
 	if len(rewrite.unmet) > 0 {
@@ -72,7 +94,7 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 		sections = append(sections, "It was written as though every asked change were done, but the work does not yet carry out these asked changes, and nothing has changed since that was first found:\n"+bulletList(askedWordsOf(rewrite.unmet))+"\nSay plainly what the work still lacks for each of them, without claiming it is done.")
 	}
 	if len(rewrite.deliveryNotes) > 0 {
-		sections = append(sections, "It was written before its files were delivered, and the delivery reports what the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these. A value the delivery left blank is gone from the file: never quote it, describe it as present or offer it back; offer to fill it in once the person gives it.")
+		sections = append(sections, "The latest delivery of each file it carries reports what that file now holds, which the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these, and describe the files only as these reports and the reply agree. A value the delivery left blank is gone from the file: never quote it, describe it as present or offer it back; offer to fill it in once the person gives it.")
 	}
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
