@@ -1,8 +1,8 @@
 package loop
 
-import ()
-
-import "testing"
+import (
+	"testing"
+)
 
 func TestApplyToolRequestNormalizesContinueActionToolNames(t *testing.T) {
 	request := AgentTurnRequest{ToolSet: testToolSet([]string{"file_deliver", "file.promote", "bash"})}

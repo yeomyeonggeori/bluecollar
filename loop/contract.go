@@ -144,9 +144,6 @@ const (
 )
 
 var (
-	prepareFailureNoticeWithGenerator    = agentcontract.PrepareFailureNoticeWithGenerator
-	buildIntakeNoticePrompt              = agentcontract.BuildIntakeNoticePrompt
-	buildFailureNoticeCompressionPrompt  = agentcontract.BuildFailureNoticeCompressionPrompt
 	buildFailureNoticeRepairPrompt       = agentcontract.BuildFailureNoticeRepairPrompt
 	buildFailureNoticePrompt             = agentcontract.BuildFailureNoticePrompt
 	failureReportAttachmentFilenames     = agentcontract.FailureReportAttachmentFilenames
@@ -171,12 +168,9 @@ var (
 
 	appendUniqueStrings         = toolcontract.AppendUniqueStrings
 	taskLevelRank               = turnclassification.TaskLevelRank
-	normalizeClassification     = agentcontract.NormalizeIntakeClassification
 	normalizeExpectedResults    = turnclassification.NormalizeExpectedResults
 	normalizePriorTaskReference = turnclassification.NormalizePriorTaskReference
 )
-
-var formatContextTimestamp = agentcontract.FormatContextTimestamp
 
 var buildVisibleContextDescription = agentcontract.BuildVisibleContextDescription
 
@@ -216,16 +210,11 @@ var (
 	buildFinishMessageCompressionPrompt    = BuildFinishMessageCompressionPrompt
 	generateRecoveryChatText               = agentcontract.GenerateRecoveryChatText
 	recoveryContextError                   = agentcontract.RecoveryContextError
-	generateLocalRecoveryChatText          = agentcontract.GenerateLocalRecoveryChatText
-	recoveryChatCompletionRequest          = agentcontract.RecoveryChatCompletionRequest
 	buildElapsedLimitRawErrorFailureNotice = BuildElapsedLimitRawErrorFailureNotice
-	failureNoticeRequiresReview            = agentcontract.FailureNoticeRequiresReview
-	normalizeFailureReport                 = agentcontract.NormalizeFailureReport
 	buildFailureNotice                     = agentcontract.BuildFailureNotice
 )
 
 var (
-	activeGoalDescription          = contextdescription.ActiveGoalDescription
 	activeGoalDescriptionForPrompt = contextdescription.ActiveGoalDescriptionForPrompt
 )
 
@@ -235,8 +224,6 @@ var (
 	normalizeIntakeOptions          = turnclassification.NormalizeIntakeOptions
 	normalizeRequestedOutputFormats = turnclassification.NormalizeRequestedOutputFormats
 	registeredToolNamesOnly         = turnclassification.RegisteredToolNamesOnly
-	hasAllTools                     = turnclassification.HasAllTools
-	hasTool                         = turnclassification.HasTool
 )
 
 type (
@@ -244,13 +231,12 @@ type (
 )
 
 var (
-	TaskLevelProfileForLevel          = iterationcost.TaskLevelProfileForLevel
-	NewIterationCostObserver          = iterationcost.NewIterationCostObserver
-	DurationForIterationCount         = iterationcost.DurationForIterationCount
-	nextTaskLevel                     = iterationcost.NextTaskLevel
-	taskLevelRequiresPlan             = iterationcost.TaskLevelRequiresPlan
-	taskLevelWantsSingleFinalReply    = iterationcost.TaskLevelWantsSingleFinalReply
-	taskLevelWantsProgressCheckpoints = iterationcost.TaskLevelWantsProgressCheckpoints
+	TaskLevelProfileForLevel       = iterationcost.TaskLevelProfileForLevel
+	NewIterationCostObserver       = iterationcost.NewIterationCostObserver
+	DurationForIterationCount      = iterationcost.DurationForIterationCount
+	nextTaskLevel                  = iterationcost.NextTaskLevel
+	taskLevelRequiresPlan          = iterationcost.TaskLevelRequiresPlan
+	taskLevelWantsSingleFinalReply = iterationcost.TaskLevelWantsSingleFinalReply
 )
 
 type (

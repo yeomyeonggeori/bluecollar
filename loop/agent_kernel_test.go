@@ -731,46 +731,6 @@ func TestAgentKernelSideEffectTaskProceedsWithoutRouterPredictedEvidence(t *test
 	}
 }
 
-type routerLedgerLanguageModel struct {
-	decision   TurnDecision
-	response   model.StructuredResponse
-	errorValue error
-}
-
-func (languageModel *routerLedgerLanguageModel) GenerateResponse(context.Context, string) (string, error) {
-	return "", errors.New("router model only serves structured routing")
-}
-
-func (languageModel *routerLedgerLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	if request.StructuredOutputSchema.Name != turnRouterSchemaName {
-		return model.StructuredResponse{Content: "{}"}, nil
-	}
-	if languageModel.errorValue != nil {
-		return languageModel.response, languageModel.errorValue
-	}
-	document, errorValue := json.Marshal(languageModel.decision)
-	if errorValue != nil {
-		return model.StructuredResponse{}, errorValue
-	}
-	response := languageModel.response
-	response.Content = string(document)
-	return response, nil
-}
-
-func persistedTurnRouterCallRecords(taskEvents []agentcontract.TaskEvent) []llmCallRecord {
-	records := []llmCallRecord{}
-	for _, taskEvent := range taskEvents {
-		if taskEvent.Name != "llm.call" {
-			continue
-		}
-		var record llmCallRecord
-		if errorValue := json.Unmarshal([]byte(taskEvent.Body), &record); errorValue == nil && record.SchemaName == turnRouterSchemaName {
-			records = append(records, record)
-		}
-	}
-	return records
-}
-
 func TestAgentKernelGeneratesIntakeNoticeWhenRouterReplyMissing(t *testing.T) {
 	agentKernel, _ := newKernelTestServices()
 	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{

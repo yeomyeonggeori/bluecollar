@@ -143,30 +143,8 @@ func confirmationEvidenceHintsForRequest(request AgentRequest, intakeDecision In
 	return toolNames
 }
 
-func selectedSkillNameSet(skillDecisions []SkillSelectionDecision) map[string]bool {
-	selectedSkillNames := map[string]bool{}
-	for _, skillDecision := range skillDecisions {
-		if skillDecision.Status == "selected" {
-			selectedSkillNames[skillDecision.Name] = true
-		}
-	}
-	return selectedSkillNames
-}
-
 func selectedRequiredAttachmentSuffixes(_ InstructionBundle, _ string) []string {
 	return nil
-}
-
-func selectedEvidenceToolsForContinuation(contract OutcomeContract, selectedEvidenceHints []string) []string {
-	activeGoalHintByName := stringSet(contract.SelectedEvidenceHints)
-	toolNames := []string{}
-	for _, toolName := range selectedEvidenceHints {
-		trimmedToolName := strings.TrimSpace(toolName)
-		if activeGoalHintByName[trimmedToolName] {
-			toolNames = appendUniqueStrings(toolNames, trimmedToolName)
-		}
-	}
-	return toolNames
 }
 
 func selectedEvidenceToolsForRequestContinuation(request AgentRequest, contract OutcomeContract, selectedEvidenceHints []string) []string {

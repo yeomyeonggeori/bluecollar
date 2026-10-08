@@ -18,26 +18,6 @@ type recoveryChatNoticeProvider struct {
 	chatRequests     []model.ChatCompletionRequest
 }
 
-type recoveryChatNoticeAccessor struct {
-	provider model.LanguageModelProvider
-}
-
-func (accessor recoveryChatNoticeAccessor) GenerateResponse(ctx context.Context, prompt string) (string, error) {
-	return accessor.provider.GenerateResponse(ctx, prompt)
-}
-
-func (accessor recoveryChatNoticeAccessor) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
-	return accessor.provider.GenerateStructuredResponse(ctx, request)
-}
-
-func (accessor recoveryChatNoticeAccessor) RecoveryChatCompleter() (model.RecoveryChatCompleter, bool) {
-	return model.ResolveRecoveryChatCompleter(accessor.provider)
-}
-
-func (accessor recoveryChatNoticeAccessor) LocalRecoveryChatCompleter() (model.LocalRecoveryChatCompleter, bool) {
-	return model.ResolveLocalRecoveryChatCompleter(accessor.provider)
-}
-
 func (provider *recoveryChatNoticeProvider) GenerateResponse(context.Context, string) (string, error) {
 	provider.legacyCalls++
 	return provider.legacyReply, provider.legacyError

@@ -1,8 +1,8 @@
 package loop
 
-import ()
-
-import "testing"
+import (
+	"testing"
+)
 
 func TestToolExposureUsesKernelWithoutSelectedSkills(t *testing.T) {
 	toolSet := testToolSet(append(testBuiltInToolNames(),
