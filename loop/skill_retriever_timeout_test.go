@@ -8,7 +8,12 @@ import (
 
 type blockingEmbeddingProvider struct{}
 
-func (blockingEmbeddingProvider) GenerateEmbedding(ctx context.Context, _ string) ([]float32, error) {
+func (blockingEmbeddingProvider) EmbedQuery(ctx context.Context, _ string) ([]float32, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (blockingEmbeddingProvider) EmbedDocuments(ctx context.Context, _ []string) ([][]float32, error) {
 	<-ctx.Done()
 	return nil, ctx.Err()
 }
@@ -46,13 +51,25 @@ func TestSkillSearchDegradesToBM25WhenIndexLockIsHeld(t *testing.T) {
 
 type slowEmbeddingProvider struct{ delay time.Duration }
 
-func (provider slowEmbeddingProvider) GenerateEmbedding(ctx context.Context, _ string) ([]float32, error) {
+func (provider slowEmbeddingProvider) EmbedQuery(ctx context.Context, _ string) ([]float32, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(provider.delay):
 		return []float32{1, 0}, nil
 	}
+}
+
+func (provider slowEmbeddingProvider) EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error) {
+	embeddings := make([][]float32, 0, len(texts))
+	for _, text := range texts {
+		embedding, errorValue := provider.EmbedQuery(ctx, text)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		embeddings = append(embeddings, embedding)
+	}
+	return embeddings, nil
 }
 
 func TestQueryEmbeddingsAreAskedForTogether(t *testing.T) {
