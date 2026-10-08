@@ -95,7 +95,7 @@ func TestTheUnmetChangesReplyIsToldWhichFilesItCarries(t *testing.T) {
 	check := changeCheck{Unmet: []expectedChange{{Change: "file created", Asked: "견적서를 pdf로 만들어 주세요."}}}
 	carried := []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-1/documents/견적서.pdf", Filename: "견적서.pdf", ContentType: "application/pdf", SizeBytes: 34549}}
 
-	services.runner.replyForFinish(context.Background(), "task-run-1", request, &agentTaskState{}, completionGateResult{IsSatisfied: true, Attachments: carried, ChangeCheck: &check}, quoteReply, nil)
+	services.runner.replyForFinish(context.Background(), "task-run-1", request, &agentTaskState{}, completionGateResult{IsSatisfied: true, Attachments: carried, ChangeCheck: &check}, quoteReply)
 
 	if len(recorder.prompts) != 1 {
 		t.Fatalf("expected one rewrite, got %d", len(recorder.prompts))
@@ -123,7 +123,7 @@ func TestAFinishWhoseCheckStaysUnmetRewritesTheReplyKnowingTheDeliveredFile(t *t
 	gate := completionGateResult{IsSatisfied: true, Attachments: []toolcontract.FileAttachment{attachment}, ChangeCheck: &check}
 	state := agentTaskState{}
 
-	services.runner.replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: delivery.Prompt}, &state, gate, "done", nil)
+	services.runner.replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: delivery.Prompt}, &state, gate, "done")
 
 	encoded, _ := json.Marshal(recorder.prompts)
 	if len(recorder.prompts) != 1 || !strings.Contains(recorder.prompts[0], "Files this reply carries: "+attachment.Filename+".") {
@@ -191,7 +191,7 @@ func TestAFinishWhoseOwnDeliveryReportsNotesRewritesTheReplyWithThem(t *testing.
 }
 
 func TestAFinishWithoutDeliveryNotesSendsItsReplyAsWritten(t *testing.T) {
-	reply, carried := (&AgentTurnRunner{}).replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: quoteRequest}, &agentTaskState{}, completionGateResult{IsSatisfied: true}, quoteReply, nil)
+	reply, carried := (&AgentTurnRunner{}).replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: quoteRequest}, &agentTaskState{}, completionGateResult{IsSatisfied: true}, quoteReply)
 
 	if reply != quoteReply || len(carried) != 0 {
 		t.Fatalf("expected the reply unchanged, got %q", reply)
@@ -207,5 +207,32 @@ func TestAnUnmetRewriteSpeaksOfTheWorkAndNeverOfARecord(t *testing.T) {
 	}
 	if !strings.Contains(prompt, "records") {
 		t.Fatalf("expected the rewrite told not to speak of records, got %q", prompt)
+	}
+}
+
+const remoteWorkMemoReply = "재택근무 시범 운영 메모를 첨부했습니다. 기대 효과: 생산성 약 13% 향상"
+
+func stagedMemoDelivery(observationID string, notes ...string) turnObservation {
+	delivery := newContentObservation(observationID, "continue", toolcontract.FileDeliverToolName, "files staged")
+	delivery.Attachments = []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-1/documents/memo.docx", Filename: "memo.docx", ContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", SizeBytes: 494276}}
+	delivery.ReplyNotes = notes
+	return delivery
+}
+
+func TestAFinishCarryingAFileStagedEarlierRewritesTheReplyWithThatFilesLatestDeliveryNotes(t *testing.T) {
+	earlier := stagedMemoDelivery("obs-011", "memo.docx: left blank, for the reply to offer to complete: 1. 개요")
+	latest := stagedMemoDelivery("obs-013", "memo.docx: text the check took out of these places: 3. 기대 효과")
+	recorder := &unmetReplyRecorder{}
+	services := newTurnRunnerTestServices(recorder, TurnOptions{MaxIterationCount: 8})
+	state := agentTaskState{Observations: []turnObservation{earlier, latest}}
+	gate := completionGateResult{IsSatisfied: true, Attachments: latest.Attachments}
+
+	services.runner.replyForFinish(context.Background(), "task-run-1", AgentTurnRequest{Prompt: "재택근무 시범 운영 메모를 docx로 써 주세요."}, &state, gate, remoteWorkMemoReply)
+
+	if len(recorder.prompts) != 1 {
+		t.Fatalf("expected the reply rewritten with the staged file's notes, got %d rewrites", len(recorder.prompts))
+	}
+	if !strings.Contains(recorder.prompts[0], latest.ReplyNotes[0]) || strings.Contains(recorder.prompts[0], earlier.ReplyNotes[0]) {
+		t.Fatalf("expected only the latest delivery's notes, got %q", recorder.prompts[0])
 	}
 }
