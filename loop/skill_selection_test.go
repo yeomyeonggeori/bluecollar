@@ -1416,20 +1416,40 @@ func TestSkillIndexIncludesConfiguredEmbeddingModel(t *testing.T) {
 
 type constantEmbeddingProvider struct{}
 
-func (provider constantEmbeddingProvider) GenerateEmbedding(context.Context, string) ([]float32, error) {
+func (provider constantEmbeddingProvider) EmbedQuery(context.Context, string) ([]float32, error) {
 	return []float32{1, 0}, nil
+}
+
+func (provider constantEmbeddingProvider) EmbedDocuments(_ context.Context, texts []string) ([][]float32, error) {
+	embeddings := make([][]float32, 0, len(texts))
+	for range texts {
+		embeddings = append(embeddings, []float32{1, 0})
+	}
+	return embeddings, nil
 }
 
 type dimensionChangingEmbeddingProvider struct {
 	callCount int
 }
 
-func (provider *dimensionChangingEmbeddingProvider) GenerateEmbedding(context.Context, string) ([]float32, error) {
+func (provider *dimensionChangingEmbeddingProvider) EmbedQuery(context.Context, string) ([]float32, error) {
 	provider.callCount++
 	if provider.callCount == 1 {
 		return []float32{1}, nil
 	}
 	return []float32{1, 0}, nil
+}
+
+func (provider *dimensionChangingEmbeddingProvider) EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error) {
+	embeddings := make([][]float32, 0, len(texts))
+	for _, text := range texts {
+		embedding, errorValue := provider.EmbedQuery(ctx, text)
+		if errorValue != nil {
+			return nil, errorValue
+		}
+		embeddings = append(embeddings, embedding)
+	}
+	return embeddings, nil
 }
 
 type staticStructuredLanguageModel struct {
@@ -1610,11 +1630,6 @@ func TestContractSkillArbitrationHearsNothingAboutAFiringWithoutOne(t *testing.T
 type inputTypeRecordingEmbeddingProvider struct {
 	mutex      sync.Mutex
 	inputTypes []string
-}
-
-func (provider *inputTypeRecordingEmbeddingProvider) GenerateEmbedding(context.Context, string) ([]float32, error) {
-	provider.record("untyped")
-	return []float32{1, 0}, nil
 }
 
 func (provider *inputTypeRecordingEmbeddingProvider) EmbedQuery(context.Context, string) ([]float32, error) {

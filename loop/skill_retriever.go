@@ -32,11 +32,6 @@ type SkillSearchDocument struct {
 	IndexedAt      time.Time `json:"indexedAt"`
 }
 
-type inputTypedEmbeddingProvider interface {
-	EmbedQuery(ctx context.Context, text string) ([]float32, error)
-	EmbedDocuments(ctx context.Context, texts []string) ([][]float32, error)
-}
-
 type EmbeddingSkillRetriever struct {
 	EmbeddingProvider model.EmbeddingProvider
 	IndexPath         string
@@ -55,19 +50,11 @@ func NewEmbeddingSkillRetriever(embeddingProvider model.EmbeddingProvider, index
 }
 
 func (skillRetriever *EmbeddingSkillRetriever) embedQuery(ctx context.Context, text string) ([]float32, error) {
-	typedProvider, isTyped := skillRetriever.EmbeddingProvider.(inputTypedEmbeddingProvider)
-	if !isTyped {
-		return skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, text)
-	}
-	return typedProvider.EmbedQuery(ctx, text)
+	return skillRetriever.EmbeddingProvider.EmbedQuery(ctx, text)
 }
 
 func (skillRetriever *EmbeddingSkillRetriever) embedDocument(ctx context.Context, text string) ([]float32, error) {
-	typedProvider, isTyped := skillRetriever.EmbeddingProvider.(inputTypedEmbeddingProvider)
-	if !isTyped {
-		return skillRetriever.EmbeddingProvider.GenerateEmbedding(ctx, text)
-	}
-	embeddings, errorValue := typedProvider.EmbedDocuments(ctx, []string{text})
+	embeddings, errorValue := skillRetriever.EmbeddingProvider.EmbedDocuments(ctx, []string{text})
 	if errorValue != nil {
 		return nil, errorValue
 	}
