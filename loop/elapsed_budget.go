@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/turnclock"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
@@ -83,19 +84,18 @@ func (agentTurnRunner *AgentTurnRunner) extendBudgetOneLevelOnce(taskRunID strin
 	return true
 }
 
-func (agentTurnRunner *AgentTurnRunner) currentEffortElapsed(turnStartedAt time.Time) bool {
+func (agentTurnRunner *AgentTurnRunner) currentEffortElapsed(ctx context.Context, turnStartedAt time.Time) bool {
 	if turnStartedAt.IsZero() || agentTurnRunner.options.MaxElapsedSecond <= 0 {
 		return false
 	}
-	return time.Since(turnStartedAt) >= agentTurnRunner.maximumWorkDuration()
+	return turnclock.ActiveSince(ctx, turnStartedAt) >= agentTurnRunner.maximumWorkDuration()
 }
 
 func (agentTurnRunner *AgentTurnRunner) currentEffortContext(parentContext context.Context, effortStartedAt time.Time) (context.Context, context.CancelFunc) {
 	if effortStartedAt.IsZero() || agentTurnRunner.options.MaxElapsedSecond <= 0 {
 		return context.WithCancel(parentContext)
 	}
-	deadline := effortStartedAt.Add(agentTurnRunner.maximumWorkDuration())
-	return context.WithDeadline(parentContext, deadline)
+	return turnclock.WithActiveBudget(parentContext, effortStartedAt, agentTurnRunner.maximumWorkDuration())
 }
 
 func (agentTurnRunner *AgentTurnRunner) maximumWorkDuration() time.Duration {
@@ -126,12 +126,12 @@ func (agentTurnRunner *AgentTurnRunner) elapsedClosingContext(parentContext cont
 		return context.WithCancel(parentContext)
 	}
 	maximumElapsedDuration := time.Duration(agentTurnRunner.options.MaxElapsedSecond) * time.Second
-	return context.WithDeadline(parentContext, effortStartedAt.Add(maximumElapsedDuration))
+	return turnclock.WithActiveBudget(parentContext, effortStartedAt, maximumElapsedDuration)
 }
 
-func (agentTurnRunner *AgentTurnRunner) turnElapsed(turnStartedAt time.Time) time.Duration {
+func (agentTurnRunner *AgentTurnRunner) turnElapsed(ctx context.Context, turnStartedAt time.Time) time.Duration {
 	if turnStartedAt.IsZero() {
 		return 0
 	}
-	return time.Since(turnStartedAt)
+	return turnclock.ActiveSince(ctx, turnStartedAt)
 }

@@ -113,6 +113,7 @@ func restoreAgentTaskState(request AgentTurnRequest, options TurnOptions, taskRu
 	if userResumeClearsInheritedFailureDebt(request, state.Observations) {
 		state.Observations = observationsWithoutFailures(state.Observations)
 	}
+	state.Observations = withApprovedCallsNotYetRun(state.Observations, events)
 	state.Attachments = attachmentsFromObservations(state.Observations)
 	state.DeliveredAttachmentPaths = deliveredAttachmentPathsFromTaskEvents(events)
 	planStepSelection := planStepSelectionFromTaskEvents(events)
@@ -186,7 +187,7 @@ func cleanRestartedAgentTaskState(request AgentTurnRequest, options TurnOptions,
 	state := buildInitialAgentTaskState(scrubRestoredGoalContext(request), options, taskRun.TaskRunID)
 	state.Status = taskRun.Status
 	durableObservations := durableDeliveryObservations(events)
-	state.Observations = append(durableObservations, regroundingObservation(len(durableObservations)+1, producedSourcePaths(events)))
+	state.Observations = withApprovedCallsNotYetRun(append(durableObservations, regroundingObservation(len(durableObservations)+1, producedSourcePaths(events))), events)
 	state.Attachments = attachmentsFromObservations(state.Observations)
 	state.DeliveredAttachmentPaths = deliveredAttachmentPathsFromTaskEvents(events)
 	return state

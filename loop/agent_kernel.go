@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/bluecollar/turnclock"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -742,6 +743,7 @@ func clampedTurnStartedAt(turnStartedAt time.Time, isRuntimeRestartResume bool, 
 
 func newTurnBudgetContext(parentContext context.Context, turnStartedAt time.Time, isRuntimeRestartResume bool, referenceNow time.Time, turnOptions TurnOptions) turnBudgetContext {
 	resolvedTurnStartedAt, didClampAnchor, originalTurnStartedAt := clampedTurnStartedAt(turnStartedAt, isRuntimeRestartResume, referenceNow)
+	parentContext = turnclock.With(parentContext, turnclock.New())
 	if resolvedTurnStartedAt.IsZero() || turnOptions.MaxElapsedSecond <= 0 {
 		totalContext, cancelTotal := context.WithCancel(parentContext)
 		workContext, cancelWork := context.WithCancel(totalContext)
@@ -759,8 +761,8 @@ func newTurnBudgetContext(parentContext context.Context, turnStartedAt time.Time
 	}
 	totalDuration := time.Duration(turnOptions.MaxElapsedSecond) * time.Second
 	workDeadline := resolvedTurnStartedAt.Add(workDurationWithinTotal(totalDuration))
-	totalContext, cancelTotal := context.WithDeadline(parentContext, resolvedTurnStartedAt.Add(totalDuration))
-	workContext, cancelWork := context.WithDeadline(totalContext, workDeadline)
+	totalContext, cancelTotal := turnclock.WithActiveBudget(parentContext, resolvedTurnStartedAt, totalDuration)
+	workContext, cancelWork := turnclock.WithActiveBudget(totalContext, resolvedTurnStartedAt, workDurationWithinTotal(totalDuration))
 	return turnBudgetContext{
 		parentContext:         parentContext,
 		totalContext:          totalContext,

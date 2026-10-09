@@ -1,15 +1,14 @@
 package loop
 
 import (
-	"time"
-
+	"github.com/yeomyeonggeori/bluecollar/turnclock"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func buildIntakeFailureReport(turnBudget turnBudgetContext, request AgentRequest, intakeDecision IntakeDecision, taskRunID string) agentcontract.FailureReport {
 	elapsedSecond := 0.0
 	if !turnBudget.turnStartedAt.IsZero() {
-		elapsedSecond = time.Since(turnBudget.turnStartedAt).Seconds()
+		elapsedSecond = turnclock.ActiveSince(turnBudget.parentContext, turnBudget.turnStartedAt).Seconds()
 	}
 	carriedOutToolNames := make([]string, 0, len(request.CarriedOutCalls))
 	for _, carriedOutCall := range request.CarriedOutCalls {

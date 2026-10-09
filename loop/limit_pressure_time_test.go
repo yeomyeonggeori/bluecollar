@@ -61,13 +61,13 @@ func TestLimitPressureLevelUsesMaxOfStepAndTime(t *testing.T) {
 func TestExecutionEffortClockDoesNotIncludePreflightTime(t *testing.T) {
 	runner := &AgentTurnRunner{options: TurnOptions{MaxElapsedSecond: 30}}
 
-	if runner.currentEffortElapsed(time.Now()) {
+	if runner.currentEffortElapsed(context.Background(), time.Now()) {
 		t.Fatal("expected a fresh execution effort budget after preflight")
 	}
-	if runner.currentEffortElapsed(time.Now().Add(-19 * time.Second)) {
+	if runner.currentEffortElapsed(context.Background(), time.Now().Add(-19*time.Second)) {
 		t.Fatal("expected work to continue before the reserved closing window")
 	}
-	if !runner.currentEffortElapsed(time.Now().Add(-21 * time.Second)) {
+	if !runner.currentEffortElapsed(context.Background(), time.Now().Add(-21*time.Second)) {
 		t.Fatal("expected work to stop with one third of the total budget reserved for closing")
 	}
 }

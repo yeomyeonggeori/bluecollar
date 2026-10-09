@@ -327,7 +327,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			state.Observations = append(state.Observations, grantedBudget)
 			agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentBudgetUpdateSent, marshalEventBody(grantedBudget))
 		}
-		if warning := agentTurnRunner.nextLimitPressureWarning(state, iteration-1, state.ToolCallCount, agentTurnRunner.turnElapsed(request.EffortStartedAt), len(state.Observations)+1, limitPressureWarnings); warning != nil {
+		if warning := agentTurnRunner.nextLimitPressureWarning(state, iteration-1, state.ToolCallCount, agentTurnRunner.turnElapsed(taskContext, request.EffortStartedAt), len(state.Observations)+1, limitPressureWarnings); warning != nil {
 			if warning.Observation != nil {
 				state.Observations = append(state.Observations, *warning.Observation)
 			}
@@ -367,7 +367,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				if ctx.Err() != nil {
 					return agentTurnRunner.abandonedTurnResult(taskContext, taskRun.TaskRunID, request, ctx.Err(), "the turn's caller context ended while the model was answering: "+actionError.Error(), state.Attachments), nil
 				}
-				if !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
+				if !agentTurnRunner.currentEffortElapsed(taskContext, request.EffortStartedAt) {
 					refreshWorkContext()
 					continue
 				}

@@ -13,9 +13,9 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func (agentTurnRunner *AgentTurnRunner) requestForStep(_ context.Context, request AgentTurnRequest, state *agentTaskState) AgentTurnRequest {
+func (agentTurnRunner *AgentTurnRunner) requestForStep(ctx context.Context, request AgentTurnRequest, state *agentTaskState) AgentTurnRequest {
 	plannedRequest := requestWithStepWorkingSetTools(request, *state)
-	elapsed := agentTurnRunner.turnElapsed(request.EffortStartedAt)
+	elapsed := agentTurnRunner.turnElapsed(ctx, request.EffortStartedAt)
 	pressureStage := limitPressureStageFor(state.IterationCount, state.ToolCallCount, elapsed, agentTurnRunner.reachableLimits(*state))
 	stepKey := stepToolExposureKey(plannedRequest, *state)
 	if state.StepExposure.Key != stepKey {

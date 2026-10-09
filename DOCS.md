@@ -212,6 +212,7 @@ The contract packages come from the blueprotocol module, pinned as the `.depende
 | `.dependency/blueprotocol/` | the contract packages `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord`, `acpupdate` and `evaltest`, shared with the host as the blueprotocol submodule |
 | `turnclassification/` | the names and normalization of a turn's route, task shape, task level and deliverable, shared by `intake` and `loop` |
 | `iterationcost/` | what one iteration costs, the patience a model call is given and the budget profile of each task level |
+| `turnclock/` | the turn's clock, which stops while an approval waits on the requester |
 | `llmcalls/` | the schema names of the model calls bluecollar makes |
 | `toolexposure/` | how many tools a plan step is expected to expose |
 | `messageimages/` | the image parts of a message |
@@ -354,6 +355,8 @@ The level picks a profile. The first working tier is the 95th percentile of meas
 | `max` | 320 | 208 | 112 min |
 
 The clock is steps × cost of one step × 2. Before any call is measured, one step is assumed to cost 200 ms plus 205 output tokens at 20 tokens a second, the slowest speed the product plans for. After that, it is the median wall time of the model in use over its last hundred calls, bounded below by one second and above by two minutes a step. A host that sets an explicit wall keeps it.
+
+The clock counts only time the task spends working. While an approval question waits on the requester it stops, so an answer given an hour later finds the turn with the time it had when it asked. A host cancellation still ends the wait at once.
 
 When the step, tool call or time limit arrives, the loop extends once per task to the next level's profile, only when the budget came from the level, and records `agent.budget_extended_one_level`. The model stays the one chosen when the task started. At the next limit the task stops, and the stop asks the same question a final reply does. It completes when the change check confirms every change the request asked for, or when the model's last call said the goal was done and the check does not refuse it. Completion is recorded before the reply is written, so a reply that runs out of time falls back to a plain sentence and never loses finished work. Any other stop reports how far the task got.
 
