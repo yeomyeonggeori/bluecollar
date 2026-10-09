@@ -62,29 +62,6 @@ func TestTurnRouterAsksAWorkRouteOnlyForItsAcceptanceContract(t *testing.T) {
 	}
 }
 
-func TestTurnRouterWritesNothingForAConsumedTurn(t *testing.T) {
-	languageModel := &sequenceLanguageModel{}
-	outcome := startTaskOutcome()
-	outcome.TurnDecision.Route = agentcontract.TurnRouteConsume
-	outcome.TurnDecision.Classification = agentcontract.IntakeClassificationQuickReply
-	outcome.TurnDecision.TaskShape = agentcontract.TaskShapeImmediateReply
-	outcome.TurnDecision.InitialToolNames = nil
-	outcome.TurnDecision.RequestedOutputFormats = nil
-	turnRouter := turnRouterWith(languageModel, outcome)
-
-	decision, errorValue := turnRouter.Plan(context.Background(), agentcontract.AgentRequest{Prompt: "고마워!", ResponseLanguage: "ko"})
-	if errorValue != nil {
-		t.Fatalf("expected a routed turn: %v", errorValue)
-	}
-
-	if decision.Route != agentcontract.TurnRouteConsume {
-		t.Fatalf("expected the consume route, got %q", decision.Route)
-	}
-	if len(languageModel.requests) != 0 {
-		t.Fatalf("expected no chat call for a consumed turn, got %d", len(languageModel.requests))
-	}
-}
-
 func TestTurnRouterAsksTheChatModelOnlyForTheWords(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"reason":"missing the deadline","userFacingReply":"","clarificationDisposition":"ask","clarificationQuestion":"언제까지 필요하세요?","clarificationOptions":[],"expectedResults":[]}`,

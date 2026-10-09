@@ -286,10 +286,6 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	request.PinnedToolNames = appendUniqueStrings(append([]string{}, request.PinnedToolNames...), intakeDecision.InitialToolNames...)
 	intakeRequest.PinnedToolNames = request.PinnedToolNames
 	intakeRequest.LikelyToolNames = request.LikelyToolNames
-	if turnDecision.Route == TurnRouteConsume {
-		result, errorValue := agentKernel.completeConsumedRequest(intakeRequest, turnDecision, routerCallLedger.Records)
-		return result, errorValue
-	}
 	if !request.SkipSkillSelection {
 		instructionBundle, intakeDecision = agentKernel.selectInstructionBundleForResolvedRequest(taskContext, baseInstructionBundle, request, intakeDecision)
 	}
@@ -565,21 +561,6 @@ func (agentKernel *AgentKernel) selectInstructionBundleForResolvedRequest(ctx co
 	instructionBundle = instructionBundleWithPinnedSkills(instructionBundle, selectionRequest)
 	instructionBundle = instructionBundleWithToolOwningSkills(instructionBundle, selectionRequest, intakeDecision.InitialToolNames)
 	return instructionBundle, intakeDecision
-}
-
-func (agentKernel *AgentKernel) completeConsumedRequest(request AgentRequest, decision TurnDecision, routerCallRecords []llmCallRecord) (AgentTurnResult, error) {
-	taskRun := agentKernel.taskRunForRequest(request)
-	agentKernel.appendTurnRouterCallRecords(taskRun.TaskRunID, routerCallRecords)
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentIntake, marshalEventBody(decision.IntakeDecision()))
-	agentKernel.taskRunService.AppendTaskEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentConsumed, marshalEventBody(map[string]string{
-		"route":  string(decision.Route),
-		"reason": strings.TrimSpace(decision.Reason),
-	}))
-	completedTaskRun, errorValue := agentKernel.taskRunService.CompleteTaskRun(taskRun.TaskRunID, "consumed")
-	if errorValue != nil {
-		return AgentTurnResult{}, errorValue
-	}
-	return AgentTurnResult{TaskRun: completedTaskRun, TurnRoute: TurnRouteConsume, FinishMessage: strings.TrimSpace(decision.UserFacingReply), ReplySuppressed: true, ToolNames: toolNamesForEvent(request.ToolSet)}, nil
 }
 
 type confirmationGatePlan struct {

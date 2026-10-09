@@ -10,8 +10,9 @@ import (
 func quickReplyKernel(t *testing.T) (*AgentKernel, *taskstate.TaskRunService) {
 	t.Helper()
 	agentKernel, taskRunService := newKernelTestServices()
+	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{finishMessageDocument("천만에요!"), finishMessageDocument("천만에요!")}})
 	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
-		Route:            TurnRouteConsume,
+		Route:            TurnRouteAnswerQuestion,
 		Classification:   IntakeClassificationQuickReply,
 		TaskShape:        TaskShapeImmediateReply,
 		TaskLevel:        TaskLevelXLow,
@@ -29,7 +30,7 @@ func TestAHostSuppliedTaskRunIsUsedRatherThanASecondOne(t *testing.T) {
 	request.ExistingTaskRunID = hostTaskRun.TaskRunID
 	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
 	if errorValue != nil {
-		t.Fatalf("expected the consumed request to complete: %v", errorValue)
+		t.Fatalf("expected the quick reply to complete: %v", errorValue)
 	}
 
 	if result.TaskRun.TaskRunID != hostTaskRun.TaskRunID {

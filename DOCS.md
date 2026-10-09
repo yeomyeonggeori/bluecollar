@@ -252,8 +252,9 @@ Plans a turn from the facts the host hands over before it runs.
 | `answer_question` | answer in words now |
 | `answer_meta` | answer a question about the agent itself |
 | `clarify` | ask the one thing only the sender can resolve |
-| `consume` | say nothing |
 | `give_up` | the request is impossible or plainly improper on its face |
+
+No route ends a turn without work or words. Whether a message deserves only a reaction is the host's call, made before a turn starts.
 
 Intake chooses the level from `low`, `medium` and `high`. A request for slides or another visual deliverable is raised to `xhigh`. When the route starts, continues or revises work, one chat call writes the expected results: what should exist when the work is done and which tool result, file or link proves it. The other routes that need words (`clarify`, `answer_question`, `answer_meta`, `give_up`) get them from the same kind of call.
 

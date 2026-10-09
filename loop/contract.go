@@ -136,7 +136,6 @@ const (
 	TurnRouteAnswerMeta     = agentcontract.TurnRouteAnswerMeta
 	TurnRouteAnswerQuestion = agentcontract.TurnRouteAnswerQuestion
 	TurnRouteClarify        = agentcontract.TurnRouteClarify
-	TurnRouteConsume        = agentcontract.TurnRouteConsume
 	TurnRouteContinueTask   = agentcontract.TurnRouteContinueTask
 	TurnRouteGiveUp         = agentcontract.TurnRouteGiveUp
 	TurnRouteReviseTask     = agentcontract.TurnRouteReviseTask

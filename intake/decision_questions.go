@@ -116,7 +116,6 @@ func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQu
 	return model.ChoiceQuestion{
 		Instructions: builder.about(messageKey) + "What should " + agentName + " do about it? The latest message is authoritative; earlier context only helps read it. When activeGoal is in the state the message is input to that goal unless it plainly starts something unrelated.",
 		OptionDescriptions: optionDescriptions(agentcontract.TurnRouteNames, map[string]string{
-			string(agentcontract.TurnRouteConsume):        "nothing to say: an addressed message that needs no text reply, acknowledged with an emoji. Never consume a message that asks " + agentName + " to do, check, read, verify, or report anything",
 			string(agentcontract.TurnRouteAnswerQuestion): "answer in words right now, from common knowledge, judgment, or what is visible",
 			string(agentcontract.TurnRouteAnswerMeta):     "answer a question about " + agentName + " itself: what it can do, how it works, what it is",
 			string(agentcontract.TurnRouteClarify):        "ask one clarifying question first only when the requested goal, target, or outcome is still ambiguous after using visible context and only the sender can resolve it. Do not block on operational details, approval roles, or requirements a tool can inspect or resolve; start work and let the execution loop discover those. Never to ask for approval.",
