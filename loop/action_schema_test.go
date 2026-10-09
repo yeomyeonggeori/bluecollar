@@ -65,7 +65,7 @@ func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 }
 
 func legacyRootOneOfFinalizerSchema(hasFailureDebt bool) string {
-	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{replyActionSchema(hasFailureDebt, nil), failActionSchema(hasFailureDebt)}})
+	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{replyActionSchema(hasFailureDebt, nil, toolcontract.ToolDefinition{}), failActionSchema(hasFailureDebt)}})
 }
 
 func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing.T) {
@@ -351,7 +351,7 @@ func TestAContinueVariantAsksOnlyForWhatTheLoopReads(t *testing.T) {
 
 func TestAFinishHasOnePlaceForTheReply(t *testing.T) {
 	schemas := map[string]map[string]any{
-		"reply":    replyActionSchema(false, nil),
+		"reply":    replyActionSchema(false, nil, toolcontract.ToolDefinition{}),
 		"terminal": terminalActionUnifiedSchema(false),
 	}
 	for name, schema := range schemas {

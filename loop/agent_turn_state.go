@@ -705,10 +705,15 @@ func retryAgentActionChatCompletionRequest(request model.ChatCompletionRequest, 
 		}
 		toolName = firstPendingActionToolName(state)
 		if toolName == "" {
-			return retryRequest, true
+			return requireAnyAgentActionCall(retryRequest), true
 		}
 	}
 	return restrictAgentActionChatCompletionRequest(retryRequest, toolName)
+}
+
+func requireAnyAgentActionCall(request model.ChatCompletionRequest) model.ChatCompletionRequest {
+	request.ToolChoice = json.RawMessage(`"required"`)
+	return request
 }
 
 func restrictAgentActionChatCompletionRequest(request model.ChatCompletionRequest, toolName string) (model.ChatCompletionRequest, bool) {
@@ -735,6 +740,15 @@ func firstPendingActionToolName(state agentTaskState) string {
 }
 
 func nativeActionParseCorrection(parseError error) model.StructuredOutputCorrection {
+	var unreadableError unreadableModelActionError
+	if errors.As(parseError, &unreadableError) && unreadableError.silentFinishReason != "" {
+		return model.StructuredOutputCorrection{
+			Diagnostic: model.StructuredOutputDiagnostic{
+				Category:     model.StructuredOutputDiagnosticFinishReason,
+				FinishReason: unreadableError.silentFinishReason,
+			},
+		}
+	}
 	return model.StructuredOutputCorrection{
 		Diagnostic: model.StructuredOutputDiagnostic{
 			Category:         model.StructuredOutputDiagnosticSchemaValidation,
@@ -1002,11 +1016,8 @@ func parseNativeAgentActionResponse(response model.ChatCompletionResponse, tools
 		action.ModelReasoningField = response.Message.ReasoningField
 		return action, nil
 	}
-	if response.FinishReason != "tool_calls" {
-		return turnActionDocument{}, fmt.Errorf("native agent action chat finish reason is %q", response.FinishReason)
-	}
-	if len(response.Message.ToolCalls) == 0 {
-		return turnActionDocument{}, errors.New("native agent action chat expected at least one tool call")
+	if response.FinishReason != "tool_calls" || len(response.Message.ToolCalls) == 0 {
+		return turnActionDocument{}, silentModelActionError(response.FinishReason)
 	}
 	firstAction, errorValue := nativeAgentActionFromToolCall(response.Message.ToolCalls[0], tools)
 	firstAction.AssistantText = firstNonEmptyString(firstAction.AssistantText, strings.TrimSpace(response.Message.Content))
@@ -1034,11 +1045,19 @@ func batchedNativeAgentActions(toolCalls []model.ChatCompletionToolCall, tools [
 // The model producing something the runtime cannot read is the model's mistake, which every
 // other layer hands back for one more try. Only a transport failure ends the turn.
 type unreadableModelActionError struct {
-	reason string
+	reason             string
+	silentFinishReason model.StructuredOutputFinishReason
 }
 
 func (errorValue unreadableModelActionError) Error() string {
 	return errorValue.reason
+}
+
+func silentModelActionError(finishReason string) unreadableModelActionError {
+	return unreadableModelActionError{
+		reason:             fmt.Sprintf("native agent action chat ended with finish reason %q and neither a tool call nor a reply", finishReason),
+		silentFinishReason: model.StructuredOutputFinishReason(finishReason),
+	}
 }
 
 func isUnreadableModelActionError(errorValue error) bool {
