@@ -23,10 +23,15 @@ func actionSchemaCitingEvidence(toolSet *toolcontract.ToolSet, citableEvidenceID
 	if toolSet == nil {
 		return buildActionSchemaFromToolDefinitions(nil, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
 	}
-	return buildActionSchemaFromToolDefinitions(toolSet.ListToolDefinitions(), citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
+	fileDeliverDefinition, _ := toolSet.ToolDefinition(toolcontract.FileDeliverToolName)
+	return buildActionSchemaDeliveringThrough(fileDeliverDefinition, toolSet.ListToolDefinitions(), citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
 }
 
 func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+	return buildActionSchemaDeliveringThrough(toolcontract.ToolDefinition{}, toolDefinitions, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
+}
+
+func buildActionSchemaDeliveringThrough(fileDeliverDefinition toolcontract.ToolDefinition, toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
 	allowFail := true
 	allowReply := true
 	if len(terminalActionValues) > 0 {
@@ -41,7 +46,7 @@ func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDef
 	}
 	var variants []any
 	if allowReply {
-		variants = append(variants, replyActionSchema(hasFailureDebt, citableEvidenceIDs))
+		variants = append(variants, replyActionSchema(hasFailureDebt, citableEvidenceIDs, fileDeliverDefinition))
 	}
 	if allowFail {
 		variants = append(variants, failActionSchema(hasFailureDebt))
@@ -100,10 +105,10 @@ func replyVariantProperties(hasFailureDebt bool, citableEvidenceIDs []string) ma
 	}
 }
 
-func replyActionSchema(hasFailureDebt bool, citableEvidenceIDs []string) map[string]any {
+func replyActionSchema(hasFailureDebt bool, citableEvidenceIDs []string, fileDeliverDefinition toolcontract.ToolDefinition) map[string]any {
 	properties := replyVariantProperties(hasFailureDebt, citableEvidenceIDs)
 	properties["action"] = enumStringSchema("reply")
-	properties["attachments"] = replyAttachmentArraySchema()
+	properties["attachments"] = replyAttachmentArraySchema(fileDeliverDefinition)
 	properties["expectsAnswer"] = booleanSchema()
 	properties["choices"] = replyChoiceArraySchema()
 	properties["goalStatus"] = enumValuesStringSchema([]string{"satisfied", "in_progress"})
@@ -114,15 +119,40 @@ func replyChoiceArraySchema() map[string]any {
 	return map[string]any{"type": "array", "items": stringSchema()}
 }
 
-func replyAttachmentArraySchema() map[string]any {
+func replyAttachmentArraySchema(fileDeliverDefinition toolcontract.ToolDefinition) map[string]any {
+	deliveredFileProperties := deliveredFilePropertySchemas(fileDeliverDefinition.InputSchema)
 	return map[string]any{
 		"type":        "array",
 		"description": "Files listed here are attached to this reply and reach the person you are answering, in this conversation.",
 		"items": closedObjectSchema(map[string]any{
-			"path":     stringSchema(),
-			"filename": stringSchema(),
+			"path":     deliveredFilePropertySchema(deliveredFileProperties, "path"),
+			"filename": deliveredFilePropertySchema(deliveredFileProperties, "filename"),
 		}),
 	}
+}
+
+func deliveredFilePropertySchemas(fileDeliverInputSchema json.RawMessage) map[string]json.RawMessage {
+	var document struct {
+		Properties struct {
+			Files struct {
+				Items struct {
+					Properties map[string]json.RawMessage `json:"properties"`
+				} `json:"items"`
+			} `json:"files"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal(fileDeliverInputSchema, &document) != nil {
+		return nil
+	}
+	return document.Properties.Files.Items.Properties
+}
+
+func deliveredFilePropertySchema(deliveredFileProperties map[string]json.RawMessage, propertyName string) any {
+	propertySchema, isDescribed := deliveredFileProperties[propertyName]
+	if !isDescribed {
+		return stringSchema()
+	}
+	return propertySchema
 }
 
 func delegateActionSchema() map[string]any {
