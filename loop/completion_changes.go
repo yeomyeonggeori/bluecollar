@@ -44,7 +44,7 @@ func (agentTurnRunner *AgentTurnRunner) evaluateExpectedChanges(ctx context.Cont
 	if len(check.Unmet) == 0 {
 		return completionGateResult{IsSatisfied: true, AreChangesConfirmed: true}
 	}
-	if check.RepeatsRefusalOf != "" {
+	if check.RepeatsRefusalOf != "" || check.awaitsOnlyTheRequester() {
 		return completionGateResult{IsSatisfied: true, ChangeCheck: &check}
 	}
 	return completionGateResult{
@@ -76,6 +76,9 @@ func unmetChangesMessage(check changeCheck) string {
 		reason := "the recorded changes do not carry it out"
 		if containsExpectedChange(check.Unrecorded, change) {
 			reason = "nothing recorded changed this kind of record"
+		}
+		if containsExpectedChange(check.AwaitsRequester, change) {
+			reason = "it needs information only the requester can give, which the final reply will ask them for"
 		}
 		lines = append(lines, "\""+change.Asked+"\" ("+change.Change+"): "+reason)
 	}

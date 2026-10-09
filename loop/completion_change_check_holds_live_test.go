@@ -56,6 +56,75 @@ func TestLiveChangeCheckJudgesDeliveredOfficeFilesByWhatTheyHold(t *testing.T) {
 	}
 }
 
+type turnEnding string
+
+const (
+	endsDone          turnEnding = "done"
+	endsAskingForInfo turnEnding = "ask"
+	goesBackToWork    turnEnding = "back"
+)
+
+func TestLiveChangeCheckSendsBackOnlyWorkTheAgentCanStillDo(t *testing.T) {
+	endpoint := liveDecisionEndpoint(t)
+	cases := deliveredOfficeFileCases(t)
+	wrongBefore, wrongAfter, endedWithWorkLeftBefore, endedWithWorkLeftAfter := 0, 0, 0, 0
+	for _, liveCase := range cases {
+		request, expected, observations := deliveredOfficeFileTurn(liveCase)
+		wanted := wantedEnding(liveCase)
+		for attempt := 0; attempt < holdsLiveAttempts; attempt++ {
+			check, errorValue := checkExpectedChanges(context.Background(), endpoint.DecisionModel(), request, expected, observations)
+			if errorValue != nil {
+				t.Fatalf("the change check failed: %v", errorValue)
+			}
+			before, after := endingWithoutGap(check), endingOf(check)
+			wrongBefore += boolCount(before != wanted)
+			wrongAfter += boolCount(after != wanted)
+			endedWithWorkLeftBefore += boolCount(wanted == goesBackToWork && before != goesBackToWork)
+			endedWithWorkLeftAfter += boolCount(wanted == goesBackToWork && after != goesBackToWork)
+			t.Logf("%-62s want=%-4s before=%-4s after=%-4s carriedOut=%.2f requesterOnly=%.2f gapError=%q", liveCase.Name, wanted, before, after, check.CarriedOut[changeQuestionKey(0)], check.RequesterOnly[changeGapQuestionKey(0)], check.GapCheckError)
+		}
+	}
+	verdicts := len(cases) * holdsLiveAttempts
+	t.Logf("wrong endings: before %d/%d, after %d/%d; turns ended with work left: before %d, after %d", wrongBefore, verdicts, wrongAfter, verdicts, endedWithWorkLeftBefore, endedWithWorkLeftAfter)
+	if endedWithWorkLeftAfter > endedWithWorkLeftBefore {
+		t.Fatalf("asking the requester ended turns that still had work left: %d before, %d after", endedWithWorkLeftBefore, endedWithWorkLeftAfter)
+	}
+}
+
+func wantedEnding(liveCase deliveredOfficeFileCase) turnEnding {
+	if liveCase.IsCarriedOut {
+		return endsDone
+	}
+	if liveCase.Gap == changeGapRequesterInformation {
+		return endsAskingForInfo
+	}
+	return goesBackToWork
+}
+
+func endingWithoutGap(check changeCheck) turnEnding {
+	if len(check.Unmet) == 0 {
+		return endsDone
+	}
+	return goesBackToWork
+}
+
+func endingOf(check changeCheck) turnEnding {
+	if len(check.Unmet) == 0 {
+		return endsDone
+	}
+	if check.awaitsOnlyTheRequester() {
+		return endsAskingForInfo
+	}
+	return goesBackToWork
+}
+
+func boolCount(isTrue bool) int {
+	if isTrue {
+		return 1
+	}
+	return 0
+}
+
 func TestLiveChangeCheckAcceptsW1RecordedWorkbookByWhatItHolds(t *testing.T) {
 	endpoint := liveDecisionEndpoint(t)
 	delivery := w1DeliveredWorkbook(t)

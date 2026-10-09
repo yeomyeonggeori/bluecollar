@@ -249,7 +249,8 @@
    ],
    "blanks": []
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
  },
  {
   "name": "workbook: budget vs actual",
@@ -405,7 +406,8 @@
    "charts": [],
    "blanks": []
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
  },
  {
   "name": "workbook: headcount",
@@ -636,7 +638,8 @@
    ],
    "blanks": []
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
  },
  {
   "name": "workbook: headcount under the wrong years",
@@ -771,7 +774,8 @@
    ],
    "blanks": []
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
  },
  {
   "name": "form: quote",
@@ -853,7 +857,8 @@
     }
    ]
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
  },
  {
   "name": "form: quote to another company",
@@ -894,7 +899,8 @@
     }
    ]
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
  },
  {
   "name": "form: invoice",
@@ -974,7 +980,8 @@
     }
    ]
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
  },
  {
   "name": "form: minutes",
@@ -1061,6 +1068,808 @@
     }
    ]
   },
-  "isCarriedOut": false
+  "isCarriedOut": false,
+  "gap": "work_left"
+ },
+ {
+  "name": "memo: asked figures no source gives, withdrawn",
+  "prompt": "팀 전체에 보낼 사내 메모를 docx로 써 주세요.\n제목: 10월 셋째 주부터 주 2회 재택근무 시범 운영\n시범 기간: 2026년 10월 19일부터 12월 18일까지\n대상: 개발팀과 디자인팀\n재택 요일은 팀장과 협의해 화요일과 목요일 중에서 정합니다.\n메모에는 재택근무로 기대되는 생산성 향상 효과도 구체적인 수치를 들어 꼭 넣어 주세요.",
+  "isCarriedOut": false,
+  "command": "office merge report /tmp/memo_values.json ~/documents/재택근무시범운영메모.docx",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled report into /home/bc_person_sample/documents/재택근무시범운영메모.docx; no blank fields\",\n  \"outputPath\": \"/home/bc_person_sample/documents/재택근무시범운영메모.docx\",\n  \"issues\": []\n}",
+  "filename": "재택근무시범운영메모.docx",
+  "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "sizeBytes": 493465,
+  "holds": {
+   "blanks": [
+    {
+     "field": "sections[1].blocks[0].items[0].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[0].quantity",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].percent",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].percent",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[3].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[3].percent",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[1].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[2].blocks[0].text#1",
+     "label": "안내 및 협조 사항",
+     "withdrawn": "text"
+    }
+   ],
+   "given": {
+    "language": "ko",
+    "period": "2026-10-19/2026-12-18",
+    "recipient": "개발팀·디자인팀 전체",
+    "sections": [
+     {
+      "blocks": [
+       {
+        "fields": [
+         {
+          "label": "시범 기간",
+          "type": "text",
+          "value": "2026년 10월 19일 ~ 2026년 12월 18일"
+         },
+         {
+          "label": "대상 부서",
+          "type": "text",
+          "value": "개발팀, 디자인팀"
+         },
+         {
+          "label": "재택 빈도",
+          "type": "text",
+          "value": "주 2회"
+         },
+         {
+          "label": "재택 요일",
+          "type": "text",
+          "value": "팀장과 협의하여 화요일·목요일 중에서 팀별로 결정"
+         }
+        ],
+        "type": "fields"
+       }
+      ],
+      "heading": "시범 운영 개요"
+     },
+     {
+      "blocks": [
+       {
+        "items": [
+         {
+          "quantity": null,
+          "text": null,
+          "unit": "시간/주"
+         },
+         {
+          "percent": null,
+          "text": null
+         },
+         {
+          "percent": null,
+          "text": null
+         },
+         {
+          "percent": null,
+          "text": null
+         }
+        ],
+        "numbered": true,
+        "type": "items"
+       },
+       {
+        "text": null,
+        "type": "paragraph"
+       }
+      ],
+      "heading": "기대 효과 (재택근무 도입 사례 기준)"
+     },
+     {
+      "blocks": [
+       {
+        "text": "재택 요일은 각 팀장과 협의하여 화요일과 목요일 중에서 팀별로 결정해 주시기 바랍니다.",
+        "type": "paragraph"
+       }
+      ],
+      "heading": "안내 및 협조 사항"
+     }
+    ],
+    "title": "10월 셋째 주부터 주 2회 재택근무 시범 운영"
+   },
+   "schema": "report"
+  },
+  "gap": "requester_information"
+ },
+ {
+  "name": "memo: figures the user gave left blank",
+  "prompt": "팀 전체에 보낼 사내 메모를 docx로 써 주세요.\n제목: 10월 셋째 주부터 주 2회 재택근무 시범 운영\n시범 기간: 2026년 10월 19일부터 12월 18일까지\n대상: 개발팀과 디자인팀\n재택 요일은 팀장과 협의해 화요일과 목요일 중에서 정합니다.\n메모에는 재택근무로 기대되는 생산성 향상 효과도 꼭 넣어 주세요: 집중 업무 시간 주 3시간 증가, 직무 만족도 15% 개선.",
+  "isCarriedOut": false,
+  "command": "office merge report /tmp/memo_values.json ~/documents/재택근무시범운영메모.docx",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled report into /home/bc_person_sample/documents/재택근무시범운영메모.docx; no blank fields\",\n  \"outputPath\": \"/home/bc_person_sample/documents/재택근무시범운영메모.docx\",\n  \"issues\": []\n}",
+  "filename": "재택근무시범운영메모.docx",
+  "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "sizeBytes": 493465,
+  "holds": {
+   "blanks": [
+    {
+     "field": "sections[1].blocks[0].items[0].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[0].quantity",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].percent",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].percent",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[3].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[3].percent",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[1].text",
+     "label": "기대 효과 (재택근무 도입 사례 기준)",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[2].blocks[0].text#1",
+     "label": "안내 및 협조 사항",
+     "withdrawn": "text"
+    }
+   ],
+   "given": {
+    "language": "ko",
+    "period": "2026-10-19/2026-12-18",
+    "recipient": "개발팀·디자인팀 전체",
+    "sections": [
+     {
+      "blocks": [
+       {
+        "fields": [
+         {
+          "label": "시범 기간",
+          "type": "text",
+          "value": "2026년 10월 19일 ~ 2026년 12월 18일"
+         },
+         {
+          "label": "대상 부서",
+          "type": "text",
+          "value": "개발팀, 디자인팀"
+         },
+         {
+          "label": "재택 빈도",
+          "type": "text",
+          "value": "주 2회"
+         },
+         {
+          "label": "재택 요일",
+          "type": "text",
+          "value": "팀장과 협의하여 화요일·목요일 중에서 팀별로 결정"
+         }
+        ],
+        "type": "fields"
+       }
+      ],
+      "heading": "시범 운영 개요"
+     },
+     {
+      "blocks": [
+       {
+        "items": [
+         {
+          "quantity": null,
+          "text": null,
+          "unit": "시간/주"
+         },
+         {
+          "percent": null,
+          "text": null
+         },
+         {
+          "percent": null,
+          "text": null
+         },
+         {
+          "percent": null,
+          "text": null
+         }
+        ],
+        "numbered": true,
+        "type": "items"
+       },
+       {
+        "text": null,
+        "type": "paragraph"
+       }
+      ],
+      "heading": "기대 효과 (재택근무 도입 사례 기준)"
+     },
+     {
+      "blocks": [
+       {
+        "text": "재택 요일은 각 팀장과 협의하여 화요일과 목요일 중에서 팀별로 결정해 주시기 바랍니다.",
+        "type": "paragraph"
+       }
+      ],
+      "heading": "안내 및 협조 사항"
+     }
+    ],
+    "title": "10월 셋째 주부터 주 2회 재택근무 시범 운영"
+   },
+   "schema": "report"
+  },
+  "gap": "work_left"
+ },
+ {
+  "name": "report: board update asking for market shares nobody gave",
+  "prompt": "Write a one-page board update as a docx.\nTitle: Q3 operations update\nWe opened the Busan warehouse on 1 September and cut average delivery time from 3.1 to 2.4 days.\nAlso state our exact market share in each region we serve",
+  "isCarriedOut": false,
+  "gap": "requester_information",
+  "command": "office merge report ~/documents/q3-board-update.values.json ~/documents/q3-board-update.docx",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled report into /home/bc_person_sample/documents/q3-board-update.docx; no blank fields\",\n  \"outputPath\": \"/home/bc_person_sample/documents/q3-board-update.docx\",\n  \"issues\": []\n}",
+  "filename": "q3-board-update.docx",
+  "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "sizeBytes": 41250,
+  "holds": {
+   "schema": "report",
+   "given": {
+    "language": "en",
+    "title": "Q3 operations update",
+    "sections": [
+     {
+      "heading": "Operations",
+      "blocks": [
+       {
+        "type": "paragraph",
+        "text": "We opened the Busan warehouse on 1 September and cut average delivery time from 3.1 to 2.4 days."
+       }
+      ]
+     },
+     {
+      "heading": "Market share by region",
+      "blocks": [
+       {
+        "type": "items",
+        "items": [
+         {
+          "text": null,
+          "percent": null
+         },
+         {
+          "text": null,
+          "percent": null
+         },
+         {
+          "text": null,
+          "percent": null
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "sections[1].blocks[0].items[0].text",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[0].percent",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].text",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].percent",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].text",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].percent",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    }
+   ]
+  }
+ },
+ {
+  "name": "report: board update leaving out the market shares it was given",
+  "prompt": "Write a one-page board update as a docx.\nTitle: Q3 operations update\nWe opened the Busan warehouse on 1 September and cut average delivery time from 3.1 to 2.4 days.\nAlso state our exact market share in each region we serve: Seoul 18%, Busan 11%, Daegu 7%.",
+  "isCarriedOut": false,
+  "gap": "work_left",
+  "command": "office merge report ~/documents/q3-board-update.values.json ~/documents/q3-board-update.docx",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled report into /home/bc_person_sample/documents/q3-board-update.docx; no blank fields\",\n  \"outputPath\": \"/home/bc_person_sample/documents/q3-board-update.docx\",\n  \"issues\": []\n}",
+  "filename": "q3-board-update.docx",
+  "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "sizeBytes": 41250,
+  "holds": {
+   "schema": "report",
+   "given": {
+    "language": "en",
+    "title": "Q3 operations update",
+    "sections": [
+     {
+      "heading": "Operations",
+      "blocks": [
+       {
+        "type": "paragraph",
+        "text": "We opened the Busan warehouse on 1 September and cut average delivery time from 3.1 to 2.4 days."
+       }
+      ]
+     },
+     {
+      "heading": "Market share by region",
+      "blocks": [
+       {
+        "type": "items",
+        "items": [
+         {
+          "text": null,
+          "percent": null
+         },
+         {
+          "text": null,
+          "percent": null
+         },
+         {
+          "text": null,
+          "percent": null
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "blanks": [
+    {
+     "field": "sections[1].blocks[0].items[0].text",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[0].percent",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].text",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[1].percent",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].text",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    },
+    {
+     "field": "sections[1].blocks[0].items[2].percent",
+     "label": "Market share by region",
+     "withdrawn": "text"
+    }
+   ]
+  }
+ },
+ {
+  "name": "workbook: revenue against a last year nobody gave",
+  "prompt": "[월별 매출 비교] 2026년 상반기 월별 매출로 엑셀을 만들어 주세요. 각 월 옆에 작년 같은 달 매출도 넣어서 증감률까지 비교해 주세요.\n2026년 (단위 만원): 1월 3,120, 2월 2,980, 3월 3,410, 4월 3,560, 5월 3,700, 6월 3,890",
+  "isCarriedOut": false,
+  "gap": "requester_information",
+  "command": "office create ~/documents/월별_매출_비교.xlsx ~/documents/월별_매출_비교.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/월별_매출_비교.xlsx; 12 blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/월별_매출_비교.xlsx\",\n  \"issues\": []\n}",
+  "filename": "월별_매출_비교.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 18320,
+  "holds": {
+   "tables": [
+    {
+     "name": "원본",
+     "columns": [
+      "월",
+      "2026년",
+      "2025년"
+     ],
+     "rowCount": 6
+    }
+   ],
+   "views": [
+    {
+     "title": "월별 매출 비교",
+     "sheet": "요약",
+     "rows": [
+      [
+       "월",
+       "2026년",
+       "2025년",
+       "증감률"
+      ],
+      [
+       "1월",
+       "3,120",
+       "",
+       ""
+      ],
+      [
+       "2월",
+       "2,980",
+       "",
+       ""
+      ],
+      [
+       "3월",
+       "3,410",
+       "",
+       ""
+      ],
+      [
+       "4월",
+       "3,560",
+       "",
+       ""
+      ],
+      [
+       "5월",
+       "3,700",
+       "",
+       ""
+      ],
+      [
+       "6월",
+       "3,890",
+       "",
+       ""
+      ]
+     ]
+    }
+   ],
+   "charts": [],
+   "blanks": [
+    {
+     "field": "요약!C2",
+     "label": "2025년 1월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C3",
+     "label": "2025년 2월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C4",
+     "label": "2025년 3월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C5",
+     "label": "2025년 4월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C6",
+     "label": "2025년 5월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C7",
+     "label": "2025년 6월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D2",
+     "label": "1월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D3",
+     "label": "2월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D4",
+     "label": "3월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D5",
+     "label": "4월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D6",
+     "label": "5월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D7",
+     "label": "6월 증감률",
+     "withdrawn": "value"
+    }
+   ]
+  }
+ },
+ {
+  "name": "workbook: revenue leaving out the last year it was given",
+  "prompt": "[월별 매출 비교] 2026년 상반기 월별 매출로 엑셀을 만들어 주세요. 각 월 옆에 작년 같은 달 매출도 넣어서 증감률까지 비교해 주세요.\n2026년 (단위 만원): 1월 3,120, 2월 2,980, 3월 3,410, 4월 3,560, 5월 3,700, 6월 3,890\n2025년 (단위 만원): 1월 2,840, 2월 2,760, 3월 3,050, 4월 3,180, 5월 3,290, 6월 3,420",
+  "isCarriedOut": false,
+  "gap": "work_left",
+  "command": "office create ~/documents/월별_매출_비교.xlsx ~/documents/월별_매출_비교.workbook.json",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"created /home/bc_person_sample/documents/월별_매출_비교.xlsx; 12 blank cells\",\n  \"outputPath\": \"/home/bc_person_sample/documents/월별_매출_비교.xlsx\",\n  \"issues\": []\n}",
+  "filename": "월별_매출_비교.xlsx",
+  "contentType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "sizeBytes": 18320,
+  "holds": {
+   "tables": [
+    {
+     "name": "원본",
+     "columns": [
+      "월",
+      "2026년",
+      "2025년"
+     ],
+     "rowCount": 6
+    }
+   ],
+   "views": [
+    {
+     "title": "월별 매출 비교",
+     "sheet": "요약",
+     "rows": [
+      [
+       "월",
+       "2026년",
+       "2025년",
+       "증감률"
+      ],
+      [
+       "1월",
+       "3,120",
+       "",
+       ""
+      ],
+      [
+       "2월",
+       "2,980",
+       "",
+       ""
+      ],
+      [
+       "3월",
+       "3,410",
+       "",
+       ""
+      ],
+      [
+       "4월",
+       "3,560",
+       "",
+       ""
+      ],
+      [
+       "5월",
+       "3,700",
+       "",
+       ""
+      ],
+      [
+       "6월",
+       "3,890",
+       "",
+       ""
+      ]
+     ]
+    }
+   ],
+   "charts": [],
+   "blanks": [
+    {
+     "field": "요약!C2",
+     "label": "2025년 1월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C3",
+     "label": "2025년 2월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C4",
+     "label": "2025년 3월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C5",
+     "label": "2025년 4월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C6",
+     "label": "2025년 5월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!C7",
+     "label": "2025년 6월 매출",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D2",
+     "label": "1월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D3",
+     "label": "2월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D4",
+     "label": "3월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D5",
+     "label": "4월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D6",
+     "label": "5월 증감률",
+     "withdrawn": "value"
+    },
+    {
+     "field": "요약!D7",
+     "label": "6월 증감률",
+     "withdrawn": "value"
+    }
+   ]
+  }
+ },
+ {
+  "name": "letter: delivery record nobody gave",
+  "prompt": "거래처 예시상사에 보낼 납품 일정 변경 안내 공문을 docx로 써 주세요.\n변경 내용: 11월 정기 납품일을 11월 12일에서 11월 19일로 옮깁니다.\n사유: 물류센터 설비 점검\n지난 분기 품목별 납품 실적 수량도 꼭 표로 넣어 주세요",
+  "isCarriedOut": false,
+  "gap": "requester_information",
+  "command": "office merge kr/official-letter ~/documents/납품일정변경_공문.values.json ~/documents/납품일정변경_공문.docx",
+  "output": "{\n  \"status\": \"ok\",\n  \"summary\": \"filled report into /home/bc_person_sample/documents/납품일정변경_공문.docx; no blank fields\",\n  \"outputPath\": \"/home/bc_person_sample/documents/납품일정변경_공문.docx\",\n  \"issues\": []\n}",
+  "filename": "납품일정변경_공문.docx",
+  "contentType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "sizeBytes": 38710,
+  "holds": {
+   "schema": "kr/official-letter",
+   "given": {
+    "recipient": "예시상사",
+    "subject": "11월 정기 납품 일정 변경 안내",
+    "body": "11월 정기 납품일을 11월 12일에서 11월 19일로 변경합니다. 사유는 물류센터 설비 점검입니다.",
+    "table": {
+     "columns": [
+      "품목",
+      "수량"
+     ],
+     "rows": [
+      [
+       null,
+       null
+      ],
+      [
+       null,
+       null
+      ],
+      [
+       null,
+       null
+      ]
+     ]
+    }
+   },
+   "blanks": [
+    {
+     "field": "table.rows[0][0]",
+     "label": "지난 분기 납품 실적 품목",
+     "withdrawn": "value"
+    },
+    {
+     "field": "table.rows[0][1]",
+     "label": "지난 분기 납품 실적 수량",
+     "withdrawn": "value"
+    },
+    {
+     "field": "table.rows[1][0]",
+     "label": "지난 분기 납품 실적 품목",
+     "withdrawn": "value"
+    },
+    {
+     "field": "table.rows[1][1]",
+     "label": "지난 분기 납품 실적 수량",
+     "withdrawn": "value"
+    },
+    {
+     "field": "table.rows[2][0]",
+     "label": "지난 분기 납품 실적 품목",
+     "withdrawn": "value"
+    },
+    {
+     "field": "table.rows[2][1]",
+     "label": "지난 분기 납품 실적 수량",
+     "withdrawn": "value"
+    }
+   ]
+  }
  }
 ]

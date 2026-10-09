@@ -20,6 +20,9 @@ const (
 	changeLookupLimit         = 2
 	unrecordedWorkLimit       = 4
 	changeValueMaximumLength  = 1500
+
+	changeGapWorkLeft             = "work_left"
+	changeGapRequesterInformation = "requester_information"
 )
 
 type changeCheck struct {
@@ -27,8 +30,15 @@ type changeCheck struct {
 	CarriedOut       map[string]float64 `json:"carriedOut,omitempty"`
 	Unrecorded       []expectedChange   `json:"unrecorded,omitempty"`
 	Unmet            []expectedChange   `json:"unmet,omitempty"`
+	AwaitsRequester  []expectedChange   `json:"awaitsRequester,omitempty"`
+	RequesterOnly    map[string]float64 `json:"requesterOnly,omitempty"`
+	GapCheckError    string             `json:"gapCheckError,omitempty"`
 	StateDigest      string             `json:"stateDigest,omitempty"`
 	RepeatsRefusalOf string             `json:"repeatsRefusalOf,omitempty"`
+}
+
+func (check changeCheck) awaitsOnlyTheRequester() bool {
+	return len(check.Unmet) > 0 && len(check.AwaitsRequester) == len(check.Unmet)
 }
 
 type changedRecord struct {
@@ -79,14 +89,36 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		return changeCheck{}, errorValue
 	}
 	check.CarriedOut = map[string]float64{}
+	unmetIndexes := []int{}
 	for index, change := range expected {
 		answer := response.Answers[changeQuestionKey(index)]
 		check.CarriedOut[changeQuestionKey(index)] = answer.Noul
 		if answer.Noul < changeCarriedOutThreshold {
 			check.Unmet = append(check.Unmet, change)
+			unmetIndexes = append(unmetIndexes, index)
 		}
 	}
-	return check, nil
+	if len(unmetIndexes) == 0 {
+		return check, nil
+	}
+	return withWhatUnmetChangesLack(ctx, decisionModel, state, expected, unmetIndexes, check), nil
+}
+
+func withWhatUnmetChangesLack(ctx context.Context, decisionModel model.DecisionModel, state map[string]any, expected []expectedChange, unmetIndexes []int, check changeCheck) changeCheck {
+	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{State: state, Questions: changeGapQuestions(unmetIndexes)})
+	if errorValue != nil {
+		check.GapCheckError = errorValue.Error()
+		return check
+	}
+	check.RequesterOnly = map[string]float64{}
+	for _, index := range unmetIndexes {
+		answer := response.Answers[changeGapQuestionKey(index)]
+		check.RequesterOnly[changeGapQuestionKey(index)] = answer.ChoiceProbability(changeGapRequesterInformation)
+		if answer.Choice == changeGapRequesterInformation {
+			check.AwaitsRequester = append(check.AwaitsRequester, expected[index])
+		}
+	}
+	return check
 }
 
 func unrecordedChanges(toolSet *toolcontract.ToolSet, expected []expectedChange, observations []turnObservation) []expectedChange {
@@ -152,6 +184,29 @@ func changeCheckQuestions(changeCount int, isAnyFileHeld bool) map[string]model.
 		}.Question()
 	}
 	return questions
+}
+
+func changeGapQuestions(unmetIndexes []int) map[string]model.DecisionQuestion {
+	questions := map[string]model.DecisionQuestion{}
+	for _, index := range unmetIndexes {
+		questions[changeGapQuestionKey(index)] = model.ChoiceQuestion{
+			Instructions: strings.Join([]string{
+				fmt.Sprintf("expectedChanges[%d] was found not carried out. What does carrying it out still need? asked is the user's own words asking for it; read them in request and conversationBefore.", index),
+				"A blank a delivered file's holds mark as withdrawn is a value its writer took out because nothing the user gave or the work read supported it; the work cannot put it back without making it up.",
+				"It needs requester information when what is missing is a value or fact that request and conversationBefore never give, and that the records show the work could not support: its blanks are marked withdrawn, or a lookup came back without it. Asking for a value is not giving it.",
+				"It is work left when the user gave the missing value or fact and the work left it out or got it wrong, when a part asked was never made, when a change went to a different record, or when the work never looked for something it could read. Do not count a value as given unless request or conversationBefore states it.",
+			}, "\n"),
+			OptionDescriptions: map[string]string{
+				changeGapWorkLeft:             "the work can still carry it out from what the user gave and what it can read",
+				changeGapRequesterInformation: "it needs a value or fact nobody gave that the records show was looked for or withdrawn for lack of support, which only the requester can supply",
+			},
+		}.Question()
+	}
+	return questions
+}
+
+func changeGapQuestionKey(index int) string {
+	return fmt.Sprintf("gap%d", index)
 }
 
 func changeQuestionKey(index int) string {
