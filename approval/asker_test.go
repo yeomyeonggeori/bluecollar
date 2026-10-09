@@ -1,9 +1,12 @@
 package approval
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/turnclock"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
@@ -93,5 +96,22 @@ func TestAnAnswerThatIsNoAnswerDecidesNothing(t *testing.T) {
 
 	if outcome.kind != outcomeUnanswered || fixture.hasEvent(agentcontract.TaskEventApprovalDecided) {
 		t.Fatalf("an unread reply is not an answer, got %+v with %v", outcome, fixture.eventNames())
+	}
+}
+
+func TestWaitingOnThePersonDoesNotSpendTheTurnsTime(t *testing.T) {
+	const turnBudget = 60 * time.Millisecond
+	turnContext, cancelTurn := turnclock.WithActiveBudget(turnclock.With(context.Background(), turnclock.New()), time.Now(), turnBudget)
+	defer cancelTurn()
+	asker := &scriptedAsker{answer: Approved, beforeAnswering: func() { time.Sleep(4 * turnBudget) }}
+	fixture := newFixtureWith(t, nil, asker)
+
+	outcome := fixture.gate.awaitApproval(turnContext, fixture.request())
+
+	if outcome.kind != outcomeApproved {
+		t.Fatalf("the answered call decided %q, expected approved", outcome.kind)
+	}
+	if turnContext.Err() != nil {
+		t.Fatalf("the turn ended (%v) while the person was deciding, so an answer given after the turn's budget found nothing left to run the call", turnContext.Err())
 	}
 }

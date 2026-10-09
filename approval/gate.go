@@ -3,6 +3,7 @@ package approval
 import (
 	"context"
 
+	"github.com/yeomyeonggeori/bluecollar/turnclock"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -36,7 +37,7 @@ func (gate *Gate) awaitApproval(ctx context.Context, request approvalRequest) ou
 
 func (gate *Gate) holdAndAsk(ctx context.Context, request approvalRequest) outcome {
 	hold := gate.recordHold(request, gate.wordQuestion(ctx, request))
-	answer := gate.asker.Ask(ctx, hold)
+	answer := gate.askWithTheTurnClockStopped(ctx, hold)
 	if !answer.isGiven() {
 		return outcome{kind: outcomeUnanswered}
 	}
@@ -58,4 +59,10 @@ func (gate *Gate) settle(taskRunID string, hold holdrecord.Hold, answer Answer, 
 func (gate *Gate) spend(request approvalRequest, holdID string) outcome {
 	holdrecord.Spend(gate.taskRuns, request.taskRunID, holdID, request.toolDefinition.Name, request.toolInput)
 	return outcome{kind: outcomeApproved, holdID: holdID}
+}
+
+func (gate *Gate) askWithTheTurnClockStopped(ctx context.Context, hold holdrecord.Hold) Answer {
+	resume := turnclock.Pause(ctx)
+	defer resume()
+	return gate.asker.Ask(ctx, hold)
 }

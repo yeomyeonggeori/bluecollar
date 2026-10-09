@@ -164,7 +164,7 @@ func (agentTurnRunner *AgentTurnRunner) finalizeIfSatisfiedOrFail(ctx context.Co
 	if ctx.Err() != nil {
 		return agentTurnRunner.abandonedTurnResult(ctx, state.TaskRunID, request, ctx.Err(), "the turn's caller context ended before the agent could finish: "+errorString(ctx.Err()), state.Attachments), nil
 	}
-	if errors.Is(effortError, context.DeadlineExceeded) || agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
+	if errors.Is(effortError, context.DeadlineExceeded) || agentTurnRunner.currentEffortElapsed(ctx, request.EffortStartedAt) {
 		return agentTurnRunner.stopAtElapsedLimit(ctx, state.TaskRunID, request, state, usedIterationCount)
 	}
 	return agentTurnRunner.failTurnWithContext(ctx, state.TaskRunID, request, reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)

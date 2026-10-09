@@ -29,6 +29,7 @@ The documentation is [DOCS.md](DOCS.md), published at [bluecollar.intern.kim](ht
 | `.dependency/blueprotocol/` | the contract packages `agentcontract`, `toolcontract`, `model`, `taskstate`, `holdrecord`, `acpupdate` and `evaltest`, shared with the host as the blueprotocol submodule |
 | `turnclassification/` | the names and normalization of a turn's route, task shape, task level and deliverable, shared by `intake` and `loop` |
 | `iterationcost/` | what one iteration costs, the patience a model call is given and the budget profile of each task level |
+| `turnclock/` | the turn's clock, which stops while an approval waits on the requester |
 | `llmcalls/` | the schema names of the model calls bluecollar makes |
 | `toolexposure/` | how many tools a plan step is expected to expose |
 | `messageimages/` | the image parts of a message |

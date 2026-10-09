@@ -23,7 +23,7 @@ func (agentTurnRunner *AgentTurnRunner) completeOrStopForLimit(ctx context.Conte
 }
 
 func (agentTurnRunner *AgentTurnRunner) stopForElapsedLimitIfReached(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, usedIterationCount int) (AgentTurnResult, bool, error) {
-	if ctx.Err() != nil || !agentTurnRunner.currentEffortElapsed(request.EffortStartedAt) {
+	if ctx.Err() != nil || !agentTurnRunner.currentEffortElapsed(ctx, request.EffortStartedAt) {
 		return AgentTurnResult{}, false, nil
 	}
 	if agentTurnRunner.options.ElapsedBudgetSource != ElapsedBudgetFromCaller && agentTurnRunner.extendBudgetOneLevelOnce(taskRunID, state) {
