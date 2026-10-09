@@ -236,3 +236,99 @@ func TestAFinishCarryingAFileStagedEarlierRewritesTheReplyWithThatFilesLatestDel
 		t.Fatalf("expected only the latest delivery's notes, got %q", recorder.prompts[0])
 	}
 }
+
+type rewritingAfterDeliveryModel struct {
+	actions        []model.ChatCompletionToolCall
+	rewritePrompts []string
+}
+
+func (languageModel *rewritingAfterDeliveryModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (languageModel *rewritingAfterDeliveryModel) GenerateStructuredResponse(context.Context, model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	return model.StructuredResponse{}, nil
+}
+
+func (languageModel *rewritingAfterDeliveryModel) GenerateChatCompletion(_ context.Context, request model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	if request.SchemaName == deliveryNotesReplySchemaName {
+		languageModel.rewritePrompts = append(languageModel.rewritePrompts, request.Messages[0].Content)
+		return model.ChatCompletionResponse{FinishReason: "stop", Message: model.ChatCompletionMessage{Role: "assistant", Content: "메모를 첨부했습니다."}}, nil
+	}
+	action := languageModel.actions[0]
+	languageModel.actions = languageModel.actions[1:]
+	return model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{Role: "assistant", ToolCalls: []model.ChatCompletionToolCall{action}}}, nil
+}
+
+const remoteWorkMemoPath = "/workspace/private/people/person-1/documents/memo.docx"
+
+type memoVersion struct {
+	sizeBytes int64
+	note      string
+}
+
+var memoVersions = []memoVersion{
+	{493465, "memo.docx: text the check took out of these places: 기대 효과"},
+	{494316, "memo.docx: text the check took out again after the file was rewritten: 기대 효과"},
+}
+
+func deliverMemoVersions(deliveries *[]string) toolcontract.ToolHandler {
+	return func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		version := memoVersions[min(len(*deliveries), len(memoVersions)-1)]
+		*deliveries = append(*deliveries, string(invocation.Input))
+		return toolcontract.ToolResult{
+			Output:      toolcontract.ToolOutput{Content: "files staged", Data: json.RawMessage(`{}`)},
+			Attachments: []toolcontract.FileAttachment{{DevicePath: remoteWorkMemoPath, Filename: "memo.docx", ContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", SizeBytes: version.sizeBytes}},
+			ReplyNotes:  []string{version.note},
+		}, nil
+	}
+}
+
+func runMemoTurn(t *testing.T, actions ...model.ChatCompletionToolCall) (AgentTurnResult, []string, *rewritingAfterDeliveryModel) {
+	t.Helper()
+	languageModel := &rewritingAfterDeliveryModel{actions: actions}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6})
+	toolSet := newTestToolSet([]string{toolcontract.BashToolName, toolcontract.FileDeliverToolName})
+	registerTestTool(toolSet, testToolDescriptor(toolcontract.BashToolName), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return testToolSuccess("wrote memo.docx"), nil
+	})
+	deliveries := []string{}
+	registerTestTool(toolSet, testToolDescriptor(toolcontract.FileDeliverToolName), deliverMemoVersions(&deliveries))
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterPersonID: "person-1", ConversationID: "conversation-1", Prompt: "재택근무 시범 운영 메모를 docx로 써 주세요.", ToolSet: toolSet})
+	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
+		t.Fatalf("expected the turn to complete, got %v %+v", errorValue, result.TaskRun)
+	}
+	return result, deliveries, languageModel
+}
+
+func stageMemo() model.ChatCompletionToolCall {
+	return nativeAgentActionToolCall(toolcontract.FileDeliverToolName, `{"files":[{"path":"`+remoteWorkMemoPath+`"}]}`)
+}
+
+func finishMemo() model.ChatCompletionToolCall {
+	return nativeAgentActionToolCall("reply", `{"final":true,"message":"`+remoteWorkMemoReply+`","goalStatus":"satisfied","goalSatisfied":true}`)
+}
+
+func TestAFinishCarryingAFileRewrittenAfterItsDeliveryChecksItAgainBeforeAttachingIt(t *testing.T) {
+	rewriteMemo := nativeAgentActionToolCall(toolcontract.BashToolName, `{"command":"office merge report values.json documents/memo.docx"}`)
+
+	result, deliveries, languageModel := runMemoTurn(t, stageMemo(), rewriteMemo, finishMemo())
+
+	if len(deliveries) != 2 {
+		t.Fatalf("expected the rewritten file delivered again at the finish, got %d deliveries %q", len(deliveries), deliveries)
+	}
+	if len(result.Attachments) != 1 || result.Attachments[0].SizeBytes != memoVersions[1].sizeBytes {
+		t.Fatalf("expected the finish to carry the rechecked version, got %+v", result.Attachments)
+	}
+	if len(languageModel.rewritePrompts) != 1 || !strings.Contains(languageModel.rewritePrompts[0], memoVersions[1].note) || strings.Contains(languageModel.rewritePrompts[0], memoVersions[0].note) {
+		t.Fatalf("expected the reply told only what the recheck reported, got %q", languageModel.rewritePrompts)
+	}
+}
+
+func TestAFinishCarryingAFileNothingCouldChangeSinceItsDeliveryDoesNotCheckItAgain(t *testing.T) {
+	result, deliveries, _ := runMemoTurn(t, stageMemo(), finishMemo())
+
+	if len(deliveries) != 1 || len(result.Attachments) != 1 || result.Attachments[0].SizeBytes != memoVersions[0].sizeBytes {
+		t.Fatalf("expected one delivery carried as it was, got %d deliveries %+v", len(deliveries), result.Attachments)
+	}
+}

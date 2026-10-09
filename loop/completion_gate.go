@@ -142,6 +142,7 @@ func validateCompletionFacts(request AgentTurnRequest, observations []turnObserv
 	if len(attachments) == 0 {
 		attachments = deliveredAttachments(observations)
 	}
+	attachments = latestDeliveredVersions(observations, attachments)
 	if failedDelivery, isUndelivered := undeliveredFailedDelivery(observations); isUndelivered {
 		return completionGateResult{Message: undeliveredFailedDeliveryMessage(failedDelivery), EvidenceKind: evidenceKindAttachment}
 	}

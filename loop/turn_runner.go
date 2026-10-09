@@ -420,7 +420,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			}
 			continue
 		case "finish":
-			deliveredDocument, _, isDelivered := agentTurnRunner.deliverReplyAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
+			deliveredDocument, isDelivered := agentTurnRunner.deliverFinishAttachments(workContext, taskRun.TaskRunID, iterationRequest, &state, successfulToolCalls, actionDocument)
 			if !isDelivered {
 				agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "reply", lastObservationText(state.Observations))
 				if result, shouldStop := stopForNoProgress(stepID); shouldStop {
