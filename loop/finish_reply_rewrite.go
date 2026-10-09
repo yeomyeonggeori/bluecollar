@@ -13,16 +13,17 @@ import (
 
 type finishReplyRewrite struct {
 	unmet         []expectedChange
+	awaiting      []expectedChange
 	deliveryNotes []string
 	carried       []toolcontract.FileAttachment
 }
 
 func (rewrite finishReplyRewrite) isNeeded() bool {
-	return len(rewrite.unmet) > 0 || len(rewrite.deliveryNotes) > 0
+	return len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 || len(rewrite.deliveryNotes) > 0
 }
 
 func (rewrite finishReplyRewrite) schemaName() string {
-	if len(rewrite.unmet) > 0 {
+	if len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 {
 		return unmetChangesReplySchemaName
 	}
 	return deliveryNotesReplySchemaName
@@ -32,7 +33,7 @@ func (agentTurnRunner *AgentTurnRunner) replyForFinish(ctx context.Context, task
 	carried := attachmentsNotYetDelivered(completionGateResult.Attachments, state.DeliveredAttachmentPaths)
 	rewrite := finishReplyRewrite{deliveryNotes: latestDeliveryNotes(state.Observations, carried), carried: carried}
 	if completionGateResult.leavesChangesUnmet() {
-		rewrite.unmet = completionGateResult.ChangeCheck.Unmet
+		rewrite.unmet, rewrite.awaiting = splitAwaitingRequester(*completionGateResult.ChangeCheck)
 	}
 	if !rewrite.isNeeded() {
 		return reply, rewrite.carried
@@ -60,6 +61,16 @@ func (agentTurnRunner *AgentTurnRunner) rewriteFinishReply(ctx context.Context, 
 	return strings.TrimSpace(rewritten)
 }
 
+func splitAwaitingRequester(check changeCheck) ([]expectedChange, []expectedChange) {
+	var unmet []expectedChange
+	for _, change := range check.Unmet {
+		if !containsExpectedChange(check.AwaitsRequester, change) {
+			unmet = append(unmet, change)
+		}
+	}
+	return unmet, check.AwaitsRequester
+}
+
 func latestDeliveryNotes(observations []turnObservation, carried []toolcontract.FileAttachment) []string {
 	notes := []string{}
 	for _, attachment := range carried {
@@ -82,8 +93,8 @@ func latestDeliveryOf(observations []turnObservation, devicePath string) (turnOb
 
 func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
 	sections := []string{reply}
-	if len(rewrite.unmet) > 0 {
-		sections = append(sections, unmetChangesMessage(changeCheck{Unmet: rewrite.unmet}))
+	if len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 {
+		sections = append(sections, unmetChangesMessage(changeCheck{Unmet: append(append([]expectedChange(nil), rewrite.unmet...), rewrite.awaiting...), AwaitsRequester: rewrite.awaiting}))
 	}
 	return strings.Join(append(sections, rewrite.deliveryNotes...), "\n\n")
 }
@@ -93,13 +104,16 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 	if len(rewrite.unmet) > 0 {
 		sections = append(sections, "It was written as though every asked change were done, but the work does not yet carry out these asked changes, and nothing has changed since that was first found:\n"+bulletList(askedWordsOf(rewrite.unmet))+"\nSay plainly what the work still lacks for each of them, without claiming it is done.")
 	}
+	if len(rewrite.awaiting) > 0 {
+		sections = append(sections, "These asked changes need information the person has not given and nothing the work read supports, so the work left that information out instead of making it up:\n"+bulletList(askedWordsOf(rewrite.awaiting))+"\nFor each, name the information that is missing and offer to complete the work once the person gives it, without claiming it is done.")
+	}
 	if len(rewrite.deliveryNotes) > 0 {
 		sections = append(sections, "The latest delivery of each file it carries reports what that file now holds, which the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these, and describe the files only as these reports and the reply agree. A value the delivery left blank is gone from the file: never quote it, describe it as present or offer it back; offer to fill it in once the person gives it.")
 	}
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
 		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention tools, checks, records, evidence identifiers, prompts, or runtime details.",
-		finishReplyFilesFact(rewrite.carried, len(rewrite.unmet) > 0),
+		finishReplyFilesFact(rewrite.carried, len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0),
 		"Original request:\n"+completionReplyOriginalRequest(request),
 		"Reply:\n"+reply,
 	), "\n\n")

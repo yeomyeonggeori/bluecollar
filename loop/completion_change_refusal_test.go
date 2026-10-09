@@ -28,8 +28,8 @@ func TestTheChangeCheckDoesNotRefuseTheRecordedWorkbookAgainOverTheSameState(t *
 	if refusal.IsSatisfied {
 		t.Fatal("expected the first check over the recorded workbook refused")
 	}
-	if len(decisionModel.requests) != 1 {
-		t.Fatalf("expected the same judged state asked about once, got %d decision calls", len(decisionModel.requests))
+	if decisionModel.carriedOutJudgements() != 1 {
+		t.Fatalf("expected the same judged state asked about once, got %d judgements", decisionModel.carriedOutJudgements())
 	}
 	if !repeat.IsSatisfied {
 		t.Fatalf("expected a refusal over the state already refused not repeated, got %+v", repeat)
@@ -55,8 +55,8 @@ func TestTheChangeCheckJudgesAgainOnceTheStateChanges(t *testing.T) {
 	observations = append(observations, another)
 	second := services.runner.evaluateExpectedChanges(context.Background(), taskRun.TaskRunID, request, observations)
 
-	if len(decisionModel.requests) != 2 || second.IsSatisfied {
-		t.Fatalf("expected a changed state judged again and refused again, got %d calls and %+v", len(decisionModel.requests), second)
+	if decisionModel.carriedOutJudgements() != 2 || second.IsSatisfied {
+		t.Fatalf("expected a changed state judged again and refused again, got %d judgements and %+v", decisionModel.carriedOutJudgements(), second)
 	}
 }
 
@@ -106,8 +106,8 @@ func TestAFinishRefusedOverTheSameStateCompletesWithAReplyStatingWhatIsUnmet(t *
 	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the run to finish instead of being refused until its limit, got %v %+v", errorValue, result.TaskRun)
 	}
-	if len(decisionModel.requests) != 1 {
-		t.Fatalf("expected the repeat recognized without asking the decision model again, got %d calls", len(decisionModel.requests))
+	if decisionModel.carriedOutJudgements() != 1 {
+		t.Fatalf("expected the repeat recognized without asking the decision model again, got %d judgements", decisionModel.carriedOutJudgements())
 	}
 	if result.FinishMessage != unmetDeletionReply {
 		t.Fatalf("expected the reply rewritten to state what is unmet, got %q", result.FinishMessage)

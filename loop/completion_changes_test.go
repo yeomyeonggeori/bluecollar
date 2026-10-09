@@ -36,9 +36,21 @@ func (languageModel *stubStructuredLanguageModel) GenerateStructuredResponse(_ c
 
 type scriptedDecisionModel struct {
 	noul       map[string]float64
+	choice     map[string]string
+	gapError   error
 	errorValue error
 	cancel     context.CancelFunc
 	requests   []model.DecisionRequest
+}
+
+func (decisionModel *scriptedDecisionModel) carriedOutJudgements() int {
+	count := 0
+	for _, request := range decisionModel.requests {
+		if _, isAsked := request.Questions[changeQuestionKey(0)]; isAsked {
+			count++
+		}
+	}
+	return count
 }
 
 func (decisionModel *scriptedDecisionModel) Decide(_ context.Context, request model.DecisionRequest) (model.DecisionResponse, error) {
@@ -50,7 +62,14 @@ func (decisionModel *scriptedDecisionModel) Decide(_ context.Context, request mo
 		return model.DecisionResponse{}, decisionModel.errorValue
 	}
 	answers := map[string]model.DecisionAnswer{}
-	for key := range request.Questions {
+	for key, question := range request.Questions {
+		if question.Type == model.DecisionQuestionTypeChoice {
+			if decisionModel.gapError != nil {
+				return model.DecisionResponse{}, decisionModel.gapError
+			}
+			answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice[key]}
+			continue
+		}
 		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeNoul, Noul: decisionModel.noul[key]}
 	}
 	return model.DecisionResponse{Answers: answers}, nil
@@ -208,8 +227,8 @@ func TestJevJudgesAChangeWithNoLookupAndNoRecordedChangeAndALowVerdictLeavesItUn
 
 	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
 
-	if len(decisionModel.requests) != 1 {
-		t.Fatalf("expected Jev asked about a change nothing recorded or looked up, got %d calls", len(decisionModel.requests))
+	if decisionModel.carriedOutJudgements() != 1 {
+		t.Fatalf("expected Jev asked about a change nothing recorded or looked up, got %d calls", decisionModel.carriedOutJudgements())
 	}
 	if errorValue != nil || len(check.Unmet) != 1 || len(check.Unrecorded) != 1 {
 		t.Fatalf("expected the unrecorded change to be unmet, got %+v error=%v", check, errorValue)
@@ -467,6 +486,7 @@ type deliveredOfficeFileCase struct {
 	SizeBytes    int64           `json:"sizeBytes"`
 	Holds        json.RawMessage `json:"holds"`
 	IsCarriedOut bool            `json:"isCarriedOut"`
+	Gap          string          `json:"gap,omitempty"`
 }
 
 func deliveredOfficeFileCases(t *testing.T) []deliveredOfficeFileCase {
