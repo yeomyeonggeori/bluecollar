@@ -90,9 +90,6 @@ func liftBoundedImmediateReplyToMaintenance(decision turnclassification.TurnDeci
 
 func normalizeDecidedExecution(decision turnclassification.TurnDecision, request agentcontract.AgentRequest) (turnclassification.TurnDecision, error) {
 	decision = canonicalizeTurnDecision(decision)
-	if decision.Route == agentcontract.TurnRouteConsume {
-		decision.InitialToolNames = nil
-	}
 	if isBareContinuation(decision) {
 		return normalizeDecidedLanguage(decision, request), nil
 	}

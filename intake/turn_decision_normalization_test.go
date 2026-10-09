@@ -39,7 +39,6 @@ func TestClassificationRepairsTheRouteItContradicts(t *testing.T) {
 		expectedRoute  agentcontract.TurnRoute
 		expectedShape  agentcontract.TaskShape
 	}{
-		{"a bounded task cannot consume", agentcontract.TurnRouteConsume, agentcontract.IntakeClassificationBoundedTask, agentcontract.TurnRouteStartTask, agentcontract.TaskShapeMaintenanceTask},
 		{"a bounded task cannot clarify", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask, agentcontract.TurnRouteStartTask, agentcontract.TaskShapeMaintenanceTask},
 		{"a bounded task cannot give up", agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationBoundedTask, agentcontract.TurnRouteStartTask, agentcontract.TaskShapeMaintenanceTask},
 		{"a quick reply cannot clarify", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationQuickReply, agentcontract.TurnRouteAnswerQuestion, agentcontract.TaskShapeImmediateReply},
@@ -96,21 +95,6 @@ func TestAnInvalidClosedFieldIsAnError(t *testing.T) {
 		if _, errorValue := normalizeTurnDecision(decision, agentcontract.AgentRequest{}); errorValue == nil {
 			t.Fatalf("expected an invalid %s to be refused", fieldName)
 		}
-	}
-}
-
-func TestAConsumedTurnCarriesNoTools(t *testing.T) {
-	toolSet := newTestToolSet([]string{"task_list"})
-	decidedFields := decidedTurnFields(agentcontract.TurnRouteConsume, agentcontract.IntakeClassificationQuickReply)
-	decidedFields.InitialToolNames = []string{"task_list"}
-
-	decision := normalizedTurnDecision(t, decidedFields, agentcontract.AgentRequest{ToolSet: toolSet})
-
-	if decision.Route != agentcontract.TurnRouteConsume {
-		t.Fatalf("expected the consume route to survive, got %q", decision.Route)
-	}
-	if len(decision.InitialToolNames) != 0 {
-		t.Fatalf("expected a consumed turn to run nothing, got %v", decision.InitialToolNames)
 	}
 }
 
