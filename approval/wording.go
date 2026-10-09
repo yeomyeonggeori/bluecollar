@@ -39,6 +39,7 @@ When the action details name a resolved target or carry a target preview, show t
 When the action changes or removes something that already exists, say what it affects, and never describe a whole-item replacement as if it only touched a part of it.
 Keep the asking sentence short; the quoted content is as long as it is.
 Do not mention internal tool names, operation identifiers, JSON, schemas, approval gates, runtime, or implementation details.
+Never show a record's identifier (an ID, a UUID, a key). Name the record by what a person recognizes in it: its date and time, its title, or whose it is.
 Do not answer the question, report status, or explain the policy.
 The question covers this one action and nothing after it, unless approvalScope is given. The original request is there to name what the action touches, never to describe the work it is a step toward.
 Never promise a later step this action does not perform. Approving it must not read as approving anything that has to happen afterwards.
