@@ -277,14 +277,19 @@ func readTurnFields(request turnclassification.IntakeDecisionRequest, reader ans
 	if errorValue != nil {
 		return turnclassification.TurnDecision{}, errorValue
 	}
-	route := agentcontract.TurnRoute(choices[agentcontract.IntakeQuestionRoute])
+	routeAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionRoute)
+	if errorValue != nil {
+		return turnclassification.TurnDecision{}, errorValue
+	}
+	rawRoute := agentcontract.TurnRoute(strings.TrimSpace(routeAnswer.Choice))
+	route := routeByGroupedBelief(routeAnswer)
 	classification := classificationOf(route, needsTool)
 	if route == agentcontract.TurnRouteClarify && needsTool && hasIndependentWork {
 		classification = agentcontract.IntakeClassificationBoundedTask
 	}
 	turnFields := turnclassification.TurnDecision{
 		Route:                   route,
-		RawDecisionRoute:        route,
+		RawDecisionRoute:        rawRoute,
 		Classification:          classification,
 		HasIndependentWork:      hasIndependentWork,
 		ExpectedToolCount:       expectedToolCount,
