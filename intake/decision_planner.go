@@ -293,7 +293,7 @@ func readDecidedWork(request turnclassification.IntakeDecisionRequest, reader an
 	if errorValue != nil {
 		return "", errorValue
 	}
-	if work := ReadWork(answer); work != "" {
+	if work := agentcontract.ReadWork(answer); work != "" {
 		return work, nil
 	}
 	return "", errors.New("intake decision answered " + reader.questionKey(agentcontract.IntakeQuestionWork) + " with an unknown work")

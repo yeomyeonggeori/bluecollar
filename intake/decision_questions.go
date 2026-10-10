@@ -98,7 +98,7 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	}
 	decidedWork := builder.request.DecidedWork
 	if decidedWork == "" {
-		questions[agentcontract.IntakeQuestionWork] = WorkQuestion(builder.about(messageKey), builder.agentName())
+		questions[agentcontract.IntakeQuestionWork] = agentcontract.WorkQuestion(builder.about(messageKey), builder.agentName())
 	}
 	if decidedWork != "" && !decidedWork.IsDoable() {
 		return questions
