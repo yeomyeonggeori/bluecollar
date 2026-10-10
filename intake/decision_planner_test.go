@@ -133,24 +133,20 @@ func TestThePlannerDerivesTheTurnFromTheJudgedWork(t *testing.T) {
 	testCases := []struct {
 		name               string
 		work               agentcontract.Work
-		needsClarification bool
 		wantRoute          agentcontract.TurnRoute
 		wantClassification agentcontract.IntakeClassification
 		wantLevel          agentcontract.TaskLevel
 	}{
-		{"no work is answered in words", agentcontract.WorkNone, false, agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply, agentcontract.TaskLevelLow},
-		{"impossible work is declined", agentcontract.WorkImpossible, false, agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationUnsupported, agentcontract.TaskLevelLow},
-		{"easy work starts at the low level", agentcontract.WorkEasy, false, agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask, agentcontract.TaskLevelLow},
-		{"hard work starts at the high level", agentcontract.WorkHard, false, agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask, agentcontract.TaskLevelHigh},
-		{"work nothing of which can proceed is asked about", agentcontract.WorkNormal, true, agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TaskLevelMedium},
+		{"no work is answered in words", agentcontract.WorkNone, agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply, agentcontract.TaskLevelLow},
+		{"impossible work is declined", agentcontract.WorkImpossible, agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationUnsupported, agentcontract.TaskLevelLow},
+		{"easy work starts at the low level", agentcontract.WorkEasy, agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask, agentcontract.TaskLevelLow},
+		{"hard work starts at the high level", agentcontract.WorkHard, agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask, agentcontract.TaskLevelHigh},
+		{"work nothing of which can start is asked about", agentcontract.WorkUnclear, agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TaskLevelLow},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			outcome := startTaskOutcome()
 			outcome.WorkProbabilities = map[string]float64{string(testCase.work): 1}
-			if testCase.needsClarification {
-				outcome.TurnDecision.Classification = agentcontract.IntakeClassificationNeedsConfirmation
-			}
 			decision := decideOnce(t, NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil), addressedDecisionRequest("이번 주 회의록 정리해줘"))
 
 			if decision.TurnFields.Route != testCase.wantRoute || decision.TurnFields.Classification != testCase.wantClassification {
@@ -159,8 +155,8 @@ func TestThePlannerDerivesTheTurnFromTheJudgedWork(t *testing.T) {
 			if decision.TurnFields.TaskLevel != testCase.wantLevel {
 				t.Fatalf("expected level %q, got %q", testCase.wantLevel, decision.TurnFields.TaskLevel)
 			}
-			if decision.TurnFields.HasIndependentWork == testCase.needsClarification && testCase.work.IsDoable() {
-				t.Fatalf("expected independent work to be the opposite of needing clarification, got %t", decision.TurnFields.HasIndependentWork)
+			if decision.TurnFields.HasIndependentWork != testCase.work.IsDoable() {
+				t.Fatalf("expected independent work exactly when the work is doable, got %t", decision.TurnFields.HasIndependentWork)
 			}
 		})
 	}
@@ -450,8 +446,10 @@ func TestAScheduledFiringIsWorkByTheFactThatItFired(t *testing.T) {
 	if decision.TurnFields.Route != agentcontract.TurnRouteStartTask || decision.TurnFields.TaskLevel != agentcontract.TaskLevelLow {
 		t.Fatalf("expected the firing to start work at its likeliest level, got %q at %q", decision.TurnFields.Route, decision.TurnFields.TaskLevel)
 	}
-	if _, isAsked := questionsFor(firingDecisionRequest("매주 월요일 주간 보고 알림 보내줘"))["m1."+agentcontract.IntakeQuestionClarify]; isAsked {
-		t.Fatal("expected a firing, which has nobody to ask, not to be asked whether to clarify")
+	outcome.WorkProbabilities = map[string]float64{"unclear": 0.7, "easy": 0.3}
+	asking := decideOnce(t, NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil), firingDecisionRequest("매주 월요일 주간 보고 알림 보내줘"))
+	if asking.TurnFields.Route != agentcontract.TurnRouteStartTask {
+		t.Fatalf("expected a firing, which has nobody to ask, never to clarify, got %q", asking.TurnFields.Route)
 	}
 }
 

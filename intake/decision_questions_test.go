@@ -39,26 +39,17 @@ func TestTheWorkQuestionReservesImpossibleForWorkThatCannotBeDone(t *testing.T) 
 	}
 }
 
-func TestClarificationQuestionDefersToolDiscoverableRequirementsToWork(t *testing.T) {
+func TestUnclearWorkDefersToolDiscoverableRequirementsToTheWork(t *testing.T) {
 	questions := questionsFor(addressedDecisionRequest("make a report"))
-	clarifyQuestion := questions["m1."+agentcontract.IntakeQuestionClarify]
-	if clarifyQuestion.Type != model.DecisionQuestionTypeNoul {
-		t.Fatalf("expected clarify to be a typed yes/no question, got %q", clarifyQuestion.Type)
-	}
-	clarifyCriteria := criteriaText(t, clarifyQuestion)
+	workCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionWork])
 	for _, expected := range []string{
-		"requested goal, target, or outcome",
+		"requested goal, target or outcome",
 		"only the sender can resolve it",
-		"independently requested part",
-		"clear target and effect",
-		"only a prerequisite",
-		"an action the sender did not authorize",
-		"Operational details, approval roles",
-		"a tool can inspect or resolve",
-		"Never to ask for approval",
+		"A missing detail the work can look up, infer from context or fill with the plain default is not unclear",
+		"neither is an approval",
 	} {
-		if !strings.Contains(clarifyCriteria, expected) {
-			t.Fatalf("expected the clarify question to include %q, got %s", expected, clarifyCriteria)
+		if !strings.Contains(workCriteria, expected) {
+			t.Fatalf("expected the work question to include %q, got %s", expected, workCriteria)
 		}
 	}
 
@@ -164,8 +155,8 @@ func TestEveryQuestionAboutAFiringSaysItIsTheWorkNow(t *testing.T) {
 	plainRequest := addressedDecisionRequest(scheduleInstruction)
 	plainRequest.ToolSet = newTestToolSet([]string{"schedule_create", "message_send"})
 	plainQuestions := questionsFor(plainRequest)
-	if _, isAsked := plainQuestions["m1."+agentcontract.IntakeQuestionClarify]; !isAsked || len(plainQuestions) != len(firingQuestions)+1 {
-		t.Fatalf("expected the same questions either way but clarify, which a firing has nobody to ask, got %d without a firing and %d with one", len(plainQuestions), len(firingQuestions))
+	if len(plainQuestions) != len(firingQuestions) {
+		t.Fatalf("expected the same questions either way, got %d without a firing and %d with one", len(plainQuestions), len(firingQuestions))
 	}
 	plainPreamble := newQuestionBuilder(plainRequest).about("m1")
 	for questionName, question := range plainQuestions {
@@ -214,7 +205,6 @@ func TestTheJointCallAsksOnlyWhatPlanningATurnNeeds(t *testing.T) {
 	planning := map[string]bool{
 		agentcontract.IntakeQuestionWork:                    true,
 		agentcontract.IntakeQuestionRelation:                true,
-		agentcontract.IntakeQuestionClarify:                 true,
 		agentcontract.IntakeQuestionExpectedToolCount:       true,
 		agentcontract.IntakeQuestionIsExternalSendRequested: true,
 		agentcontract.IntakeQuestionTaskShape:               true,

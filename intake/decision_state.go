@@ -19,6 +19,7 @@ type decisionState struct {
 	Now              string                   `json:"now,omitempty"`
 	Context          []decisionContextMessage `json:"context,omitempty"`
 	Messages         []decisionMessage        `json:"messages"`
+	CallableTools    []string                 `json:"callableTools,omitempty"`
 	AvailableTools   []decisionTool           `json:"availableTools,omitempty"`
 	ToolGuidance     string                   `json:"toolLikelihoodGuidance,omitempty"`
 	PriorTask        *decisionPriorTask       `json:"priorTask,omitempty"`
@@ -87,6 +88,7 @@ func buildDecisionState(request turnclassification.IntakeDecisionRequest, toolDe
 		Now:              agentcontract.FormatContextTimestamp(request.EnvironmentNow, request.Company.TimeZone),
 		Context:          decisionContextMessages(request),
 		Messages:         decisionMessages(request),
+		CallableTools:    resolveCallableToolNames(request),
 		AvailableTools:   toolDescriptions,
 		ToolGuidance:     toolLikelihoodGuidanceFor(toolDescriptions),
 		ResponseLanguage: strings.TrimSpace(request.ResponseLanguage),

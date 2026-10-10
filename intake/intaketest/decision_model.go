@@ -105,8 +105,6 @@ func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool)
 		return workAnswer(outcome), true
 	case agentcontract.IntakeQuestionRelation:
 		return choiceAnswer(scriptedRelation(decision)), true
-	case agentcontract.IntakeQuestionClarify:
-		return noulAnswer(scriptedClassification(decision) == agentcontract.IntakeClassificationNeedsConfirmation), true
 	case agentcontract.IntakeQuestionExpectedToolCount:
 		return choiceAnswer(string(scriptedWorkToolCount(decision))), true
 	case agentcontract.IntakeQuestionSingleToolChoice:
@@ -139,6 +137,8 @@ func ScriptedWork(decision turnclassification.TurnDecision) agentcontract.Work {
 		return agentcontract.WorkNone
 	case agentcontract.IntakeClassificationUnsupported:
 		return agentcontract.WorkImpossible
+	case agentcontract.IntakeClassificationNeedsConfirmation:
+		return agentcontract.WorkUnclear
 	}
 	switch agentcontract.NormalizeTaskLevel(string(decision.TaskLevel)) {
 	case agentcontract.TaskLevelMedium:

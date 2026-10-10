@@ -116,9 +116,6 @@ func (builder questionBuilder) workQuestions(messageKey string) map[string]model
 		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
 		agentcontract.IntakeQuestionDeliverableKind:         builder.deliverableKindQuestion(messageKey),
 	}
-	if canClarify(builder.request) {
-		questions[agentcontract.IntakeQuestionClarify] = builder.clarifyQuestion(messageKey)
-	}
 	if hasActiveGoal(builder.request) {
 		questions[agentcontract.IntakeQuestionRelation] = builder.relationQuestion(messageKey)
 	}
@@ -131,10 +128,6 @@ func (builder questionBuilder) workQuestions(messageKey string) map[string]model
 	return questions
 }
 
-func canClarify(request turnclassification.IntakeDecisionRequest) bool {
-	return request.ScheduledRun.IsEmpty()
-}
-
 var relationRouteNames = []string{string(agentcontract.TurnRouteContinueTask), string(agentcontract.TurnRouteReviseTask), string(agentcontract.TurnRouteStartTask)}
 
 func (builder questionBuilder) relationQuestion(messageKey string) model.DecisionQuestion {
@@ -145,14 +138,6 @@ func (builder questionBuilder) relationQuestion(messageKey string) model.Decisio
 			string(agentcontract.TurnRouteReviseTask):   "it redirects that goal toward a changed target or scope",
 			string(agentcontract.TurnRouteStartTask):    "it plainly starts something unrelated to that goal",
 		}),
-	}.Question()
-}
-
-func (builder questionBuilder) clarifyQuestion(messageKey string) model.DecisionQuestion {
-	return model.NoulQuestion{
-		Instructions:     builder.about(messageKey) + "Must " + builder.agentName() + " ask the sender one question before any of the requested work can proceed?",
-		TrueDescription:  "the requested goal, target, or outcome is still ambiguous after using the visible context, only the sender can resolve it, and no independently requested part with a clear target and effect can proceed without the answer. A step that is only a prerequisite, or an action the sender did not authorize, is not a part that can proceed",
-		FalseDescription: "at least one independently requested part has a clear target and effect and can proceed now. Operational details, approval roles, and requirements a tool can inspect or resolve are not reasons to ask; the work finds those out. Never to ask for approval",
 	}.Question()
 }
 
