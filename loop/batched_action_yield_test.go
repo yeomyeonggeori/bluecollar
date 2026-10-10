@@ -2,7 +2,9 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -13,6 +15,7 @@ import (
 type batchingLanguageModel struct {
 	firstBatch     []model.ChatCompletionToolCall
 	actionRequests int
+	lastRequest    model.ChatCompletionRequest
 }
 
 func (languageModel *batchingLanguageModel) GenerateResponse(context.Context, string) (string, error) {
@@ -31,6 +34,7 @@ func (languageModel *batchingLanguageModel) GenerateChatCompletion(_ context.Con
 		return model.ChatCompletionResponse{FinishReason: "stop", Message: model.ChatCompletionMessage{Role: "assistant", Content: "done"}}, nil
 	}
 	languageModel.actionRequests++
+	languageModel.lastRequest = request
 	if languageModel.actionRequests == 1 {
 		return model.ChatCompletionResponse{FinishReason: "tool_calls", Message: model.ChatCompletionMessage{Role: "assistant", ToolCalls: languageModel.firstBatch}}, nil
 	}
@@ -78,6 +82,48 @@ func TestABatchedCallThatRepeatsAnEarlierOutputHandsTheTurnBackToTheModel(t *tes
 	if languageModel.actionRequests != 2 {
 		t.Fatalf("expected the model to be asked again after the repeat, got %d action requests", languageModel.actionRequests)
 	}
+	if count := toolResultsSaying(languageModel.lastRequest, "Not run: "+batchStoppedByRepeat); count != 4 {
+		t.Fatalf("expected each of the 4 dropped calls to reach the model as not run, found %d", count)
+	}
+}
+
+func TestEveryCallDroppedAfterAFailureReachesTheModelAsNotRun(t *testing.T) {
+	languageModel := &batchingLanguageModel{firstBatch: probeCalls(3)}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 20, TaskLevel: TaskLevelMedium})
+	toolSet := newTestToolSet([]string{"probe"})
+	probeCallCount := 0
+	registerTestTool(toolSet, testToolDescriptor("probe"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		probeCallCount++
+		return toolcontract.ToolResult{}, errors.New("probe failed")
+	})
+	_, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterPersonID: "person-1",
+		ConversationID:    "conversation-1",
+		Prompt:            "check the file",
+		TaskLevel:         TaskLevelMedium,
+		ToolSet:           toolSet,
+		PinnedToolNames:   []string{"probe"},
+	})
+	if errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+
+	if probeCallCount != 1 {
+		t.Fatalf("expected the batch to stop at the failure, ran %d calls", probeCallCount)
+	}
+	if count := toolResultsSaying(languageModel.lastRequest, "Not run: "+batchStoppedByFailure); count != 2 {
+		t.Fatalf("expected both calls after the failure to reach the model as not run, found %d", count)
+	}
+}
+
+func toolResultsSaying(request model.ChatCompletionRequest, text string) int {
+	count := 0
+	for _, message := range request.Messages {
+		if message.Role == "tool" && strings.Contains(message.Content, text) {
+			count++
+		}
+	}
+	return count
 }
 
 func TestABatchStillRunsWhileEachCallReturnsSomethingNew(t *testing.T) {
