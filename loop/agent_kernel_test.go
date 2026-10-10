@@ -304,7 +304,6 @@ func TestAgentKernelRunsIndependentWorkWithPendingPlanInformation(t *testing.T) 
 				TaskLevel:          TaskLevelLow,
 				ResponseLanguage:   "en",
 				HasIndependentWork: testCase.hasIndependentWork,
-				RawDecisionRoute:   TurnRouteClarify,
 				InitialToolNames:   []string{"web_search"},
 			}
 			request := kernelTestRequest("Research a short company profile and ask me which domain to use before publishing.")

@@ -19,12 +19,12 @@ type decisionState struct {
 	Now              string                   `json:"now,omitempty"`
 	Context          []decisionContextMessage `json:"context,omitempty"`
 	Messages         []decisionMessage        `json:"messages"`
+	CallableTools    []string                 `json:"callableTools,omitempty"`
 	AvailableTools   []decisionTool           `json:"availableTools,omitempty"`
 	ToolGuidance     string                   `json:"toolLikelihoodGuidance,omitempty"`
 	PriorTask        *decisionPriorTask       `json:"priorTask,omitempty"`
 	ScheduledRun     *decisionScheduledRun    `json:"scheduledRun,omitempty"`
 	ActiveGoal       *decisionActiveGoal      `json:"activeGoal,omitempty"`
-	GiveUpAllowance  string                   `json:"giveUpAllowedBecause,omitempty"`
 	ResponseLanguage string                   `json:"runtimeResponseLanguage,omitempty"`
 }
 
@@ -88,6 +88,7 @@ func buildDecisionState(request turnclassification.IntakeDecisionRequest, toolDe
 		Now:              agentcontract.FormatContextTimestamp(request.EnvironmentNow, request.Company.TimeZone),
 		Context:          decisionContextMessages(request),
 		Messages:         decisionMessages(request),
+		CallableTools:    resolveCallableToolNames(request),
 		AvailableTools:   toolDescriptions,
 		ToolGuidance:     toolLikelihoodGuidanceFor(toolDescriptions),
 		ResponseLanguage: strings.TrimSpace(request.ResponseLanguage),
@@ -105,9 +106,6 @@ func buildDecisionState(request turnclassification.IntakeDecisionRequest, toolDe
 	}
 	if activeGoal, hasActiveGoal := decisionActiveGoalOf(request.ActiveGoal); hasActiveGoal {
 		state.ActiveGoal = &activeGoal
-	}
-	if request.AllowGiveUp {
-		state.GiveUpAllowance = strings.TrimSpace(request.AllowGiveUpReason)
 	}
 	return state
 }
@@ -196,6 +194,11 @@ func clipToolDescription(description string) string {
 
 func decisionMessageKey(index int) string {
 	return "m" + strconv.Itoa(index+1)
+}
+
+func hasActiveGoal(request turnclassification.IntakeDecisionRequest) bool {
+	_, hasGoal := decisionActiveGoalOf(request.ActiveGoal)
+	return hasGoal
 }
 
 func hasPriorTask(request turnclassification.IntakeDecisionRequest) bool {

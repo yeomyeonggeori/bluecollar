@@ -41,6 +41,7 @@ func revisingTurn(t *testing.T, isHostRunOpenedForThisTurn bool) revisedTurn {
 	request := kernelTestRequest("다시 해봐")
 	request.ToolSet = toolSet
 	request.ExistingTaskRunID = hostTaskRun.TaskRunID
+	request.ActiveGoal = ActiveGoal{TaskRunID: hostTaskRun.TaskRunID, OriginalInstruction: "업무 하나 추가해줘"}
 	request.IsTaskRunOpenedForThisTurn = isHostRunOpenedForThisTurn
 	request.TaskRunChosen = func(taskRunID string) { revised.chosenTaskRunIDs = append(revised.chosenTaskRunIDs, taskRunID) }
 	revised.hostTaskRunID = hostTaskRun.TaskRunID

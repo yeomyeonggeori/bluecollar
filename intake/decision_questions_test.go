@@ -28,49 +28,34 @@ func criteriaText(t *testing.T, question model.DecisionQuestion) string {
 	return question.Instructions + " " + string(document)
 }
 
-func TestTheRouteQuestionReservesGiveUpForImpossibleWork(t *testing.T) {
+func TestTheWorkQuestionReservesImpossibleForWorkThatCannotBeDone(t *testing.T) {
 	questions := questionsFor(addressedDecisionRequest("이 파일로 덱 만들어줘"))
 
-	routeCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionRoute])
-	if !strings.Contains(routeCriteria, "Never for a permission concern, which the operating system decides at execution") {
-		t.Fatalf("expected give_up to stay out of permission decisions, got %s", routeCriteria)
+	workCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionWork])
+	for _, expected := range []string{"Never for a permission concern", "a tool " + addressedDecisionRequest("").AgentIdentity.DisplayName() + " might lack"} {
+		if !strings.Contains(workCriteria, expected) {
+			t.Fatalf("expected impossible work to exclude %q, got %s", expected, workCriteria)
+		}
 	}
 }
 
-func TestClarificationQuestionDefersToolDiscoverableRequirementsToWork(t *testing.T) {
+func TestUnclearWorkDefersToolDiscoverableRequirementsToTheWork(t *testing.T) {
 	questions := questionsFor(addressedDecisionRequest("make a report"))
-	routeCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionRoute])
+	workCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionWork])
 	for _, expected := range []string{
-		"requested goal, target, or outcome",
+		"requested goal, target or outcome",
 		"only the sender can resolve it",
-		"operational details, approval roles",
-		"a tool can inspect or resolve",
+		"A missing detail the work can look up, infer from context or fill with the plain default is not unclear",
+		"neither is an approval",
 	} {
-		if !strings.Contains(routeCriteria, expected) {
-			t.Fatalf("expected the route question to include %q, got %s", expected, routeCriteria)
+		if !strings.Contains(workCriteria, expected) {
+			t.Fatalf("expected the work question to include %q, got %s", expected, workCriteria)
 		}
 	}
 
 	shapeCriteria := criteriaText(t, questions["m1."+agentcontract.IntakeQuestionTaskShape])
 	if !strings.Contains(shapeCriteria, "tool-discoverable operational requirements belong to the work itself") {
 		t.Fatalf("expected approval-gated task shape to exclude tool-discoverable requirements, got %s", shapeCriteria)
-	}
-	independentWorkQuestion := questions["m1."+agentcontract.IntakeQuestionHasIndependentWork]
-	independentWorkCriteria := criteriaText(t, independentWorkQuestion)
-	if independentWorkQuestion.Type != model.DecisionQuestionTypeNoul {
-		t.Fatalf("expected independent work to use a typed yes/no question, got %q", independentWorkQuestion.Type)
-	}
-	for _, expected := range []string{
-		"independently requested part",
-		"clear target and effect",
-		"does not depend on the unresolved answer",
-		"no actionable work was requested",
-		"only a prerequisite",
-		"action the requester did not authorize",
-	} {
-		if !strings.Contains(independentWorkCriteria, expected) {
-			t.Fatalf("expected independent-work question to include %q, got %s", expected, independentWorkCriteria)
-		}
 	}
 	if !strings.Contains(shapeCriteria, "classify the work that can proceed") {
 		t.Fatalf("expected task shape to describe executable work, got %s", shapeCriteria)
@@ -184,20 +169,17 @@ func TestEveryQuestionAboutAFiringSaysItIsTheWorkNow(t *testing.T) {
 	}
 }
 
-func TestTheRouteQuestionDoesNotRepeatTheFiringFact(t *testing.T) {
+func TestTheWorkQuestionDoesNotRepeatTheFiringFact(t *testing.T) {
 	scheduleInstruction := "매일 이 시간에 주간 보고 알림을 보내줘."
 
-	firingRoute := criteriaText(t, questionsFor(firingDecisionRequest(scheduleInstruction))["m1."+agentcontract.IntakeQuestionRoute])
-	if occurrences := strings.Count(firingRoute, firingMessagePreambleEnding); occurrences != 1 {
-		t.Fatalf("expected the firing fact exactly once, got %d in %q", occurrences, firingRoute)
-	}
-	if !strings.Contains(firingRoute, "activeGoal") {
-		t.Fatalf("expected the route question to keep the activeGoal clause, got %q", firingRoute)
+	firingWork := criteriaText(t, questionsFor(firingDecisionRequest(scheduleInstruction))["m1."+agentcontract.IntakeQuestionWork])
+	if occurrences := strings.Count(firingWork, firingMessagePreambleEnding); occurrences != 1 {
+		t.Fatalf("expected the firing fact exactly once, got %d in %q", occurrences, firingWork)
 	}
 
-	plainRoute := criteriaText(t, questionsFor(addressedDecisionRequest(scheduleInstruction))["m1."+agentcontract.IntakeQuestionRoute])
-	if strings.Contains(plainRoute, "scheduledRun") {
-		t.Fatalf("expected no mention of scheduledRun without a scheduled run, got %q", plainRoute)
+	plainWork := criteriaText(t, questionsFor(addressedDecisionRequest(scheduleInstruction))["m1."+agentcontract.IntakeQuestionWork])
+	if strings.Contains(plainWork, "scheduledRun") {
+		t.Fatalf("expected no mention of scheduledRun without a scheduled run, got %q", plainWork)
 	}
 }
 
@@ -210,7 +192,7 @@ func TestTheStateNamesEachMessageTheQuestionsAskAbout(t *testing.T) {
 	if len(state.Messages) != 2 || state.Messages[0].ID != "m1" || state.Messages[1].ID != "m2" {
 		t.Fatalf("expected the messages to be named m1 and m2, got %+v", state.Messages)
 	}
-	if !strings.Contains(questionsFor(request)["m2."+agentcontract.IntakeQuestionRoute].Instructions, "message m2") {
+	if !strings.Contains(questionsFor(request)["m2."+agentcontract.IntakeQuestionWork].Instructions, "message m2") {
 		t.Fatal("expected each question to name the message it asks about")
 	}
 }
@@ -221,12 +203,11 @@ func TestTheJointCallAsksOnlyWhatPlanningATurnNeeds(t *testing.T) {
 	request.PriorTask = agentcontract.PriorTaskContext{TaskRunID: "task-run-0", Prompt: "보고서 정리해줘"}
 	request.ToolSet = newTestToolSet([]string{"task_add"})
 	planning := map[string]bool{
-		agentcontract.IntakeQuestionRoute:                   true,
+		agentcontract.IntakeQuestionWork:                    true,
+		agentcontract.IntakeQuestionRelation:                true,
 		agentcontract.IntakeQuestionExpectedToolCount:       true,
-		agentcontract.IntakeQuestionHasIndependentWork:      true,
 		agentcontract.IntakeQuestionIsExternalSendRequested: true,
 		agentcontract.IntakeQuestionTaskShape:               true,
-		agentcontract.IntakeQuestionLevel:                   true,
 		agentcontract.IntakeQuestionDeliverableKind:         true,
 		agentcontract.IntakeQuestionPriorTaskReference:      true,
 		agentcontract.IntakeQuestionResponseLanguage:        true,

@@ -460,9 +460,9 @@ func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 	}
 }
 
-func TestAgentKernelQuickReplyPromotesToolFailureToRecovery(t *testing.T) {
+func TestAgentKernelEasyWorkPromotesToolFailureToRecovery(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"initialToolNames":["primary_lookup","backup_lookup"],"reason":"quick with useful tool","userFacingReply":""}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"initialToolNames":["primary_lookup","backup_lookup"],"reason":"quick with useful tool","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"primary_lookup","toolInput":{"query":"hello"}}`,
@@ -527,9 +527,9 @@ func TestAgentKernelQuickReplyFailureDoesNotInventToolFailure(t *testing.T) {
 	}
 }
 
-func TestAgentKernelQuickReplyCanUseInitialTool(t *testing.T) {
+func TestAgentKernelEasyWorkUsesItsInitialTool(t *testing.T) {
 	intakeLanguageModel := &sequenceLanguageModel{contents: []string{
-		`{"route":"start_task","classification":"quick_reply","taskShape":"immediate_reply","level":"xlow","requestedOutputFormats":null,"initialToolNames":["schedule_list"],"responseLanguage":"ko","reason":"schedule question","userFacingReply":""}`,
+		`{"route":"start_task","classification":"bounded_task","taskShape":"research_task","level":"low","requestedOutputFormats":null,"initialToolNames":["schedule_list"],"responseLanguage":"ko","reason":"schedule question","userFacingReply":""}`,
 	}}
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"schedule_list","toolInput":{}}`,

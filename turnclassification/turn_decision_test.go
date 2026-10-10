@@ -31,16 +31,15 @@ func TestIndependentWorkFactSurvivesIntakeConversionAndRestoration(t *testing.T)
 		Route:              agentcontract.TurnRouteClarify,
 		TaskLevel:          agentcontract.TaskLevelLow,
 		HasIndependentWork: true,
-		RawDecisionRoute:   agentcontract.TurnRouteClarify,
 	}
 
 	intakeDecision := turnDecision.IntakeDecision()
-	if !intakeDecision.HasIndependentWork || intakeDecision.RawDecisionRoute != agentcontract.TurnRouteClarify {
+	if !intakeDecision.HasIndependentWork {
 		t.Fatalf("expected intake conversion to preserve independent-work facts, got %+v", intakeDecision)
 	}
 
 	restoredDecision := TurnDecision{}.WithRestoredIntakeState(intakeDecision)
-	if !restoredDecision.HasIndependentWork || restoredDecision.RawDecisionRoute != agentcontract.TurnRouteClarify {
+	if !restoredDecision.HasIndependentWork {
 		t.Fatalf("expected restored intake state to preserve independent-work facts, got %+v", restoredDecision)
 	}
 }

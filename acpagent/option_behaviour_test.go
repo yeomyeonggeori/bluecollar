@@ -75,8 +75,9 @@ func TestTheTierThatTheTaskLevelNamesAnswersTheTurn(t *testing.T) {
 	options := testOptions(lowTier)
 	options.LanguageModels.XLow = extraLowTier
 
+	handedOver := agentcontract.AgentTurnRequest{TaskLevel: agentcontract.TaskLevelXLow}
 	host := openPipedHost(t, options, publishedCatalogTransport(t, &hostCalls), &hostClient{})
-	if _, errorValue := host.prompt(t, nil, acp.TextBlock("회의록 정리해줘")); errorValue != nil {
+	if _, errorValue := host.prompt(t, map[string]any{TurnRequestMetaKey: handedOver}, acp.TextBlock("회의록 정리해줘")); errorValue != nil {
 		t.Fatalf("session/prompt: %v", errorValue)
 	}
 

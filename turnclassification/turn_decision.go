@@ -24,7 +24,6 @@ type TurnDecision struct {
 	ClarificationOptions    []agentcontract.ClarificationOption `json:"clarificationOptions,omitempty"`
 	HasIndependentWork      bool                                `json:"hasIndependentWork"`
 	ExpectedToolCount       agentcontract.ExpectedToolCount     `json:"expectedToolCount,omitempty"`
-	RawDecisionRoute        agentcontract.TurnRoute             `json:"rawDecisionRoute,omitempty"`
 	RoutingFallbackReason   string                              `json:"routingFallbackReason,omitempty"`
 }
 
@@ -51,7 +50,6 @@ func (turnDecision TurnDecision) IntakeDecision() agentcontract.IntakeDecision {
 		IsExternalSendRequested: turnDecision.IsExternalSendRequested,
 		HasIndependentWork:      turnDecision.HasIndependentWork,
 		ExpectedToolCount:       turnDecision.ExpectedToolCount,
-		RawDecisionRoute:        turnDecision.RawDecisionRoute,
 		InitialToolNames:        append([]string{}, turnDecision.InitialToolNames...),
 		PriorTaskReference:      NormalizePriorTaskReference(turnDecision.PriorTaskReference),
 		ClarificationQuestion:   turnDecision.ClarificationQuestion,
@@ -71,7 +69,6 @@ func (turnDecision TurnDecision) WithRestoredIntakeState(intakeDecision agentcon
 	turnDecision.IsExternalSendRequested = intakeDecision.IsExternalSendRequested
 	turnDecision.HasIndependentWork = intakeDecision.HasIndependentWork
 	turnDecision.ExpectedToolCount = intakeDecision.ExpectedToolCount
-	turnDecision.RawDecisionRoute = intakeDecision.RawDecisionRoute
 	turnDecision.InitialToolNames = append([]string{}, intakeDecision.InitialToolNames...)
 	return turnDecision
 }

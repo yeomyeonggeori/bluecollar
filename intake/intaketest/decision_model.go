@@ -12,9 +12,9 @@ import (
 )
 
 type Outcome struct {
-	TurnDecision       turnclassification.TurnDecision
-	ToolProbabilities  map[string]float64
-	RouteProbabilities map[string]float64
+	TurnDecision      turnclassification.TurnDecision
+	ToolProbabilities map[string]float64
+	WorkProbabilities map[string]float64
 }
 
 type DecisionModel struct {
@@ -99,37 +99,101 @@ func answerFor(shortName string, question model.DecisionQuestion, outcome Outcom
 }
 
 func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool) {
+	decision := outcome.TurnDecision
 	switch shortName {
-	case agentcontract.IntakeQuestionRoute:
-		return routeAnswer(outcome), true
+	case agentcontract.IntakeQuestionWork:
+		return workAnswer(outcome), true
+	case agentcontract.IntakeQuestionRelation:
+		return choiceAnswer(scriptedRelation(decision)), true
 	case agentcontract.IntakeQuestionExpectedToolCount:
-		return choiceAnswer(string(scriptedExpectedToolCount(outcome.TurnDecision))), true
+		return choiceAnswer(string(scriptedWorkToolCount(decision))), true
 	case agentcontract.IntakeQuestionSingleToolChoice:
-		return choiceAnswer(firstScriptedToolName(outcome.TurnDecision)), true
-	case agentcontract.IntakeQuestionHasIndependentWork:
-		return noulAnswer(outcome.TurnDecision.HasIndependentWork), true
+		return choiceAnswer(firstScriptedToolName(decision)), true
 	case agentcontract.IntakeQuestionIsExternalSendRequested:
-		return noulAnswer(outcome.TurnDecision.IsExternalSendRequested), true
+		return noulAnswer(decision.IsExternalSendRequested), true
 	case agentcontract.IntakeQuestionTaskShape:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskShape), string(agentcontract.TaskShapeImmediateReply))), true
-	case agentcontract.IntakeQuestionLevel:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.TaskLevel), string(agentcontract.TaskLevelLow))), true
+		return choiceAnswer(string(scriptedWorkTaskShape(decision))), true
 	case agentcontract.IntakeQuestionDeliverableKind:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.DeliverableKind), string(agentcontract.DeliverableKindNone))), true
+		return choiceAnswer(orDefault(string(decision.DeliverableKind), string(agentcontract.DeliverableKindNone))), true
 	case agentcontract.IntakeQuestionResponseLanguage:
-		return choiceAnswer(orDefault(outcome.TurnDecision.ResponseLanguage, "other")), true
+		return choiceAnswer(orDefault(decision.ResponseLanguage, "other")), true
 	case agentcontract.IntakeQuestionPriorTaskReference:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone))), true
+		return choiceAnswer(orDefault(string(decision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone))), true
 	}
 	return model.DecisionAnswer{}, false
 }
 
-func routeAnswer(outcome Outcome) model.DecisionAnswer {
-	answer := choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
-	if len(outcome.RouteProbabilities) > 0 {
-		answer.Probabilities = outcome.RouteProbabilities
+func workAnswer(outcome Outcome) model.DecisionAnswer {
+	answer := choiceAnswer(string(ScriptedWork(outcome.TurnDecision)))
+	if len(outcome.WorkProbabilities) > 0 {
+		answer.Probabilities = outcome.WorkProbabilities
 	}
 	return answer
+}
+
+func ScriptedWork(decision turnclassification.TurnDecision) agentcontract.Work {
+	switch scriptedClassification(decision) {
+	case agentcontract.IntakeClassificationQuickReply:
+		return agentcontract.WorkNone
+	case agentcontract.IntakeClassificationUnsupported:
+		return agentcontract.WorkImpossible
+	case agentcontract.IntakeClassificationNeedsConfirmation:
+		return agentcontract.WorkUnclear
+	}
+	switch agentcontract.NormalizeTaskLevel(string(decision.TaskLevel)) {
+	case agentcontract.TaskLevelMedium:
+		return agentcontract.WorkNormal
+	case agentcontract.TaskLevelHigh, agentcontract.TaskLevelXHigh, agentcontract.TaskLevelMax:
+		return agentcontract.WorkHard
+	default:
+		return agentcontract.WorkEasy
+	}
+}
+
+func scriptedClassification(decision turnclassification.TurnDecision) agentcontract.IntakeClassification {
+	if classification := agentcontract.NormalizeIntakeClassification(decision.Classification); classification != "" {
+		return classification
+	}
+	switch decision.Route {
+	case agentcontract.TurnRouteClarify:
+		return agentcontract.IntakeClassificationNeedsConfirmation
+	case agentcontract.TurnRouteGiveUp:
+		return agentcontract.IntakeClassificationUnsupported
+	case agentcontract.TurnRouteAnswerQuestion, agentcontract.TurnRouteAnswerMeta, "":
+		return agentcontract.IntakeClassificationQuickReply
+	}
+	if scriptedExpectedToolCount(decision) == agentcontract.ExpectedToolCountNone {
+		return agentcontract.IntakeClassificationQuickReply
+	}
+	return agentcontract.IntakeClassificationBoundedTask
+}
+
+func scriptedRelation(decision turnclassification.TurnDecision) string {
+	switch decision.Route {
+	case agentcontract.TurnRouteContinueTask, agentcontract.TurnRouteReviseTask:
+		return string(decision.Route)
+	default:
+		return string(agentcontract.TurnRouteStartTask)
+	}
+}
+
+func scriptedWorkToolCount(decision turnclassification.TurnDecision) agentcontract.ExpectedToolCount {
+	if toolCount := scriptedExpectedToolCount(decision); toolCount != agentcontract.ExpectedToolCountNone {
+		return toolCount
+	}
+	return agentcontract.ExpectedToolCountOne
+}
+
+func scriptedWorkTaskShape(decision turnclassification.TurnDecision) agentcontract.TaskShape {
+	if scriptedClassification(decision) == agentcontract.IntakeClassificationNeedsConfirmation {
+		return agentcontract.TaskShapeApprovalGatedTask
+	}
+	switch decision.TaskShape {
+	case "", agentcontract.TaskShapeImmediateReply:
+		return agentcontract.TaskShapeMaintenanceTask
+	default:
+		return decision.TaskShape
+	}
 }
 
 func orDefault(value string, defaultValue string) string {

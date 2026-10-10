@@ -133,19 +133,6 @@ func executableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute 
 	}
 }
 
-func classificationOf(route agentcontract.TurnRoute, needsTool bool) agentcontract.IntakeClassification {
-	switch {
-	case route == agentcontract.TurnRouteClarify:
-		return agentcontract.IntakeClassificationNeedsConfirmation
-	case route == agentcontract.TurnRouteGiveUp:
-		return agentcontract.IntakeClassificationUnsupported
-	case needsTool:
-		return agentcontract.IntakeClassificationBoundedTask
-	default:
-		return agentcontract.IntakeClassificationQuickReply
-	}
-}
-
 func answerableTurnRoute(route agentcontract.TurnRoute) agentcontract.TurnRoute {
 	switch route {
 	case agentcontract.TurnRouteClarify, agentcontract.TurnRouteGiveUp:
