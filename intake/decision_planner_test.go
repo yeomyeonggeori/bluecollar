@@ -441,3 +441,29 @@ func TestDecisionPlannerAsksTheLanguageOnlyWhenTheHostNamesNone(t *testing.T) {
 		}
 	}
 }
+
+func TestAScheduledFiringIsWorkByTheFactThatItFired(t *testing.T) {
+	outcome := startTaskOutcome()
+	outcome.WorkProbabilities = map[string]float64{"none": 0.8, "easy": 0.15, "normal": 0.05}
+	decision := decideOnce(t, NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil), firingDecisionRequest("매주 월요일 주간 보고 알림 보내줘"))
+
+	if decision.TurnFields.Route != agentcontract.TurnRouteStartTask || decision.TurnFields.TaskLevel != agentcontract.TaskLevelLow {
+		t.Fatalf("expected the firing to start work at its likeliest level, got %q at %q", decision.TurnFields.Route, decision.TurnFields.TaskLevel)
+	}
+	if _, isAsked := questionsFor(firingDecisionRequest("매주 월요일 주간 보고 알림 보내줘"))["m1."+agentcontract.IntakeQuestionClarify]; isAsked {
+		t.Fatal("expected a firing, which has nobody to ask, not to be asked whether to clarify")
+	}
+}
+
+func TestAMessageThatCarriesAnActiveGoalOnIsWork(t *testing.T) {
+	outcome := startTaskOutcome()
+	outcome.TurnDecision.Route = agentcontract.TurnRouteContinueTask
+	outcome.WorkProbabilities = map[string]float64{"none": 0.9, "easy": 0.1}
+	request := addressedDecisionRequest("응 그렇게 해줘")
+	request.ActiveGoal = agentcontract.ActiveGoal{OriginalInstruction: "다음 주 회의 잡아줘", Status: agentcontract.ActiveGoalStatusBlocked}
+	decision := decideOnce(t, NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil), request)
+
+	if decision.TurnFields.Route != agentcontract.TurnRouteContinueTask {
+		t.Fatalf("expected a yes to a waiting goal to continue it, got %q", decision.TurnFields.Route)
+	}
+}

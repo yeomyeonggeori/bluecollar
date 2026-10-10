@@ -111,11 +111,13 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 
 func (builder questionBuilder) workQuestions(messageKey string) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{
-		agentcontract.IntakeQuestionClarify:                 builder.clarifyQuestion(messageKey),
 		agentcontract.IntakeQuestionExpectedToolCount:       builder.expectedToolCountQuestion(messageKey),
 		agentcontract.IntakeQuestionIsExternalSendRequested: builder.isExternalSendRequestedQuestion(messageKey),
 		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
 		agentcontract.IntakeQuestionDeliverableKind:         builder.deliverableKindQuestion(messageKey),
+	}
+	if canClarify(builder.request) {
+		questions[agentcontract.IntakeQuestionClarify] = builder.clarifyQuestion(messageKey)
 	}
 	if hasActiveGoal(builder.request) {
 		questions[agentcontract.IntakeQuestionRelation] = builder.relationQuestion(messageKey)
@@ -127,6 +129,10 @@ func (builder questionBuilder) workQuestions(messageKey string) map[string]model
 		questions[agentcontract.IntakeQuestionPrefixFormat+formatName] = builder.outputFormatQuestion(messageKey, formatName)
 	}
 	return questions
+}
+
+func canClarify(request turnclassification.IntakeDecisionRequest) bool {
+	return request.ScheduledRun.IsEmpty()
 }
 
 var relationRouteNames = []string{string(agentcontract.TurnRouteContinueTask), string(agentcontract.TurnRouteReviseTask), string(agentcontract.TurnRouteStartTask)}

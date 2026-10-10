@@ -164,8 +164,8 @@ func TestEveryQuestionAboutAFiringSaysItIsTheWorkNow(t *testing.T) {
 	plainRequest := addressedDecisionRequest(scheduleInstruction)
 	plainRequest.ToolSet = newTestToolSet([]string{"schedule_create", "message_send"})
 	plainQuestions := questionsFor(plainRequest)
-	if len(plainQuestions) != len(firingQuestions) {
-		t.Fatalf("expected the same questions either way, got %d without a firing and %d with one", len(plainQuestions), len(firingQuestions))
+	if _, isAsked := plainQuestions["m1."+agentcontract.IntakeQuestionClarify]; !isAsked || len(plainQuestions) != len(firingQuestions)+1 {
+		t.Fatalf("expected the same questions either way but clarify, which a firing has nobody to ask, got %d without a firing and %d with one", len(plainQuestions), len(firingQuestions))
 	}
 	plainPreamble := newQuestionBuilder(plainRequest).about("m1")
 	for questionName, question := range plainQuestions {

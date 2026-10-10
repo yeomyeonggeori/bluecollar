@@ -293,10 +293,24 @@ func readDecidedWork(request turnclassification.IntakeDecisionRequest, reader an
 	if errorValue != nil {
 		return "", errorValue
 	}
+	if isWorkKnownToExist(request, reader) {
+		return agentcontract.ReadDoableWork(answer), nil
+	}
 	if work := agentcontract.ReadWork(answer); work != "" {
 		return work, nil
 	}
 	return "", errors.New("intake decision answered " + reader.questionKey(agentcontract.IntakeQuestionWork) + " with an unknown work")
+}
+
+func isWorkKnownToExist(request turnclassification.IntakeDecisionRequest, reader answerReader) bool {
+	if !request.ScheduledRun.IsEmpty() {
+		return true
+	}
+	if !hasActiveGoal(request) {
+		return false
+	}
+	relation, errorValue := reader.choice(agentcontract.IntakeQuestionRelation)
+	return errorValue == nil && agentcontract.TurnRoute(relation) != agentcontract.TurnRouteStartTask
 }
 
 func readResponseLanguage(request turnclassification.IntakeDecisionRequest, reader answerReader) (string, error) {
@@ -331,7 +345,7 @@ func readWorkTurn(request turnclassification.IntakeDecisionRequest, reader answe
 	if errorValue != nil {
 		return turnclassification.TurnDecision{}, errorValue
 	}
-	needsClarification, errorValue := reader.noul(agentcontract.IntakeQuestionClarify)
+	needsClarification, errorValue := readNeedsClarification(request, reader)
 	if errorValue != nil {
 		return turnclassification.TurnDecision{}, errorValue
 	}
@@ -359,6 +373,13 @@ func readWorkTurn(request turnclassification.IntakeDecisionRequest, reader answe
 	}
 	turnFields.RequestedOutputFormats, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, turnclassification.RequestedOutputFormatNames)
 	return turnFields, errorValue
+}
+
+func readNeedsClarification(request turnclassification.IntakeDecisionRequest, reader answerReader) (bool, error) {
+	if !canClarify(request) {
+		return false, nil
+	}
+	return reader.noul(agentcontract.IntakeQuestionClarify)
 }
 
 func workRoute(choices map[string]string) agentcontract.TurnRoute {
