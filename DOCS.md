@@ -254,6 +254,8 @@ Plans a turn from the facts the host hands over before it runs.
 | `clarify` | ask the one thing only the sender can resolve |
 | `give_up` | the request is impossible or plainly improper on its face |
 
+The route is read by group. The three routes that do work form one group and the two that answer form another; `clarify` and `give_up` stand alone. The group whose probabilities sum highest wins, and its likeliest route is taken. Read by the single likeliest route, a `give_up` at 0.24 would beat work believed at 0.47 split three ways. The model's own pick stays in the ledger as the raw route.
+
 No route ends a turn without work or words. Whether a message deserves only a reaction is the host's call, made before a turn starts.
 
 Intake chooses the level from `low`, `medium` and `high`. A request for slides or another visual deliverable is raised to `xhigh`. When the route starts, continues or revises work, one chat call writes the expected results: what should exist when the work is done and which tool result, file or link proves it. The other routes that need words (`clarify`, `answer_question`, `answer_meta`, `give_up`) get them from the same kind of call.
