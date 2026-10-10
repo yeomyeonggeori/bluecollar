@@ -49,8 +49,9 @@ func takeBatchedAction(state *agentTaskState) (turnActionDocument, bool) {
 }
 
 func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocument, exposedToolNames []string, exposure ToolExposureEvent) {
-	if lastObservationFailed(state.Observations) {
-		clearPendingBatchedActions(state)
+	if reason, mustStop := batchStopReason(state.Observations); mustStop {
+		state.PendingBatchedActions = append(state.PendingBatchedActions, actionDocument.BatchedActions...)
+		dropPendingBatchedActions(state, reason)
 		return
 	}
 	state.PendingBatchedActions = append(state.PendingBatchedActions, actionDocument.BatchedActions...)

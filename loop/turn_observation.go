@@ -10,13 +10,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func lastObservationFailed(observations []turnObservation) bool {
-	if len(observations) == 0 {
-		return false
-	}
-	return observations[len(observations)-1].Failed()
-}
-
 type turnObservation struct {
 	ObservationID        string                        `json:"observationID"`
 	Action               string                        `json:"action"`
