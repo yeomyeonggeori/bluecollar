@@ -31,8 +31,7 @@ type IntakeDecisionRequest struct {
 	ToolSet           *toolcontract.ToolSet
 	CallableToolNames []string
 	ResponseLanguage  string
-	AllowGiveUp       bool
-	AllowGiveUpReason string
+	DecidedWork       agentcontract.Work
 	EnvironmentNow    time.Time
 }
 

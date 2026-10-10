@@ -129,47 +129,82 @@ func TestDecisionPlannerReadsExternalSendIntentAsNoul(t *testing.T) {
 	}
 }
 
-func TestDecisionPlannerPromotesOnlyClarifyWithToolAndIndependentWork(t *testing.T) {
+func TestThePlannerDerivesTheTurnFromTheJudgedWork(t *testing.T) {
 	testCases := []struct {
 		name               string
-		route              agentcontract.TurnRoute
-		classification     agentcontract.IntakeClassification
-		hasIndependentWork bool
-		wantClassification agentcontract.IntakeClassification
+		work               agentcontract.Work
+		needsClarification bool
 		wantRoute          agentcontract.TurnRoute
+		wantClassification agentcontract.IntakeClassification
+		wantLevel          agentcontract.TaskLevel
 	}{
-		{"mixed request", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask, true, agentcontract.IntakeClassificationBoundedTask, agentcontract.TurnRouteStartTask},
-		{"all requested work blocked despite needing a tool", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationBoundedTask, false, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
-		{"independent work needs no tool", agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationQuickReply, true, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TurnRouteClarify},
-		{"unsupported request despite needing a tool", agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationBoundedTask, true, agentcontract.IntakeClassificationUnsupported, agentcontract.TurnRouteGiveUp},
+		{"no work is answered in words", agentcontract.WorkNone, false, agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply, agentcontract.TaskLevelLow},
+		{"impossible work is declined", agentcontract.WorkImpossible, false, agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationUnsupported, agentcontract.TaskLevelLow},
+		{"easy work starts at the low level", agentcontract.WorkEasy, false, agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask, agentcontract.TaskLevelLow},
+		{"hard work starts at the high level", agentcontract.WorkHard, false, agentcontract.TurnRouteStartTask, agentcontract.IntakeClassificationBoundedTask, agentcontract.TaskLevelHigh},
+		{"work nothing of which can proceed is asked about", agentcontract.WorkNormal, true, agentcontract.TurnRouteClarify, agentcontract.IntakeClassificationNeedsConfirmation, agentcontract.TaskLevelMedium},
 	}
-
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
 			outcome := startTaskOutcome()
-			outcome.TurnDecision.Route = testCase.route
-			outcome.TurnDecision.Classification = testCase.classification
-			outcome.TurnDecision.HasIndependentWork = testCase.hasIndependentWork
-			decisionModel := intaketest.NewDecisionModel(outcome)
-			decision := decideOnce(t, NewDecisionPlanner(decisionModel, nil), addressedDecisionRequest("finish the clear part and ask me about the unresolved part"))
+			outcome.WorkProbabilities = map[string]float64{string(testCase.work): 1}
+			if testCase.needsClarification {
+				outcome.TurnDecision.Classification = agentcontract.IntakeClassificationNeedsConfirmation
+			}
+			decision := decideOnce(t, NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil), addressedDecisionRequest("이번 주 회의록 정리해줘"))
 
-			if decision.TurnFields.Classification != testCase.wantClassification {
-				t.Fatalf("expected classification %q, got %q", testCase.wantClassification, decision.TurnFields.Classification)
+			if decision.TurnFields.Route != testCase.wantRoute || decision.TurnFields.Classification != testCase.wantClassification {
+				t.Fatalf("expected %q/%q, got %q/%q", testCase.wantRoute, testCase.wantClassification, decision.TurnFields.Route, decision.TurnFields.Classification)
 			}
-			if decision.TurnFields.HasIndependentWork != testCase.hasIndependentWork {
-				t.Fatalf("expected independent work %t, got %t", testCase.hasIndependentWork, decision.TurnFields.HasIndependentWork)
+			if decision.TurnFields.TaskLevel != testCase.wantLevel {
+				t.Fatalf("expected level %q, got %q", testCase.wantLevel, decision.TurnFields.TaskLevel)
 			}
-			if decision.TurnFields.RawDecisionRoute != testCase.route {
-				t.Fatalf("expected raw route %q, got %q", testCase.route, decision.TurnFields.RawDecisionRoute)
-			}
-			normalizedDecision, errorValue := normalizeTurnDecision(decision.TurnFields, agentcontract.AgentRequest{})
-			if errorValue != nil {
-				t.Fatalf("expected the turn decision to normalize: %v", errorValue)
-			}
-			if normalizedDecision.Route != testCase.wantRoute {
-				t.Fatalf("expected normalized route %q, got %q", testCase.wantRoute, normalizedDecision.Route)
+			if decision.TurnFields.HasIndependentWork == testCase.needsClarification && testCase.work.IsDoable() {
+				t.Fatalf("expected independent work to be the opposite of needing clarification, got %t", decision.TurnFields.HasIndependentWork)
 			}
 		})
+	}
+}
+
+func TestTheRelationToAnActiveGoalIsAskedOnlyWhenThereIsOne(t *testing.T) {
+	outcome := startTaskOutcome()
+	outcome.TurnDecision.Route = agentcontract.TurnRouteReviseTask
+	request := addressedDecisionRequest("아 그거 말고 3월 걸로")
+	request.ActiveGoal = agentcontract.ActiveGoal{OriginalInstruction: "2월 매출 정리"}
+	decision := decideOnce(t, NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil), request)
+	if decision.TurnFields.Route != agentcontract.TurnRouteReviseTask {
+		t.Fatalf("expected the relation to the goal to set the route, got %q", decision.TurnFields.Route)
+	}
+
+	questions := questionsFor(addressedDecisionRequest("2월 매출 정리해줘"))
+	if _, isAsked := questions["m1."+agentcontract.IntakeQuestionRelation]; isAsked {
+		t.Fatal("expected no relation question without an active goal")
+	}
+}
+
+func TestDecidedWorkIsTakenAsAFact(t *testing.T) {
+	request := addressedDecisionRequest("포틀랜드 기준 23시 퇴근 찍어줘")
+	request.DecidedWork = agentcontract.WorkEasy
+	if _, isAsked := questionsFor(request)["m1."+agentcontract.IntakeQuestionWork]; isAsked {
+		t.Fatal("expected the planner not to ask work the host already judged")
+	}
+	outcome := startTaskOutcome()
+	outcome.TurnDecision.Classification = agentcontract.IntakeClassificationUnsupported
+	decision := decideOnce(t, NewDecisionPlanner(intaketest.NewDecisionModel(outcome), nil), request)
+	if decision.TurnFields.Route != agentcontract.TurnRouteStartTask || decision.TurnFields.TaskLevel != agentcontract.TaskLevelLow {
+		t.Fatalf("expected the host's easy work to start at the low level, got %q at %q", decision.TurnFields.Route, decision.TurnFields.TaskLevel)
+	}
+}
+
+func TestWorkThatIsNotDoableAsksTheModelNothing(t *testing.T) {
+	for _, work := range []agentcontract.Work{agentcontract.WorkNone, agentcontract.WorkImpossible} {
+		decisionModel := intaketest.NewDecisionModel(startTaskOutcome())
+		request := addressedDecisionRequest("고마워")
+		request.DecidedWork = work
+		decideOnce(t, NewDecisionPlanner(decisionModel, nil), request)
+		if requests := decisionModel.Requests(); len(requests) != 0 {
+			t.Fatalf("%s: expected no decision call, got %d", work, len(requests))
+		}
 	}
 }
 
@@ -201,8 +236,8 @@ func TestDecisionPlannerRecordsTheCallInTheIntakeLedger(t *testing.T) {
 	if record.AttachmentsDescribed {
 		t.Fatal("expected no described attachments without a describer")
 	}
-	if _, isRecorded := record.DecisionAnswers["m1."+agentcontract.IntakeQuestionRoute]; !isRecorded {
-		t.Fatalf("expected the route distribution in the record, got %+v", record.DecisionAnswers)
+	if _, isRecorded := record.DecisionAnswers["m1."+agentcontract.IntakeQuestionWork]; !isRecorded {
+		t.Fatalf("expected the work distribution in the record, got %+v", record.DecisionAnswers)
 	}
 	if !strings.Contains(string(record.Input), "보고서 정리해줘") {
 		t.Fatalf("expected the record to keep the request the planner was given, got %s", record.Input)
@@ -230,7 +265,7 @@ func TestDecisionPlannerDecidesEveryMessageOfABurstInOneCall(t *testing.T) {
 		t.Fatal("expected the second message to be addressable by its identifier")
 	}
 	questions := decisionModel.Requests()[0].Questions
-	if _, isAsked := questions["m2."+agentcontract.IntakeQuestionRoute]; !isAsked {
+	if _, isAsked := questions["m2."+agentcontract.IntakeQuestionWork]; !isAsked {
 		t.Fatal("expected the question set to repeat per message")
 	}
 }
@@ -362,7 +397,7 @@ func TestDecisionPlannerSendsFactsAloneWithoutADescriber(t *testing.T) {
 func TestDecisionPlannerFailsWhenAnAskedQuestionIsUnanswered(t *testing.T) {
 	request := addressedDecisionRequest("발표자료 초안 만들어줘")
 	request.ToolSet = newTestToolSet([]string{"task_add", "task_list"})
-	droppedQuestionKey := "m1." + agentcontract.IntakeQuestionRoute
+	droppedQuestionKey := "m1." + agentcontract.IntakeQuestionWork
 	planner := NewDecisionPlanner(answerDroppingDecisionModel{outcome: startTaskOutcome(), droppedQuestionKey: droppedQuestionKey}, nil)
 
 	_, errorValue := planner.Decide(context.Background(), request, nil)

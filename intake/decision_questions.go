@@ -1,6 +1,8 @@
 package intake
 
 import (
+	"slices"
+
 	"github.com/yeomyeonggeori/bluecollar/turnclassification"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
@@ -90,17 +92,33 @@ func optionDescriptions(optionNames []string, descriptionsByName map[string]stri
 }
 
 func (builder questionBuilder) routerQuestions(messageKey string) map[string]model.DecisionQuestion {
-	questions := map[string]model.DecisionQuestion{
-		agentcontract.IntakeQuestionRoute:                   builder.routeQuestion(messageKey),
-		agentcontract.IntakeQuestionExpectedToolCount:       builder.expectedToolCountQuestion(messageKey),
-		agentcontract.IntakeQuestionHasIndependentWork:      builder.hasIndependentWorkQuestion(messageKey),
-		agentcontract.IntakeQuestionIsExternalSendRequested: builder.isExternalSendRequestedQuestion(messageKey),
-		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
-		agentcontract.IntakeQuestionLevel:                   builder.levelQuestion(messageKey),
-		agentcontract.IntakeQuestionDeliverableKind:         builder.deliverableKindQuestion(messageKey),
-	}
+	questions := map[string]model.DecisionQuestion{}
 	if needsResponseLanguage(builder.request) {
 		questions[agentcontract.IntakeQuestionResponseLanguage] = builder.responseLanguageQuestion(messageKey)
+	}
+	decidedWork := builder.request.DecidedWork
+	if decidedWork == "" {
+		questions[agentcontract.IntakeQuestionWork] = WorkQuestion(builder.about(messageKey), builder.agentName())
+	}
+	if decidedWork != "" && !decidedWork.IsDoable() {
+		return questions
+	}
+	for name, question := range builder.workQuestions(messageKey) {
+		questions[name] = question
+	}
+	return questions
+}
+
+func (builder questionBuilder) workQuestions(messageKey string) map[string]model.DecisionQuestion {
+	questions := map[string]model.DecisionQuestion{
+		agentcontract.IntakeQuestionClarify:                 builder.clarifyQuestion(messageKey),
+		agentcontract.IntakeQuestionExpectedToolCount:       builder.expectedToolCountQuestion(messageKey),
+		agentcontract.IntakeQuestionIsExternalSendRequested: builder.isExternalSendRequestedQuestion(messageKey),
+		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
+		agentcontract.IntakeQuestionDeliverableKind:         builder.deliverableKindQuestion(messageKey),
+	}
+	if hasActiveGoal(builder.request) {
+		questions[agentcontract.IntakeQuestionRelation] = builder.relationQuestion(messageKey)
 	}
 	if hasPriorTask(builder.request) {
 		questions[agentcontract.IntakeQuestionPriorTaskReference] = builder.priorTaskReferenceQuestion(messageKey)
@@ -111,27 +129,24 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 	return questions
 }
 
-func (builder questionBuilder) routeQuestion(messageKey string) model.DecisionQuestion {
-	agentName := builder.agentName()
+var relationRouteNames = []string{string(agentcontract.TurnRouteContinueTask), string(agentcontract.TurnRouteReviseTask), string(agentcontract.TurnRouteStartTask)}
+
+func (builder questionBuilder) relationQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "What should " + agentName + " do about it? The latest message is authoritative; earlier context only helps read it. When activeGoal is in the state the message is input to that goal unless it plainly starts something unrelated.",
-		OptionDescriptions: optionDescriptions(agentcontract.TurnRouteNames, map[string]string{
-			string(agentcontract.TurnRouteAnswerQuestion): "answer in words right now, from common knowledge, judgment, or what is visible",
-			string(agentcontract.TurnRouteAnswerMeta):     "answer a question about " + agentName + " itself: what it can do, how it works, what it is",
-			string(agentcontract.TurnRouteClarify):        "ask one clarifying question first only when the requested goal, target, or outcome is still ambiguous after using visible context and only the sender can resolve it. Do not block on operational details, approval roles, or requirements a tool can inspect or resolve; start work and let the execution loop discover those. Never to ask for approval.",
-			string(agentcontract.TurnRouteStartTask):      "start work that takes tools and time",
-			string(agentcontract.TurnRouteContinueTask):   "add to, or approve, work already running",
-			string(agentcontract.TurnRouteReviseTask):     "redirect work already running toward a changed target or scope",
-			string(agentcontract.TurnRouteGiveUp):         "say it cannot be done: physically impossible, nonsensical, or plainly improper on its face. Never for a permission concern, which the operating system decides at execution",
+		Instructions: builder.about(messageKey) + "How does the work it asks for stand to activeGoal in the state? The latest message is authoritative; earlier context only helps read it. The message is input to that goal unless it plainly starts something unrelated.",
+		OptionDescriptions: optionDescriptions(relationRouteNames, map[string]string{
+			string(agentcontract.TurnRouteContinueTask): "input to that goal: what it waits for, more of the same work, or an approval",
+			string(agentcontract.TurnRouteReviseTask):   "it redirects that goal toward a changed target or scope",
+			string(agentcontract.TurnRouteStartTask):    "it plainly starts something unrelated to that goal",
 		}),
 	}.Question()
 }
 
-func (builder questionBuilder) hasIndependentWorkQuestion(messageKey string) model.DecisionQuestion {
+func (builder questionBuilder) clarifyQuestion(messageKey string) model.DecisionQuestion {
 	return model.NoulQuestion{
-		Instructions:     builder.about(messageKey) + "Can any independently requested part proceed now, even if another part needs clarification?",
-		TrueDescription:  "at least one separable part is explicitly requested, has a clear target and effect, and does not depend on the unresolved answer",
-		FalseDescription: "no actionable work was requested, all requested work depends on the unresolved answer, or the apparent first step is only a prerequisite, operational detail, or action the requester did not authorize",
+		Instructions:     builder.about(messageKey) + "Must " + builder.agentName() + " ask the sender one question before any of the requested work can proceed?",
+		TrueDescription:  "the requested goal, target, or outcome is still ambiguous after using the visible context, only the sender can resolve it, and no independently requested part with a clear target and effect can proceed without the answer. A step that is only a prerequisite, or an action the sender did not authorize, is not a part that can proceed",
+		FalseDescription: "at least one independently requested part has a clear target and effect and can proceed now. Operational details, approval roles, and requirements a tool can inspect or resolve are not reasons to ask; the work finds those out. Never to ask for approval",
 	}.Question()
 }
 
@@ -139,7 +154,6 @@ func (builder questionBuilder) expectedToolCountQuestion(messageKey string) mode
 	return model.ChoiceQuestion{
 		Instructions: builder.about(messageKey) + "How many tools will doing what it asks call before the work is done?",
 		OptionDescriptions: map[string]string{
-			string(agentcontract.ExpectedToolCountNone):    "none: words from common knowledge, judgment, or the visible conversation are enough. A message that merely mentions work is not a reason to call a tool",
 			string(agentcontract.ExpectedToolCountOne):     "one: a single lookup, a single record, or a single change answers it",
 			string(agentcontract.ExpectedToolCountSeveral): "several: the work reads or records one thing and then sends, records or changes another, so more than one tool is called",
 		},
@@ -154,26 +168,18 @@ func (builder questionBuilder) isExternalSendRequestedQuestion(messageKey string
 	}.Question()
 }
 
+var workTaskShapeNames = slices.DeleteFunc(slices.Clone(agentcontract.TaskShapeNames), func(name string) bool {
+	return name == string(agentcontract.TaskShapeImmediateReply)
+})
+
 func (builder questionBuilder) taskShapeQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
 		Instructions: builder.about(messageKey) + "What shape does the executable work take? If some work can proceed while another part awaits clarification, classify the work that can proceed.",
-		OptionDescriptions: optionDescriptions(agentcontract.TaskShapeNames, map[string]string{
-			string(agentcontract.TaskShapeImmediateReply):    "a tool-free answer; only for a quick reply or an unsupported request",
+		OptionDescriptions: optionDescriptions(workTaskShapeNames, map[string]string{
 			string(agentcontract.TaskShapeResearchTask):      "information acquisition from an external or private source, or synthesis across source material",
 			string(agentcontract.TaskShapeMaintenanceTask):   "work that changes state: adding, updating, or deleting records, files, or settings",
 			string(agentcontract.TaskShapeScheduledTask):     "work the message asks to run later, repeatedly, or on a schedule",
 			string(agentcontract.TaskShapeApprovalGatedTask): "work held for a missing essential choice about the requested goal, target, or outcome that only the requester can resolve; tool-discoverable operational requirements belong to the work itself",
-		}),
-	}.Question()
-}
-
-func (builder questionBuilder) levelQuestion(messageKey string) model.DecisionQuestion {
-	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "How difficult is the work it asks for? This one tier sizes both the model and the work budget.",
-		OptionDescriptions: optionDescriptions(agentcontract.IntakeTaskLevelNames, map[string]string{
-			string(agentcontract.TaskLevelLow):    "ordinary bounded work with a clear short outcome that normally produces one final reply, even when it needs a few tools",
-			string(agentcontract.TaskLevelMedium): "multi-step work, research, or artifact generation, where progress updates are useful",
-			string(agentcontract.TaskLevelHigh):   "long, wide, deployment-shaped, or verification-heavy work",
 		}),
 	}.Question()
 }

@@ -41,7 +41,7 @@ func (planner DecisionPlanner) Decide(ctx context.Context, request turnclassific
 		return turnclassification.IntakeDecisions{}, errors.New("intake decision request carries no message")
 	}
 	describedRequest, hasDescribedAttachments := planner.describeAttachmentsOnlyMessages(ctx, request)
-	calls := planner.decideEveryRequest(ctx, []model.DecisionRequest{buildIntakeDecisionRequest(describedRequest)})
+	calls := planner.decideEveryRequest(ctx, requestsWithQuestions(buildIntakeDecisionRequest(describedRequest)))
 	callError := firstCallError(calls)
 	answers := mergedDecisionAnswers(calls)
 	decisions, readError := planner.readDecisions(describedRequest, answers, callError)
@@ -160,6 +160,16 @@ func buildIntakeDecisionRequest(request turnclassification.IntakeDecisionRequest
 	}
 }
 
+func requestsWithQuestions(requests ...model.DecisionRequest) []model.DecisionRequest {
+	asking := []model.DecisionRequest{}
+	for _, request := range requests {
+		if len(request.Questions) > 0 {
+			asking = append(asking, request)
+		}
+	}
+	return asking
+}
+
 func largestDecisionRequestByteCount(requests []model.DecisionRequest) int {
 	largestByteCount := 0
 	for _, request := range requests {
@@ -256,9 +266,63 @@ func (planner DecisionPlanner) readMessageDecision(request turnclassification.In
 }
 
 func readTurnFields(request turnclassification.IntakeDecisionRequest, reader answerReader) (turnclassification.TurnDecision, error) {
-	choiceNames := []string{agentcontract.IntakeQuestionRoute, agentcontract.IntakeQuestionExpectedToolCount, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionLevel, agentcontract.IntakeQuestionDeliverableKind}
-	if needsResponseLanguage(request) {
-		choiceNames = append(choiceNames, agentcontract.IntakeQuestionResponseLanguage)
+	work, errorValue := readDecidedWork(request, reader)
+	if errorValue != nil {
+		return turnclassification.TurnDecision{}, errorValue
+	}
+	responseLanguage, errorValue := readResponseLanguage(request, reader)
+	if errorValue != nil {
+		return turnclassification.TurnDecision{}, errorValue
+	}
+	switch work {
+	case agentcontract.WorkNone:
+		return wordsTurn(agentcontract.TurnRouteAnswerQuestion, agentcontract.IntakeClassificationQuickReply, responseLanguage), nil
+	case agentcontract.WorkImpossible:
+		return wordsTurn(agentcontract.TurnRouteGiveUp, agentcontract.IntakeClassificationUnsupported, responseLanguage), nil
+	}
+	turnFields, errorValue := readWorkTurn(request, reader, work)
+	turnFields.ResponseLanguage = responseLanguage
+	return turnFields, errorValue
+}
+
+func readDecidedWork(request turnclassification.IntakeDecisionRequest, reader answerReader) (agentcontract.Work, error) {
+	if request.DecidedWork != "" {
+		return request.DecidedWork, nil
+	}
+	answer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionWork)
+	if errorValue != nil {
+		return "", errorValue
+	}
+	if work := ReadWork(answer); work != "" {
+		return work, nil
+	}
+	return "", errors.New("intake decision answered " + reader.questionKey(agentcontract.IntakeQuestionWork) + " with an unknown work")
+}
+
+func readResponseLanguage(request turnclassification.IntakeDecisionRequest, reader answerReader) (string, error) {
+	if !needsResponseLanguage(request) {
+		return "", nil
+	}
+	return reader.choice(agentcontract.IntakeQuestionResponseLanguage)
+}
+
+func wordsTurn(route agentcontract.TurnRoute, classification agentcontract.IntakeClassification, responseLanguage string) turnclassification.TurnDecision {
+	return turnclassification.TurnDecision{
+		Route:              route,
+		Classification:     classification,
+		ExpectedToolCount:  agentcontract.ExpectedToolCountNone,
+		TaskShape:          agentcontract.TaskShapeImmediateReply,
+		TaskLevel:          agentcontract.TaskLevelLow,
+		DeliverableKind:    agentcontract.DeliverableKindNone,
+		ResponseLanguage:   responseLanguage,
+		PriorTaskReference: agentcontract.PriorTaskReferenceNone,
+	}
+}
+
+func readWorkTurn(request turnclassification.IntakeDecisionRequest, reader answerReader, work agentcontract.Work) (turnclassification.TurnDecision, error) {
+	choiceNames := []string{agentcontract.IntakeQuestionExpectedToolCount, agentcontract.IntakeQuestionTaskShape, agentcontract.IntakeQuestionDeliverableKind}
+	if hasActiveGoal(request) {
+		choiceNames = append(choiceNames, agentcontract.IntakeQuestionRelation)
 	}
 	if hasPriorTask(request) {
 		choiceNames = append(choiceNames, agentcontract.IntakeQuestionPriorTaskReference)
@@ -267,9 +331,7 @@ func readTurnFields(request turnclassification.IntakeDecisionRequest, reader ans
 	if errorValue != nil {
 		return turnclassification.TurnDecision{}, errorValue
 	}
-	expectedToolCount := agentcontract.ExpectedToolCount(choices[agentcontract.IntakeQuestionExpectedToolCount])
-	needsTool := expectedToolCount != agentcontract.ExpectedToolCountNone
-	hasIndependentWork, errorValue := reader.noul(agentcontract.IntakeQuestionHasIndependentWork)
+	needsClarification, errorValue := reader.noul(agentcontract.IntakeQuestionClarify)
 	if errorValue != nil {
 		return turnclassification.TurnDecision{}, errorValue
 	}
@@ -277,37 +339,33 @@ func readTurnFields(request turnclassification.IntakeDecisionRequest, reader ans
 	if errorValue != nil {
 		return turnclassification.TurnDecision{}, errorValue
 	}
-	routeAnswer, errorValue := reader.choiceAnswer(agentcontract.IntakeQuestionRoute)
-	if errorValue != nil {
-		return turnclassification.TurnDecision{}, errorValue
-	}
-	rawRoute := agentcontract.TurnRoute(strings.TrimSpace(routeAnswer.Choice))
-	route := routeByGroupedBelief(routeAnswer)
-	classification := classificationOf(route, needsTool)
-	if route == agentcontract.TurnRouteClarify && needsTool && hasIndependentWork {
-		classification = agentcontract.IntakeClassificationBoundedTask
-	}
 	turnFields := turnclassification.TurnDecision{
-		Route:                   route,
-		RawDecisionRoute:        rawRoute,
-		Classification:          classification,
-		HasIndependentWork:      hasIndependentWork,
-		ExpectedToolCount:       expectedToolCount,
+		Route:                   workRoute(choices),
+		Classification:          agentcontract.IntakeClassificationBoundedTask,
+		HasIndependentWork:      !needsClarification,
+		ExpectedToolCount:       agentcontract.ExpectedToolCount(choices[agentcontract.IntakeQuestionExpectedToolCount]),
 		TaskShape:               agentcontract.TaskShape(choices[agentcontract.IntakeQuestionTaskShape]),
-		TaskLevel:               agentcontract.TaskLevel(choices[agentcontract.IntakeQuestionLevel]),
+		TaskLevel:               work.TaskLevel(),
 		DeliverableKind:         agentcontract.DeliverableKind(choices[agentcontract.IntakeQuestionDeliverableKind]),
-		ResponseLanguage:        choices[agentcontract.IntakeQuestionResponseLanguage],
 		IsExternalSendRequested: isExternalSendRequested,
 		PriorTaskReference:      agentcontract.PriorTaskReferenceNone,
+	}
+	if needsClarification {
+		turnFields.Route = agentcontract.TurnRouteClarify
+		turnFields.Classification = agentcontract.IntakeClassificationNeedsConfirmation
 	}
 	if priorTaskChoice, isAsked := choices[agentcontract.IntakeQuestionPriorTaskReference]; isAsked {
 		turnFields.PriorTaskReference = agentcontract.PriorTaskReference(priorTaskChoice)
 	}
 	turnFields.RequestedOutputFormats, errorValue = reader.yesMembers(agentcontract.IntakeQuestionPrefixFormat, turnclassification.RequestedOutputFormatNames)
-	if errorValue != nil {
-		return turnclassification.TurnDecision{}, errorValue
+	return turnFields, errorValue
+}
+
+func workRoute(choices map[string]string) agentcontract.TurnRoute {
+	if relation, isAsked := choices[agentcontract.IntakeQuestionRelation]; isAsked {
+		return agentcontract.TurnRoute(relation)
 	}
-	return turnFields, nil
+	return agentcontract.TurnRouteStartTask
 }
 
 type answerReader struct {
