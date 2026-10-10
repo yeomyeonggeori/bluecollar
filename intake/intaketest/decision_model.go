@@ -12,8 +12,9 @@ import (
 )
 
 type Outcome struct {
-	TurnDecision      turnclassification.TurnDecision
-	ToolProbabilities map[string]float64
+	TurnDecision       turnclassification.TurnDecision
+	ToolProbabilities  map[string]float64
+	RouteProbabilities map[string]float64
 }
 
 type DecisionModel struct {
@@ -100,7 +101,7 @@ func answerFor(shortName string, question model.DecisionQuestion, outcome Outcom
 func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool) {
 	switch shortName {
 	case agentcontract.IntakeQuestionRoute:
-		return choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion))), true
+		return routeAnswer(outcome), true
 	case agentcontract.IntakeQuestionExpectedToolCount:
 		return choiceAnswer(string(scriptedExpectedToolCount(outcome.TurnDecision))), true
 	case agentcontract.IntakeQuestionSingleToolChoice:
@@ -121,6 +122,14 @@ func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool)
 		return choiceAnswer(orDefault(string(outcome.TurnDecision.PriorTaskReference), string(agentcontract.PriorTaskReferenceNone))), true
 	}
 	return model.DecisionAnswer{}, false
+}
+
+func routeAnswer(outcome Outcome) model.DecisionAnswer {
+	answer := choiceAnswer(orDefault(string(outcome.TurnDecision.Route), string(agentcontract.TurnRouteAnswerQuestion)))
+	if len(outcome.RouteProbabilities) > 0 {
+		answer.Probabilities = outcome.RouteProbabilities
+	}
+	return answer
 }
 
 func orDefault(value string, defaultValue string) string {
