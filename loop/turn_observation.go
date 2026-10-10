@@ -10,11 +10,12 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-func lastObservationFailed(observations []turnObservation) bool {
+func lastObservationNeedsTheModel(observations []turnObservation) bool {
 	if len(observations) == 0 {
 		return false
 	}
-	return observations[len(observations)-1].Failed()
+	last := observations[len(observations)-1]
+	return last.Failed() || last.Action == "policy" || last.RepeatsObservationID != ""
 }
 
 type turnObservation struct {

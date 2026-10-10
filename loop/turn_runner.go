@@ -331,6 +331,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			if warning.Observation != nil {
 				state.Observations = append(state.Observations, *warning.Observation)
 			}
+			clearPendingBatchedActions(&state)
 			agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitPressure, marshalEventBody(warning.EventBody))
 			limitPressureWarnings[warning.Stage] = true
 		}

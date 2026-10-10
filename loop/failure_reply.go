@@ -275,36 +275,47 @@ const limitObservationSummaryLineBytes = 2000
 const limitObservationSummaryTotalBytes = 20000
 
 func buildLimitObservationSummary(observations []turnObservation) string {
-	lines := []string{}
+	newestFirst := []string{}
 	usedBytes := 0
 	droppedCount := 0
-	for _, observation := range observations {
-		if observation.Failed() {
+	for index := len(observations) - 1; index >= 0; index-- {
+		line, hasLine := limitObservationSummaryLine(observations[index])
+		if !hasLine {
 			continue
 		}
-		summary := strings.TrimSpace(observation.Summary)
-		if summary == "" {
-			summary = summarizeObservationContent(observation)
-		}
-		if summary == "" {
-			continue
-		}
-		label := strings.TrimSpace(observation.Tool)
-		if label == "" {
-			label = strings.TrimSpace(observation.Action)
-		}
-		line := "- " + label + ": " + truncateForLedger(summary, limitObservationSummaryLineBytes)
-		if usedBytes+len(line) > limitObservationSummaryTotalBytes {
+		if droppedCount > 0 || usedBytes+len(line) > limitObservationSummaryTotalBytes {
 			droppedCount++
 			continue
 		}
-		lines = append(lines, line)
+		newestFirst = append(newestFirst, line)
 		usedBytes += len(line)
 	}
+	lines := []string{}
 	if droppedCount > 0 {
-		lines = append(lines, "…and "+strconv.Itoa(droppedCount)+" more successful observations not shown here.")
+		lines = append(lines, "…"+strconv.Itoa(droppedCount)+" earlier successful observations not shown here.")
+	}
+	for index := len(newestFirst) - 1; index >= 0; index-- {
+		lines = append(lines, newestFirst[index])
 	}
 	return strings.Join(lines, "\n")
+}
+
+func limitObservationSummaryLine(observation turnObservation) (string, bool) {
+	if observation.Failed() {
+		return "", false
+	}
+	summary := strings.TrimSpace(observation.Summary)
+	if summary == "" {
+		summary = summarizeObservationContent(observation)
+	}
+	if summary == "" {
+		return "", false
+	}
+	label := strings.TrimSpace(observation.Tool)
+	if label == "" {
+		label = strings.TrimSpace(observation.Action)
+	}
+	return "- " + label + ": " + truncateForLedger(summary, limitObservationSummaryLineBytes), true
 }
 
 func buildFailureObservationSummary(observations []turnObservation) string {

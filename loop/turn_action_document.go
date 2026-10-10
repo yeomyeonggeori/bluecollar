@@ -49,7 +49,7 @@ func takeBatchedAction(state *agentTaskState) (turnActionDocument, bool) {
 }
 
 func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocument, exposedToolNames []string, exposure ToolExposureEvent) {
-	if lastObservationFailed(state.Observations) {
+	if lastObservationNeedsTheModel(state.Observations) {
 		clearPendingBatchedActions(state)
 		return
 	}
