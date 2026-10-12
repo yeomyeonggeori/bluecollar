@@ -34,12 +34,14 @@ func TestStreamTurnEmitsOrderedProgressBeforeTheResult(t *testing.T) {
 	})
 
 	turnStream := turnstream.New(services.runner, services.taskRunService).StreamTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
-		CheckpointSender:  func(context.Context, AgentCheckpoint) error { return nil },
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "do it",
+		ToolSet:          toolRegistry,
+		PinnedToolNames:  toolRegistry.ListToolNames(),
+		CheckpointSender: func(context.Context, AgentCheckpoint) error { return nil },
 	})
 	collected := collectTurnEvents(turnStream)
 
@@ -117,12 +119,14 @@ func TestStreamTurnAbandonedConsumerDoesNotPanic(t *testing.T) {
 	})
 
 	turnStream := turnstream.New(services.runner, services.taskRunService).StreamTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
-		CheckpointSender:  func(context.Context, AgentCheckpoint) error { return nil },
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "do it",
+		ToolSet:          toolRegistry,
+		PinnedToolNames:  toolRegistry.ListToolNames(),
+		CheckpointSender: func(context.Context, AgentCheckpoint) error { return nil },
 	})
 	for range turnStream.Events {
 		break
@@ -134,11 +138,13 @@ func TestStreamTurnAbandonedConsumerDoesNotPanic(t *testing.T) {
 
 func turnRequestWithTool(services turnRunnerTestServices) AgentTurnRequest {
 	return AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistryWithAlpha(),
-		CheckpointSender:  func(context.Context, AgentCheckpoint) error { return nil },
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "do it",
+		ToolSet:          toolRegistryWithAlpha(),
+		CheckpointSender: func(context.Context, AgentCheckpoint) error { return nil },
 	}
 }
 

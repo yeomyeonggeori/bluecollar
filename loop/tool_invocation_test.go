@@ -21,11 +21,13 @@ func TestAgentTurnRunnerRecordsToolRequestedEvent(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "do it",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to succeed: %v", errorValue)
@@ -50,11 +52,13 @@ func TestAgentTurnRunnerTreatsToolFailureAsObservation(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "do it",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to recover: %v", errorValue)
@@ -79,11 +83,13 @@ func TestAgentTurnRunnerStoresLargeToolResultAsArtifact(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "do it",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to succeed: %v", errorValue)

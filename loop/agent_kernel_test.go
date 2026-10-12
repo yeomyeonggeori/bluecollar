@@ -55,11 +55,13 @@ func newKernelTestServices() (*AgentKernel, *taskstate.TaskRunService) {
 
 func kernelTestRequest(prompt string) AgentRequest {
 	return AgentRequest{
-		RequesterPersonID: "person-kernel-test",
-		ConversationID:    "conversation-kernel-test",
-		Prompt:            prompt,
-		ResponseLanguage:  "ko",
-		ToolSet:           newTestToolSet([]string{"web_search"}),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-kernel-test",
+		},
+		ConversationID:   "conversation-kernel-test",
+		Prompt:           prompt,
+		ResponseLanguage: "ko",
+		ToolSet:          newTestToolSet([]string{"web_search"}),
 	}
 }
 
@@ -975,10 +977,12 @@ func TestAgentKernelCompleteLaunchFailureRedactsRawError(t *testing.T) {
 	agentKernel.UseLanguageModelProvider(failingLanguageModel{})
 
 	result := agentKernel.CompleteLaunchFailure(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-kernel-test",
-		ConversationID:    "conversation-kernel-test",
-		Prompt:            "발표자료 만들어줘",
-		ResponseLanguage:  "ko",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-kernel-test",
+		},
+		ConversationID:   "conversation-kernel-test",
+		Prompt:           "발표자료 만들어줘",
+		ResponseLanguage: "ko",
 	}, "launch", "build_tool_set", errors.New("tool registry mismatch token=launch-secret"))
 
 	if result.TaskRun.Status != agentcontract.TaskStatusFailed {

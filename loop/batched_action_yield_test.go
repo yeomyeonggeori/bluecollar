@@ -59,12 +59,14 @@ func runProbeBatch(t *testing.T, languageModel *batchingLanguageModel, options T
 		return testToolSuccess(probeOutput(probeCallCount)), nil
 	})
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "check the file",
-		TaskLevel:         options.TaskLevel,
-		ToolSet:           toolSet,
-		PinnedToolNames:   []string{"probe"},
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "check the file",
+		TaskLevel:       options.TaskLevel,
+		ToolSet:         toolSet,
+		PinnedToolNames: []string{"probe"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)
@@ -97,12 +99,14 @@ func TestEveryCallDroppedAfterAFailureReachesTheModelAsNotRun(t *testing.T) {
 		return toolcontract.ToolResult{}, errors.New("probe failed")
 	})
 	_, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "check the file",
-		TaskLevel:         TaskLevelMedium,
-		ToolSet:           toolSet,
-		PinnedToolNames:   []string{"probe"},
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "check the file",
+		TaskLevel:       TaskLevelMedium,
+		ToolSet:         toolSet,
+		PinnedToolNames: []string{"probe"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)

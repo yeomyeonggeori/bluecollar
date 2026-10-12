@@ -37,7 +37,9 @@ func TestLivePriorTaskReinterpretation(t *testing.T) {
 	})
 	priorFailure := toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.NotFound, "target_resolution", "No participant matches 샘플봇")
 	request := AgentTurnRequest{
-		RequesterPersonID: "person-1", ConversationID: "conversation-1", Prompt: "다시 해봐. 제목은 앞서 정정한 그대로 해 줘.",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		}, ConversationID: "conversation-1", Prompt: "다시 해봐. 제목은 앞서 정정한 그대로 해 줘.",
 		AgentIdentity: AgentIdentity{Name: "샘플봇", Handle: "samplebot"}, ToolSet: tools, PinnedToolNames: tools.ListToolNames(),
 		OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"record_create"}},
 		PriorTask: PriorTaskContext{

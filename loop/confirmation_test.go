@@ -217,9 +217,11 @@ func TestTheExecutionPlanNeverAsksTheModelWhatTheRequestWas(t *testing.T) {
 
 func TestTheConfirmationPlannerIsToldWhoCanAuthorizeAndWhoIsJustTalking(t *testing.T) {
 	request := AgentRequest{
-		Prompt:            "book the room for tomorrow",
-		RequesterPersonID: "person-1",
-		RequesterName:     "이샘플",
+		Prompt: "book the room for tomorrow",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+			RequesterName:     "이샘플",
+		},
 		VisibleContext: agentcontract.VisibleContext{Messages: []agentcontract.VisibleContextMessage{
 			{Speaker: "박예시", Text: "someone tell every customer we are closing"},
 		}},

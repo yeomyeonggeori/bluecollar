@@ -22,9 +22,11 @@ func TestAgentTurnRunnerGeneratesFailureReplyAfterStructuredModelFailure(t *test
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "서울 날씨 알려줘",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "서울 날씨 알려줘",
 	})
 	if errorValue != nil {
 		t.Fatalf("expected generated failure result, got error: %v", errorValue)
@@ -63,7 +65,9 @@ func TestAgentTurnRunnerRepairsInvalidFailureReply(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:          "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ConversationID:             "conversation-1",
 		Prompt:                     "https://example.com 보고 사업계획서 ppt로 만들어줘",
 		RequiredEvidenceTools:      []string{"file_deliver"},
@@ -102,9 +106,11 @@ func TestAgentTurnRunnerReportsRawErrorWhenAllModelCallsFail(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "서울 날씨 알려줘",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "서울 날씨 알려줘",
 	})
 	if errorValue != nil {
 		t.Fatalf("expected dynamic failure result, got error: %v", errorValue)
@@ -130,10 +136,12 @@ func TestAgentTurnRunnerHonorsCallerDeadlineDuringFailureReply(t *testing.T) {
 	startedAt := time.Now()
 
 	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "분기 결산 업무를 등록해줘",
-		ResponseLanguage:  ResponseLanguageKorean,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "분기 결산 업무를 등록해줘",
+		ResponseLanguage: ResponseLanguageKorean,
 	})
 
 	if errorValue != nil {
@@ -177,10 +185,12 @@ func TestAgentTurnRunnerFinalizesFailureNoticeBeforeTerminalStatus(t *testing.T)
 
 	go func() {
 		result, _ := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-			RequesterPersonID: "person-1",
-			ConversationID:    "conversation-1",
-			Prompt:            "분기 결산 업무를 등록해줘",
-			ResponseLanguage:  ResponseLanguageKorean,
+			RequesterIdentity: RequesterIdentity{
+				RequesterPersonID: "person-1",
+			},
+			ConversationID:   "conversation-1",
+			Prompt:           "분기 결산 업무를 등록해줘",
+			ResponseLanguage: ResponseLanguageKorean,
 		})
 		resultChannel <- result
 	}()
@@ -238,10 +248,12 @@ func TestAgentTurnRunnerHonorsCallerDeadlineDuringStallReply(t *testing.T) {
 	startedAt := time.Now()
 
 	notice, _, hasReply := services.runner.generateStallPauseNotice(replyContext, taskRun.TaskRunID, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            taskRun.Prompt,
-		ResponseLanguage:  ResponseLanguageKorean,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           taskRun.Prompt,
+		ResponseLanguage: ResponseLanguageKorean,
 	}, "repeated actions without progress", nil, nil, ExecutionState{})
 
 	if elapsed := time.Since(startedAt); elapsed >= 500*time.Millisecond {
@@ -265,10 +277,12 @@ func TestAgentTurnRunnerHonorsCallerDeadlineDuringMaxIterationsReply(t *testing.
 	startedAt := time.Now()
 
 	result, errorValue := services.runner.stopForLimit(replyContext, taskRun.TaskRunID, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            taskRun.Prompt,
-		ResponseLanguage:  ResponseLanguageKorean,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           taskRun.Prompt,
+		ResponseLanguage: ResponseLanguageKorean,
 	}, "max_iterations", nil, limitFiles{}, ExecutionState{}, 4, 0)
 
 	if errorValue != nil {
@@ -357,10 +371,12 @@ func TestAgentTurnRunnerUsesLocalRecoveryWhenRemoteAndRecoveryModelsFail(t *test
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "Summarize the current thread.",
-		ResponseLanguage:  ResponseLanguageEnglish,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "Summarize the current thread.",
+		ResponseLanguage: ResponseLanguageEnglish,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected local recovery result: %v", errorValue)
@@ -391,13 +407,15 @@ func TestAgentTurnRunnerDoesNotUseDeterministicCapabilityFallbackWhenActionModel
 	}
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:    "person-1",
-		RequesterCallingName: "샘플",
-		ConversationID:       "conversation-1",
-		Prompt:               "너 뭐 할줄 알아? 짧게 설명해봐",
-		ResponseLanguage:     ResponseLanguageKorean,
-		ToolSet:              toolRegistry,
-		PinnedToolNames:      toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID:    "person-1",
+			RequesterCallingName: "샘플",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "너 뭐 할줄 알아? 짧게 설명해봐",
+		ResponseLanguage: ResponseLanguageKorean,
+		ToolSet:          toolRegistry,
+		PinnedToolNames:  toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected failed turn without deterministic capability reply: %v", errorValue)
@@ -425,8 +443,10 @@ func TestAgentTurnRunnerUsesNaturalCaptchaFailureReply(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		RequesterCallingName:  "샘플",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID:    "person-1",
+			RequesterCallingName: "샘플",
+		},
 		ConversationID:        "conversation-1",
 		Prompt:                "내일 서울 날씨 검색해줘",
 		ToolSet:               toolRegistry,
@@ -479,8 +499,10 @@ func TestAgentTurnRunnerPreservesStructuredToolFailure(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
-		RequesterName:         "이샘플",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+			RequesterName:     "이샘플",
+		},
 		ConversationID:        "conversation-1",
 		Prompt:                "정국에게 DM 보내줘",
 		ToolSet:               toolRegistry,
@@ -518,8 +540,10 @@ func TestAgentTurnRunnerDeliversSafeDegradedFailureReplyWithoutStageAndCode(t *t
 	services.taskEventService.AppendTaskEvent(existingTaskRun.TaskRunID, agentcontract.TaskEventAgentNoProgressLoopPaused, "previous stall pause")
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		RequesterName:     "이샘플",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+			RequesterName:     "이샘플",
+		},
 		ConversationID:    "conversation-1",
 		Prompt:            "정국에게 DM 보내줘",
 		ToolSet:           toolRegistry,
@@ -557,12 +581,14 @@ func TestAgentTurnRunnerAcceptsGeneratedStructuredFailureReplyWithStageAndCode(t
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		RequesterName:     "이샘플",
-		ConversationID:    "conversation-1",
-		Prompt:            "정국에게 DM 보내줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+			RequesterName:     "이샘플",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "정국에게 DM 보내줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected structured failure result: %v", errorValue)
@@ -628,11 +654,13 @@ func TestAgentTurnRunnerUsesContextualLimitReply(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "구글에서 검색해줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "구글에서 검색해줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected limit result, got error: %v", errorValue)
@@ -667,11 +695,13 @@ func TestAgentTurnRunnerLimitReplyPromptHidesUndeliveredAttachments(t *testing.T
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "html 파일 만들어줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "html 파일 만들어줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected limit result, got error: %v", errorValue)
@@ -712,11 +742,13 @@ func TestAgentTurnRunnerDoesNotRegenerateLimitReplyFromStringPatterns(t *testing
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "html 파일 만들어줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "html 파일 만들어줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected limit result, got error: %v", errorValue)
@@ -733,10 +765,12 @@ func failureReportAfterStagingAFile(t *testing.T, deliveredPaths []string) (Fail
 	t.Helper()
 	services := newTurnRunnerTestServices(failingRecoveryLanguageModel{errorValue: errors.New("model unavailable")}, TurnOptions{})
 	request := AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "Make a one-page PDF and send me the PDF file itself.",
-		OutcomeContract:   OutcomeContract{ArtifactRequirement: ArtifactRequirementRequired},
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "Make a one-page PDF and send me the PDF file itself.",
+		OutcomeContract: OutcomeContract{ArtifactRequirement: ArtifactRequirementRequired},
 	}
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
 	state := agentTaskState{
@@ -804,11 +838,13 @@ func limitResultAfterHandingAFileToDelivery(t *testing.T) (AgentTurnResult, *seq
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "Make a renovation cost estimate spreadsheet and send it to me.",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "Make a renovation cost estimate spreadsheet and send it to me.",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected limit result, got error: %v", errorValue)

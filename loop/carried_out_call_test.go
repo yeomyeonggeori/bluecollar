@@ -18,10 +18,12 @@ func TestATurnStartsKnowingWhatTheHostAlreadyCarriedOut(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "회의록 보내줘",
-		ToolSet:           newTestToolSet([]string{"message_send"}),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "회의록 보내줘",
+		ToolSet:        newTestToolSet([]string{"message_send"}),
 		CarriedOutCalls: []CarriedOutCall{{
 			ToolName:  "message_send",
 			ToolInput: json.RawMessage(`{"to":["alice"],"message":"회의록"}`),
@@ -61,7 +63,9 @@ func carriedOutDeleteTurn(t *testing.T) (turnRunnerTestServices, string) {
 	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.calendar_delete.result", `{"observationID":"obs-001","tool":"calendar_delete"}`)
 
 	services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRun.TaskRunID,
 		ConversationID:    "conversation-1",
 		Prompt:            "확인",
@@ -120,7 +124,9 @@ func TestAResumedTurnKeepsWhatItLearnedBeforeThePause(t *testing.T) {
 	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.message_search.result", `{"observationID":"obs-001","action":"continue","tool":"message_search","output":{"content":"{\"messageIDs\":[\"message-1\"]}"}}`)
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: taskRun.TaskRunID,
 		ConversationID:    "conversation-1",
 		Prompt:            "승인",

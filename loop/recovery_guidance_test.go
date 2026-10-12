@@ -26,7 +26,9 @@ func TestAgentTurnRunnerAllowsCorrectedRetryAfterSafeFailure(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ConversationID:        "conversation-1",
 		Prompt:                "send dm",
 		ToolSet:               toolRegistry,
@@ -108,11 +110,13 @@ func TestAgentTurnRunnerAllowsInspectionAfterAdjacentRecoveryBudgetExhausted(t *
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "look into the task update problem",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"task_update", "file_read", "edit"},
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "look into the task update problem",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: []string{"task_update", "file_read", "edit"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected inspection recovery to continue: %v", errorValue)
@@ -179,11 +183,13 @@ func runTwoRequestCalendarTurn(t *testing.T, languageModel *sequenceLanguageMode
 	services := newTurnRunnerTestServices(languageModel, options)
 	toolRegistry := newCalendarRecoveryToolRegistry(recording)
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "지난 워크숍 회고 일정은 지우고, 상하이 생산 미팅에는 이샘플 님을 넣어줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "지난 워크숍 회고 일정은 지우고, 상하이 생산 미팅에는 이샘플 님을 넣어줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to finish: %v", errorValue)

@@ -51,7 +51,7 @@ func TestAnyHarnessThatWritesTheLedgerIsStreamedWithoutImplementingAStreamingPor
 		taskRunStore.AppendTaskEvent(taskRunID, agentcontract.TaskEventApprovalHoldOpened, `{"toolName":"calendar_delete","confirmation":"지울까요?"}`)
 	})
 
-	stream := streamer.StreamTurn(context.Background(), agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", Prompt: "해줘"})
+	stream := streamer.StreamTurn(context.Background(), agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, Prompt: "해줘"})
 	collected := collectEvents(stream)
 
 	if len(collected) != 3 {
@@ -75,7 +75,7 @@ func TestTheTurnResultSurvivesAConsumerThatNeverReadsProgress(t *testing.T) {
 		}
 	})
 
-	stream := streamer.StreamTurn(context.Background(), agentcontract.AgentTurnRequest{RequesterPersonID: "person-1", Prompt: "해줘"})
+	stream := streamer.StreamTurn(context.Background(), agentcontract.AgentTurnRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"}, Prompt: "해줘"})
 	turnResult, errorValue := stream.Result()
 	if errorValue != nil {
 		t.Fatalf("expected the turn to finish: %v", errorValue)
@@ -91,7 +91,9 @@ func TestATurnJoinsTheTaskRunItWasGivenRatherThanStartingANewOne(t *testing.T) {
 	streamer := New(ledgerWritingHarness{taskRunStore: taskRunService}, taskRunService)
 
 	stream := streamer.StreamTurn(context.Background(), agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: existingTaskRun.TaskRunID,
 		Prompt:            "이어서",
 	})

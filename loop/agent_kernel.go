@@ -140,12 +140,9 @@ func (agentKernel *AgentKernel) RunTurn(responseContext context.Context, request
 
 func (agentKernel *AgentKernel) RunPlannedTurn(responseContext context.Context, request AgentTurnRequest, routing turnclassification.Routing) (AgentTurnResult, error) {
 	return agentKernel.RunAgentRequest(responseContext, routing, AgentRequest{
-		RequesterPersonID:          request.RequesterPersonID,
-		RequesterName:              request.RequesterName,
+		RequesterIdentity:          request.RequesterIdentity.Clone(),
+		Platform:                   request.Platform,
 		AgentIdentity:              request.AgentIdentity,
-		RequesterCallingName:       request.RequesterCallingName,
-		RequesterHandle:            request.RequesterHandle,
-		RequesterCircles:           append([]string{}, request.RequesterCircles...),
 		SourceReference:            request.SourceReference,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
 		ExistingTaskRunID:          request.ExistingTaskRunID,
@@ -372,13 +369,10 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 		RequiredEvidenceTools: append([]string{}, instructionBundle.RequiredEvidenceTools...),
 	}
 	turnRequest := AgentTurnRequest{
-		RequesterPersonID:          request.RequesterPersonID,
+		RequesterIdentity:          request.RequesterIdentity.Clone(),
+		Platform:                   request.Platform,
 		Company:                    agentKernel.companyContext(),
-		RequesterName:              request.RequesterName,
 		AgentIdentity:              request.AgentIdentity,
-		RequesterCallingName:       request.RequesterCallingName,
-		RequesterHandle:            request.RequesterHandle,
-		RequesterCircles:           append([]string{}, request.RequesterCircles...),
 		SourceReference:            request.SourceReference,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
 		ExistingTaskRunID:          request.ExistingTaskRunID,
@@ -467,7 +461,8 @@ func requestStartsFreshTask(turnDecision TurnDecision, request AgentRequest) boo
 
 func launchFailureRequest(request AgentRequest) AgentTurnRequest {
 	return AgentTurnRequest{
-		RequesterPersonID:   request.RequesterPersonID,
+		RequesterIdentity:   request.RequesterIdentity.Clone(),
+		Platform:            request.Platform,
 		AgentIdentity:       request.AgentIdentity,
 		SourceReference:     request.SourceReference,
 		ExistingTaskRunID:   request.ExistingTaskRunID,
@@ -527,7 +522,8 @@ func requiredNextToolNamesForResolvedRequest(activeGoal ActiveGoal, arbitratedTo
 
 func (agentKernel *AgentKernel) completeTurnRouterFailure(responseContext context.Context, request AgentRequest, errorValue error, routerCallRecords []llmCallRecord) AgentTurnResult {
 	result := agentKernel.CompleteLaunchFailure(responseContext, AgentTurnRequest{
-		RequesterPersonID:   request.RequesterPersonID,
+		RequesterIdentity:   request.RequesterIdentity.Clone(),
+		Platform:            request.Platform,
 		SourceReference:     request.SourceReference,
 		ExistingTaskRunID:   request.ExistingTaskRunID,
 		OriginReplyTargetID: request.OriginReplyTargetID,

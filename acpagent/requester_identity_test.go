@@ -12,9 +12,11 @@ import (
 
 func requesterTurnMeta() map[string]any {
 	return map[string]any{TurnRequestMetaKey: agentcontract.AgentTurnRequest{
-		RequesterPersonID: "sample-person-id",
-		RequesterName:     "이샘플",
-		RequesterEmail:    "sample@example.com",
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "sample-person-id",
+			RequesterName:     "이샘플",
+			RequesterEmail:    "sample@example.com",
+		},
 	}}
 }
 

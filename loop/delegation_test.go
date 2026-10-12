@@ -47,10 +47,12 @@ func TestADelegatedTurnReportsBackThroughTheParentsLedger(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 4, MaxToolCallCount: 5, DelegationLimit: 2})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "무엇이 바뀌었는지 알려줘",
-		ToolSet:           newTestToolSet([]string{toolcontract.BashToolName}),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "무엇이 바뀌었는지 알려줘",
+		ToolSet:        newTestToolSet([]string{toolcontract.BashToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to run: %v", errorValue)
@@ -81,7 +83,9 @@ func TestADelegatedChildFromAResumedParentGetsItsOwnTaskRun(t *testing.T) {
 	parentTaskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "무엇이 바뀌었는지 알려줘")
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ExistingTaskRunID: parentTaskRun.TaskRunID,
 		ConversationID:    "conversation-1",
 		Prompt:            "무엇이 바뀌었는지 알려줘",
@@ -176,7 +180,9 @@ func TestADelegatedChildIsDeniedTheApprovalItCannotAskFor(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ConversationID:    "conversation-1",
 		Prompt:            "중복 일정 정리해줘",
 		ResponseLanguage:  ResponseLanguageKorean,
@@ -235,7 +241,9 @@ func TestAStoppedChildsArtifactsSurviveIntoTheParent(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ConversationID:    "conversation-1",
 		Prompt:            "릴리스 노트 정리해줘",
 		ResponseLanguage:  ResponseLanguageKorean,

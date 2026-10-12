@@ -69,8 +69,10 @@ func newConversationSession(ctx context.Context, options runOptions) (*conversat
 
 func (session *conversationSession) runPrompt(ctx context.Context, prompt string) (agentcontract.AgentTurnResult, error) {
 	request := agentcontract.AgentTurnRequest{
-		RequesterPersonID:    "person-local",
-		RequesterName:        currentUserName(),
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-local",
+			RequesterName:     currentUserName(),
+		},
 		ConversationID:       "conversation-local",
 		Prompt:               prompt,
 		AgentIdentity:        agentcontract.AgentIdentity{Name: session.options.agentName},

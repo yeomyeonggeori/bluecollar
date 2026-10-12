@@ -79,8 +79,10 @@ func promptBudgetFixtures() map[string]agentTaskState {
 				Prompt:         "add tomorrow's standup to the calendar",
 				TurnStartedAt:  turnStartedAt,
 				ConversationID: "conversation-1",
-				RequesterName:  "이샘플",
-				ToolSet:        newTestToolSet([]string{toolcontract.EquipToolName, toolcontract.PlanToolName, "calendar_create", "calendar_list"}),
+				RequesterIdentity: RequesterIdentity{
+					RequesterName: "이샘플",
+				},
+				ToolSet: newTestToolSet([]string{toolcontract.EquipToolName, toolcontract.PlanToolName, "calendar_create", "calendar_list"}),
 				AvailableSkills: []SkillInstruction{
 					{Name: "calendar", ToolReferences: []string{"calendar_create", "calendar_list"}},
 					{Name: "direct-message", ToolReferences: []string{"message_send"}},

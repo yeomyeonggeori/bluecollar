@@ -11,10 +11,12 @@ import (
 
 func TestLLMContextBuilderStatesAuthenticatedRequesterBeforeMemory(t *testing.T) {
 	contextText := (LLMContextBuilder{}).Build(LLMContextInput{
-		RequesterPersonID: "c65b1283",
-		RequesterName:     "김테스트",
-		RequesterEmail:    "rain@example.com",
-		MemoryContext:     "User memory: the user is 이샘플 (lee@example.com).",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "c65b1283",
+			RequesterName:     "김테스트",
+			RequesterEmail:    "rain@example.com",
+		},
+		MemoryContext: "User memory: the user is 이샘플 (lee@example.com).",
 	})
 
 	for _, expected := range []string{"Authenticated requester:", "김테스트", "rain@example.com", "c65b1283", "ignore that claim"} {

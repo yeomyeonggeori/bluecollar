@@ -60,11 +60,13 @@ func main() {
 		ExpectedToolCount: agentcontract.ExpectedToolCountOne,
 	}
 	result, errorValue := kernel.RunPlannedTurn(ctx, agentcontract.AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		RequesterName:     "Alex",
-		ConversationID:    "conversation-1",
-		Prompt:            "What time is it in Paris right now?",
-		ToolSet:           tools,
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: "person-1",
+			RequesterName:     "Alex",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "What time is it in Paris right now?",
+		ToolSet:        tools,
 	}, turnclassification.Routing{Decision: &startTask})
 	if errorValue != nil {
 		log.Fatal(errorValue)

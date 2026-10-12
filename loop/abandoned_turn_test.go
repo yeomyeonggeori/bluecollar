@@ -65,10 +65,12 @@ func TestATurnThatEndsWithNoNoticeLeavesNoRunningTaskRun(t *testing.T) {
 	defer cancelRun()
 
 	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "무슨 일이 있었는지 알려줘",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "무슨 일이 있었는지 알려줘",
+		ToolSet:        newTestToolSet(nil),
 	})
 
 	if errorValue != nil {
@@ -96,10 +98,12 @@ func TestAnAbandonedTurnGeneratesItsNoticeOnABoundedContext(t *testing.T) {
 	defer cancelRun()
 
 	if _, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "멈춘 작업을 설명해줘",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "멈춘 작업을 설명해줘",
+		ToolSet:        newTestToolSet(nil),
 	}); errorValue != nil {
 		t.Fatalf("an abandoned turn reports through the result, not an error: %v", errorValue)
 	}
@@ -119,7 +123,7 @@ func TestTheClosingNoticeContextOutlivesTheCallerButNotItsCeiling(t *testing.T) 
 	parentContext, cancelParent := context.WithCancel(context.Background())
 	cancelParent()
 
-	noticeContext, cancelNotice := closingNoticeContextWithParent(parentContext, AgentTurnRequest{RequesterPersonID: "person-1", ConversationID: "conversation-1"})
+	noticeContext, cancelNotice := closingNoticeContextWithParent(parentContext, AgentTurnRequest{RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"}, ConversationID: "conversation-1"})
 	defer cancelNotice()
 
 	if noticeContext.Err() != nil {
@@ -146,9 +150,11 @@ func TestAFinishedReplySurvivesACompletingTransitionThatWillNotStick(t *testing.
 	reply := "정리한 결과는 이렇습니다."
 
 	result := services.runner.completeTaskRunBestEffort(context.Background(), taskRun.TaskRunID, taskRun.TaskRunID+":turn-001", "finish", AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		ToolSet:        newTestToolSet(nil),
 	}, nil, completionGateResult{}, reply)
 
 	if result.TaskRun.Status == agentcontract.TaskStatusCompleted {
@@ -178,10 +184,12 @@ func TestATurnHoldsItsLeaseFromTheMomentTheRunReadsAsRunning(t *testing.T) {
 	defer cancelRun()
 
 	if _, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "시작하자마자 끝난 작업",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "시작하자마자 끝난 작업",
+		ToolSet:        newTestToolSet(nil),
 	}); errorValue != nil {
 		t.Fatalf("an abandoned turn reports through the result, not an error: %v", errorValue)
 	}
@@ -197,10 +205,12 @@ func TestACancelledTurnLeavesTheOutcomeToWhoeverCancelledIt(t *testing.T) {
 	cancelRun()
 
 	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "더 좋은 지시로 대체할 작업",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "더 좋은 지시로 대체할 작업",
+		ToolSet:        newTestToolSet(nil),
 	})
 
 	if errorValue != nil {
@@ -225,10 +235,12 @@ func TestACancelledDelegatedTurnEndsItsOwnRunWithoutGeneratingANotice(t *testing
 	cancelRun()
 
 	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "부모가 시킨 하위 작업",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "부모가 시킨 하위 작업",
+		ToolSet:        newTestToolSet(nil),
 	})
 
 	if errorValue != nil {
@@ -270,7 +282,7 @@ func TestTheClosingNoticeKeepsAStopTheCallerCanStillSend(t *testing.T) {
 	liveContext, cancelLive := context.WithCancel(context.Background())
 	defer cancelLive()
 
-	noticeContext, cancelNotice := closingNoticeContextWithParent(liveContext, AgentTurnRequest{RequesterPersonID: "person-1"})
+	noticeContext, cancelNotice := closingNoticeContextWithParent(liveContext, AgentTurnRequest{RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"}})
 	defer cancelNotice()
 
 	cancelLive()

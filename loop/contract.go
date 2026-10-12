@@ -27,6 +27,7 @@ type (
 	AgentPartSource           = agentcontract.AgentPartSource
 	AgentRequest              = agentcontract.AgentRequest
 	AgentTurnRequest          = agentcontract.AgentTurnRequest
+	RequesterIdentity         = agentcontract.RequesterIdentity
 	CarriedOutCall            = agentcontract.CarriedOutCall
 	AgentTurnResult           = agentcontract.AgentTurnResult
 	ApprovalSignal            = agentcontract.ApprovalSignal

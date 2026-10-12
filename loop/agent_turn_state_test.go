@@ -870,9 +870,11 @@ func TestBuildAgentActionRequestPreservesNativeToolCallingWireShape(t *testing.T
 	})
 	state := agentTaskState{
 		Request: AgentTurnRequest{
-			RequesterPersonID: "person-1",
-			ConversationID:    "conversation-1",
-			Prompt:            "publish it",
+			RequesterIdentity: RequesterIdentity{
+				RequesterPersonID: "person-1",
+			},
+			ConversationID: "conversation-1",
+			Prompt:         "publish it",
 			VisibleContext: VisibleContext{Messages: []VisibleContextMessage{{
 				Speaker: "Lee",
 				Text:    "Please update the task.",

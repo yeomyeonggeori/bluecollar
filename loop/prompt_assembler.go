@@ -26,18 +26,15 @@ type InjectedContextInput struct {
 
 func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 	contextInput := LLMContextInput{
-		ResponseLanguage:     input.RuntimeRequest.ResponseLanguage,
-		RequesterPersonID:    input.RuntimeRequest.RequesterPersonID,
-		RequesterName:        input.RuntimeRequest.RequesterName,
-		RequesterCallingName: input.RuntimeRequest.RequesterCallingName,
-		RequesterEmail:       input.RuntimeRequest.RequesterEmail,
-		Company:              input.RuntimeRequest.Company,
-		UserPrompt:           input.RuntimeRequest.Prompt,
-		InputParts:           append([]AgentPart{}, input.RuntimeRequest.InputParts...),
-		TurnStartedAt:        input.TurnStartedAt,
-		EnvironmentNow:       input.EnvironmentNow,
-		InstructionPrompt:    input.InstructionPrompt,
-		ToolDescription:      input.ToolDescription,
+		ResponseLanguage:  input.RuntimeRequest.ResponseLanguage,
+		RequesterIdentity: input.RuntimeRequest.RequesterIdentity.Clone(),
+		Company:           input.RuntimeRequest.Company,
+		UserPrompt:        input.RuntimeRequest.Prompt,
+		InputParts:        append([]AgentPart{}, input.RuntimeRequest.InputParts...),
+		TurnStartedAt:     input.TurnStartedAt,
+		EnvironmentNow:    input.EnvironmentNow,
+		InstructionPrompt: input.InstructionPrompt,
+		ToolDescription:   input.ToolDescription,
 		WorkspaceContext: WorkspaceContext{
 			RootPath:          input.RuntimeRequest.WorkspaceRootPath,
 			DefaultPath:       input.RuntimeRequest.WorkspaceDefaultPath,

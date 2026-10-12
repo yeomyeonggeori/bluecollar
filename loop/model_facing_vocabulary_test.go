@@ -55,9 +55,11 @@ func kernelPromptStates() map[string]agentTaskState {
 		Prompt:            "어제 회의록을 정리해서 파일로 보내줘",
 		WorkspaceRootPath: "/workspace",
 		ConversationID:    "conversation-1",
-		RequesterName:     "이샘플",
-		TaskLevel:         TaskLevelMedium,
-		ToolSet:           kernelToolSet,
+		RequesterIdentity: RequesterIdentity{
+			RequesterName: "이샘플",
+		},
+		TaskLevel: TaskLevelMedium,
+		ToolSet:   kernelToolSet,
 		OutcomeContract: OutcomeContract{
 			ArtifactRequirement: ArtifactRequirementRequired,
 			ExpectedResults:     []ExpectedResult{{ID: "attached-file", Type: ExpectedResultTypeFile, Description: "정리된 회의록 파일", Required: true}},
