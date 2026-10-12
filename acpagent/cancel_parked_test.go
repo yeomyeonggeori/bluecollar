@@ -30,7 +30,7 @@ func TestAHostCancelLeavesAParkedRunParkedAndCancelsARunningOne(t *testing.T) {
 				t.Fatalf("session/new: %v", errorValue)
 			}
 			openSession, _ := runningAgent.session(newSession.SessionId)
-			taskRun := openSession.taskRuns.CreateTaskRunWithOrigin(requesterPersonID, taskstate.TaskRunOrigin{}, "book a room")
+			taskRun := openSession.taskRuns.CreateTaskRunWithOrigin("sample-person-id", taskstate.TaskRunOrigin{}, "book a room")
 			openSession.taskRuns.AdvanceTaskRun(taskRun.TaskRunID, "default")
 			openSession.rememberTaskRun(taskRun.TaskRunID)
 			testCase.park(openSession, taskRun.TaskRunID)

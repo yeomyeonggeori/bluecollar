@@ -9,7 +9,7 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 )
 
-const requesterPersonID = "bluecollar"
+const standaloneRequesterPersonID = "bluecollar"
 
 const (
 	TaskRunMetaKey           = "bluecollar.dev/task-run"
