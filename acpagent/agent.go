@@ -163,7 +163,7 @@ func routedAsThePersonWroteIt(turnRequest agentcontract.AgentTurnRequest, prompt
 
 func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest) agentcontract.AgentTurnRequest {
 	turnRequest, _ := turnRequestOfMeta(request.Meta)
-	turnRequest.RequesterPersonID = requesterPersonID
+	turnRequest.RequesterPersonID = firstNonEmpty(turnRequest.RequesterPersonID, standaloneRequesterPersonID)
 	turnRequest.ConversationID = firstNonEmpty(turnRequest.ConversationID, string(request.SessionId))
 	turnRequest.ExistingTaskRunID = openSession.currentTaskRunID()
 	turnRequest.Prompt = promptText(request.Prompt)
@@ -259,16 +259,15 @@ func (runningAgent *Agent) Cancel(_ context.Context, notification acp.CancelNoti
 	if taskRunID == "" {
 		return nil
 	}
-	if openSession.isRunParked(taskRunID) {
+	taskRun, isFound := openSession.taskRuns.FindTaskRun(taskRunID)
+	if !isFound {
 		return nil
 	}
-	openSession.taskRuns.CancelTaskRunWithReason(taskRunID, requesterPersonID, "the host cancelled this turn")
+	if taskRun.Status == agentcontract.TaskStatusWaitingUserInput || taskRun.Status == agentcontract.TaskStatusWaitingApproval {
+		return nil
+	}
+	openSession.taskRuns.CancelTaskRunWithReason(taskRunID, taskRun.RequesterPersonID, "the host cancelled this turn")
 	return nil
-}
-
-func (openSession *session) isRunParked(taskRunID string) bool {
-	taskRun, isFound := openSession.taskRuns.FindTaskRun(taskRunID)
-	return isFound && (taskRun.Status == agentcontract.TaskStatusWaitingUserInput || taskRun.Status == agentcontract.TaskStatusWaitingApproval)
 }
 
 func (openSession *session) rememberTaskRun(taskRunID string) {

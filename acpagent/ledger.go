@@ -127,6 +127,8 @@ func taskRunIDOfMeta(promptMeta map[string]any) string {
 }
 
 func (openSession *session) openTaskRun(promptMeta map[string]any, prompt string) agentcontract.TaskRun {
+	turnRequest, _ := turnRequestOfMeta(promptMeta)
+	requesterPersonID := firstNonEmpty(turnRequest.RequesterPersonID, standaloneRequesterPersonID)
 	taskRunID := taskRunIDOfMeta(promptMeta)
 	if taskRunID == "" {
 		return openSession.taskRuns.CreateTaskRunWithOrigin(requesterPersonID, taskstate.TaskRunOrigin{}, prompt)
