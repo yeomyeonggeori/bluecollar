@@ -122,15 +122,13 @@ func (agentKernel *AgentKernel) generateConfirmationUserMessage(responseContext 
 
 func confirmationPlanMessages(request AgentRequest, evidenceHints []string) []model.Message {
 	contextText := (LLMContextBuilder{}).Build(LLMContextInput{
-		ResponseLanguage:     request.ResponseLanguage,
-		UserPrompt:           request.Prompt,
-		TurnStartedAt:        request.TurnStartedAt,
-		EnvironmentNow:       request.EnvironmentNow,
-		VisibleContext:       request.VisibleContext,
-		ActiveGoal:           request.ActiveGoal,
-		RequesterPersonID:    request.RequesterPersonID,
-		RequesterName:        request.RequesterName,
-		RequesterCallingName: request.RequesterCallingName,
+		ResponseLanguage:  request.ResponseLanguage,
+		UserPrompt:        request.Prompt,
+		TurnStartedAt:     request.TurnStartedAt,
+		EnvironmentNow:    request.EnvironmentNow,
+		VisibleContext:    request.VisibleContext,
+		ActiveGoal:        request.ActiveGoal,
+		RequesterIdentity: request.RequesterIdentity.Clone(),
 		ExtraSections: []string{
 			"Selected skill evidence hints, not requirements: " + strings.Join(evidenceHints, ", "),
 			confirmationToolContext(request, evidenceHints),

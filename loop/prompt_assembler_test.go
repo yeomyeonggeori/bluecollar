@@ -33,9 +33,11 @@ func TestPromptAssemblerIncludesTemporalContext(t *testing.T) {
 
 func TestBuildTurnMessagesKeepsStablePrefixClockInvariant(t *testing.T) {
 	baseRequest := AgentTurnRequest{
-		Prompt:               "이번 주 회의 일정 알려줘",
-		RequesterPersonID:    "person-1",
-		RequesterName:        "김테스트",
+		Prompt: "이번 주 회의 일정 알려줘",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+			RequesterName:     "김테스트",
+		},
 		WorkspaceRootPath:    "/workspace",
 		WorkspaceDefaultPath: "/workspace/private/people/person-1",
 		ResponseLanguage:     "ko",
@@ -288,8 +290,10 @@ func TestPromptAssemblerIncludesTurnDateContext(t *testing.T) {
 
 func TestPromptAssemblerIncludesWritableWorkspaceContext(t *testing.T) {
 	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
-		Prompt:               "pptx 만들어줘",
-		RequesterPersonID:    "person-1",
+		Prompt: "pptx 만들어줘",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		TurnStartedAt:        time.Date(2026, time.May, 8, 18, 1, 10, 0, time.UTC),
 		WorkspaceRootPath:    "/workspace",
 		WorkspaceDefaultPath: "/workspace/private/people/person-1",

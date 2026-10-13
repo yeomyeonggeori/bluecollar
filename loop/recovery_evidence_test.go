@@ -75,7 +75,7 @@ func TestEarlyFailureReportDoesNotSpendRemainingRecoveryCalls(t *testing.T) {
 		callCount++
 		return toolcontract.ToolFailureResult(toolcontract.FailureExternalService, toolcontract.FailureCodes.OperationFailed, "result_validation", "server result contract failed"), nil
 	})
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterPersonID: "person-1", ConversationID: "conversation-1", Prompt: "Create a record", ToolSet: tools, PinnedToolNames: tools.ListToolNames()})
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"}, ConversationID: "conversation-1", Prompt: "Create a record", ToolSet: tools, PinnedToolNames: tools.ListToolNames()})
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}

@@ -19,9 +19,11 @@ func TestANonFinalReplyReachesTheRequesterAndTheTurnKeepsWorking(t *testing.T) {
 	sentCheckpoints := []AgentCheckpoint{}
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "초안 보여줘",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "초안 보여줘",
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			sentCheckpoints = append(sentCheckpoints, checkpoint)
 			return nil
@@ -50,9 +52,11 @@ func TestAReplyWithoutAChannelTellsTheModelItWasNotDelivered(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "중간 보고 해줘",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "중간 보고 해줘",
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to continue without a reply channel: %v", errorValue)
@@ -77,11 +81,13 @@ func TestAReplyExpectingAnAnswerLeavesTheRunWaitingForTheUser(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "둘 중 하나 골라줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "둘 중 하나 골라줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the question to pause the run: %v", errorValue)
@@ -105,10 +111,12 @@ func TestAQuestionTheRuntimeCannotAskComesBackToTheModelAsAFailure(t *testing.T)
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "둘 중 하나 골라줘",
-		ToolSet:           newTestToolSet([]string{toolcontract.BashToolName}),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "둘 중 하나 골라줘",
+		ToolSet:        newTestToolSet([]string{toolcontract.BashToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to continue after an unaskable question: %v", errorValue)
@@ -143,10 +151,12 @@ func TestAQuestionCarriesItsChoicesAndItsAttachmentToTheRequester(t *testing.T) 
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "보고서 보내줘",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "보고서 보내줘",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the question to pause the run: %v", errorValue)
@@ -175,10 +185,12 @@ func TestANonFinalReplyDeliversItsAttachmentOnlyOnce(t *testing.T) {
 	sentCheckpoints := []AgentCheckpoint{}
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "초안 보내줘",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "초안 보내줘",
+		ToolSet:        toolRegistry,
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			sentCheckpoints = append(sentCheckpoints, checkpoint)
 			return nil
@@ -204,10 +216,12 @@ func TestRepeatedProgressRepliesStopTheTurn(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 30})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "진행 상황 알려줘",
-		CheckpointSender:  func(context.Context, AgentCheckpoint) error { return nil },
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "진행 상황 알려줘",
+		CheckpointSender: func(context.Context, AgentCheckpoint) error { return nil },
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the stalled turn to return: %v", errorValue)
@@ -249,11 +263,13 @@ func TestAFinalReplyWhoseAttachmentFailsNeverClosesTheTaskPromisingTheFile(t *te
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "보고서 보내줘",
-		ToolSet:           toolRegistry,
-		CheckpointSender:  func(context.Context, AgentCheckpoint) error { return nil },
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "보고서 보내줘",
+		ToolSet:          toolRegistry,
+		CheckpointSender: func(context.Context, AgentCheckpoint) error { return nil },
 	})
 	if errorValue != nil {
 		t.Fatalf("expected the turn to continue after the attachment failed: %v", errorValue)
@@ -284,11 +300,13 @@ func TestACancelledTaskPostsNothingFurther(t *testing.T) {
 	sentCheckpoints := []AgentCheckpoint{}
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "초안 써줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   []string{"notes_write"},
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "초안 써줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: []string{"notes_write"},
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			sentCheckpoints = append(sentCheckpoints, checkpoint)
 			return nil
@@ -318,9 +336,11 @@ func TestATaskSendsAtMostThreeProgressRepliesAndNeverTheSameOneTwice(t *testing.
 	sentCheckpoints := []AgentCheckpoint{}
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "진행 상황 알려줘",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "진행 상황 알려줘",
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			sentCheckpoints = append(sentCheckpoints, checkpoint)
 			return nil
@@ -373,10 +393,12 @@ func TestADelegatedChildReportsToItsCallerRatherThanToTheRequester(t *testing.T)
 	sentCheckpoints := []AgentCheckpoint{}
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "릴리스 노트 정리해줘",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "릴리스 노트 정리해줘",
+		ToolSet:        toolRegistry,
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			sentCheckpoints = append(sentCheckpoints, checkpoint)
 			return nil
@@ -412,11 +434,13 @@ func TestAQuestionTheHostHoldsForAnAnswerParksTheRunWithoutAFailureDebt(t *testi
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "방 잡아줘",
-		ToolSet:           toolRegistry,
-		PinnedToolNames:   toolRegistry.ListToolNames(),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "방 잡아줘",
+		ToolSet:         toolRegistry,
+		PinnedToolNames: toolRegistry.ListToolNames(),
 	})
 
 	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {

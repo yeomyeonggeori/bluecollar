@@ -34,10 +34,12 @@ func TestAgentKernelPreservesScheduledIntakeRefusalAfterSkillSelection(t *testin
 	toolRegistry := newTestCapabilityToolSet([]string{"schedule_create"})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            `1분에 한 번씩 나한테 "죄송합니다" 10번 해봐`,
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         `1분에 한 번씩 나한테 "죄송합니다" 10번 해봐`,
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
@@ -87,10 +89,12 @@ func TestAgentKernelSelectsArtifactSkillOnceAfterRouting(t *testing.T) {
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "아까 피피티 다시 해봐",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "아까 피피티 다시 해봐",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected routed artifact task to run: %v", errorValue)
@@ -186,10 +190,12 @@ func TestAgentKernelPreservesUnsupportedArtifactWithoutSelectedSkill(t *testing.
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "다시 해봐 이제 될 거야",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "다시 해봐 이제 될 거야",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected unsupported intake to complete: %v", errorValue)
@@ -226,10 +232,12 @@ func TestAgentKernelRecoversPriorTaskOutcomeWithThePriorTaskInContext(t *testing
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "direct-1",
-		Prompt:            "전달해줘야지 그럼",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "direct-1",
+		Prompt:         "전달해줘야지 그럼",
+		ToolSet:        toolRegistry,
 		PriorTask: PriorTaskContext{
 			TaskRunID: "88894f",
 			Status:    string(agentcontract.TaskStatusFailed),
@@ -282,10 +290,12 @@ func TestAgentKernelUsesIntakeBeforeRunningTools(t *testing.T) {
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do the entire thing",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "do the entire thing",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected intake-only result: %v", errorValue)
@@ -314,10 +324,12 @@ func TestAgentKernelCreatesChoiceAskForClarificationOptions(t *testing.T) {
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "소개 자료 만들어줘",
-		ToolSet:           newTestToolSet([]string{toolcontract.AskInputToolName}),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "소개 자료 만들어줘",
+		ToolSet:        newTestToolSet([]string{toolcontract.AskInputToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected clarify result: %v", errorValue)
@@ -351,10 +363,12 @@ func TestAgentKernelAsksTheClarificationQuestionWithoutOptions(t *testing.T) {
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "회사 조사해줘",
-		ToolSet:           newTestToolSet([]string{toolcontract.AskInputToolName}),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "회사 조사해줘",
+		ToolSet:        newTestToolSet([]string{toolcontract.AskInputToolName}),
 	})
 	if errorValue != nil {
 		t.Fatalf("expected clarify result: %v", errorValue)
@@ -389,10 +403,12 @@ func TestAgentKernelQuickReplyAllowsToolFreeReplyWithoutAskInput(t *testing.T) {
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "hello",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "hello",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected quick reply: %v", errorValue)
@@ -437,10 +453,12 @@ func TestAgentKernelRunTurnPreservesCheckpointSender(t *testing.T) {
 		InitialToolNames: []string{"alpha"},
 	}
 	result, errorValue := services.kernel.RunPlannedTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "확인해줘",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "확인해줘",
+		ToolSet:        toolRegistry,
 		CheckpointSender: func(_ context.Context, checkpoint AgentCheckpoint) error {
 			checkpoints = append(checkpoints, checkpoint)
 			return nil
@@ -483,10 +501,12 @@ func TestAgentKernelEasyWorkPromotesToolFailureToRecovery(t *testing.T) {
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "lookup hello",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "lookup hello",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected quick recovery: %v", errorValue)
@@ -509,9 +529,11 @@ func TestAgentKernelQuickReplyFailureDoesNotInventToolFailure(t *testing.T) {
 	services := newKernelIntakeTestServices(failingLanguageModel{}, intakeLanguageModel)
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "1+1=",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "1+1=",
 	})
 	if errorValue != nil {
 		t.Fatalf("expected direct reply failure result: %v", errorValue)
@@ -542,10 +564,12 @@ func TestAgentKernelEasyWorkUsesItsInitialTool(t *testing.T) {
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "오늘 일정 뭐 있어?",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "오늘 일정 뭐 있어?",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected quick initial-tool reply: %v", errorValue)
@@ -594,10 +618,12 @@ func TestAgentKernelQuickReplyAsksWithExpectsAnswerForExplicitChoiceRequest(t *t
 	})
 
 	result, errorValue := services.kernel.RunAgentRequest(context.Background(), turnclassification.Routing{Decision: &routedDecision}, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "나한테 1 2 3 선택지 줘봐. 잘 동작하는지 테스트해보게",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "나한테 1 2 3 선택지 줘봐. 잘 동작하는지 테스트해보게",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected choice request: %v", errorValue)
@@ -654,10 +680,12 @@ func TestAgentKernelPreservesQuickReplyAfterSkillSelection(t *testing.T) {
 	}
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "너 뭐 할 수 있는지 피피티 만들어서 보내줘봐",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "너 뭐 할 수 있는지 피피티 만들어서 보내줘봐",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected quick reply: %v", errorValue)
@@ -705,10 +733,12 @@ func TestAgentKernelUsesStructuredOutputFormatsForAttachmentRequirements(t *test
 	})
 
 	result, errorValue := runRoutedRequest(t, context.Background(), services.kernel, AgentRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "html만 주면 돼",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "html만 주면 돼",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected structured output format task to complete: %v", errorValue)

@@ -187,10 +187,12 @@ func TestRunTurnMergesPlanUpdateObservationIntoExecutionState(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		ToolSet:           toolRegistry,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "do it",
+		ToolSet:        toolRegistry,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to succeed: %v", errorValue)
@@ -221,12 +223,14 @@ func TestRunTurnExecutesTheStateChangingCallTheNudgeAnnotates(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "do it",
-		TaskLevel:         TaskLevelMedium,
-		PinnedToolNames:   []string{"task_add"},
-		ToolSet:           toolSet,
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "do it",
+		TaskLevel:       TaskLevelMedium,
+		PinnedToolNames: []string{"task_add"},
+		ToolSet:         toolSet,
 	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to succeed: %v", errorValue)

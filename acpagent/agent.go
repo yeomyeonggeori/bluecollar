@@ -163,7 +163,6 @@ func routedAsThePersonWroteIt(turnRequest agentcontract.AgentTurnRequest, prompt
 
 func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest) agentcontract.AgentTurnRequest {
 	turnRequest, _ := turnRequestOfMeta(request.Meta)
-	turnRequest.RequesterPersonID = firstNonEmpty(turnRequest.RequesterPersonID, standaloneRequesterPersonID)
 	turnRequest.ConversationID = firstNonEmpty(turnRequest.ConversationID, string(request.SessionId))
 	turnRequest.ExistingTaskRunID = openSession.currentTaskRunID()
 	turnRequest.Prompt = promptText(request.Prompt)

@@ -174,7 +174,7 @@ func TestAFinishWhoseOwnDeliveryReportsNotesRewritesTheReplyWithThem(t *testing.
 		}, nil
 	})
 
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterPersonID: "person-1", ConversationID: "conversation-1", Prompt: "사내 3분기 업무 리뷰 발표자료를 pptx로 만들어 주세요.", ToolSet: toolRegistry})
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"}, ConversationID: "conversation-1", Prompt: "사내 3분기 업무 리뷰 발표자료를 pptx로 만들어 주세요.", ToolSet: toolRegistry})
 
 	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the finish to complete, got %v %+v", errorValue, result.TaskRun)
@@ -294,7 +294,7 @@ func runMemoTurn(t *testing.T, actions ...model.ChatCompletionToolCall) (AgentTu
 	})
 	deliveries := []string{}
 	registerTestTool(toolSet, testToolDescriptor(toolcontract.FileDeliverToolName), deliverMemoVersions(&deliveries))
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterPersonID: "person-1", ConversationID: "conversation-1", Prompt: "재택근무 시범 운영 메모를 docx로 써 주세요.", ToolSet: toolSet})
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"}, ConversationID: "conversation-1", Prompt: "재택근무 시범 운영 메모를 docx로 써 주세요.", ToolSet: toolSet})
 	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the turn to complete, got %v %+v", errorValue, result.TaskRun)
 	}

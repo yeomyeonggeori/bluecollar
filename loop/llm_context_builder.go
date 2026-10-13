@@ -10,11 +10,8 @@ import (
 type LLMContextBuilder struct{}
 
 type LLMContextInput struct {
+	RequesterIdentity
 	ResponseLanguage           string
-	RequesterPersonID          string
-	RequesterName              string
-	RequesterCallingName       string
-	RequesterEmail             string
 	Company                    CompanyContext
 	UserPrompt                 string
 	InputParts                 []AgentPart
@@ -178,7 +175,7 @@ func (builder LLMContextBuilder) workspaceContext(workspaceContext WorkspaceCont
 		sections = append(sections, strings.TrimSpace(workspaceContext.TerminalInstruction))
 	}
 	request := AgentTurnRequest{
-		RequesterPersonID:     workspaceContext.RequesterPersonID,
+		RequesterIdentity:     RequesterIdentity{RequesterPersonID: workspaceContext.RequesterPersonID},
 		WorkspaceRootPath:     workspaceContext.RootPath,
 		WorkspaceDefaultPath:  workspaceContext.DefaultPath,
 		ToolSet:               nil,
@@ -360,7 +357,7 @@ func (builder LLMContextBuilder) attachmentContext(attachments []toolcontract.Fi
 
 func agentTurnRequestForContext(input LLMContextInput) AgentTurnRequest {
 	return AgentTurnRequest{
-		RequesterPersonID:     input.WorkspaceContext.RequesterPersonID,
+		RequesterIdentity:     RequesterIdentity{RequesterPersonID: input.WorkspaceContext.RequesterPersonID},
 		ResponseLanguage:      input.ResponseLanguage,
 		TurnStartedAt:         input.TurnStartedAt,
 		WorkspaceRootPath:     input.WorkspaceContext.RootPath,

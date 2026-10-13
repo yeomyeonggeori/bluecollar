@@ -93,7 +93,7 @@ func runLiveRecoveryJudgment(t *testing.T, isRepairable bool) {
 		result.Failure.SafeRetry = true
 		return result, nil
 	})
-	request := AgentTurnRequest{RequesterPersonID: "person-1", ConversationID: "conversation-1", Prompt: "'샘플 제품소개서'를 내 업무 목록에 등록해 줘.", ToolSet: tools, PinnedToolNames: tools.ListToolNames(), RequiredEvidenceTools: []string{"record_create"}, OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"record_create"}}}
+	request := AgentTurnRequest{RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"}, ConversationID: "conversation-1", Prompt: "'샘플 제품소개서'를 내 업무 목록에 등록해 줘.", ToolSet: tools, PinnedToolNames: tools.ListToolNames(), RequiredEvidenceTools: []string{"record_create"}, OutcomeContract: OutcomeContract{RequiredEvidenceTools: []string{"record_create"}}}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	result, runError := services.runner.RunTurn(ctx, request)

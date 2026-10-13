@@ -210,13 +210,15 @@ func TestRunTurnExecutesBatchedReadAfterPlanChangesTheShortlist(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "move the deal forward",
-		TaskLevel:         TaskLevelMedium,
-		ToolSet:           toolSet,
-		PinnedToolNames:   []string{toolcontract.PlanToolName, "deal_list", "deal_update"},
-		LikelyToolNames:   []string{"deal_list", "deal_update"},
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "move the deal forward",
+		TaskLevel:       TaskLevelMedium,
+		ToolSet:         toolSet,
+		PinnedToolNames: []string{toolcontract.PlanToolName, "deal_list", "deal_update"},
+		LikelyToolNames: []string{"deal_list", "deal_update"},
 	})
 	if errorValue != nil {
 		t.Fatalf("expected turn to complete: %v", errorValue)

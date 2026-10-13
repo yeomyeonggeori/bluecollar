@@ -107,13 +107,15 @@ func TestElapsedClosingCompletesFromExactEvidenceBeforeReply(t *testing.T) {
 	toolSet, toolCallCount := countedTaskDeleteToolSet()
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "오래된 작업을 삭제해줘",
-		ResponseLanguage:  ResponseLanguageKorean,
-		ToolSet:           toolSet,
-		PinnedToolNames:   toolSet.ListToolNames(),
-		EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "오래된 작업을 삭제해줘",
+		ResponseLanguage: ResponseLanguageKorean,
+		ToolSet:          toolSet,
+		PinnedToolNames:  toolSet.ListToolNames(),
+		EffortStartedAt:  time.Now().Add(-500 * time.Millisecond),
 	})
 
 	if errorValue != nil {
@@ -146,7 +148,9 @@ func TestElapsedClosingBlocksBeforeReplyWhenEvidenceIsMissing(t *testing.T) {
 	toolSet := newTestCapabilityToolSet([]string{"task_add"})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ConversationID:        "conversation-1",
 		Prompt:                "분기 결산 운영 검토 업무를 등록해줘",
 		ResponseLanguage:      ResponseLanguageKorean,
@@ -183,7 +187,9 @@ func TestAnElapsedClosingThatWritesTheDeliverableIsNotSentAsTheNotice(t *testing
 	toolSet := newTestCapabilityToolSet([]string{"task_add"})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID:     "person-1",
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
 		ConversationID:        "conversation-1",
 		Prompt:                "Draft a residential lease as a docx and send it to me.",
 		ToolSet:               toolSet,
@@ -219,12 +225,14 @@ func TestElapsedClosingUsesRemainingTotalBudget(t *testing.T) {
 
 	go func() {
 		result, _ := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-			RequesterPersonID: "person-1",
-			ConversationID:    "conversation-1",
-			Prompt:            "오래된 작업을 삭제해줘",
-			ToolSet:           toolSet,
-			PinnedToolNames:   toolSet.ListToolNames(),
-			EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
+			RequesterIdentity: RequesterIdentity{
+				RequesterPersonID: "person-1",
+			},
+			ConversationID:  "conversation-1",
+			Prompt:          "오래된 작업을 삭제해줘",
+			ToolSet:         toolSet,
+			PinnedToolNames: toolSet.ListToolNames(),
+			EffortStartedAt: time.Now().Add(-500 * time.Millisecond),
 		})
 		resultChannel <- result
 	}()
@@ -270,12 +278,14 @@ func TestElapsedClosingTotalDeadlinePersistsRawFallback(t *testing.T) {
 
 	go func() {
 		result, _ := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-			RequesterPersonID: "person-1",
-			ConversationID:    "conversation-1",
-			Prompt:            "진행 상황을 정리해줘",
-			ResponseLanguage:  ResponseLanguageKorean,
-			ToolSet:           newTestToolSet(nil),
-			EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
+			RequesterIdentity: RequesterIdentity{
+				RequesterPersonID: "person-1",
+			},
+			ConversationID:   "conversation-1",
+			Prompt:           "진행 상황을 정리해줘",
+			ResponseLanguage: ResponseLanguageKorean,
+			ToolSet:          newTestToolSet(nil),
+			EffortStartedAt:  time.Now().Add(-500 * time.Millisecond),
 		})
 		resultChannel <- result
 	}()
@@ -312,11 +322,13 @@ func TestElapsedClosingFailureDoesNotRetryOrUseLegacyFallback(t *testing.T) {
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxElapsedSecond: 1})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "진행 상황을 정리해줘",
-		ToolSet:           newTestToolSet(nil),
-		EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "진행 상황을 정리해줘",
+		ToolSet:         newTestToolSet(nil),
+		EffortStartedAt: time.Now().Add(-500 * time.Millisecond),
 	})
 
 	if errorValue != nil {
@@ -340,10 +352,12 @@ func TestAgentTurnRunnerPreservesCallerCancellationBeforeEffortDeadline(t *testi
 	cancelRun()
 
 	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "취소할 작업",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "취소할 작업",
+		ToolSet:        newTestToolSet(nil),
 	})
 
 	if errorValue != nil {
@@ -369,10 +383,12 @@ func TestAgentTurnRunnerPreservesCallerDeadlineBeforeEffortDeadline(t *testing.T
 	defer cancelRun()
 
 	result, errorValue := services.runner.RunTurn(runContext, AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "시간 제한 전에 취소할 작업",
-		ToolSet:           newTestToolSet(nil),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "시간 제한 전에 취소할 작업",
+		ToolSet:        newTestToolSet(nil),
 	})
 
 	if errorValue != nil {
@@ -404,12 +420,14 @@ func TestAgentTurnRunnerCancelsToolCallAtExecutionEffortDeadline(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "bounded tool call",
-		ToolSet:           toolSet,
-		PinnedToolNames:   toolSet.ListToolNames(),
-		EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:  "conversation-1",
+		Prompt:          "bounded tool call",
+		ToolSet:         toolSet,
+		PinnedToolNames: toolSet.ListToolNames(),
+		EffortStartedAt: time.Now().Add(-500 * time.Millisecond),
 	})
 
 	if errorValue != nil {
@@ -443,13 +461,15 @@ func TestMaxIterationsClosingDefersToElapsedClosing(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "분기 결산 운영 검토 업무를 등록해줘",
-		ResponseLanguage:  ResponseLanguageKorean,
-		ToolSet:           toolSet,
-		PinnedToolNames:   toolSet.ListToolNames(),
-		EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "분기 결산 운영 검토 업무를 등록해줘",
+		ResponseLanguage: ResponseLanguageKorean,
+		ToolSet:          toolSet,
+		PinnedToolNames:  toolSet.ListToolNames(),
+		EffortStartedAt:  time.Now().Add(-500 * time.Millisecond),
 	})
 
 	if errorValue != nil {
@@ -484,13 +504,15 @@ func TestMaxToolCallsClosingDefersToElapsedClosing(t *testing.T) {
 	})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "두 단계 업무를 처리해줘",
-		ResponseLanguage:  ResponseLanguageKorean,
-		ToolSet:           toolSet,
-		PinnedToolNames:   toolSet.ListToolNames(),
-		EffortStartedAt:   time.Now().Add(-500 * time.Millisecond),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID:   "conversation-1",
+		Prompt:           "두 단계 업무를 처리해줘",
+		ResponseLanguage: ResponseLanguageKorean,
+		ToolSet:          toolSet,
+		PinnedToolNames:  toolSet.ListToolNames(),
+		EffortStartedAt:  time.Now().Add(-500 * time.Millisecond),
 	})
 
 	if errorValue != nil {

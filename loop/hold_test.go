@@ -65,10 +65,12 @@ func TestACarriedOutCallThatWasNeverHeldIsRecordedAsItHappened(t *testing.T) {
 		TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
 
 	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterPersonID: "person-1",
-		ConversationID:    "conversation-1",
-		Prompt:            "회의록 보내줘",
-		ToolSet:           newTestToolSet([]string{"message_send"}),
+		RequesterIdentity: RequesterIdentity{
+			RequesterPersonID: "person-1",
+		},
+		ConversationID: "conversation-1",
+		Prompt:         "회의록 보내줘",
+		ToolSet:        newTestToolSet([]string{"message_send"}),
 		CarriedOutCalls: []CarriedOutCall{{
 			ToolName:  "message_send",
 			ToolInput: json.RawMessage(`{"to":["alice"]}`),

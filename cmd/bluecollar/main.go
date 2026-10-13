@@ -133,8 +133,10 @@ func collapsedWhitespace(text string) string {
 func routeTurn(ctx context.Context, languageModel model.LanguageModelProvider, request agentcontract.AgentTurnRequest) (turnclassification.TurnDecision, error) {
 	router := intake.NewTurnRouter(languageModel, intake.NewDecisionPlanner(decisionconfig.ConfiguredDecisionModel(os.Stderr), nil), agentcontract.IntakeOptions{IsEnabled: true})
 	return router.Plan(ctx, agentcontract.AgentRequest{
-		RequesterPersonID: request.RequesterPersonID,
-		RequesterName:     request.RequesterName,
+		RequesterIdentity: agentcontract.RequesterIdentity{
+			RequesterPersonID: request.RequesterPersonID,
+			RequesterName:     request.RequesterName,
+		},
 		ConversationID:    request.ConversationID,
 		Prompt:            request.Prompt,
 		WorkspaceRootPath: request.WorkspaceRootPath,

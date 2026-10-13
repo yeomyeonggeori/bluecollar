@@ -296,7 +296,7 @@ func TestTurnRouterDecidesWithTheFilesAttachedToTheMessage(t *testing.T) {
 }
 
 func TestTurnRequestDecisionRequestUsesFormalRequesterNameWithoutCallingName(t *testing.T) {
-	decisionRequest := TurnRequestDecisionRequest(agentcontract.AgentRequest{RequesterName: "Example Requester"})
+	decisionRequest := TurnRequestDecisionRequest(agentcontract.AgentRequest{RequesterIdentity: agentcontract.RequesterIdentity{RequesterName: "Example Requester"}})
 
 	if decisionRequest.Messages[0].SenderName != "Example Requester" {
 		t.Fatalf("expected the formal requester name as sender name, got %+v", decisionRequest.Messages[0])
