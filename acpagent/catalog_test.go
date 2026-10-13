@@ -151,7 +151,7 @@ func TestStructuredCatalogFailureReachesTheHostsLedger(t *testing.T) {
 	transport, _ := connectCatalogServer(t, server)
 	host, _ := driveOneTurn(t, transport, &scriptedLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"note_write","toolInput":{}}`,
-		`{"action":"fail","message":"account unavailable","reason":"account unavailable","goalSatisfied":false,"failureResolution":"failure_report","usedFailureFacts":{"attempts":[{"toolName":"note_write","inputSummary":"{}","errorCode":"operation_failed","failureStage":"note_write","message":"account unavailable"}],"budgetState":"no_tool_fallback_available"}}`,
+		`{"action":"fail","message":"account unavailable","reason":"account unavailable","goalSatisfied":false}`,
 	}})
 	for _, record := range host.keptLedger() {
 		if record.Name != "tool.note_write.result" {

@@ -676,7 +676,7 @@ func TestActionSchemaRequiresFailureResolutionWhenRecoveryIsExhausted(t *testing
 		}},
 	})
 	schemaDocument := request.StructuredOutputSchema.Document
-	if !strings.Contains(schemaDocument, `"failureResolution"`) || !strings.Contains(schemaDocument, `"usedFailureFacts"`) {
+	if !strings.Contains(schemaDocument, `"failureResolution"`) {
 		t.Fatalf("expected debt-aware schema, got %s", schemaDocument)
 	}
 	if !structuredRequestsContain([]model.StructuredResponseRequest{request}, "FailureReportFacts") {
@@ -690,7 +690,7 @@ func TestActionSchemaRequiresFailureResolutionWhenRecoveryIsExhausted(t *testing
 	finishMessageProperties := mapFromAny(finishMessageVariant["properties"])
 	finishMessageFailureResolution := mapFromAny(finishMessageProperties["failureResolution"])
 	if containsString(stringSliceFromAny(finishMessageFailureResolution["enum"]), failureResolutionFailureReport) {
-		t.Fatal("finish schema must not allow failure_report; failure reports must use fail with usedFailureFacts")
+		t.Fatal("finish schema must not allow failure_report; a failure report is a fail action")
 	}
 	finishGoalSatisfied := mapFromAny(finishMessageProperties["goalSatisfied"])
 	if finishGoalSatisfied["type"] != "boolean" {
@@ -701,7 +701,7 @@ func TestActionSchemaRequiresFailureResolutionWhenRecoveryIsExhausted(t *testing
 	}
 	failVariant := actionSchemaVariant(t, schemaDocument, "fail")
 	failRequired := stringSliceFromAny(failVariant["required"])
-	for _, fieldName := range []string{"reason", "goalStatus", "message", "failureResolution", "usedFailureFacts"} {
+	for _, fieldName := range []string{"reason", "goalStatus", "message"} {
 		if !containsString(failRequired, fieldName) {
 			t.Fatalf("expected fail schema to require %s, got %+v", fieldName, failRequired)
 		}
@@ -713,10 +713,10 @@ func TestActionSchemaRequiresFailureResolutionWhenRecoveryIsExhausted(t *testing
 	if message := mapFromAny(failProperties["message"]); message["type"] != "string" {
 		t.Fatalf("fail must carry the final user reply: %+v", message)
 	}
-	usedFailureFacts := mapFromAny(failProperties["usedFailureFacts"])
-	attempts := mapFromAny(mapFromAny(usedFailureFacts["properties"])["attempts"])
-	if attempts["type"] != "array" {
-		t.Fatalf("expected usedFailureFacts.attempts array schema, got %+v", attempts)
+	for _, runtimeOwnedField := range []string{"failureResolution", "usedFailureFacts"} {
+		if _, isAsked := failProperties[runtimeOwnedField]; isAsked {
+			t.Fatalf("fail must not ask the model for %s; the runtime already holds the failure facts", runtimeOwnedField)
+		}
 	}
 }
 
@@ -837,7 +837,7 @@ func TestAgentTurnRunnerTerminalNoToolsAcceptsFailureReportFail(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "", "schedule_list", `{"range":"today"}`),
 		directToolAction("continue", "", "schedule_list", `{"range":"tomorrow"}`),
-		failureReportDocumentWithBudget("Schedule lookup is blocked because schedule_lookup returned operation_failed.", "schedule_list", `{"range":"today"}`, toolcontract.FailureCodes.OperationFailed.String(), "schedule_lookup", "schedule storage unavailable", "no_tool_fallback_available"),
+		failDocument("Schedule lookup is blocked because schedule_lookup returned operation_failed."),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, RecoveryBudget: terminalNoToolRecoveryBudgetForTest()})
 	toolRegistry := newTestCapabilityToolSet([]string{"schedule_list"})
@@ -863,8 +863,8 @@ func TestAgentTurnRunnerTerminalNoToolsAcceptsFailureReportFail(t *testing.T) {
 	if !strings.Contains(result.UserNotice, "schedule_lookup") {
 		t.Fatalf("expected failure report reason to be delivered, got %q", result.UserNotice)
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.failure_report_facts_used", "schedule_lookup") {
-		t.Fatal("expected used failure facts event")
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.failure_report", "schedule_list") {
+		t.Fatal("expected the runtime to record the failed attempt in its failure report")
 	}
 	assertTerminalNoToolsSchemasExcludeToolActions(t, languageModel.requests)
 }
@@ -953,7 +953,7 @@ func TestAgentTurnRunnerTerminalNoToolsRejectsFailWithoutReason(t *testing.T) {
 		directToolAction("continue", "", "schedule_list", `{"range":"today"}`),
 		directToolAction("continue", "", "schedule_list", `{"range":"tomorrow"}`),
 		`{"action":"fail","goalStatus":"blocked","goalSatisfied":false}`,
-		failureReportDocumentWithBudget("Schedule lookup is blocked because schedule_lookup returned operation_failed.", "schedule_list", `{"range":"today"}`, toolcontract.FailureCodes.OperationFailed.String(), "schedule_lookup", "schedule storage unavailable", "no_tool_fallback_available"),
+		failDocument("Schedule lookup is blocked because schedule_lookup returned operation_failed."),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, RecoveryBudget: terminalNoToolRecoveryBudgetForTest()})
 	toolRegistry := newTestCapabilityToolSet([]string{"schedule_list"})
@@ -1883,32 +1883,12 @@ func noToolFallbackFinishMessageDocument(reply string) string {
 	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":[],"qualityReview":[],"failureResolution":"no_tool_fallback"}`
 }
 
-func failureReportDocument(reason string, toolName string, inputSummary string, errorCode string, failureStage string, message string) string {
-	return failureReportDocumentWithBudget(reason, toolName, inputSummary, errorCode, failureStage, message, "failure_report_required")
+func failDocument(reason string) string {
+	return `{"action":"fail","reason":` + strconv.Quote(reason) + `,"goalStatus":"blocked"}`
 }
 
-func failureReportDocumentWithBudget(reason string, toolName string, inputSummary string, errorCode string, failureStage string, message string, budgetState string) string {
-	document, errorValue := json.Marshal(map[string]any{
-		"action":            "fail",
-		"reason":            reason,
-		"goalStatus":        "blocked",
-		"goalSatisfied":     false,
-		"failureResolution": failureResolutionFailureReport,
-		"usedFailureFacts": failureReportFacts{
-			Attempts: []failureReportAttempt{{
-				ToolName:     toolName,
-				InputSummary: inputSummary,
-				ErrorCode:    errorCode,
-				FailureStage: failureStage,
-				Message:      message,
-			}},
-			BudgetState: budgetState,
-		},
-	})
-	if errorValue != nil {
-		return `{"action":"fail","reason":"failed","goalStatus":"blocked","goalSatisfied":false,"failureResolution":"failure_report","usedFailureFacts":{"attempts":[],"budgetState":"failure_report_required"}}`
-	}
-	return string(document)
+func failReplyDocument(reply string) string {
+	return `{"action":"fail","message":` + strconv.Quote(reply) + `,"reason":` + strconv.Quote(reply) + `,"goalStatus":"blocked"}`
 }
 
 func exhaustedRecoveryBudgetForTest() RecoveryBudget {

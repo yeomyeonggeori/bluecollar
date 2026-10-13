@@ -490,28 +490,10 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				continue
 			}
 		case "fail":
-			if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt {
-				facts := buildFailureReportFacts(state.Observations, agentTurnRunner.options.RecoveryBudget)
-				failureReportResult := validateFailureReportAction(actionDocument, facts)
-				if !failureReportResult.IsSatisfied {
-					observation := completionGateObservation(len(state.Observations)+1, failureReportResult, state.Request.ToolSet, state.Observations)
-					state.Observations = append(state.Observations, observation)
-					agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReportRejected, marshalEventBody(observation))
-					agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusCompleted, "failure_report_rejected", observation.ContentText())
-					if result, shouldStop := stopForNoProgress(stepID); shouldStop {
-						if elapsedResult, isElapsed, errorValue := agentTurnRunner.stopForElapsedLimitIfReached(taskContext, taskRun.TaskRunID, request, &state, iteration); isElapsed {
-							return elapsedResult, errorValue
-						}
-						return result, nil
-					}
-					continue
+			if _, hasFailureDebt := activeFailureDebt(state.Observations); hasFailureDebt && strings.TrimSpace(actionDocument.Message) != "" {
+				if result, handled, _ := agentTurnRunner.failTerminalNoToolsFailure(taskRun.TaskRunID, stepID, request, &state, actionDocument); handled {
+					return result, nil
 				}
-				if strings.TrimSpace(actionDocument.Message) != "" {
-					if result, handled, _ := agentTurnRunner.failTerminalNoToolsFailure(taskRun.TaskRunID, stepID, request, &state, actionDocument); handled {
-						return result, nil
-					}
-				}
-				agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentFailureReportFactsUsed, marshalEventBody(actionDocument.UsedFailureFacts))
 			}
 			reason := firstNonEmptyString(actionDocument.Reason, "agent reported failure")
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "fail", reason)

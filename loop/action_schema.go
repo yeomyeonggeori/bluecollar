@@ -49,7 +49,7 @@ func buildActionSchemaDeliveringThrough(fileDeliverDefinition toolcontract.ToolD
 		variants = append(variants, replyActionSchema(hasFailureDebt, citableEvidenceIDs, fileDeliverDefinition))
 	}
 	if allowFail {
-		variants = append(variants, failActionSchema(hasFailureDebt))
+		variants = append(variants, failActionSchema())
 	}
 	if allowQualityCriteria {
 		variants = append(variants, setQualityCriteriaActionSchema())
@@ -66,7 +66,7 @@ func buildActionSchemaDeliveringThrough(fileDeliverDefinition toolcontract.ToolD
 	}
 
 	if len(variants) == 0 {
-		variants = append(variants, failActionSchema(hasFailureDebt))
+		variants = append(variants, failActionSchema())
 	}
 	schema := map[string]any{"oneOf": variants}
 	if hasContinueVariant {
@@ -174,19 +174,14 @@ func setQualityCriteriaActionSchema() map[string]any {
 	})
 }
 
-func failActionSchema(hasFailureDebt bool) map[string]any {
-	properties := map[string]any{
+func failActionSchema() map[string]any {
+	return closedObjectSchema(map[string]any{
 		"action":               enumStringSchema("fail"),
 		"message":              stringSchema(),
 		"reason":               stringSchema(),
 		"goalStatus":           enumValuesStringSchema([]string{"blocked"}),
 		"executionStateUpdate": executionStateSchema(),
-	}
-	if hasFailureDebt {
-		properties["failureResolution"] = enumValuesStringSchema([]string{"failure_report"})
-		properties["usedFailureFacts"] = failureReportFactsSchema()
-	}
-	return closedObjectSchema(properties)
+	})
 }
 
 func continueActionSchema(toolDefinition toolcontract.ToolDefinition) (map[string]any, bool) {
@@ -313,22 +308,6 @@ func qualityReviewSchema() map[string]any {
 	}
 }
 
-func failureReportFactsSchema() map[string]any {
-	return closedObjectSchema(map[string]any{
-		"attempts": map[string]any{
-			"type": "array",
-			"items": closedObjectSchema(map[string]any{
-				"toolName":     stringSchema(),
-				"inputSummary": stringSchema(),
-				"errorCode":    stringSchema(),
-				"failureStage": stringSchema(),
-				"message":      stringSchema(),
-			}),
-		},
-		"budgetState": stringSchema(),
-	})
-}
-
 func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
 	properties := replyVariantProperties(hasFailureDebt, nil)
 	properties["action"] = enumValuesStringSchema([]string{"reply", "fail"})
@@ -336,7 +315,6 @@ func terminalActionUnifiedSchema(hasFailureDebt bool) map[string]any {
 	properties["reason"] = stringSchema()
 	if hasFailureDebt {
 		properties["failureResolution"] = enumValuesStringSchema(append(replyFailureResolutionValues(hasFailureDebt), failureResolutionFailureReport))
-		properties["usedFailureFacts"] = failureReportFactsSchema()
 	}
 	return closedObjectSchema(properties)
 }

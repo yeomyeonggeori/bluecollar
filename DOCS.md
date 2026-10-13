@@ -339,7 +339,7 @@ Recovery spends from typed allowances:
 
 These are ceilings. The model can report a blocker immediately when the available tools cannot repair it. Another attempt needs evidence that it addresses the recorded cause, and a failure signature that repeats three times closes that route. A result-validation failure can arrive after a mutation, so an uncertain write calls for inspecting current state before writing again.
 
-`fail` carries `usedFailureFacts` from the recorded attempts and a `message`. Once those facts validate, the message is the reply, delivered through the terminal report path. Runtime recovery guidance is a system message; only executed calls become tool-call and result pairs, so one failed call never looks like two.
+`fail` carries a `message`, and that message is the reply, delivered through the terminal report path. The model reads the attempts the runtime recorded as `FailureReportFacts` and words the blocker from them; it never copies them back, and the runtime writes its own record of them into the failure report. Runtime recovery guidance is a system message; only executed calls become tool-call and result pairs, so one failed call never looks like two.
 
 Progress is counted in novel results: a successful call whose output does not repeat an earlier one, a new failure fingerprint, a delivered attachment. After three consecutive actions without one, the loop steers the model toward a suggested tool, a recovery route or the exit, up to four times, then stops the run.
 

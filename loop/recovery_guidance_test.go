@@ -157,23 +157,11 @@ func newCalendarRecoveryToolRegistry(recording *calendarCallRecording) *toolcont
 	return toolRegistry
 }
 
-func calendarDeleteFailureReportDocument(budgetState string) string {
-	return failureReportDocumentWithBudget(
-		"지난 워크숍 회고 일정을 찾지 못해 삭제하지 못했습니다.",
-		"calendar_delete",
-		`{"eventHint":"지난 워크숍 회고"}`,
-		toolcontract.FailureCodes.NotFound.String(),
-		"calendar_lookup",
-		"일정을 찾지 못했습니다",
-		budgetState,
-	)
-}
-
-func twoRequestCalendarLanguageModel(secondRequestEventHint string, budgetState string) *sequenceLanguageModel {
+func twoRequestCalendarLanguageModel(secondRequestEventHint string) *sequenceLanguageModel {
 	return &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"calendar_delete","toolInput":{"eventHint":"지난 워크숍 회고"}}`,
 		`{"action":"continue","toolName":"calendar_update","toolInput":{"eventHint":"` + secondRequestEventHint + `","people":["이샘플","박예시"]}}`,
-		calendarDeleteFailureReportDocument(budgetState),
+		failDocument("지난 워크숍 회고 일정을 찾지 못해 삭제하지 못했습니다."),
 	}}
 }
 
@@ -198,7 +186,7 @@ func runTwoRequestCalendarTurn(t *testing.T, languageModel *sequenceLanguageMode
 }
 
 func TestWorkOnADifferentEventRunsEvenWhenTheRecoveryBudgetIsGone(t *testing.T) {
-	services, result, recording := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅", "no_tool_fallback_available"), TurnOptions{
+	services, result, recording := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅"), TurnOptions{
 		MaxIterationCount: 8,
 		MaxToolCallCount:  6,
 		RecoveryBudget:    terminalNoToolRecoveryBudgetForTest(),
@@ -213,7 +201,7 @@ func TestWorkOnADifferentEventRunsEvenWhenTheRecoveryBudgetIsGone(t *testing.T) 
 }
 
 func TestTheSecondRequestInOneMessageRunsAfterTheFirstOneFails(t *testing.T) {
-	services, result, recording := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅", "no_tool_fallback_available"), TurnOptions{
+	services, result, recording := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅"), TurnOptions{
 		MaxIterationCount: 8,
 		MaxToolCallCount:  6,
 		RecoveryBudget:    defaultRecoveryBudget(),
@@ -232,20 +220,20 @@ func TestTheSecondRequestInOneMessageRunsAfterTheFirstOneFails(t *testing.T) {
 }
 
 func TestTheAgentStillReportsTheDeleteItCouldNotDo(t *testing.T) {
-	services, result, _ := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅", "no_tool_fallback_available"), TurnOptions{
+	services, result, _ := runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("상하이 생산 미팅"), TurnOptions{
 		MaxIterationCount: 8,
 		MaxToolCallCount:  6,
 		RecoveryBudget:    defaultRecoveryBudget(),
 	})
 
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.failure_report_facts_used", "calendar_delete") {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.failure_report", "calendar_delete") {
 		t.Fatal("finishing the second request must not settle the first request's failure in silence")
 	}
 }
 
 func runRefusedSameEventCalendarTurn(t *testing.T) (turnRunnerTestServices, AgentTurnResult, *calendarCallRecording) {
 	t.Helper()
-	return runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("지난 워크숍 회고", "no_tool_fallback_available"), TurnOptions{
+	return runTwoRequestCalendarTurn(t, twoRequestCalendarLanguageModel("지난 워크숍 회고"), TurnOptions{
 		MaxIterationCount: 8,
 		MaxToolCallCount:  6,
 		RecoveryBudget:    terminalNoToolRecoveryBudgetForTest(),

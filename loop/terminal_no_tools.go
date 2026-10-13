@@ -63,7 +63,7 @@ func terminalNoToolsInstruction(observations []turnObservation, budget RecoveryB
 		"Recovery tool budget is exhausted. Do not call tools and do not select tools.",
 		"Return exactly one terminal action.",
 		"Use reply with final=true only when the original request is fulfilled from current context with failureResolution=no_tool_fallback. Include the requested answer in the reply itself; claiming it was delivered is not delivery. Required attachments and other requested effects must already be recorded as successful.",
-		"Use fail only when completion is blocked, with failureResolution=failure_report and usedFailureFacts copied from FailureReportFacts.",
+		"Use fail with failureResolution=failure_report only when completion is blocked.",
 		"Only the recorded tool calls in FailureReportFacts were attempted. Guidance and model calls are not tool executions. Do not invent retries or infer that a failed response means a write was not saved; report an unverified outcome as uncertain.",
 		"FailureReportFacts:\n" + marshalEventBody(facts),
 	}
@@ -109,18 +109,12 @@ func (agentTurnRunner *AgentTurnRunner) failTerminalNoToolsFailure(taskRunID str
 	if strings.TrimSpace(actionDocument.Reason) == "" && strings.TrimSpace(actionDocument.Message) == "" {
 		return AgentTurnResult{}, false, "fail requires a non-empty reason"
 	}
-	facts := buildFailureReportFacts(state.Observations, agentTurnRunner.options.RecoveryBudget)
-	failureReportResult := validateFailureReportAction(actionDocument, facts)
-	if !failureReportResult.IsSatisfied {
-		return AgentTurnResult{}, false, failureReportResult.Message
-	}
 	reason := strings.TrimSpace(firstNonEmptyString(actionDocument.Message, actionDocument.Reason, "agent reported failure"))
 	notice, failureReport, validationMessage := failureNoticeFromTerminalAction(request, taskRunID, reason, state.Observations, attachmentsAlreadyDelivered(state.Attachments, state.DeliveredAttachmentPaths), state.ExecutionState)
 	if validationMessage != "" {
 		return AgentTurnResult{}, false, validationMessage
 	}
 	failedTaskRun, _ := agentTurnRunner.taskRunService.FailTaskRun(taskRunID, reason)
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFailureReportFactsUsed, marshalEventBody(actionDocument.UsedFailureFacts))
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFailureReport, marshalEventBody(failureReportEventBody("terminal_no_tools", failureReport, FailureNoticeGenerationStatus{Source: notice.Source})))
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentFailureReply, marshalEventBody(FailureNoticeGenerationStatus{Source: notice.Source}))
 	agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusFailed, "terminal_no_tools_fail", reason)
