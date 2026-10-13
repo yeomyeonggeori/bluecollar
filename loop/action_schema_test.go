@@ -65,7 +65,7 @@ func TestActionSchemaSharedEnvelopeByteBudget(t *testing.T) {
 }
 
 func legacyRootOneOfFinalizerSchema(hasFailureDebt bool) string {
-	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{replyActionSchema(hasFailureDebt, nil, toolcontract.ToolDefinition{}), failActionSchema(hasFailureDebt)}})
+	return mustMarshalStructuredSchema(map[string]any{"oneOf": []any{replyActionSchema(hasFailureDebt, nil, toolcontract.ToolDefinition{}), failActionSchema()}})
 }
 
 func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing.T) {
@@ -107,8 +107,8 @@ func TestTerminalActionSchemasAreFlatAndSmallerThanTheLegacyRootOneOf(t *testing
 }
 
 func TestTerminalNoToolsSchemaAcceptsFinalReplyAndFailDocuments(t *testing.T) {
-	failWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","final":false,"usedFailureFacts":{"attempts":[{"toolName":"bash","errorCode":"operation_failed","failureStage":"bash","message":"blocked","inputSummary":""}],"budgetState":"failure_report_required"}}`
-	finishWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"reply","final":true,"usedFailureFacts":{"attempts":[],"budgetState":""}}`
+	failWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"failure_report","reason":"blocked by captcha","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"","goalStatus":"blocked","goalSatisfied":false,"action":"fail","final":false}`
+	finishWithDebtDocument := `{"executionStateUpdate":null,"failureResolution":"no_tool_fallback","reason":"","completionEvidenceIDs":[],"qualityReview":[],"hasRemainingWork":false,"message":"done from context","goalStatus":"satisfied","goalSatisfied":true,"action":"reply","final":true}`
 
 	assertDocumentValidatesAgainstSchema(t, terminalNoToolsActionSchema(), finishWithDebtDocument)
 	assertDocumentValidatesAgainstSchema(t, terminalNoToolsActionSchema(), failWithDebtDocument)

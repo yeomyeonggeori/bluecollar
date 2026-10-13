@@ -317,7 +317,7 @@ func TestAgentTurnRunnerRejectsCompletionEvidenceFromErrorObservation(t *testing
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"unstable","toolInput":{}}`,
 		finishMessageCiting("done", "obs-001"),
-		failureReportDocument("tool failed", "unstable", "{}", toolcontract.FailureCodes.OperationFailed.String(), "unstable", "failed"),
+		failDocument("tool failed"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{RecoveryBudget: exhaustedRecoveryBudgetForTest()})
 	toolRegistry := newTestCapabilityToolSet([]string{"unstable"})

@@ -54,19 +54,9 @@ func TestRecoveryGuidanceDoesNotInventAnExecutedToolCall(t *testing.T) {
 }
 
 func TestEarlyFailureReportDoesNotSpendRemainingRecoveryCalls(t *testing.T) {
-	failureDocument := failureReportDocumentWithBudget("The server must be repaired by its operator.", "record_create", "{}", "operation_failed", "result_validation", "server result contract failed", "no_tool_fallback_available")
-	var failureAction map[string]json.RawMessage
-	if errorValue := json.Unmarshal([]byte(failureDocument), &failureAction); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	failureAction["message"] = json.RawMessage(`"The server must be repaired by its operator."`)
-	document, errorValue := json.Marshal(failureAction)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"record_create","toolInput":{}}`,
-		string(document),
+		failReplyDocument("The server must be repaired by its operator."),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
 	tools := newTestCapabilityToolSet([]string{"record_create"})
@@ -125,5 +115,28 @@ func TestRecoveryUsesTheCurrentInterpretationOfTheOutcome(t *testing.T) {
 	contract := outcomeContractForRequest(recovered, currentDecision, InstructionBundle{}, ExecutionPlan{}, false, nil)
 	if len(contract.ExpectedResults) != 1 || contract.ExpectedResults[0].ID != "current" {
 		t.Fatalf("the previous interpretation overrode the current intake: %+v", contract.ExpectedResults)
+	}
+}
+
+func TestFailureReplyIsDeliveredInTheModelsOwnWords(t *testing.T) {
+	reply := "The record refuses a clock-out in the future, so both records stay as they were."
+	languageModel := &sequenceLanguageModel{contents: []string{
+		`{"action":"continue","toolName":"attendance_update","toolInput":{}}`,
+		failReplyDocument(reply),
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 5})
+	tools := newTestCapabilityToolSet([]string{"attendance_update"})
+	registerTestTool(tools, toolcontract.ToolDefinition{Name: "attendance_update"}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return toolcontract.ToolFailureResult(toolcontract.FailureInvalidInput, toolcontract.FailureCodes.InvalidInput, "record", "attendance event time cannot be in the future"), nil
+	})
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"}, ConversationID: "conversation-1", Prompt: "Move both records one day later", ToolSet: tools, PinnedToolNames: tools.ListToolNames()})
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	if result.UserNotice != reply {
+		t.Fatalf("the failure reply the model wrote was not the reply: %q", result.UserNotice)
+	}
+	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.failure_report_rejected", "") {
+		t.Fatal("a failure report was refused for not repeating facts the runtime already holds")
 	}
 }

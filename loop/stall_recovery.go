@@ -77,10 +77,10 @@ func stalledExitDirectiveObservation(observationID string, observations []turnOb
 	if failureDebt, hasFailureDebt := activeFailureDebt(observations); hasFailureDebt {
 		failedTool = strings.TrimSpace(failureDebt.LatestFailure.Tool)
 	}
-	message := "You are repeating actions without making progress. Stop retrying the same thing and stop re-emitting a final reply that keeps getting rejected. Take one of two exits now: either take a genuinely different action that changes workspace, tool, or evidence state; or, if you cannot obtain what you need because a tool keeps failing or the required evidence is unavailable, end immediately with fail and failureResolution=failure_report, giving the user a short honest explanation of what you could not do. Do not loop and do not ask the user how to proceed."
+	message := "You are repeating actions without making progress. Stop retrying the same thing and stop re-emitting a final reply that keeps getting rejected. Take one of two exits now: either take a genuinely different action that changes workspace, tool, or evidence state; or, if you cannot obtain what you need because a tool keeps failing or the required evidence is unavailable, end immediately with fail, giving the user a short honest explanation of what you could not do. Do not loop and do not ask the user how to proceed."
 	missingOperationName := latestMissingRequiredEvidenceOperationName(observations)
 	if missingOperationName != "" {
-		message = "You have not yet called " + missingOperationName + ". Call that direct tool with the appropriate input before attempting to close again. If it is genuinely not needed for this request, end with fail and failureResolution=failure_report, explaining why in the user reply. Do not re-emit a final reply again without this evidence."
+		message = "You have not yet called " + missingOperationName + ". Call that direct tool with the appropriate input before attempting to close again. If it is genuinely not needed for this request, end with fail, explaining why in the user reply. Do not re-emit a final reply again without this evidence."
 	}
 	observation := newContentObservation(observationID, "policy", "", marshalEventBody(map[string]string{
 		"directive":                message,

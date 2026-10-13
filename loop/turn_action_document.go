@@ -25,7 +25,6 @@ type turnActionDocument struct {
 	ExpectedResult        string                        `json:"expectedResult,omitempty"`
 	QualityCriteria       []string                      `json:"qualityCriteria"`
 	QualityReview         []qualityReviewItem           `json:"qualityReview"`
-	UsedFailureFacts      failureReportFacts            `json:"usedFailureFacts"`
 	ExecutionStateUpdate  ExecutionState                `json:"executionStateUpdate"`
 	BatchedActions        []turnActionDocument          `json:"batchedActions,omitempty"`
 }

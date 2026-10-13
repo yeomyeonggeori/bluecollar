@@ -464,30 +464,10 @@ func TestAgentTurnRunnerUsesNaturalCaptchaFailureReply(t *testing.T) {
 	}
 }
 
-func TestFailureReportRejectsMissingUsedFailureFacts(t *testing.T) {
-	result := validateFailureReportAction(turnActionDocument{
-		Action:            "fail",
-		Reason:            "schedule lookup failed",
-		FailureResolution: failureResolutionFailureReport,
-	}, failureReportFacts{
-		Attempts: []failureReportAttempt{{
-			ToolName:     "schedule_list",
-			InputSummary: "today",
-			ErrorCode:    toolcontract.FailureCodes.OperationFailed.String(),
-			FailureStage: "schedule_lookup",
-			Message:      "schedule storage unavailable",
-		}},
-		BudgetState: "failure_report_required",
-	})
-	if result.IsSatisfied {
-		t.Fatal("expected missing usedFailureFacts to be rejected")
-	}
-}
-
 func TestAgentTurnRunnerPreservesStructuredToolFailure(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"정국","message":"확인 부탁해"}}`,
-		failureReportDocument("recipient missing", "message_send", "확인 부탁해", toolcontract.FailureCodes.NotFound.String(), "recipient_resolve", "approved active Mattermost recipient was not found"),
+		failDocument("recipient missing"),
 		recoveryDecisionDocument("inspect candidate recipients before retrying", "report the exact failure stage and code"),
 	}, textResponses: []string{
 		"recipient_resolve/not_found 단계에서 수신자를 찾지 못해 DM을 보내지 못했습니다.",
@@ -526,7 +506,7 @@ func TestAgentTurnRunnerDeliversSafeDegradedFailureReplyWithoutStageAndCode(t *t
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"정국","message":"확인 부탁해"}}`,
-			failureReportDocument("recipient missing", "message_send", "확인 부탁해", toolcontract.FailureCodes.NotFound.String(), "recipient_resolve", "approved active Mattermost recipient was not found"),
+			failDocument("recipient missing"),
 			recoveryDecisionDocument("inspect candidate recipients before retrying", "report the exact failure stage and code"),
 		},
 		textResponses: []string{"요청을 처리하지 못했습니다."},
@@ -569,7 +549,7 @@ func TestAgentTurnRunnerAcceptsGeneratedStructuredFailureReplyWithStageAndCode(t
 	languageModel := &sequenceLanguageModel{
 		contents: []string{
 			`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"정국","message":"확인 부탁해"}}`,
-			failureReportDocument("recipient missing", "message_send", "확인 부탁해", toolcontract.FailureCodes.NotFound.String(), "recipient_resolve", "approved active Mattermost recipient was not found"),
+			failDocument("recipient missing"),
 			recoveryDecisionDocument("inspect candidate recipients before retrying", "report the exact failure stage and code"),
 		},
 		textResponses: []string{generatedReply},

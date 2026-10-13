@@ -350,7 +350,7 @@ func maxToolCallCountWithRecovery(options TurnOptions, observations []turnObserv
 }
 
 func repeatedFailedAttemptObservation(toolSet *toolcontract.ToolSet, index int, failedObservation turnObservation, originalInstruction string) turnObservation {
-	content := "This exact tool/input/error fingerprint already failed. Do not repeat it. Recover only when evidence explains how a correction or another route addresses this failure. Answer without tools using failureResolution=no_tool_fallback if enough context exists, or fail with failureResolution=failure_report when no evidence-backed recovery is available. Budget is a ceiling, not a requirement to keep trying."
+	content := "This exact tool/input/error fingerprint already failed. Do not repeat it. Recover only when evidence explains how a correction or another route addresses this failure. Answer without tools using failureResolution=no_tool_fallback if enough context exists, or fail when no evidence-backed recovery is available. Budget is a ceiling, not a requirement to keep trying."
 	observation := recoveryGuidanceObservation(toolSet, index, failedObservation, originalInstruction)
 	observation.Action = "policy"
 	observation = withObservationContent(observation, content+" "+observation.ContentText())
@@ -466,13 +466,13 @@ func failureReportMessage(observation turnObservation) string {
 
 func failureDebtActionContractMessage(facts failureReportFacts) string {
 	return strings.Join([]string{
-		"FailureDebt is active. The action schema now requires failureResolution.",
-		"A fail action includes the final requester-language reply in message. State the blocker and any uncertain outcome concisely; validated failure facts let the runtime deliver it directly without further model calls.",
+		"FailureDebt is active. A final reply now requires failureResolution.",
+		"A fail action includes the final requester-language reply in message. State the blocker and any uncertain outcome concisely; the runtime delivers it directly without further model calls.",
 		"Budget is a ceiling, not an instruction to spend it. Judge whether the failure can be repaired with the tools, permissions, and information available to you.",
 		"If a RecoveryPacket is present, use its facts and suggested tools to identify a repair or an independent route. Before another attempt, explain in the action reason which evidence makes it useful. Do not change titles, people, or other unrelated fields merely to produce a different input.",
 		"Do not repeat a failed tool while RecoveryPacket.forbiddenRepeats applies; use an inspect/edit/repair/change-route action first.",
 		"If you can answer directly without tools, send a final reply with failureResolution=no_tool_fallback and do not apologize or mention the failed tool unless the user asked about internals.",
-		"If no evidence-backed recovery is available, return fail with failureResolution=failure_report immediately, even with budget remaining. Explain the blocker in reason and copy the recorded facts into usedFailureFacts. Do not invent a missing prerequisite or call an error temporary without evidence. A failed result check does not prove that a mutation was not saved; verify current state when possible and report uncertainty when it is not.",
+		"If no evidence-backed recovery is available, return fail immediately, even with budget remaining. Explain the blocker from FailureReportFacts, which are the attempts the runtime recorded. Do not invent a missing prerequisite or call an error temporary without evidence. A failed result check does not prove that a mutation was not saved; verify current state when possible and report uncertainty when it is not.",
 		"FailureReportFacts:\n" + marshalEventBody(facts),
 	}, "\n")
 }
@@ -484,57 +484,6 @@ func isRecoveredFailureDebtResolution(failureResolution string) bool {
 	default:
 		return false
 	}
-}
-
-func validateFailureReportAction(actionDocument turnActionDocument, facts failureReportFacts) completionGateResult {
-	if strings.TrimSpace(actionDocument.FailureResolution) != failureResolutionFailureReport {
-		return completionGateResult{Message: "FailureDebt failure reports require failureResolution=failure_report"}
-	}
-	if len(actionDocument.UsedFailureFacts.Attempts) == 0 {
-		return completionGateResult{Message: "FailureDebt failure reports require usedFailureFacts.attempts"}
-	}
-	if actionDocument.UsedFailureFacts.BudgetState != facts.BudgetState {
-		return completionGateResult{Message: "FailureDebt failure reports must copy usedFailureFacts.budgetState from FailureReportFacts"}
-	}
-	if !failureReportAttemptsAreRecorded(actionDocument.UsedFailureFacts.Attempts, facts.Attempts) {
-		return completionGateResult{Message: "FailureDebt failure reports must copy each cited attempt exactly from FailureReportFacts. Do not add unrecorded attempts or count one recorded call more than once."}
-	}
-	if expectedAttempt, hasExpectedAttempt := latestFailureReportAttempt(facts); hasExpectedAttempt && !usedFailureFactsContainAttempt(actionDocument.UsedFailureFacts.Attempts, expectedAttempt) {
-		return completionGateResult{Message: "FailureDebt failure reports must include the latest recorded failed attempt"}
-	}
-	return completionGateResult{IsSatisfied: true}
-}
-
-func failureReportAttemptsAreRecorded(attempts []failureReportAttempt, recordedAttempts []failureReportAttempt) bool {
-	remaining := make(map[failureReportAttempt]int, len(recordedAttempts))
-	for _, attempt := range recordedAttempts {
-		remaining[attempt]++
-	}
-	for _, attempt := range attempts {
-		if remaining[attempt] == 0 {
-			return false
-		}
-		remaining[attempt]--
-	}
-	return true
-}
-
-func latestFailureReportAttempt(facts failureReportFacts) (failureReportAttempt, bool) {
-	for index := len(facts.Attempts) - 1; index >= 0; index-- {
-		if strings.TrimSpace(facts.Attempts[index].ToolName) != "" {
-			return facts.Attempts[index], true
-		}
-	}
-	return failureReportAttempt{}, false
-}
-
-func usedFailureFactsContainAttempt(attempts []failureReportAttempt, expectedAttempt failureReportAttempt) bool {
-	for _, attempt := range attempts {
-		if attempt == expectedAttempt {
-			return true
-		}
-	}
-	return false
 }
 
 func recoveryToolBudgetExhaustedForRequest(observations []turnObservation, toolSet *toolcontract.ToolSet, budget RecoveryBudget, failureDebt FailureDebt) bool {
