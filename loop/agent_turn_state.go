@@ -939,15 +939,7 @@ func parametersWithReasoningSlot(parameters json.RawMessage) (json.RawMessage, e
 	if errorValue := json.Unmarshal(parameters, &document); errorValue != nil {
 		return nil, errorValue
 	}
-	var properties map[string]json.RawMessage
-	if json.Unmarshal(document["properties"], &properties) != nil || properties == nil {
-		properties = map[string]json.RawMessage{}
-	}
-	properties[reasoningSlotName], _ = json.Marshal(map[string]string{
-		"type":        "string",
-		"description": "Think here before acting: what the last results showed and why this call is next. Carried into your next step. One or two sentences.",
-	})
-	propertiesDocument, errorValue := json.Marshal(properties)
+	propertiesDocument, errorValue := propertiesEndingWithReasoningSlot(document["properties"])
 	if errorValue != nil {
 		return nil, errorValue
 	}
@@ -956,6 +948,27 @@ func parametersWithReasoningSlot(parameters json.RawMessage) (json.RawMessage, e
 	_ = json.Unmarshal(document["required"], &requiredFields)
 	document["required"], _ = json.Marshal(append(requiredFields, reasoningSlotName))
 	return json.Marshal(document)
+}
+
+func propertiesEndingWithReasoningSlot(propertiesDocument json.RawMessage) (json.RawMessage, error) {
+	var toolProperties map[string]json.RawMessage
+	if json.Unmarshal(propertiesDocument, &toolProperties) != nil || toolProperties == nil {
+		toolProperties = map[string]json.RawMessage{}
+	}
+	delete(toolProperties, reasoningSlotName)
+	toolPropertiesDocument, errorValue := json.Marshal(toolProperties)
+	if errorValue != nil {
+		return nil, errorValue
+	}
+	reasoningSlot, _ := json.Marshal(map[string]string{
+		"type":        "string",
+		"description": "Think here before acting: what the last results showed and why this call is next. Carried into your next step. One or two sentences.",
+	})
+	reasoningEntry := `"` + reasoningSlotName + `":` + string(reasoningSlot)
+	if len(toolProperties) > 0 {
+		reasoningEntry = "," + reasoningEntry
+	}
+	return json.RawMessage(strings.TrimSuffix(string(toolPropertiesDocument), "}") + reasoningEntry + "}"), nil
 }
 
 func singleSchemaEnumValue(document json.RawMessage) (string, error) {
