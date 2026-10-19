@@ -67,7 +67,7 @@ func (decisionModel *scriptedDecisionModel) Decide(_ context.Context, request mo
 			if decisionModel.gapError != nil {
 				return model.DecisionResponse{}, decisionModel.gapError
 			}
-			answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice[key]}
+			answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeChoice, Choice: decisionModel.choice[key], Probabilities: map[string]float64{decisionModel.choice[key]: 1}}
 			continue
 		}
 		answers[key] = model.DecisionAnswer{Type: model.DecisionQuestionTypeNoul, Noul: decisionModel.noul[key]}

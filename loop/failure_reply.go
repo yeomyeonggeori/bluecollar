@@ -100,6 +100,7 @@ func (agentTurnRunner *AgentTurnRunner) generateFailureNotice(parentContext cont
 	decision, decisionError := agentTurnRunner.generateRecoveryDecision(recoveryContext, request, failureReason, observations, attachments, executionState, "failure")
 	failureReportFacts := buildFailureReportFacts(observations, agentTurnRunner.options.RecoveryBudget)
 	failureReport := buildFailureReport(request, taskRunID, "failure", failureReason, observations, attachments, executionState, decision)
+	failureReport.RequestedChanges = agentTurnRunner.requestedChangesAtStop(recoveryContext, taskRunID, request, observations)
 	status := failureReplyStatus{Decision: decision, FailureReportFacts: failureReportFacts}
 	if decisionError != nil {
 		status.StructuredRecoveryError = decisionError.Error()
@@ -128,6 +129,7 @@ func (agentTurnRunner *AgentTurnRunner) generateStallPauseNotice(parentContext c
 	defer cancelRecovery()
 	decision, decisionError := agentTurnRunner.generateRecoveryDecision(recoveryContext, request, stallReason, observations, attachments, executionState, "stall")
 	failureReport := buildFailureReport(request, taskRunID, "stall", stallReason, observations, attachments, executionState, decision)
+	failureReport.RequestedChanges = agentTurnRunner.requestedChangesAtStop(recoveryContext, taskRunID, request, observations)
 	status := failureReplyStatus{Decision: decision, FailureReportFacts: buildFailureReportFacts(observations, agentTurnRunner.options.RecoveryBudget)}
 	if decisionError != nil {
 		status.StructuredRecoveryError = decisionError.Error()
@@ -156,6 +158,7 @@ func (agentTurnRunner *AgentTurnRunner) generateLimitReachedNotice(parentContext
 	decision, decisionError := agentTurnRunner.generateRecoveryDecision(recoveryContext, request, stopReason, observations, files.Delivered, executionState, "limit")
 	failureReport := limitFailureReport(request, taskRunID, stopReason, observations, files, executionState, decision)
 	failureReport = limitFailureReportWithCheckpointContext(failureReport, stopReason)
+	failureReport.RequestedChanges = agentTurnRunner.requestedChangesAtStop(recoveryContext, taskRunID, request, observations)
 	status := limitReplyStatus{Decision: decision, FailureReportFacts: buildFailureReportFacts(observations, agentTurnRunner.options.RecoveryBudget)}
 	if decisionError != nil {
 		status.StructuredRecoveryError = decisionError.Error()

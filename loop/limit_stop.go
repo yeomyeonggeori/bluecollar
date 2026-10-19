@@ -50,7 +50,7 @@ func (agentTurnRunner *AgentTurnRunner) stopAtElapsedLimit(ctx context.Context, 
 
 func (agentTurnRunner *AgentTurnRunner) blockAtElapsedLimit(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, files limitFiles, executionState ExecutionState) (AgentTurnResult, error) {
 	taskRun, _ := agentTurnRunner.taskRunService.PauseTaskRun(taskRunID, agentcontract.TaskStatusBlocked, "max_elapsed")
-	reply, replyStatus := agentTurnRunner.generateElapsedClosingReply(ctx, request, observations, files, executionState)
+	reply, replyStatus := agentTurnRunner.generateElapsedClosingReply(ctx, taskRunID, request, observations, files, executionState)
 	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentLimitReply, marshalEventBody(replyStatus))
 	if ctx.Err() != nil {
 		return AgentTurnResult{
@@ -74,7 +74,7 @@ func (agentTurnRunner *AgentTurnRunner) blockAtElapsedLimit(ctx context.Context,
 	return AgentTurnResult{TaskRun: taskRun, UserNotice: reply, FailureNotice: failureNotice, Attachments: files.Carried, RecoveryActions: recoveryActionsFromObservations(observations)}, nil
 }
 
-func (agentTurnRunner *AgentTurnRunner) generateElapsedClosingReply(ctx context.Context, request AgentTurnRequest, observations []turnObservation, files limitFiles, executionState ExecutionState) (string, limitReplyStatus) {
+func (agentTurnRunner *AgentTurnRunner) generateElapsedClosingReply(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation, files limitFiles, executionState ExecutionState) (string, limitReplyStatus) {
 	report := limitFailureReport(request, "", "max_elapsed", observations, files, executionState, recoveryDecision{})
 	chatCompleter, isAvailable := model.ResolveTextChatCompleter(agentTurnRunner.languageModel)
 	if !isAvailable {
@@ -82,6 +82,7 @@ func (agentTurnRunner *AgentTurnRunner) generateElapsedClosingReply(ctx context.
 	}
 	closingContext, cancelClosing := agentTurnRunner.elapsedClosingContext(ctx, request.EffortStartedAt)
 	defer cancelClosing()
+	report.RequestedChanges = agentTurnRunner.requestedChangesAtStop(closingContext, taskRunID, request, observations)
 	reply, errorValue := elapsedClosingText(closingContext, chatCompleter, elapsedReplySchemaName, buildFailureNoticePrompt(report))
 	if errorValue == nil && failureNoticeMessageIsSendable(reply) {
 		return reply, limitReplyStatus{Source: "generated"}

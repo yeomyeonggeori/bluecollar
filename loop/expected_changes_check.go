@@ -35,6 +35,8 @@ type changeCheck struct {
 	GapCheckError    string             `json:"gapCheckError,omitempty"`
 	StateDigest      string             `json:"stateDigest,omitempty"`
 	RepeatsRefusalOf string             `json:"repeatsRefusalOf,omitempty"`
+	RequestedFields  map[string]string  `json:"requestedFields,omitempty"`
+	UnwrittenFields  map[string]string  `json:"unwrittenFields,omitempty"`
 }
 
 func (check changeCheck) awaitsOnlyTheRequester() bool {
@@ -89,11 +91,16 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 		return changeCheck{}, errorValue
 	}
 	check.CarriedOut = map[string]float64{}
+	for index := range expected {
+		check.CarriedOut[changeQuestionKey(index)] = response.Answers[changeQuestionKey(index)].Noul
+	}
+	check, errorValue = withUnwrittenFieldsChecked(ctx, decisionModel, request, state, expected, heldObjectTypes, observations, check)
+	if errorValue != nil {
+		return changeCheck{}, errorValue
+	}
 	unmetIndexes := []int{}
 	for index, change := range expected {
-		answer := response.Answers[changeQuestionKey(index)]
-		check.CarriedOut[changeQuestionKey(index)] = answer.Noul
-		if answer.Noul < changeCarriedOutThreshold {
+		if check.CarriedOut[changeQuestionKey(index)] < changeCarriedOutThreshold {
 			check.Unmet = append(check.Unmet, change)
 			unmetIndexes = append(unmetIndexes, index)
 		}

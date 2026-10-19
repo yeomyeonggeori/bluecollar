@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
@@ -31,9 +32,16 @@ type changeVocabulary struct {
 }
 
 type pendingExpectedChanges struct {
-	done      chan struct{}
-	changes   []expectedChange
-	isDefined bool
+	done        chan struct{}
+	changes     []expectedChange
+	isDefined   bool
+	mutex       sync.Mutex
+	latestCheck *recordedChangeCheck
+}
+
+type recordedChangeCheck struct {
+	observationCount int
+	check            changeCheck
 }
 
 func (agentTurnRunner *AgentTurnRunner) beginExpectedChanges(ctx context.Context, taskRunID string, request AgentTurnRequest) {
@@ -45,14 +53,42 @@ func (agentTurnRunner *AgentTurnRunner) beginExpectedChanges(ctx context.Context
 	}()
 }
 
+func (agentTurnRunner *AgentTurnRunner) latestChangeCheck(taskRunID string, observationCount int) (changeCheck, bool) {
+	pending, isPending := agentTurnRunner.pendingExpectedChangesOf(taskRunID)
+	if !isPending {
+		return changeCheck{}, false
+	}
+	pending.mutex.Lock()
+	defer pending.mutex.Unlock()
+	if pending.latestCheck == nil || pending.latestCheck.observationCount != observationCount {
+		return changeCheck{}, false
+	}
+	return pending.latestCheck.check, true
+}
+
+func (agentTurnRunner *AgentTurnRunner) rememberChangeCheck(taskRunID string, observationCount int, check changeCheck) {
+	pending, isPending := agentTurnRunner.pendingExpectedChangesOf(taskRunID)
+	if !isPending {
+		return
+	}
+	pending.mutex.Lock()
+	defer pending.mutex.Unlock()
+	pending.latestCheck = &recordedChangeCheck{observationCount: observationCount, check: check}
+}
+
+func (agentTurnRunner *AgentTurnRunner) pendingExpectedChangesOf(taskRunID string) (*pendingExpectedChanges, bool) {
+	stored, isStarted := agentTurnRunner.expectedChanges.Load(taskRunID)
+	pending, isPending := stored.(*pendingExpectedChanges)
+	return pending, isStarted && isPending
+}
+
 func (agentTurnRunner *AgentTurnRunner) forgetExpectedChanges(taskRunID string) {
 	agentTurnRunner.expectedChanges.Delete(taskRunID)
 }
 
 func (agentTurnRunner *AgentTurnRunner) expectedChangesFor(ctx context.Context, taskRunID string, request AgentTurnRequest) ([]expectedChange, bool) {
-	stored, isStarted := agentTurnRunner.expectedChanges.Load(taskRunID)
-	pending, isPending := stored.(*pendingExpectedChanges)
-	if !isStarted || !isPending {
+	pending, isPending := agentTurnRunner.pendingExpectedChangesOf(taskRunID)
+	if !isPending {
 		return agentTurnRunner.defineExpectedChanges(ctx, taskRunID, request)
 	}
 	select {

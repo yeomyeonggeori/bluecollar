@@ -26,21 +26,10 @@ func (agentTurnRunner *AgentTurnRunner) validateCompletionGateWithChanges(ctx co
 }
 
 func (agentTurnRunner *AgentTurnRunner) evaluateExpectedChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation) completionGateResult {
-	expected, isDefined := agentTurnRunner.expectedChangesFor(ctx, taskRunID, request)
-	if !isDefined || len(expected) == 0 {
+	check, isChecked := agentTurnRunner.checkRequestedChanges(ctx, taskRunID, request, observations)
+	if !isChecked {
 		return completionGateResult{IsSatisfied: true}
 	}
-	if agentTurnRunner.decisionModel == nil {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "change_check", "error": "decision model is not configured"}))
-		return completionGateResult{IsSatisfied: true}
-	}
-	decisionModel := observedDecisionModel{decisionModel: agentTurnRunner.decisionModel, observe: agentTurnRunner.llmCallObserverForTaskRun(taskRunID)}
-	check, errorValue := checkExpectedChanges(ctx, decisionModel, request, expected, observations)
-	if errorValue != nil {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "change_check", "error": errorValue.Error()}))
-		return completionGateResult{IsSatisfied: true}
-	}
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionChangeCheck, marshalEventBody(check))
 	if len(check.Unmet) == 0 {
 		return completionGateResult{IsSatisfied: true, AreChangesConfirmed: true}
 	}
@@ -53,6 +42,45 @@ func (agentTurnRunner *AgentTurnRunner) evaluateExpectedChanges(ctx context.Cont
 		IsChangeCheckUnmet: true,
 		ChangeCheck:        &check,
 	}
+}
+
+func (agentTurnRunner *AgentTurnRunner) checkRequestedChanges(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation) (changeCheck, bool) {
+	expected, isDefined := agentTurnRunner.expectedChangesFor(ctx, taskRunID, request)
+	if !isDefined || len(expected) == 0 {
+		return changeCheck{}, false
+	}
+	if check, isKnown := agentTurnRunner.latestChangeCheck(taskRunID, len(observations)); isKnown {
+		return check, true
+	}
+	if agentTurnRunner.decisionModel == nil {
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "change_check", "error": "decision model is not configured"}))
+		return changeCheck{}, false
+	}
+	decisionModel := observedDecisionModel{decisionModel: agentTurnRunner.decisionModel, observe: agentTurnRunner.llmCallObserverForTaskRun(taskRunID)}
+	check, errorValue := checkExpectedChanges(ctx, decisionModel, request, expected, observations)
+	if errorValue != nil {
+		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "change_check", "error": errorValue.Error()}))
+		return changeCheck{}, false
+	}
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionChangeCheck, marshalEventBody(check))
+	agentTurnRunner.rememberChangeCheck(taskRunID, len(observations), check)
+	return check, true
+}
+
+func (agentTurnRunner *AgentTurnRunner) requestedChangesAtStop(ctx context.Context, taskRunID string, request AgentTurnRequest, observations []turnObservation) []agentcontract.RequestedChange {
+	check, isChecked := agentTurnRunner.checkRequestedChanges(ctx, taskRunID, request, observations)
+	if !isChecked {
+		return nil
+	}
+	requestedChanges := make([]agentcontract.RequestedChange, 0, len(check.ExpectedChanges))
+	for _, change := range check.ExpectedChanges {
+		requestedChanges = append(requestedChanges, agentcontract.RequestedChange{
+			Change:       change.Change,
+			Asked:        change.Asked,
+			IsCarriedOut: !containsExpectedChange(check.Unmet, change),
+		})
+	}
+	return requestedChanges
 }
 
 type observedDecisionModel struct {
@@ -77,12 +105,24 @@ func unmetChangesMessage(check changeCheck) string {
 		if containsExpectedChange(check.Unrecorded, change) {
 			reason = "nothing recorded changed this kind of record"
 		}
+		if fieldName := check.unwrittenFieldOf(change); fieldName != "" {
+			reason = "it is held in the field " + fieldName + ", and no recorded write set that field"
+		}
 		if containsExpectedChange(check.AwaitsRequester, change) {
 			reason = "it needs information only the requester can give, which the final reply will ask them for"
 		}
 		lines = append(lines, "\""+change.Asked+"\" ("+change.Change+"): "+reason)
 	}
 	return "Requested changes not done yet:\n" + strings.Join(lines, "\n")
+}
+
+func (check changeCheck) unwrittenFieldOf(wanted expectedChange) string {
+	for index, change := range check.ExpectedChanges {
+		if change == wanted {
+			return check.UnwrittenFields[changeQuestionKey(index)]
+		}
+	}
+	return ""
 }
 
 func containsExpectedChange(changes []expectedChange, wanted expectedChange) bool {
