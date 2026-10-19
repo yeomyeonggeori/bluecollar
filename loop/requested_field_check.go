@@ -15,11 +15,11 @@ const (
 	requestedFieldChoiceMinimum = 0.5
 )
 
-func requestedFieldQuestions(toolSet *toolcontract.ToolSet, expected []expectedChange, heldObjectTypes map[string]bool) map[string]model.DecisionQuestion {
+func requestedFieldQuestions(toolSet *toolcontract.ToolSet, expected []expectedChange, heldObjectTypes map[string]bool, carriedOut map[string]float64) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	objectTypeByKind := objectTypeByChangeKind(toolSet)
 	for index, change := range expected {
-		if heldObjectTypes[objectTypeByKind[change.Change]] {
+		if heldObjectTypes[objectTypeByKind[change.Change]] || carriedOut[changeQuestionKey(index)] < changeCarriedOutThreshold {
 			continue
 		}
 		fieldMeanings := inputFieldMeaningsOfChangeKind(toolSet, change.Change)
@@ -96,9 +96,9 @@ func requestedField(answers map[string]model.DecisionAnswer, index int) string {
 	return answer.Choice
 }
 
-func isFieldWrittenForChange(observations []turnObservation, kind string, fieldName string) bool {
+func isFieldWrittenToObjectType(observations []turnObservation, objectType string, fieldName string) bool {
 	for _, observation := range successfulToolObservations(observations) {
-		if !recordsChangeKind(observation, kind) {
+		if !changesObjectType(observation, objectType) {
 			continue
 		}
 		var input map[string]json.RawMessage
@@ -112,9 +112,9 @@ func isFieldWrittenForChange(observations []turnObservation, kind string, fieldN
 	return false
 }
 
-func recordsChangeKind(observation turnObservation, kind string) bool {
+func changesObjectType(observation turnObservation, objectType string) bool {
 	for _, effect := range observation.Effects {
-		if changeKind(effect.ObjectType, effect.Effect) == kind {
+		if strings.TrimSpace(effect.ObjectType) == objectType {
 			return true
 		}
 	}
@@ -136,8 +136,8 @@ func alreadySoQuestions(unwrittenFields map[int]string) map[string]model.Decisio
 	return questions
 }
 
-func requestedFieldAnswers(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []expectedChange, heldObjectTypes map[string]bool) (map[string]model.DecisionAnswer, error) {
-	questions := requestedFieldQuestions(request.ToolSet, expected, heldObjectTypes)
+func requestedFieldAnswers(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []expectedChange, heldObjectTypes map[string]bool, carriedOut map[string]float64) (map[string]model.DecisionAnswer, error) {
+	questions := requestedFieldQuestions(request.ToolSet, expected, heldObjectTypes, carriedOut)
 	if len(questions) == 0 {
 		return nil, nil
 	}
@@ -150,10 +150,11 @@ func requestedFieldAnswers(ctx context.Context, decisionModel model.DecisionMode
 }
 
 func withUnwrittenFieldsChecked(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, state map[string]any, expected []expectedChange, heldObjectTypes map[string]bool, observations []turnObservation, check changeCheck) (changeCheck, error) {
-	answers, errorValue := requestedFieldAnswers(ctx, decisionModel, request, expected, heldObjectTypes)
+	answers, errorValue := requestedFieldAnswers(ctx, decisionModel, request, expected, heldObjectTypes, check.CarriedOut)
 	if errorValue != nil {
 		return changeCheck{}, errorValue
 	}
+	objectTypeByKind := objectTypeByChangeKind(request.ToolSet)
 	unwrittenFields := map[int]string{}
 	for index, change := range expected {
 		fieldName := requestedField(answers, index)
@@ -164,7 +165,7 @@ func withUnwrittenFieldsChecked(ctx context.Context, decisionModel model.Decisio
 			check.RequestedFields = map[string]string{}
 		}
 		check.RequestedFields[changeQuestionKey(index)] = fieldName
-		if check.CarriedOut[changeQuestionKey(index)] >= changeCarriedOutThreshold && !isFieldWrittenForChange(observations, change.Change, fieldName) {
+		if !isFieldWrittenToObjectType(observations, objectTypeByKind[change.Change], fieldName) {
 			unwrittenFields[index] = fieldName
 		}
 	}
