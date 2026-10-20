@@ -113,6 +113,7 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
 		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention tools, checks, records, evidence identifiers, prompts, or runtime details.",
+		agentcontract.NothingRunsAfterTheLastWord,
 		finishReplyFilesFact(rewrite.carried, len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0),
 		"Original request:\n"+completionReplyOriginalRequest(request),
 		"Reply:\n"+reply,
