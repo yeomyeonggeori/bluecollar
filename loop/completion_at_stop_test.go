@@ -94,3 +94,24 @@ func TestAStopWithNothingAskedToChangeWaitsForTheModelToSayItWasDone(t *testing.
 		t.Fatal("a request that asked for no change completes once the model says its last step was the answer")
 	}
 }
+
+func TestAStoppedTaskReportsWhichAskedChangesWereNotCarriedOut(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.1}}
+	services := servicesStoppingAfterDeletion(expectedChangesDocument(deleteOldTask), decisionModel)
+	request := deleteRequest(taskDeleteToolSet())
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
+	state := agentTaskState{Observations: []turnObservation{deletedTaskObservation()}}
+	services.runner.beginExpectedChanges(context.Background(), taskRun.TaskRunID, request)
+
+	services.runner.completeOrStopForLimit(context.Background(), taskRun.TaskRunID, request, "max_iterations", &state, 3)
+
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "agent.failure_report", `"requestedChanges":[{"change":"task deleted"`) {
+		t.Fatal("expected the stop's failure report to carry the asked change")
+	}
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "agent.failure_report", `"carriedOut":false`) {
+		t.Fatal("expected the stop's failure report to say the asked change was not carried out")
+	}
+	if judgements := decisionModel.carriedOutJudgements(); judgements != 1 {
+		t.Fatalf("the notice reuses the check the stop already ran, got %d judgements", judgements)
+	}
+}
