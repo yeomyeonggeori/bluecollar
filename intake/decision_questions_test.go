@@ -62,28 +62,6 @@ func TestUnclearWorkDefersToolDiscoverableRequirementsToTheWork(t *testing.T) {
 	}
 }
 
-func TestExternalSendQuestionSeparatesIntentFromCurrentConversationAndToolAvailability(t *testing.T) {
-	question := questionsFor(addressedDecisionRequest("deliver the report"))["m1."+agentcontract.IntakeQuestionIsExternalSendRequested]
-	criteria := criteriaText(t, question)
-	if question.Type != model.DecisionQuestionTypeNoul {
-		t.Fatalf("expected the external-send question to use Noul, got %q", question.Type)
-	}
-	for _, expected := range []string{
-		"content or files",
-		"outside the current conversation",
-		"on a schedule",
-		"quoted or forwarded content",
-		"intent, not whether the effect is approved or permitted",
-		"attachment in this current conversation",
-		"optional notification",
-		"send tool available",
-	} {
-		if !strings.Contains(criteria, expected) {
-			t.Fatalf("expected external-send intent guidance %q, got %s", expected, criteria)
-		}
-	}
-}
-
 func TestEveryQuestionOptionIsAString(t *testing.T) {
 	request := addressedDecisionRequest("보고서 정리해줘")
 	request.ToolSet = newTestToolSet([]string{"task_add"})
@@ -203,14 +181,13 @@ func TestTheJointCallAsksOnlyWhatPlanningATurnNeeds(t *testing.T) {
 	request.PriorTask = agentcontract.PriorTaskContext{TaskRunID: "task-run-0", Prompt: "보고서 정리해줘"}
 	request.ToolSet = newTestToolSet([]string{"task_add"})
 	planning := map[string]bool{
-		agentcontract.IntakeQuestionWork:                    true,
-		agentcontract.IntakeQuestionRelation:                true,
-		agentcontract.IntakeQuestionExpectedToolCount:       true,
-		agentcontract.IntakeQuestionIsExternalSendRequested: true,
-		agentcontract.IntakeQuestionTaskShape:               true,
-		agentcontract.IntakeQuestionDeliverableKind:         true,
-		agentcontract.IntakeQuestionPriorTaskReference:      true,
-		agentcontract.IntakeQuestionResponseLanguage:        true,
+		agentcontract.IntakeQuestionWork:               true,
+		agentcontract.IntakeQuestionRelation:           true,
+		agentcontract.IntakeQuestionExpectedToolCount:  true,
+		agentcontract.IntakeQuestionTaskShape:          true,
+		agentcontract.IntakeQuestionDeliverableKind:    true,
+		agentcontract.IntakeQuestionPriorTaskReference: true,
+		agentcontract.IntakeQuestionResponseLanguage:   true,
 	}
 
 	for questionName := range questionsFor(request) {

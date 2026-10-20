@@ -594,32 +594,6 @@ func TestOutcomeContractDerivesSideEffectEvidenceAnyOfGroupForMaintenanceTask(t 
 	}
 }
 
-func TestOutcomeReferenceToolSetHidesSendToolsForDocumentGoal(t *testing.T) {
-	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
-		{Name: "web_fetch", Namespace: "web", SideEffectClass: toolcontract.ToolSideEffectRead},
-		{Name: "write", Namespace: "file", SideEffectClass: toolcontract.ToolSideEffectWorkspaceWrite},
-		{Name: "file_deliver", Namespace: "file", SideEffectClass: toolcontract.ToolSideEffectExternalWrite},
-		{Name: "message_send", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
-		{Name: "mail_message_send", Namespace: "mail", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
-	})
-	contract := OutcomeContract{
-		SelectedEvidenceHints: []string{"message_send", "mail_message_send"},
-	}
-
-	filteredToolSet := toolSetForOutcomeReference(toolSet, AgentRequest{Prompt: "https://example.com use it to write the business plan"}, ExecutionPlan{}, false, contract)
-
-	for _, toolName := range []string{"web_fetch", "write", "file_deliver"} {
-		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected %s to remain available, got %+v", toolName, filteredToolSet.ListToolNames())
-		}
-	}
-	for _, toolName := range []string{"message_send", "mail_message_send"} {
-		if filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected %s to be hidden for document goal, got %+v", toolName, filteredToolSet.ListToolNames())
-		}
-	}
-}
-
 func TestAgentTurnToolSetExposesPinnedNonKernelTools(t *testing.T) {
 	toolSet := testToolSet([]string{"web_search", "web_fetch", "bash", "write"})
 	instructionBundle := InstructionBundle{
@@ -635,27 +609,6 @@ func TestAgentTurnToolSetExposesPinnedNonKernelTools(t *testing.T) {
 	for _, toolName := range []string{"bash", "write", "web_search", "web_fetch"} {
 		if !filteredToolSet.IsAllowed(toolName) {
 			t.Fatalf("expected pinned tool %s to remain available, got %+v", toolName, filteredToolSet.ListToolNames())
-		}
-	}
-}
-
-func TestOutcomeReferenceToolSetKeepsActiveGoalEvidenceToolsForContinuation(t *testing.T) {
-	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{
-		{Name: "web_fetch", Namespace: "web", SideEffectClass: toolcontract.ToolSideEffectRead},
-		{Name: "message_send", Namespace: "message", SideEffectClass: toolcontract.ToolSideEffectExternalSend},
-	})
-	request := AgentRequest{
-		Prompt: "try again, it should work",
-		ActiveGoal: ActiveGoal{OriginalInstruction: "send Dana a DM saying the draft is ready", OutcomeContract: OutcomeContract{
-			RequiredEvidenceTools: []string{"message_send"},
-		}},
-	}
-
-	filteredToolSet := toolSetForOutcomeReference(toolSet, request, ExecutionPlan{}, false, OutcomeContract{})
-
-	for _, toolName := range []string{"message_send"} {
-		if !filteredToolSet.IsAllowed(toolName) {
-			t.Fatalf("expected %s to remain available for an active send continuation, got %+v", toolName, filteredToolSet.ListToolNames())
 		}
 	}
 }
@@ -760,16 +713,6 @@ func TestAgentTurnToolSetHidesUnrequestedSendToolForAttachmentFollowUp(t *testin
 	}
 	if !filteredToolSet.IsAllowed("file_preview") {
 		t.Fatalf("expected attachment preview to remain available, got %+v", filteredToolSet.ListToolNames())
-	}
-}
-
-func TestOutcomeReferenceToolSetKeepsSendToolsForExplicitSendGoal(t *testing.T) {
-	toolSet := testToolSet([]string{"web_fetch", "message_send", "mail_message_send"})
-
-	filteredToolSet := toolSetForOutcomeReference(toolSet, AgentRequest{Prompt: "send Dana a DM"}, ExecutionPlan{}, false, OutcomeContract{RequiredEvidenceTools: []string{"message_send"}})
-
-	if !filteredToolSet.IsAllowed("message_send") {
-		t.Fatalf("expected DM send to remain available, got %+v", filteredToolSet.ListToolNames())
 	}
 }
 

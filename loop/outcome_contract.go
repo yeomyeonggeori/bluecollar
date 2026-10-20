@@ -16,9 +16,6 @@ func shouldBuildExecutionPlanForConfirmation(request AgentRequest, intakeDecisio
 	if intakeDecision.TaskShape == TaskShapeApprovalGatedTask {
 		return true
 	}
-	if intakeDecision.IsExternalSendRequested {
-		return true
-	}
 	for _, toolName := range requiredEvidenceTools {
 		if isSendEvidenceTool(request.ToolSet, toolName) {
 			return true
@@ -49,38 +46,6 @@ func requestNeedsDerivedSideEffectEvidenceGroup(toolSet *toolcontract.ToolSet, i
 		return false
 	}
 	return !requiredEvidenceIncludesSideEffect(toolSet, contract.RequiredEvidenceTools)
-}
-
-func toolSetForOutcomeReference(toolSet *toolcontract.ToolSet, request AgentRequest, executionPlan ExecutionPlan, hasExecutionPlan bool, outcomeContract OutcomeContract) *toolcontract.ToolSet {
-	if toolSet == nil {
-		return nil
-	}
-	allowedToolNames := []string{}
-	for _, toolName := range toolSet.ListToolNames() {
-		if shouldExposeToolForOutcome(toolSet, toolName, request, executionPlan, hasExecutionPlan, outcomeContract) {
-			allowedToolNames = append(allowedToolNames, toolName)
-		}
-	}
-	return toolSet.WithAllowedToolNames(allowedToolNames)
-}
-
-func shouldExposeToolForOutcome(toolSet *toolcontract.ToolSet, toolName string, request AgentRequest, executionPlan ExecutionPlan, hasExecutionPlan bool, outcomeContract OutcomeContract) bool {
-	trimmedToolName := strings.TrimSpace(toolName)
-	if stringSliceContains(request.PinnedToolNames, trimmedToolName) {
-		return true
-	}
-	if activeGoalRequiresTool(request.ActiveGoal, trimmedToolName) {
-		return true
-	}
-	if isSendEvidenceTool(toolSet, trimmedToolName) {
-		return outcomeAllowsExternalSendTools(toolSet, executionPlan, hasExecutionPlan, outcomeContract)
-	}
-	return true
-}
-
-func outcomeAllowsExternalSendTools(toolSet *toolcontract.ToolSet, executionPlan ExecutionPlan, hasExecutionPlan bool, outcomeContract OutcomeContract) bool {
-	return contractRequiresSendTool(toolSet, outcomeContract) ||
-		(hasExecutionPlan && (executionPlan.ExternalSend || executionPlan.ThirdPartyExternalSend))
 }
 
 func outcomeAllowsVisualArtifactReview(request AgentRequest, outcomeContract OutcomeContract) bool {
@@ -239,9 +204,6 @@ func sanitizeOutcomeContractForRequest(request AgentRequest, executionPlan Execu
 	if outcomeContractRequiresPlatformMessageMaintenance(request.ToolSet, contract) {
 		contract = removePlatformMessageSendContract(contract)
 	}
-	if !requestExpectsExternalSend(request, executionPlan, hasExecutionPlan) {
-		contract = removeExternalSendContract(request.ToolSet, contract)
-	}
 	return normalizeOutcomeContract(contract)
 }
 
@@ -304,14 +266,6 @@ func toolResultContractAttachesFile(resultContract *toolcontract.ToolResultContr
 	return false
 }
 
-func requestExpectsExternalSend(request AgentRequest, executionPlan ExecutionPlan, hasExecutionPlan bool) bool {
-	_ = request
-	if !hasExecutionPlan {
-		return true
-	}
-	return executionPlan.ExternalSend || executionPlan.ThirdPartyExternalSend
-}
-
 func outcomeContractExpectsFileResult(contract OutcomeContract) bool {
 	return len(contract.RequiredAttachmentSuffixes) > 0 ||
 		evidenceToolsContainArtifactDelivery(contract.RequiredEvidenceTools) ||
@@ -332,17 +286,6 @@ func removePlatformMessageSendContract(contract OutcomeContract) OutcomeContract
 	contract.RequiredEvidenceTools = removeToolName(contract.RequiredEvidenceTools, "message_send")
 	contract.SelectedEvidenceHints = removeToolName(contract.SelectedEvidenceHints, "message_send")
 	contract.RequiredEvidenceAnyOf = removeToolNameGroups(contract.RequiredEvidenceAnyOf, "message_send")
-	return contract
-}
-
-func removeExternalSendContract(toolSet *toolcontract.ToolSet, contract OutcomeContract) OutcomeContract {
-	for _, toolName := range outcomeContractToolNames(contract) {
-		if !isSendEvidenceTool(toolSet, toolName) {
-			continue
-		}
-		contract.RequiredEvidenceTools = removeToolName(contract.RequiredEvidenceTools, toolName)
-		contract.RequiredEvidenceAnyOf = removeToolNameGroups(contract.RequiredEvidenceAnyOf, toolName)
-	}
 	return contract
 }
 

@@ -149,7 +149,7 @@ func TestApprovalGatedTaskStillBuildsConfirmationPlan(t *testing.T) {
 	}
 }
 
-func TestConfirmationPlanUsesExplicitExternalSendIntentInsteadOfLikelyToolNames(t *testing.T) {
+func TestALikelySendToolDoesNotBuildAConfirmationPlan(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{{
 		Name:            "message_send",
 		Namespace:       "message",
@@ -167,11 +167,6 @@ func TestConfirmationPlanUsesExplicitExternalSendIntentInsteadOfLikelyToolNames(
 	}
 	if shouldBuildExecutionPlanForConfirmation(request, intakeDecision, nil) {
 		t.Fatal("a likely or available send tool does not mean the requester asked to send externally")
-	}
-
-	intakeDecision.IsExternalSendRequested = true
-	if !shouldBuildExecutionPlanForConfirmation(request, intakeDecision, nil) {
-		t.Fatal("explicit external-send intent must build a plan for a maintenance-shaped request")
 	}
 }
 

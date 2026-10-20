@@ -22,13 +22,6 @@ func (agentTurnRunner *AgentTurnRunner) rejectUnavailableToolCall(taskRunID stri
 		result, shouldStop := stopForNoProgress(stepID)
 		return noProgressToolCallActionOutcome(result, shouldStop)
 	}
-	if observation, isRejected := unrequestedPlatformMessageSendObservation(request, actionDocument, nextObservationIDForObservations(state.Observations)); isRejected {
-		state.Observations = append(state.Observations, observation)
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentExternalSendIntentRejected, marshalEventBody(observation))
-		agentTurnRunner.saveStep(taskRunID, stepID, agentcontract.TaskStatusCompleted, "external_send_intent_rejected "+actionDocument.ToolName, observation.ContentText())
-		result, shouldStop := stopForNoProgress(stepID)
-		return noProgressToolCallActionOutcome(result, shouldStop)
-	}
 	return toolCallActionOutcome{}
 }
 
@@ -500,56 +493,6 @@ func observationSendRecipientKey(observation turnObservation) string {
 func requiredEvidenceContains(requiredEvidenceTools []string, expectedToolName string) bool {
 	for _, toolName := range requiredEvidenceTools {
 		if toolexposure.ToolNamesMatch(toolName, expectedToolName) {
-			return true
-		}
-	}
-	return false
-}
-
-func unrequestedPlatformMessageSendObservation(request AgentTurnRequest, actionDocument turnActionDocument, observationID string) (turnObservation, bool) {
-	toolName := strings.TrimSpace(actionDocument.ToolName)
-	if !isSendEvidenceTool(request.ToolSet, toolName) {
-		return turnObservation{}, false
-	}
-	if sendTargetsCurrentConversation(actionDocument.ToolInput) {
-		return turnObservation{}, false
-	}
-	if requestRequiresExternalSendTool(request, toolName) {
-		return turnObservation{}, false
-	}
-	message := toolName + " requires an exact external-send outcome contract. Answer in the current conversation with a reply instead."
-	return newFailureObservation(observationID, "policy", toolName, message, toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "policy"), true
-}
-
-// A send into the conversation the requester is already in has the blast radius
-// of a normal reply, so it needs neither an external-send outcome contract nor
-// runtime approval.
-func sendTargetsCurrentConversation(toolInput json.RawMessage) bool {
-	var document struct {
-		TargetType string `json:"targetType"`
-	}
-	if len(toolInput) == 0 || json.Unmarshal(toolInput, &document) != nil {
-		return false
-	}
-	switch strings.TrimSpace(document.TargetType) {
-	case "currentThread", "currentChannel":
-		return true
-	default:
-		return false
-	}
-}
-
-func requestRequiresExternalSendTool(request AgentTurnRequest, toolName string) bool {
-	if requiredEvidenceContains(request.RequiredEvidenceTools, toolName) {
-		return true
-	}
-	for _, requiredToolName := range outcomeContractRequiredToolNames(request.OutcomeContract) {
-		if toolexposure.ToolNamesMatch(requiredToolName, toolName) {
-			return true
-		}
-	}
-	for _, requiredToolName := range outcomeContractRequiredToolNames(request.ActiveGoal.OutcomeContract) {
-		if toolexposure.ToolNamesMatch(requiredToolName, toolName) {
 			return true
 		}
 	}
