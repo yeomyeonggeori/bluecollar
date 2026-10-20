@@ -177,11 +177,11 @@ func (builder questionBuilder) taskShapeQuestion(messageKey string) model.Decisi
 
 func (builder questionBuilder) deliverableKindQuestion(messageKey string) model.DecisionQuestion {
 	return model.ChoiceQuestion{
-		Instructions: builder.about(messageKey) + "What is the primary deliverable the work ultimately is? This is about the final form, not which tool runs first.",
+		Instructions: builder.about(messageKey) + "What is the primary deliverable the work ultimately is? This is about the final form, not which tool runs first. Judge what this message asks the work to produce: a record it refers to, such as a task, an event or a message, is not a deliverable because its name mentions a report or a document.",
 		OptionDescriptions: optionDescriptions(agentcontract.DeliverableKindNames, map[string]string{
-			string(agentcontract.DeliverableKindPresentation): "a slide deck",
-			string(agentcontract.DeliverableKindDocument):     "a text document that exists as a file",
-			string(agentcontract.DeliverableKindNone):         "anything else, including everything whose final form is a message in the conversation",
+			string(agentcontract.DeliverableKindPresentation): "a slide deck the work makes",
+			string(agentcontract.DeliverableKindDocument):     "a text document the work writes as a file",
+			string(agentcontract.DeliverableKindNone):         "anything else, including everything whose final form is a message in the conversation and every change to a record such as a task or an event",
 		}),
 	}.Question()
 }
