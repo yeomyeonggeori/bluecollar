@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1658,6 +1659,48 @@ func TestEveryNativeActionCarriesAReasoningSlot(t *testing.T) {
 			t.Fatalf("under a forced tool call the model acts without ever thinking, and %q gives it nowhere to: %s", tool.Function.Name, string(parameters)[:300])
 		}
 	}
+}
+
+func TestTheReasoningSlotFollowsEveryPropertyTheToolDeclares(t *testing.T) {
+	parameters, errorValue := parametersWithReasoningSlot(json.RawMessage(`{"type":"object","properties":{"business":{"type":"string"},"taskHint":{"type":"string"},"type":{"type":"string"}},"required":["taskHint"]}`))
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	names := propertyNamesInOrder(t, parameters)
+	if strings.Join(names, ",") != "business,taskHint,type,reasoning" {
+		t.Fatalf("a decoder that writes keys in schema order and starts with the slot can never reach a field sorted before it: %v", names)
+	}
+}
+
+func propertyNamesInOrder(t *testing.T, parameters json.RawMessage) []string {
+	t.Helper()
+	var document struct {
+		Properties json.RawMessage `json:"properties"`
+	}
+	if errorValue := json.Unmarshal(parameters, &document); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	decoder := json.NewDecoder(bytes.NewReader(document.Properties))
+	if _, errorValue := decoder.Token(); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	var names []string
+	for decoder.More() {
+		token, errorValue := decoder.Token()
+		if errorValue != nil {
+			t.Fatal(errorValue)
+		}
+		name, isName := token.(string)
+		if !isName {
+			t.Fatalf("expected a property name, got %v", token)
+		}
+		names = append(names, name)
+		var value json.RawMessage
+		if errorValue := decoder.Decode(&value); errorValue != nil {
+			t.Fatal(errorValue)
+		}
+	}
+	return names
 }
 
 func TestReasoningIsCarriedAndStrippedFromTheToolInput(t *testing.T) {
