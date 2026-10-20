@@ -28,7 +28,7 @@ func requestedFieldQuestions(toolSet *toolcontract.ToolSet, expected []expectedC
 		}
 		fieldMeanings[requestedFieldNone] = "asked names no particular field: it asks for the record as a whole, such as making or removing it, or for several fields at once"
 		questions[requestedFieldQuestionKey(index)] = model.ChoiceQuestion{
-			Instructions:       fmt.Sprintf("asked in expectedChanges[%d] is the user's own words asking for a change of that kind. Which field of the write holds what asked asks to set? Choose by what each field means, not by how its name sounds.", index),
+			Instructions:       fmt.Sprintf("asked in expectedChanges[%d] is the user's own words asking for a change of that kind. Which field of the write holds what asked asks to set? Choose by what each field means, not by how its name sounds.\n", index) + addressedAgentInstruction,
 			OptionDescriptions: fieldMeanings,
 		}.Question()
 	}
@@ -141,11 +141,7 @@ func requestedFieldAnswers(ctx context.Context, decisionModel model.DecisionMode
 	if len(questions) == 0 {
 		return nil, nil
 	}
-	state := map[string]any{"request": strings.Join(requestWordings(request), "\n\nLatest message about it:\n"), "expectedChanges": expected}
-	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
-		state["conversationBefore"] = conversation
-	}
-	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{State: state, Questions: questions})
+	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{State: askedState(request, expected), Questions: questions})
 	return response.Answers, errorValue
 }
 

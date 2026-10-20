@@ -173,6 +173,7 @@ func changeCheckQuestions(changeCount int, isAnyFileHeld bool) map[string]model.
 			"changedRecords lists every record a tool recorded changing, with its changes in order; judge a record by where its history ends. unrecordedWork lists calls that can change things but record no change of their own, such as commands: a record they made or changed shows in changedRecords only through a later recorded change, so read the two together.",
 			"It is carried out when the records asked about end up the way asked says, as changedRecords and unrecordedWork show together, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
 			"It counts as already so only when lookups or changedRecords show it; with no such evidence it was not carried out.",
+			addressedAgentInstruction,
 		}
 		if isAnyFileHeld {
 			instructions = append(instructions,
@@ -193,12 +194,15 @@ func changeCheckQuestions(changeCount int, isAnyFileHeld bool) map[string]model.
 	return questions
 }
 
+const addressedAgentInstruction = "agent is who was asked to do the work. request, asked and conversationBefore may address it by its name or handle, as in a mention; that names who is asked, never whom the work is for, who takes part in it, or what it is called."
+
 func changeGapQuestions(unmetIndexes []int) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	for _, index := range unmetIndexes {
 		questions[changeGapQuestionKey(index)] = model.ChoiceQuestion{
 			Instructions: strings.Join([]string{
 				fmt.Sprintf("expectedChanges[%d] was found not carried out. What does carrying it out still need? asked is the user's own words asking for it; read them in request and conversationBefore.", index),
+				addressedAgentInstruction,
 				"A blank a delivered file's holds mark as withdrawn is a value its writer took out because nothing the user gave or the work read supported it; the work cannot put it back without making it up.",
 				"It needs requester information when what is missing is a value or fact that request and conversationBefore never give, and that the records show the work could not support: its blanks are marked withdrawn, or a lookup came back without it. Asking for a value is not giving it.",
 				"It is work left when the user gave the missing value or fact and the work left it out or got it wrong, when a part asked was never made, when a change went to a different record, or when the work never looked for something it could read. Do not count a value as given unless request or conversationBefore states it.",
@@ -221,15 +225,9 @@ func changeQuestionKey(index int) string {
 }
 
 func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, heldObjectTypes map[string]bool, observations []turnObservation) map[string]any {
-	state := map[string]any{
-		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
-		"now":             environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST"),
-		"expectedChanges": expected,
-		"changedRecords":  append(changedRecords(observations, location, heldObjectTypes), heldFileRecords(observations, heldObjectTypes)...),
-	}
-	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
-		state["conversationBefore"] = conversation
-	}
+	state := askedState(request, expected)
+	state["now"] = environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST")
+	state["changedRecords"] = append(changedRecords(observations, location, heldObjectTypes), heldFileRecords(observations, heldObjectTypes)...)
 	changesBeyondHolds := changesNotJudgedByHolds(request.ToolSet, expected, heldObjectTypes)
 	if lookups := changeLookups(request.ToolSet, changesBeyondHolds, observations, location); len(lookups) > 0 {
 		state["lookups"] = lookups
@@ -241,6 +239,31 @@ func changeCheckState(request AgentTurnRequest, location *time.Location, expecte
 		state["unrecordedWork"] = work
 	}
 	return state
+}
+
+func askedState(request AgentTurnRequest, expected []expectedChange) map[string]any {
+	state := map[string]any{
+		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
+		"expectedChanges": expected,
+	}
+	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
+		state["conversationBefore"] = conversation
+	}
+	if agent := addressedAgent(request.AgentIdentity); len(agent) > 0 {
+		state["agent"] = agent
+	}
+	return state
+}
+
+func addressedAgent(identity AgentIdentity) map[string]string {
+	agent := map[string]string{}
+	if name := strings.TrimSpace(identity.Name); name != "" {
+		agent["name"] = name
+	}
+	if handle := strings.TrimSpace(identity.Handle); handle != "" {
+		agent["handle"] = handle
+	}
+	return agent
 }
 
 func changesNotJudgedByHolds(toolSet *toolcontract.ToolSet, expected []expectedChange, heldObjectTypes map[string]bool) []expectedChange {
