@@ -25,11 +25,8 @@ func (gate *Gate) awaitApproval(ctx context.Context, request approvalRequest) ou
 	if gate.asker == nil || request.taskRunID == "" {
 		return outcome{kind: outcomeUnanswerable}
 	}
-	ledger := holdrecord.LedgerOf(gate.taskRuns.ListTaskEvent(request.taskRunID))
-	if ledger.GrantsScope(request.approvalScope()) {
-		return gate.spend(request, "")
-	}
-	if hold, isApproved := holdrecord.ApprovedHoldForCall(ledger.Holds, request.toolName(), request.toolInput); isApproved {
+	holds := holdrecord.Holds(gate.taskRuns.ListTaskEvent(request.taskRunID))
+	if hold, isApproved := holdrecord.ApprovedHoldForCall(holds, request.toolName(), request.toolInput); isApproved {
 		return gate.spend(request, hold.ID)
 	}
 	return gate.holdAndAsk(ctx, request)

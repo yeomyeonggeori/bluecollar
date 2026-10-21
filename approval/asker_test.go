@@ -2,7 +2,6 @@ package approval
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
@@ -62,30 +61,15 @@ func TestAnAskerIsHandedTheHoldWithTheWordedQuestion(t *testing.T) {
 	}
 }
 
-func TestApprovingAScopedCallGrantsItsScopeForTheRestOfTheTask(t *testing.T) {
+func TestApprovingACallDoesNotApproveTheNextOne(t *testing.T) {
 	asker := &scriptedAsker{answer: Approved}
 	fixture := newFixtureWith(t, nil, asker)
-	fixture.awaitOutcome(fixture.scopedRequest())
-	nextCall := fixture.scopedRequest()
-	nextCall.toolInput = []byte(`{"eventID":"event-2"}`)
-
-	nextOutcome := fixture.awaitOutcome(nextCall)
-
-	if !strings.Contains(fixture.eventBody(t, agentcontract.TaskEventApprovalScopeGranted), `"scope":"calendar"`) {
-		t.Fatal("approving a call that declares an approval scope approves that scope")
-	}
-	if nextOutcome.kind != outcomeApproved || asker.askedCount != 1 {
-		t.Fatalf("a call inside the granted scope runs without a second question, got %+v after %d questions", nextOutcome, asker.askedCount)
-	}
-}
-
-func TestApprovingAnUnscopedCallGrantsNothing(t *testing.T) {
-	fixture := newFixtureWith(t, nil, &scriptedAsker{answer: Approved})
-
 	fixture.awaitOutcome(fixture.request())
 
-	if fixture.hasEvent(agentcontract.TaskEventApprovalScopeGranted) {
-		t.Fatal("a call with no approval scope has no scope to grant")
+	fixture.awaitOutcome(fixture.requestWithInput(`{"eventID":"event-2"}`))
+
+	if asker.askedCount != 2 {
+		t.Fatalf("the requester approved event-1 and was never shown event-2, asked %d times", asker.askedCount)
 	}
 }
 

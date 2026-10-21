@@ -18,11 +18,11 @@ func (fixture fixture) recordDecided(holdID string, decision string) {
 
 func TestAHoldRecordedByTheGateReadsBackWhole(t *testing.T) {
 	fixture := newFixture(t)
-	fixture.awaitOutcome(fixture.scopedRequest())
+	fixture.awaitOutcome(fixture.request())
 
 	hold := fixture.pendingHold(t)
 
-	if hold.ID == "" || hold.Call.HoldID != hold.ID || hold.Call.ApprovalScope != "calendar" || hold.State != holdrecord.StatePending {
+	if hold.ID == "" || hold.Call.HoldID != hold.ID || hold.Call.ToolName != "event_delete" || hold.State != holdrecord.StatePending {
 		t.Fatalf("a hold is read back whole from the ledger, got %+v", hold)
 	}
 }
@@ -108,28 +108,6 @@ func TestTheSpentApprovalCarriesTheCallAndTheHoldItRanUnder(t *testing.T) {
 		if !strings.Contains(spent, expectedFragment) {
 			t.Fatalf("expected the spent approval to carry %q, got %s", expectedFragment, spent)
 		}
-	}
-}
-
-func TestACallInsideAGrantedScopeRunsUnderNoHold(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.record(agentcontract.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
-
-	outcome := fixture.awaitOutcome(fixture.scopedRequest())
-
-	if outcome.kind != outcomeApproved || outcome.holdID != "" || strings.Contains(fixture.eventBody(t, agentcontract.TaskEventApprovalHoldSpent), "holdID") {
-		t.Fatalf("a call approved by its scope runs under no hold, got %+v", outcome)
-	}
-}
-
-func TestApprovingAScopedHoldGrantsItsScope(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.awaitOutcome(fixture.scopedRequest())
-
-	decision := fixture.answer(t, Approved, "chat_reply")
-
-	if decision != outcomeApproved || !strings.Contains(fixture.eventBody(t, agentcontract.TaskEventApprovalScopeGranted), `"scope":"calendar"`) {
-		t.Fatalf("approving a hold grants the scope the hold recorded, got %q with %v", decision, fixture.eventNames())
 	}
 }
 

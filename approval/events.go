@@ -18,10 +18,9 @@ func marshalEventBody(value any) string {
 
 func (gate *Gate) recordHold(request approvalRequest, question string) holdrecord.Hold {
 	hold := holdrecord.Open(gate.taskRuns, request.taskRunID, agentcontract.HeldCall{
-		ToolName:      request.toolDefinition.Name,
-		ToolInput:     request.toolInput,
-		ApprovalScope: request.approvalScope(),
-		Confirmation:  question,
+		ToolName:     request.toolDefinition.Name,
+		ToolInput:    request.toolInput,
+		Confirmation: question,
 	}, nil)
 	gate.recordApprovalQuestion(request, question)
 	return hold
@@ -47,16 +46,11 @@ func approvalReasonCode(request approvalRequest) string {
 }
 
 func askRecord(request approvalRequest, question string) map[string]any {
-	record := map[string]any{
+	return map[string]any{
 		"kind":             "ask_confirm",
 		"message":          question,
 		"reasonCode":       approvalReasonCode(request),
 		"reasonDetail":     "approval gate for " + request.toolDefinition.Name,
 		"responseLanguage": request.turn.ResponseLanguage,
 	}
-	if approvalScope := request.approvalScope(); approvalScope != "" {
-		record["approvalScope"] = approvalScope
-		record["sessionApprovable"] = true
-	}
-	return record
 }
