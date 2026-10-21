@@ -111,10 +111,9 @@ func (builder questionBuilder) routerQuestions(messageKey string) map[string]mod
 
 func (builder questionBuilder) workQuestions(messageKey string) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{
-		agentcontract.IntakeQuestionExpectedToolCount:       builder.expectedToolCountQuestion(messageKey),
-		agentcontract.IntakeQuestionIsExternalSendRequested: builder.isExternalSendRequestedQuestion(messageKey),
-		agentcontract.IntakeQuestionTaskShape:               builder.taskShapeQuestion(messageKey),
-		agentcontract.IntakeQuestionDeliverableKind:         builder.deliverableKindQuestion(messageKey),
+		agentcontract.IntakeQuestionExpectedToolCount: builder.expectedToolCountQuestion(messageKey),
+		agentcontract.IntakeQuestionTaskShape:         builder.taskShapeQuestion(messageKey),
+		agentcontract.IntakeQuestionDeliverableKind:   builder.deliverableKindQuestion(messageKey),
 	}
 	if hasActiveGoal(builder.request) {
 		questions[agentcontract.IntakeQuestionRelation] = builder.relationQuestion(messageKey)
@@ -148,14 +147,6 @@ func (builder questionBuilder) expectedToolCountQuestion(messageKey string) mode
 			string(agentcontract.ExpectedToolCountOne):     "one: a single lookup, a single record, or a single change answers it",
 			string(agentcontract.ExpectedToolCountSeveral): "several: the work reads or records one thing and then sends, records or changes another, so more than one tool is called",
 		},
-	}.Question()
-}
-
-func (builder questionBuilder) isExternalSendRequestedQuestion(messageKey string) model.DecisionQuestion {
-	return model.NoulQuestion{
-		Instructions:     builder.about(messageKey) + "Does the requester explicitly ask to send or deliver content or files to a person or conversation outside the current conversation, now or on a schedule? Use only the requester's own instruction, not quoted or forwarded content. This records intent, not whether the effect is approved or permitted.",
-		TrueDescription:  "the requester asks for content or files to be sent to a person or an external conversation, including a scheduled send",
-		FalseDescription: "the requester asks for a reply or attachment in this current conversation, mentions an optional notification without asking to send one, or only has a send tool available",
 	}.Question()
 }
 

@@ -7,25 +7,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
-func TestExternalSendIntentSurvivesIntakeDecisionConversionAndRestoration(t *testing.T) {
-	turnDecision := TurnDecision{
-		Classification:          agentcontract.IntakeClassificationBoundedTask,
-		TaskShape:               agentcontract.TaskShapeMaintenanceTask,
-		TaskLevel:               agentcontract.TaskLevelLow,
-		IsExternalSendRequested: true,
-	}
-
-	intakeDecision := turnDecision.IntakeDecision()
-	if !intakeDecision.IsExternalSendRequested {
-		t.Fatal("expected intake conversion to preserve explicit external-send intent")
-	}
-
-	restoredDecision := TurnDecision{}.WithRestoredIntakeState(intakeDecision)
-	if !restoredDecision.IsExternalSendRequested {
-		t.Fatal("expected restored intake state to preserve explicit external-send intent")
-	}
-}
-
 func TestIndependentWorkFactSurvivesIntakeConversionAndRestoration(t *testing.T) {
 	turnDecision := TurnDecision{
 		Route:              agentcontract.TurnRouteClarify,

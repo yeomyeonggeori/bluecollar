@@ -182,38 +182,6 @@ func TestAgentTurnRunnerAllowsSendToDifferentRecipients(t *testing.T) {
 	}
 }
 
-func TestAgentTurnRunnerRejectsMessageSendWithoutExternalSendIntent(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"directMessage","personHint":"Dana","message":"can I stop at the rest area."}}`,
-		noToolFallbackFinishMessageDocument("stopping at the rest area is fine."),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
-	toolRegistry := newTestCapabilityToolSet([]string{"message_send"})
-	registerTestTool(toolRegistry, testExternalSendToolDefinition("message_send"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		t.Fatal("message_send must not run without external send intent")
-		return toolcontract.ToolResult{}, nil
-	})
-
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterIdentity: RequesterIdentity{
-			RequesterPersonID: "person-1",
-		},
-		ConversationID:  "conversation-1",
-		Prompt:          "I need to stop at the rest area?",
-		ToolSet:         toolRegistry,
-		PinnedToolNames: toolRegistry.ListToolNames(),
-	})
-	if errorValue != nil {
-		t.Fatalf("expected turn to recover from rejected message_send: %v", errorValue)
-	}
-	if result.FinishMessage != "stopping at the rest area is fine." {
-		t.Fatalf("expected final reply in current conversation, got %q", result.FinishMessage)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_intent_rejected", "with a reply instead") {
-		t.Fatal("expected external send intent rejection event")
-	}
-}
-
 func TestAgentTurnRunnerAllowsCurrentThreadSendWithoutExternalSendContract(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"currentThread","message":"note: weekly customer support check done"}}`,
@@ -227,7 +195,7 @@ func TestAgentTurnRunnerAllowsCurrentThreadSendWithoutExternalSendContract(t *te
 		return testToolSuccess("sent"), nil
 	})
 
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+	_, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
 		RequesterIdentity: RequesterIdentity{
 			RequesterPersonID: "person-1",
 		},
@@ -242,37 +210,39 @@ func TestAgentTurnRunnerAllowsCurrentThreadSendWithoutExternalSendContract(t *te
 	if sendCallCount != 1 {
 		t.Fatalf("expected the current-thread send to run without an external-send contract, got %d calls", sendCallCount)
 	}
-	if taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_intent_rejected", "") {
-		t.Fatal("a send into the current conversation must not be rejected as an external send")
-	}
 }
 
-func TestAgentTurnRunnerRejectsChannelSendWithoutExternalSendIntent(t *testing.T) {
-	languageModel := &sequenceLanguageModel{contents: []string{
-		`{"action":"continue","toolName":"message_send","toolInput":{"targetType":"channel","channelName":"announcements","message":"this is an announcement."}}`,
-		noToolFallbackFinishMessageDocument("Answering in the current conversation."),
-	}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
-	toolRegistry := newTestCapabilityToolSet([]string{"message_send"})
-	registerTestTool(toolRegistry, testExternalSendToolDefinition("message_send"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-		t.Fatal("channel message_send must not run without external send intent")
-		return toolcontract.ToolResult{}, nil
-	})
+func TestASendOutsideTheConversationIsHeldForApprovalWhateverTheOutcomeContractSays(t *testing.T) {
+	for _, toolInput := range []string{
+		`{"targetType":"directMessage","personHint":"Dana","message":"can I stop at the rest area."}`,
+		`{"targetType":"channel","channelName":"announcements","message":"this is an announcement."}`,
+	} {
+		languageModel := &sequenceLanguageModel{contents: []string{
+			`{"action":"continue","toolName":"message_send","toolInput":` + toolInput + `}`,
+		}}
+		services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 3})
+		toolRegistry := newTestCapabilityToolSet([]string{"message_send"})
+		sendDefinition := testExternalSendToolDefinition("message_send")
+		sendDefinition.RequiresApproval = true
+		registerTestTool(toolRegistry, sendDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+			t.Fatal("message_send must not run before the requester approves it")
+			return toolcontract.ToolResult{}, nil
+		})
+		toolRegistry.UseToolCallGate(holdingToolCallGate{taskRunService: services.taskRunService, confirmation: "Send it?"})
 
-	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
-		RequesterIdentity: RequesterIdentity{
-			RequesterPersonID: "person-1",
-		},
-		ConversationID:  "conversation-1",
-		Prompt:          "I have a question",
-		ToolSet:         toolRegistry,
-		PinnedToolNames: toolRegistry.ListToolNames(),
-	})
-	if errorValue != nil {
-		t.Fatalf("expected turn to recover from rejected channel send: %v", errorValue)
-	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID), "agent.external_send_intent_rejected", "with a reply instead") {
-		t.Fatal("expected external send intent rejection event for a channel target")
+		result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+			RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"},
+			ConversationID:    "conversation-1",
+			Prompt:            "ask Dana whether I can stop at the rest area",
+			ToolSet:           toolRegistry,
+			PinnedToolNames:   toolRegistry.ListToolNames(),
+		})
+		if errorValue != nil {
+			t.Fatalf("expected the send to reach the approval gate: %v", errorValue)
+		}
+		if result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
+			t.Fatalf("%s: a send outside the conversation waits for approval, never a policy refusal; got %s", toolInput, result.TaskRun.Status)
+		}
 	}
 }
 
