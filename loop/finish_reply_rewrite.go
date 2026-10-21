@@ -16,6 +16,7 @@ type finishReplyRewrite struct {
 	awaiting      []expectedChange
 	deliveryNotes []string
 	carried       []toolcontract.FileAttachment
+	recorded      []changedRecord
 }
 
 func (rewrite finishReplyRewrite) isNeeded() bool {
@@ -34,6 +35,7 @@ func (agentTurnRunner *AgentTurnRunner) replyForFinish(ctx context.Context, task
 	rewrite := finishReplyRewrite{deliveryNotes: latestDeliveryNotes(state.Observations, carried), carried: carried}
 	if completionGateResult.leavesChangesUnmet() {
 		rewrite.unmet, rewrite.awaiting = splitAwaitingRequester(*completionGateResult.ChangeCheck)
+		rewrite.recorded = changedRecords(state.Observations, companyLocation(request.Company.TimeZone), heldObjectTypes(state.Observations))
 	}
 	if !rewrite.isNeeded() {
 		return reply, rewrite.carried
@@ -100,7 +102,7 @@ func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
 }
 
 func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewrite finishReplyRewrite) string {
-	sections := []string{"Rewrite the final user-facing reply below."}
+	sections := []string{"You are " + request.AgentIdentity.DisplayName() + ", and the request is addressed to you: a mention of you names who is asked, never a person the work is for. Rewrite the final user-facing reply below."}
 	if len(rewrite.unmet) > 0 {
 		sections = append(sections, "It was written as though every asked change were done, but the work does not yet carry out these asked changes, and nothing has changed since that was first found:\n"+bulletList(askedWordsOf(rewrite.unmet))+"\nSay plainly what the work still lacks for each of them, without claiming it is done.")
 	}
@@ -110,13 +112,24 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 	if len(rewrite.deliveryNotes) > 0 {
 		sections = append(sections, "The latest delivery of each file it carries reports what that file now holds, which the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these, and describe the files only as these reports and the reply agree. A value the delivery left blank is gone from the file: never quote it, describe it as present or offer it back; offer to fill it in once the person gives it.")
 	}
+	if len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 {
+		sections = append(sections, recordedChangesFact(rewrite.recorded))
+	}
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
 		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention tools, checks, records, evidence identifiers, prompts, or runtime details.",
+		agentcontract.NothingRunsAfterTheLastWord,
 		finishReplyFilesFact(rewrite.carried, len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0),
 		"Original request:\n"+completionReplyOriginalRequest(request),
 		"Reply:\n"+reply,
 	), "\n\n")
+}
+
+func recordedChangesFact(recorded []changedRecord) string {
+	if len(recorded) == 0 {
+		return "Records this work changed: none."
+	}
+	return "Records this work changed, as the record itself answered each change; each of them exists as shown here, so never say one was not made, not saved or not found, and describe it only as shown:\n" + marshalEventBody(recorded)
 }
 
 func askedWordsOf(changes []expectedChange) []string {

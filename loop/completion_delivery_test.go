@@ -332,3 +332,26 @@ func TestAFinishCarryingAFileNothingCouldChangeSinceItsDeliveryDoesNotCheckItAga
 		t.Fatalf("expected one delivery carried as it was, got %d deliveries %+v", len(deliveries), result.Attachments)
 	}
 }
+
+func TestTheUnmetChangesReplyIsToldWhatTheRecordHolds(t *testing.T) {
+	recorder := &unmetReplyRecorder{}
+	services := newTurnRunnerTestServices(recorder, TurnOptions{MaxIterationCount: 8})
+	request := AgentTurnRequest{Prompt: "@김인턴 완료 업무로 추가해줘", ResponseLanguage: "ko", AgentIdentity: AgentIdentity{Name: "김인턴"}}
+	added := successfulSideEffectObservation("obs-001", "task_add", `{"status":"completed","title":"주간 회의"}`, "added")
+	added.Output.Data = json.RawMessage(`{"taskID":"task-1","content":"주간 회의","status":"completed"}`)
+	added.Effects = []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "task-1"}}
+	check := changeCheck{Unmet: []expectedChange{{Change: "task created", Asked: request.Prompt}}}
+
+	services.runner.replyForFinish(context.Background(), "task-run-1", request, &agentTaskState{Observations: []turnObservation{added}}, completionGateResult{IsSatisfied: true, ChangeCheck: &check}, "추가했어요.")
+
+	if len(recorder.prompts) != 1 {
+		t.Fatalf("expected one rewrite, got %d", len(recorder.prompts))
+	}
+	prompt := recorder.prompts[0]
+	if !strings.Contains(prompt, `"record":"task-1"`) || !strings.Contains(prompt, `"status":"completed"`) || !strings.Contains(prompt, "never say one was not made") {
+		t.Fatalf("expected the rewrite told that task-1 was created as the record answered, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "You are 김인턴, and the request is addressed to you") {
+		t.Fatalf("expected the rewrite told the request addresses the agent, got %q", prompt)
+	}
+}

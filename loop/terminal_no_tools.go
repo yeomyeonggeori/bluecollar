@@ -65,6 +65,7 @@ func terminalNoToolsInstruction(observations []turnObservation, budget RecoveryB
 		"Use reply with final=true only when the original request is fulfilled from current context with failureResolution=no_tool_fallback. Include the requested answer in the reply itself; claiming it was delivered is not delivery. Required attachments and other requested effects must already be recorded as successful.",
 		"Use fail with failureResolution=failure_report only when completion is blocked.",
 		"Only the recorded tool calls in FailureReportFacts were attempted. Guidance and model calls are not tool executions. Do not invent retries or infer that a failed response means a write was not saved; report an unverified outcome as uncertain.",
+		agentcontract.NothingRunsAfterTheLastWord,
 		"FailureReportFacts:\n" + marshalEventBody(facts),
 	}
 	if strings.TrimSpace(rejectionReason) != "" {

@@ -567,3 +567,21 @@ func TestARecordRepeatingAnIdenticalStepShowsItOnce(t *testing.T) {
 		t.Fatalf("expected the repeated identical deletion shown once, got %+v", records)
 	}
 }
+
+func TestTheChangeCheckIsToldWhoTheRequestAddresses(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{changeQuestionKey(0): 0.95}}
+	request := AgentTurnRequest{Prompt: "@김인턴 완료 업무로 추가해줘", ToolSet: taskToolsTestToolSet(), AgentIdentity: AgentIdentity{Name: "김인턴", Handle: "kim-intern"}}
+	expected := []expectedChange{{Change: "task created", Asked: request.Prompt}}
+	if _, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, expected, nil); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	judged := decisionModel.requests[0]
+	state, _ := judged.State.(map[string]any)
+	agent, _ := state["agent"].(map[string]string)
+	if agent["name"] != "김인턴" || agent["handle"] != "kim-intern" {
+		t.Fatalf("the judge is not told who the request addresses: %v", state["agent"])
+	}
+	if !strings.Contains(judged.Questions[changeQuestionKey(0)].Instructions, addressedAgentInstruction) {
+		t.Fatal("the judge is not told that addressing the agent never names whom the work is for")
+	}
+}
