@@ -36,12 +36,6 @@ func (fixture fixture) request() approvalRequest {
 	return requestFixture(fixture.taskRun.TaskRunID)
 }
 
-func (fixture fixture) scopedRequest() approvalRequest {
-	request := fixture.request()
-	request.toolDefinition.ApprovalScope = "calendar"
-	return request
-}
-
 func (fixture fixture) requestWithInput(toolInput string) approvalRequest {
 	request := fixture.request()
 	request.toolInput = json.RawMessage(toolInput)
@@ -174,7 +168,7 @@ func approvalToolSet(t *testing.T, executed *[]string) *toolcontract.ToolSet {
 	t.Helper()
 	toolSet := toolcontract.NewToolSet([]string{"file_delete", "file_read"})
 	toolSet.AllowTestReplacement()
-	register := func(name string, requiresApproval bool, approvalScope string) {
+	register := func(name string, requiresApproval bool) {
 		errorValue := toolSet.RegisterTool(toolcontract.ToolDefinition{
 			ID:               "test:" + name,
 			Name:             name,
@@ -182,7 +176,6 @@ func approvalToolSet(t *testing.T, executed *[]string) *toolcontract.ToolSet {
 			Visibility:       toolcontract.ToolVisibilityModel,
 			InputSchema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`),
 			RequiresApproval: requiresApproval,
-			ApprovalScope:    approvalScope,
 			SideEffectClass:  toolcontract.ToolSideEffectStateChange,
 			ResultContract:   &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)},
 		}, func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
@@ -193,8 +186,8 @@ func approvalToolSet(t *testing.T, executed *[]string) *toolcontract.ToolSet {
 			t.Fatalf("expected %s to register: %v", name, errorValue)
 		}
 	}
-	register("file_delete", true, "workspace_files")
-	register("file_read", false, "")
+	register("file_delete", true)
+	register("file_read", false)
 	return toolSet
 }
 

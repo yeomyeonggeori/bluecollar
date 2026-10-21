@@ -18,14 +18,8 @@ type questionContext struct {
 	OriginalRequest  string                     `json:"originalRequest,omitempty"`
 	ModelDraft       string                     `json:"modelDraft,omitempty"`
 	Operation        string                     `json:"operation,omitempty"`
-	ApprovalScope    *scopeContext              `json:"approvalScope,omitempty"`
 	ActionDetails    map[string]json.RawMessage `json:"actionDetails,omitempty"`
 	Choices          []holdrecord.Choice        `json:"choices,omitempty"`
-}
-
-type scopeContext struct {
-	Name   string `json:"name"`
-	Covers string `json:"covers,omitempty"`
 }
 
 const questionSystemPrompt = `Write exactly one user-facing approval question.
@@ -36,9 +30,8 @@ When the action changes or removes something that already exists, say what it af
 Do not mention internal tool names, operation identifiers, JSON, schemas, approval gates, runtime, or implementation details.
 Never show a record's identifier (an ID, a UUID, a key). Name the record by what a person recognizes in it: its date and time, its title, or whose it is.
 Do not answer the question, report status, or explain the policy.
-The question covers this one action and nothing after it, unless approvalScope is given. The original request is there to name what the action touches, never to describe the work it is a step toward.
+The question covers this one action and nothing after it. The original request is there to name what the action touches, never to describe the work it is a step toward.
 Never promise a later step this action does not perform. Approving it must not read as approving anything that has to happen afterwards.
-When approvalScope is given, saying yes approves every action of that scope for the rest of this task, not only this one. The question says so in plain words and states what the scope covers, using approvalScope.covers; when covers is empty, describe the scope from its name and the operation.
 State each consequence the action details list plainly; a requester approving it must know them.
 When choices are given, the question offers exactly those choices, in the order given, followed by cancelling, as a short numbered list the requester can answer by number. A choice with startsAt runs the action at that moment, written as a local date and time; a choice without startsAt runs it now. Offer no choice that is not given.`
 
@@ -140,18 +133,9 @@ func newQuestionContext(facts holdrecord.QuestionFacts) questionContext {
 		OriginalRequest:  strings.TrimSpace(facts.OriginalRequest),
 		ModelDraft:       strings.TrimSpace(facts.ModelDraft),
 		Operation:        strings.TrimSpace(facts.Tool.Name),
-		ApprovalScope:    scopeCoverage(facts.Tool),
 		ActionDetails:    actionDetails(facts),
 		Choices:          facts.Choices,
 	}
-}
-
-func scopeCoverage(tool toolcontract.ToolDefinition) *scopeContext {
-	name := strings.TrimSpace(tool.ApprovalScope)
-	if name == "" {
-		return nil
-	}
-	return &scopeContext{Name: name, Covers: strings.TrimSpace(tool.ApprovalScopeSummary)}
 }
 
 func actionDetails(facts holdrecord.QuestionFacts) map[string]json.RawMessage {

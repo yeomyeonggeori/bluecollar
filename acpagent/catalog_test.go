@@ -191,16 +191,14 @@ func assertCatalogSessionClosed(t *testing.T, session *mcp.ServerSession) {
 
 func TestADescriptorReadsWhatTheToolDeclaresAboutItsApproval(t *testing.T) {
 	tool := &mcp.Tool{Name: "event_delete", Meta: mcp.Meta{
-		toolcontract.MetaKeySideEffectClass:      "destructive",
-		toolcontract.MetaKeyApprovalScope:        "calendar",
-		toolcontract.MetaKeyRequiresApproval:     true,
-		toolcontract.MetaKeyApprovalScopeSummary: "every change to the team calendar",
-		toolcontract.MetaKeyApprovalInputFields:  []any{"eventHint", "reason"},
+		toolcontract.MetaKeySideEffectClass:     "destructive",
+		toolcontract.MetaKeyRequiresApproval:    true,
+		toolcontract.MetaKeyApprovalInputFields: []any{"eventHint", "reason"},
 	}}
 
 	descriptor := descriptorForTool(tool)
 
-	if descriptor.SideEffectClass != "destructive" || descriptor.ApprovalScope != "calendar" || descriptor.ApprovalScopeSummary != "every change to the team calendar" || !descriptor.RequiresApproval {
+	if descriptor.SideEffectClass != "destructive" || !descriptor.RequiresApproval {
 		t.Fatalf("the approval facts the tool declared were not read: %+v", descriptor)
 	}
 	if !reflect.DeepEqual(descriptor.ApprovalInputFields, []string{"eventHint", "reason"}) {

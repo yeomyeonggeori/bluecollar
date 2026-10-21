@@ -41,10 +41,6 @@ func (request approvalRequest) toolName() string {
 	return strings.TrimSpace(request.toolDefinition.Name)
 }
 
-func (request approvalRequest) approvalScope() string {
-	return strings.TrimSpace(request.toolDefinition.ApprovalScope)
-}
-
 type outcomeKind string
 
 const (

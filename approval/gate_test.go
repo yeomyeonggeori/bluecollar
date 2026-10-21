@@ -97,50 +97,6 @@ func TestAHoldTellsTheRequesterWhatTheyAreBeingAskedAbout(t *testing.T) {
 	}
 }
 
-func TestAScopedHoldRecordsTheScopeItWouldGrant(t *testing.T) {
-	fixture := newFixture(t)
-
-	fixture.awaitOutcome(fixture.scopedRequest())
-
-	askBody := fixture.eventBody(t, agentcontract.TaskEventAgentApprovalAskRequested)
-	for _, expectedFragment := range []string{`"approvalScope":"calendar"`, `"sessionApprovable":true`} {
-		if !strings.Contains(askBody, expectedFragment) {
-			t.Fatalf("the scope an approval grants is read off this event, expected %q in %s", expectedFragment, askBody)
-		}
-	}
-}
-
-func TestAnUnscopedHoldDoesNotOfferAScopeItHasNot(t *testing.T) {
-	fixture := newFixture(t)
-
-	fixture.awaitOutcome(fixture.request())
-
-	if askBody := fixture.eventBody(t, agentcontract.TaskEventAgentApprovalAskRequested); strings.Contains(askBody, "sessionApprovable") {
-		t.Fatalf("a call with no approval scope must not offer approving the whole task, got %s", askBody)
-	}
-}
-
-func TestAGrantedScopeLetsTheNextCallInThatScopeRunUnasked(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.awaitOutcome(fixture.scopedRequest())
-	fixture.record(agentcontract.TaskEventApprovalScopeGranted, `{"scope":"calendar"}`)
-	nextCall := fixture.scopedRequest()
-	nextCall.toolInput = []byte(`{"eventID":"event-2"}`)
-
-	if nextCallOutcome := fixture.awaitOutcome(nextCall); nextCallOutcome.kind != outcomeApproved {
-		t.Fatalf("approving the whole task means the requester is not asked again inside that scope, got %+v", nextCallOutcome)
-	}
-}
-
-func TestAGrantedScopeDoesNotCoverAnotherScope(t *testing.T) {
-	fixture := newFixture(t)
-	fixture.record(agentcontract.TaskEventApprovalScopeGranted, `{"scope":"messaging"}`)
-
-	if heldOutcome := fixture.awaitOutcome(fixture.scopedRequest()); heldOutcome.kind != outcomeUnanswered {
-		t.Fatalf("a grant covers the scope it was given for and no other, got %+v", heldOutcome)
-	}
-}
-
 func TestTheRequesterIsAskedInWordsTheModelChose(t *testing.T) {
 	languageModel := &wordingLanguageModel{question: "내일 팀 회의를 캘린더에서 지울까요?"}
 	fixture := newFixtureWith(t, languageModel, &scriptedAsker{})
