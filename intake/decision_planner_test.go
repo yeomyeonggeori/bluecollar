@@ -97,38 +97,6 @@ func TestDecisionPlannerDecidesRoutingInOneCallThatNamesNoTool(t *testing.T) {
 	}
 }
 
-func TestDecisionPlannerReadsExternalSendIntentAsNoul(t *testing.T) {
-	for _, testCase := range []struct {
-		name                    string
-		isExternalSendRequested bool
-		initialToolNames        []string
-	}{
-		{name: "requested send", isExternalSendRequested: true, initialToolNames: []string{"message_send"}},
-		{name: "available send tool without request", initialToolNames: []string{"message_send"}},
-	} {
-		t.Run(testCase.name, func(t *testing.T) {
-			outcome := startTaskOutcome()
-			outcome.TurnDecision.IsExternalSendRequested = testCase.isExternalSendRequested
-			outcome.TurnDecision.InitialToolNames = testCase.initialToolNames
-			decisionModel := intaketest.NewDecisionModel(outcome)
-			planner := NewDecisionPlanner(decisionModel, nil)
-
-			decision := decideOnce(t, planner, addressedDecisionRequest("complete the requested work"))
-			if decision.TurnFields.IsExternalSendRequested != testCase.isExternalSendRequested {
-				t.Fatalf("expected explicit send intent %t, got %+v", testCase.isExternalSendRequested, decision.TurnFields)
-			}
-			requests := decisionModel.Requests()
-			if len(requests) != 1 {
-				t.Fatalf("expected one batched decision call, got %d", len(requests))
-			}
-			question, isAsked := requests[0].Questions["m1."+agentcontract.IntakeQuestionIsExternalSendRequested]
-			if !isAsked || question.Type != model.DecisionQuestionTypeNoul {
-				t.Fatalf("expected the external-send intent to be a batched Noul question, got %+v", question)
-			}
-		})
-	}
-}
-
 func TestThePlannerDerivesTheTurnFromTheJudgedWork(t *testing.T) {
 	testCases := []struct {
 		name               string

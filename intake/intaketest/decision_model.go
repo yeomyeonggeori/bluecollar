@@ -109,8 +109,6 @@ func namedAnswer(shortName string, outcome Outcome) (model.DecisionAnswer, bool)
 		return choiceAnswer(string(scriptedWorkToolCount(decision))), true
 	case agentcontract.IntakeQuestionSingleToolChoice:
 		return choiceAnswer(firstScriptedToolName(decision)), true
-	case agentcontract.IntakeQuestionIsExternalSendRequested:
-		return noulAnswer(decision.IsExternalSendRequested), true
 	case agentcontract.IntakeQuestionTaskShape:
 		return choiceAnswer(string(scriptedWorkTaskShape(decision))), true
 	case agentcontract.IntakeQuestionDeliverableKind:

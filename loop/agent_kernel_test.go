@@ -457,13 +457,12 @@ func TestExistingTaskRunIDDoesNotAuthorizeConfirmationBypass(t *testing.T) {
 func TestExternalSendPlanReachesApprovalGateBeforeEffect(t *testing.T) {
 	agentKernel, taskRunService := newKernelTestServices()
 	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
-		Route:                   TurnRouteStartTask,
-		Classification:          IntakeClassificationBoundedTask,
-		TaskShape:               TaskShapeMaintenanceTask,
-		TaskLevel:               TaskLevelLow,
-		ResponseLanguage:        "ko",
-		IsExternalSendRequested: true,
-		InitialToolNames:        []string{"message_send"},
+		Route:            TurnRouteStartTask,
+		Classification:   IntakeClassificationBoundedTask,
+		TaskShape:        TaskShapeMaintenanceTask,
+		TaskLevel:        TaskLevelLow,
+		ResponseLanguage: "ko",
+		InitialToolNames: []string{"message_send"},
 	}})
 	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
 		`{"summary":"send a direct message","targets":["이샘플"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":true,"thirdPartyExternalSend":true,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"requesterAuthorization":"explicit","missingInformation":[],"continuationInstruction":"send the message"}`,
@@ -499,8 +498,52 @@ func TestExternalSendPlanReachesApprovalGateBeforeEffect(t *testing.T) {
 	if !taskEventsContain(events, agentcontract.TaskEventApprovalHoldOpened, "message_send") {
 		t.Fatalf("expected the exact external send call to be held for approval, got %+v", events)
 	}
-	if taskEventsContain(events, "agent.external_send_intent_rejected", "") {
-		t.Fatalf("expected the planned external-send contract to pass validation before approval, got %+v", events)
+}
+
+func TestASendThePlanDidNotForeseeStillWaitsForApproval(t *testing.T) {
+	agentKernel, taskRunService := newKernelTestServices()
+	agentKernel.UseIntakeLanguageModelProvider(intakeDecisionLanguageModel{decision: TurnDecision{
+		Route:            TurnRouteStartTask,
+		Classification:   IntakeClassificationBoundedTask,
+		TaskShape:        TaskShapeMaintenanceTask,
+		TaskLevel:        TaskLevelLow,
+		ResponseLanguage: "ko",
+		InitialToolNames: []string{"task_add", "message_send"},
+	}})
+	agentKernel.UseLanguageModelProvider(&sequenceLanguageModel{contents: []string{
+		`{"summary":"record a task and ask a colleague","targets":["이샘플"],"schedule":"","startAt":"","endAt":"","cadence":"","externalSend":false,"thirdPartyExternalSend":false,"repeated":false,"highFrequency":false,"destructive":false,"permissionChange":false,"publicDeploy":false,"paidAction":false,"requesterAuthorization":"explicit","missingInformation":[],"continuationInstruction":"ask 이샘플 for a time"}`,
+		directToolAction("continue", "", "message_send", `{"targetType":"directMessage","personHint":"이샘플","message":"내일 홍보 문의 건으로 가능한 시간 알려주실 수 있을까요?"}`),
+	}})
+	sendDefinition := testExternalSendToolDefinition("message_send")
+	sendDefinition.RequiresApproval = true
+	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{sendDefinition})
+	sendCallCount := 0
+	registerTestTool(toolSet, sendDefinition, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		sendCallCount++
+		return testToolSuccess("sent"), nil
+	})
+	toolSet.UseToolCallGate(holdingToolCallGate{
+		taskRunService: taskRunService,
+		confirmation:   "이샘플님께 보낼까요?",
+	})
+	request := kernelTestRequest("내일 박예시 홍보관련 문의 담당자 이샘플 시간은 이샘플님에게 물어봐")
+	request.ToolSet = toolSet
+	request.SkipSkillSelection = true
+	request.ActiveGoal.RequiredNextTools = []string{"message_send"}
+
+	result, errorValue := runRoutedRequest(t, context.Background(), agentKernel, request)
+	if errorValue != nil {
+		t.Fatalf("expected the send to reach the runtime approval gate: %v", errorValue)
+	}
+	events := taskRunService.ListTaskEvent(result.TaskRun.TaskRunID)
+	if result.TaskRun.Status != agentcontract.TaskStatusWaitingApproval {
+		t.Fatalf("a send to another person is the approval gate's to hold, never a policy refusal; got %s events=%+v", result.TaskRun.Status, events)
+	}
+	if sendCallCount != 0 {
+		t.Fatalf("expected no send before approval, got %d handler calls", sendCallCount)
+	}
+	if !taskEventsContain(events, agentcontract.TaskEventApprovalHoldOpened, "message_send") {
+		t.Fatalf("expected the exact send call to be held for approval, got %+v", events)
 	}
 }
 
