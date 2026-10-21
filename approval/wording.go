@@ -30,14 +30,9 @@ type scopeContext struct {
 
 const questionSystemPrompt = `Write exactly one user-facing approval question.
 The question asks whether to perform the pending action.
-The question is the user's only view of the action, so it must show exactly what will happen, never a category of thing that will happen: 'post this?' is worthless, 'post "…"?' is the question.
-When the action sends or posts content, quote the content verbatim in the question (a blockquote under one asking sentence works). Never paraphrase, summarize, or shorten it — what the user approves is exactly what will appear.
-When the action replaces a span of text, show the span being replaced and its replacement, both verbatim.
-When the action removes something, quote what will be removed — its text or the given preview — so the user can tell it from everything it is not.
-Use the original request and action details to phrase the target, content, file, or event naturally. The action details are the call's own inputs, named as the tool names them.
-When the action details name a resolved target or carry a target preview, show that and never repeat a search phrase the caller typed.
+Beneath your question the runtime prints the action's details exactly as they will be carried out: the resolved target, a target preview when there is one, and each input the action takes. Never quote, paraphrase, or repeat those details; the requester reads them there, verbatim.
+Write one short asking sentence that names the action and whom or what it reaches in plain words, from the original request and the action details. When the action details name a resolved target, name it that way and never repeat a search phrase the caller typed.
 When the action changes or removes something that already exists, say what it affects, and never describe a whole-item replacement as if it only touched a part of it.
-Keep the asking sentence short; the quoted content is as long as it is.
 Do not mention internal tool names, operation identifiers, JSON, schemas, approval gates, runtime, or implementation details.
 Never show a record's identifier (an ID, a UUID, a key). Name the record by what a person recognizes in it: its date and time, its title, or whose it is.
 Do not answer the question, report status, or explain the policy.
@@ -61,9 +56,17 @@ func NewWorder(languageModel model.LanguageModelProvider) Worder {
 func (worder Worder) WordQuestion(ctx context.Context, facts holdrecord.QuestionFacts) holdrecord.QuestionWording {
 	text, errorValue := worder.generateQuestion(ctx, facts)
 	if errorValue != nil {
-		return holdrecord.QuestionWording{Text: rawApprovalSummary(facts), Failure: errorValue}
+		return holdrecord.QuestionWording{Text: withHeldCallDetails(rawApprovalSummary(facts), facts), Failure: errorValue}
 	}
-	return holdrecord.QuestionWording{Text: text}
+	return holdrecord.QuestionWording{Text: withHeldCallDetails(text, facts)}
+}
+
+func withHeldCallDetails(sentence string, facts holdrecord.QuestionFacts) string {
+	details := heldCallDetails(facts)
+	if details == "" {
+		return sentence
+	}
+	return strings.TrimSpace(sentence) + "\n\n" + details
 }
 
 func (gate *Gate) wordQuestion(ctx context.Context, request approvalRequest) string {

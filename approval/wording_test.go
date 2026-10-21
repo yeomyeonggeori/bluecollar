@@ -114,7 +114,63 @@ func TestAWordingThatFailsReturnsTheRawSummaryAndTheFailure(t *testing.T) {
 
 	wording := NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
 
-	if wording.Failure == nil || wording.Text != "calendar_event_delete Team sync" {
+	if wording.Failure == nil || !strings.HasPrefix(wording.Text, "calendar_event_delete Team sync\n\nresolvedTarget: Team sync\n") {
 		t.Fatalf("a failed wording still names the resolved target and reports why, got %+v", wording)
+	}
+}
+
+func heldMessageFacts() holdrecord.QuestionFacts {
+	return holdrecord.QuestionFacts{
+		ResponseLanguage: "ko",
+		OriginalRequest:  "박예시한테 내일 회의 시간 물어봐줘",
+		Tool:             toolcontract.ToolDefinition{Name: "message_send"},
+		Input:            json.RawMessage(`{"targetType":"directMessage","personHint":"박예시","message":"내일 회의를 10시로 옮겨도 될까요?\n안 되면 알려주세요."}`),
+		Target:           agentcontract.ApprovalTarget{InputField: "personHint", ID: "person-2", Title: "박예시 (sample2@example.com)"},
+	}
+}
+
+func TestTheQuestionShowsTheRecipientAndTheExactContentWhateverTheModelWrites(t *testing.T) {
+	for _, languageModel := range []*wordingLanguageModel{
+		{question: "보낼까요?"},
+		{question: "최견본님께 회의 취소를 알릴까요?"},
+		{failure: errors.New("the model is down")},
+	} {
+		wording := NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
+
+		for _, expectedLine := range []string{
+			"resolvedTarget: 박예시 (sample2@example.com)",
+			"> 내일 회의를 10시로 옮겨도 될까요?",
+			"> 안 되면 알려주세요.",
+			"targetType: directMessage",
+		} {
+			if !strings.Contains(wording.Text, expectedLine) {
+				t.Fatalf("the held call's own %q is missing from the question:\n%s", expectedLine, wording.Text)
+			}
+		}
+		if strings.Contains(wording.Text, "personHint") || strings.Contains(wording.Text, "person-2") {
+			t.Fatalf("the search phrase or the identifier was shown instead of the resolved recipient:\n%s", wording.Text)
+		}
+	}
+}
+
+func TestTheShownCallIsTheSameForTheSameHeldCall(t *testing.T) {
+	first := heldCallDetails(heldMessageFacts())
+	second := heldCallDetails(heldMessageFacts())
+
+	if first != second || first == "" {
+		t.Fatalf("one held call rendered two ways:\n%s\n---\n%s", first, second)
+	}
+	if !strings.HasPrefix(first, "resolvedTarget: ") {
+		t.Fatalf("the recipient is not the first thing shown:\n%s", first)
+	}
+}
+
+func TestTheWordingModelWritesOnlyTheAskingSentence(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "박예시님께 보낼까요?"}
+
+	NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
+
+	if !strings.Contains(languageModel.promptSeen(), "Never quote, paraphrase, or repeat") {
+		t.Fatalf("the model is not told the details are shown beneath its sentence:\n%s", languageModel.promptSeen())
 	}
 }
