@@ -11,8 +11,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yeomyeonggeori/bluecollar/loop"
-	"github.com/yeomyeonggeori/blueprotocol/acpupdate"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -21,6 +20,7 @@ type catalog struct {
 	toolSet   *toolcontract.ToolSet
 	toolNames []string
 	parking   *runParking
+	ledger    *ledgerStream
 }
 
 type transportResolver func(acp.McpServer) (mcp.Transport, error)
@@ -61,14 +61,15 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 	}
 
 	parking := &runParking{}
+	ledger := newLedgerStream()
 	toolSet := toolcontract.NewToolSet(toolNames)
 	toolSet.AllowTestReplacement()
 	for toolName, descriptor := range descriptors {
-		if errorValue := toolSet.RegisterTool(descriptor, callThroughCatalog(handlers[toolName], toolName, parking)); errorValue != nil {
+		if errorValue := toolSet.RegisterTool(descriptor, callThroughCatalog(handlers[toolName], toolName, parking, ledger)); errorValue != nil {
 			return nil, errorValue
 		}
 	}
-	return &catalog{sessions: openedSessions, toolSet: toolSet, toolNames: toolNames, parking: parking}, nil
+	return &catalog{sessions: openedSessions, toolSet: toolSet, toolNames: toolNames, parking: parking, ledger: ledger}, nil
 }
 
 func (openedCatalog *catalog) LoadImageContentBase64(ctx context.Context, taskRunID string, devicePath string) (string, error) {
@@ -155,13 +156,13 @@ func encodedSchema(schema any) json.RawMessage {
 	return encoded
 }
 
-func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *runParking) toolcontract.ToolHandler {
+func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *runParking, ledger *ledgerStream) toolcontract.ToolHandler {
 	return func(ctx context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
 		arguments := map[string]any{}
 		if len(invocation.Input) > 0 {
 			json.Unmarshal(invocation.Input, &arguments)
 		}
-		callResult, errorValue := session.CallTool(ctx, &mcp.CallToolParams{Name: toolName, Arguments: arguments, Meta: requestMetaOf(ctx)})
+		callResult, errorValue := session.CallTool(ctx, &mcp.CallToolParams{Name: toolName, Arguments: arguments, Meta: carriedLedgerMeta(ctx, ledger)})
 		if errorValue != nil {
 			return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.Unavailable, toolName, errorValue.Error()), nil
 		}
@@ -187,16 +188,12 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *ru
 	}
 }
 
-func requestMetaOf(ctx context.Context) mcp.Meta {
-	requestEvent, isPresent := loop.ToolRequestEventFromContext(ctx)
-	if !isPresent {
+func carriedLedgerMeta(ctx context.Context, ledger *ledgerStream) mcp.Meta {
+	records := ledger.carry(strings.TrimSpace(toolcontract.TaskRunIDFromContext(ctx)))
+	if len(records) == 0 {
 		return nil
 	}
-	requestUpdate, isToolCall := acpupdate.ToolCallForEvent(requestEvent)
-	if !isToolCall {
-		return nil
-	}
-	return requestUpdate.ToolCall.Meta
+	return mcp.Meta{agentcontract.LedgerMetaKey: records}
 }
 
 func withImageBytes(attachments []toolcontract.FileAttachment, images []toolcontract.FileAttachment) []toolcontract.FileAttachment {

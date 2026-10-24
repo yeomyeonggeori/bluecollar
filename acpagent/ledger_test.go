@@ -82,7 +82,7 @@ func TestARecordTheAgentWritesAfterTheHostCancelledTheTurnStillReachesTheHost(t 
 	cancel()
 	sender := &recordingSessionUpdates{}
 
-	ledgerObserver(cancelled, sender, "session-1", func(string) {})(taskstate.RawTurnEvent{TaskRunID: "run-1", Name: "agent.goal.waiting_approval", Body: "{}"})
+	ledgerObserver(cancelled, sender, "session-1", func(string) {}, newLedgerStream())(taskstate.RawTurnEvent{TaskRunID: "run-1", Name: "agent.goal.waiting_approval", Body: "{}"})
 
 	if sender.deliveredWithLiveContext != 1 {
 		t.Fatal("the host cancels a turn to end it, and the records the loop writes while ending are the ones that say why")

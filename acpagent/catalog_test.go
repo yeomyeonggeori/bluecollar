@@ -12,7 +12,6 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -477,13 +476,15 @@ func TestAToolOfferedOnRequestIsRegisteredForSelectionButNotPinnedToTheTurn(t *t
 	}
 }
 
-func TestACatalogCallCarriesTheLedgerRecordOfItsOwnRequest(t *testing.T) {
+func TestACatalogCallCarriesEveryRecordNoEarlierCallCarried(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
-	carried := agentcontract.LedgerRecord{}
+	carriedPerCall := [][]agentcontract.LedgerRecord{}
 	server.AddTool(&mcp.Tool{Name: "note_write", InputSchema: map[string]any{"type": "object"}},
 		func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			carried := []agentcontract.LedgerRecord{}
 			encoded, _ := json.Marshal(request.Params.Meta[agentcontract.LedgerMetaKey])
 			_ = json.Unmarshal(encoded, &carried)
+			carriedPerCall = append(carriedPerCall, carried)
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "note written"}}}, nil
 		})
 	transport, _ := connectCatalogServer(t, server)
@@ -492,13 +493,28 @@ func TestACatalogCallCarriesTheLedgerRecordOfItsOwnRequest(t *testing.T) {
 		t.Fatal(errorValue)
 	}
 	defer opened.Close()
-	requestEvent := taskstate.RawTurnEvent{TaskRunID: "run-1", Name: "tool.note_write.requested", Body: `{"observationID":"obs-001","toolName":"note_write","input":{}}`}
-
-	if _, errorValue := opened.toolSet.Invoke(loop.WithToolRequestEvent(t.Context(), requestEvent), toolcontract.ToolInvocation{ToolName: "note_write", Input: json.RawMessage(`{}`)}); errorValue != nil {
-		t.Fatal(errorValue)
+	callContext := toolcontract.WithTaskRunID(t.Context(), "run-1")
+	writeThenCall := func(eventNames ...string) {
+		for _, eventName := range eventNames {
+			opened.ledger.send(taskstate.RawTurnEvent{TaskRunID: "run-1", Name: eventName, Body: `{}`})
+		}
+		if _, errorValue := opened.toolSet.Invoke(callContext, toolcontract.ToolInvocation{ToolName: "note_write", Input: json.RawMessage(`{}`)}); errorValue != nil {
+			t.Fatal(errorValue)
+		}
 	}
 
-	if carried.Name != requestEvent.Name || carried.EventBody() != requestEvent.Body {
-		t.Fatalf("the host acts on a call the moment it arrives, so the call has to bring its own request rather than trust the notification to get there first, got %+v", carried)
+	writeThenCall("agent.instructions_loaded", "llm.call", "tool.note_write.requested")
+	writeThenCall("tool.note_write.result", "llm.call", "tool.note_write.requested")
+
+	positionsPerCall := [][]int{}
+	for _, carried := range carriedPerCall {
+		positions := []int{}
+		for _, record := range carried {
+			positions = append(positions, record.Position)
+		}
+		positionsPerCall = append(positionsPerCall, positions)
+	}
+	if !reflect.DeepEqual(positionsPerCall, [][]int{{1, 2, 3}, {4, 5, 6}}) {
+		t.Fatalf("the host acts on a call the moment it arrives, so the call has to bring every record written before it that no earlier call brought, got positions %v", positionsPerCall)
 	}
 }
