@@ -11,6 +11,8 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/bluecollar/loop"
+	"github.com/yeomyeonggeori/blueprotocol/acpupdate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -159,7 +161,7 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *ru
 		if len(invocation.Input) > 0 {
 			json.Unmarshal(invocation.Input, &arguments)
 		}
-		callResult, errorValue := session.CallTool(ctx, &mcp.CallToolParams{Name: toolName, Arguments: arguments})
+		callResult, errorValue := session.CallTool(ctx, &mcp.CallToolParams{Name: toolName, Arguments: arguments, Meta: requestMetaOf(ctx)})
 		if errorValue != nil {
 			return toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.Unavailable, toolName, errorValue.Error()), nil
 		}
@@ -183,6 +185,18 @@ func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *ru
 		toolResult.Attachments = imageAttachmentsOfResult(callResult)
 		return toolResult, nil
 	}
+}
+
+func requestMetaOf(ctx context.Context) mcp.Meta {
+	requestEvent, isPresent := loop.ToolRequestEventFromContext(ctx)
+	if !isPresent {
+		return nil
+	}
+	requestUpdate, isToolCall := acpupdate.ToolCallForEvent(requestEvent)
+	if !isToolCall {
+		return nil
+	}
+	return requestUpdate.ToolCall.Meta
 }
 
 func withImageBytes(attachments []toolcontract.FileAttachment, images []toolcontract.FileAttachment) []toolcontract.FileAttachment {
