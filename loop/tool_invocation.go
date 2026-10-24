@@ -11,6 +11,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/toolexposure"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
+	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -81,14 +82,15 @@ func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegi
 		observation.AttemptFingerprint = attemptFingerprint(toolInputKey, observation.FailureCode())
 		return observation
 	}
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(trimmedToolName, agentcontract.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
+	requestEvent := taskstate.RawTurnEvent{TaskRunID: taskRunID, Name: agentcontract.ToolTaskEventName(trimmedToolName, agentcontract.ToolTaskEventRequestedSuffix), Body: marshalEventBody(map[string]any{
 		"observationID": observationID,
 		"toolName":      trimmedToolName,
 		"input":         json.RawMessage(toolInput),
-	}))
+	})}
+	agentTurnRunner.appendEvent(requestEvent.TaskRunID, requestEvent.Name, requestEvent.Body)
 	unregisterTool := agentTurnRunner.taskRunService.RegisterTaskRunTool(taskRunID, observationID, trimmedToolName)
 	defer unregisterTool()
-	toolContext := WithUserFacingMessage(WithObservationID(WithResponseLanguage(WithTaskRunID(ctx, taskRunID), responseLanguage), observationID), userFacingMessage)
+	toolContext := WithToolRequestEvent(WithUserFacingMessage(WithObservationID(WithResponseLanguage(WithTaskRunID(ctx, taskRunID), responseLanguage), observationID), userFacingMessage), requestEvent)
 	invocationStartedAt := time.Now()
 	toolDefinition, _ := toolRegistry.ToolDefinition(trimmedToolName)
 	toolResult, errorValue := toolRegistry.Invoke(toolContext, toolcontract.ToolInvocation{ToolName: trimmedToolName, Input: toolInput})

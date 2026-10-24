@@ -12,6 +12,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -473,5 +474,31 @@ func TestAToolOfferedOnRequestIsRegisteredForSelectionButNotPinnedToTheTurn(t *t
 	}
 	if _, isRegistered := opened.toolSet.ToolDefinition("message_send"); !isRegistered {
 		t.Fatal("a tool offered on request has to be registered, or the router cannot choose it")
+	}
+}
+
+func TestACatalogCallCarriesTheLedgerRecordOfItsOwnRequest(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	carried := agentcontract.LedgerRecord{}
+	server.AddTool(&mcp.Tool{Name: "note_write", InputSchema: map[string]any{"type": "object"}},
+		func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			encoded, _ := json.Marshal(request.Params.Meta[agentcontract.LedgerMetaKey])
+			_ = json.Unmarshal(encoded, &carried)
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "note written"}}}, nil
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+	requestEvent := taskstate.RawTurnEvent{TaskRunID: "run-1", Name: "tool.note_write.requested", Body: `{"observationID":"obs-001","toolName":"note_write","input":{}}`}
+
+	if _, errorValue := opened.toolSet.Invoke(loop.WithToolRequestEvent(t.Context(), requestEvent), toolcontract.ToolInvocation{ToolName: "note_write", Input: json.RawMessage(`{}`)}); errorValue != nil {
+		t.Fatal(errorValue)
+	}
+
+	if carried.Name != requestEvent.Name || carried.EventBody() != requestEvent.Body {
+		t.Fatalf("the host acts on a call the moment it arrives, so the call has to bring its own request rather than trust the notification to get there first, got %+v", carried)
 	}
 }
