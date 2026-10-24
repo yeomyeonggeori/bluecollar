@@ -3,9 +3,9 @@ package intake
 import (
 	"context"
 	"encoding/json"
+	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/yeomyeonggeori/bluecollar/llmcalls"
 )
@@ -20,14 +20,10 @@ func TestAThousandToolsAreSelectedFromInBatchesTheModelAccepts(t *testing.T) {
 	decisionModel := &concurrencyCountingDecisionModel{outcome: outcome}
 	callLedger := &llmcalls.IntakeCallLedger{SchemaNames: llmcalls.IntakeSchemaNames}
 
-	startedAt := time.Now()
 	decisions, errorValue := NewDecisionPlanner(decisionModel, nil).Decide(context.Background(), request, callLedger)
 
 	if errorValue != nil {
 		t.Fatalf("expected a catalog this size to be decided: %v", errorValue)
-	}
-	if time.Since(startedAt) > 10*time.Second {
-		t.Fatalf("expected the selection to stay fast, got %s", time.Since(startedAt))
 	}
 	plan := planToolSelection(request, []string{decisionMessageKey(0)}, resolveCallableToolNames(request))
 	if decisionModel.startedCallCount != len(plan.requests)+1 {
@@ -64,3 +60,22 @@ func TestAThousandToolsAreSelectedFromInBatchesTheModelAccepts(t *testing.T) {
 }
 
 const recordedToolSelectionByteBudget = 4096
+
+func TestResolvingCallableToolsCostsInProportionToTheCatalog(t *testing.T) {
+	smallCatalogBytes := bytesAllocatedToResolveCallableTools(syntheticCatalog(15, 50))
+	largeCatalogBytes := bytesAllocatedToResolveCallableTools(syntheticCatalog(30, 50))
+
+	if growth := float64(largeCatalogBytes) / float64(smallCatalogBytes); growth > 3 {
+		t.Fatalf("expected twice the tools to cost about twice the memory, got %.1f times (%d bytes, then %d)", growth, smallCatalogBytes, largeCatalogBytes)
+	}
+}
+
+func bytesAllocatedToResolveCallableTools(syntheticTools []syntheticTool) uint64 {
+	request := addressedDecisionRequest("경쟁사 자료 찾아서 정리해줘")
+	request.ToolSet = newProviderToolSet(syntheticTools)
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	resolveCallableToolNames(request)
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}

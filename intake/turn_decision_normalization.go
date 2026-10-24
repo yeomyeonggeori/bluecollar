@@ -237,11 +237,11 @@ func clarificationOptionKey(index int) string {
 }
 
 func removeToolName(toolNames []string, removedToolName string) []string {
-	values := []string{}
+	keptToolNames := []string{}
 	for _, toolName := range toolNames {
 		if !toolexposure.ToolNamesMatch(toolName, removedToolName) {
-			values = toolcontract.AppendUniqueStrings(values, toolName)
+			keptToolNames = append(keptToolNames, toolName)
 		}
 	}
-	return values
+	return toolcontract.AppendUniqueStrings(nil, keptToolNames...)
 }
