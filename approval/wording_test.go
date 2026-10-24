@@ -165,7 +165,7 @@ func handoffFacts() holdrecord.QuestionFacts {
 		ResponseLanguage: "ko",
 		OriginalRequest:  "거래처 포털에서 지난달 청구서 받아줘",
 		Tool:             toolcontract.ToolDefinition{Name: "browser_handoff"},
-		Input:            json.RawMessage(`{"reason":"Sign in to the vendor portal"}`),
+		Input:            json.RawMessage(`{"step":"sign in to the vendor portal"}`),
 		Target:           agentcontract.ApprovalTarget{InputField: "handoff", ID: "handoff-1", Title: "https://portal.example.com", HandoffID: "handoff-1"},
 	}
 }
@@ -179,8 +179,8 @@ func TestAHandoffIsWordedAsAHandOverAndShowsNoCallDetails(t *testing.T) {
 	if !strings.Contains(prompt, "hands the requester the agent's browser") || strings.Contains(prompt, "Write exactly one user-facing approval question") {
 		t.Fatalf("a handoff is not an approval question, got %s", prompt)
 	}
-	if !strings.Contains(prompt, `"reason":"Sign in to the vendor portal"`) || !strings.Contains(prompt, `"resolvedTarget":"https://portal.example.com"`) {
-		t.Fatalf("the wording model needs the reason and the site, got %s", prompt)
+	if !strings.Contains(prompt, `"step":"sign in to the vendor portal"`) || !strings.Contains(prompt, `"resolvedTarget":"https://portal.example.com"`) {
+		t.Fatalf("the wording model needs the step and the site, got %s", prompt)
 	}
 	if wording.Text != "아래 링크를 열어 거래처 포털에 직접 로그인한 뒤 돌려주세요." {
 		t.Fatalf("a handoff message carries no approval details beneath it, got %q", wording.Text)

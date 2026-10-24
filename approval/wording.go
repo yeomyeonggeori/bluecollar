@@ -37,9 +37,9 @@ When choices are given, the question offers exactly those choices, in the order 
 
 const handoffSystemPrompt = `Write exactly one short user-facing message that hands the requester the agent's browser so they can do one step in it themselves.
 On the line after your message the runtime prints a link. Opening it shows the agent's browser live; the requester works in it and presses the button that hands it back when they are done.
-Say what they need to do in that browser in plain words, from the reason in the action details and the site the resolved target names, and ask them to open the link below and hand the browser back when they finish.
+Say what they need to do in that browser in plain words, from the step in the action details and the site the resolved target names, and ask them to open the link below and hand the browser back when they finish.
 The agent never sees the screen or what they type there; you may say so. Never ask for a password, a code or any other secret in the conversation.
-Do not add steps the reason does not state, do not write the link yourself, and do not mention internal tool names, identifiers, JSON, runtime or implementation details.`
+Do not add anything the step does not state, do not write the link yourself, and do not mention internal tool names, identifiers, JSON, runtime or implementation details.`
 
 const questionSchemaName = "approval_question"
 const questionSchemaDocument = `{"type":"object","properties":{"question":{"type":"string"}},"required":["question"],"additionalProperties":false}`
