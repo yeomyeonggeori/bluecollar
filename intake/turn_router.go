@@ -399,12 +399,14 @@ func turnRouterCallableToolNames(request agentcontract.AgentRequest) []string {
 				callableToolNames = append(callableToolNames, toolName)
 			}
 		}
+		registeredToolNames := []string{}
 		for _, toolDefinition := range request.ToolSet.ListRegisteredToolDefinitions() {
 			toolName := strings.TrimSpace(toolDefinition.Name)
 			if toolIsSelectableForTurn(request.ToolSet, toolName) && turnclassification.RequiredEvidenceToolCanBeSatisfied(request.ToolSet, toolName) {
-				callableToolNames = toolcontract.AppendUniqueStrings(callableToolNames, toolName)
+				registeredToolNames = append(registeredToolNames, toolName)
 			}
 		}
+		callableToolNames = toolcontract.AppendUniqueStrings(callableToolNames, registeredToolNames...)
 	}
 	return callableToolNames
 }
