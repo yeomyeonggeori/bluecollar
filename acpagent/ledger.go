@@ -57,21 +57,21 @@ func (sender *deferredSessionUpdateSender) SessionUpdate(ctx context.Context, no
 	}
 }
 
-func sendLedgerEvent(ctx context.Context, sender sessionUpdateSender, sessionID acp.SessionId, rawTurnEvent taskstate.RawTurnEvent) {
+func sendLedgerEvent(ctx context.Context, sender sessionUpdateSender, sessionID acp.SessionId, rawTurnEvent taskstate.RawTurnEvent, position int) {
 	if sender == nil {
 		return
 	}
 	sender.SessionUpdate(ctx, acp.SessionNotification{
 		SessionId: sessionID,
-		Update:    acpupdate.ForEvent(rawTurnEvent),
+		Update:    acpupdate.ForEvent(rawTurnEvent, position),
 	})
 }
 
-func ledgerObserver(ctx context.Context, sender sessionUpdateSender, sessionID acp.SessionId, rememberTaskRun func(string)) func(taskstate.RawTurnEvent) {
+func ledgerObserver(ctx context.Context, sender sessionUpdateSender, sessionID acp.SessionId, rememberTaskRun func(string), stream *ledgerStream) func(taskstate.RawTurnEvent) {
 	deliveryContext := context.WithoutCancel(ctx)
 	return func(rawTurnEvent taskstate.RawTurnEvent) {
 		rememberTaskRun(rawTurnEvent.TaskRunID)
-		sendLedgerEvent(deliveryContext, sender, sessionID, rawTurnEvent)
+		sendLedgerEvent(deliveryContext, sender, sessionID, rawTurnEvent, stream.send(rawTurnEvent).Position)
 	}
 }
 

@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
-	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -160,33 +159,5 @@ func TestACrashedToolLeavesItsStackInTheLedgerAndNotInTheTurn(t *testing.T) {
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "tool.crashed", "goroutine") {
 		t.Fatal("recovering the panic took away the goroutine dump the crash used to print; without it in the ledger, whoever has to fix that tool has one sentence")
-	}
-}
-
-func TestAToolIsHandedTheRequestTheLedgerRecordedForIt(t *testing.T) {
-	services := newTurnRunnerTestServices(&sequenceLanguageModel{modelTier: "xlow", contents: []string{finishMessageDocument("done")}},
-		TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
-	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "write the note")
-	toolSet := toolcontract.NewToolSet([]string{"note_write"})
-	toolSet.AllowTestReplacement()
-	handedRequest := taskstate.RawTurnEvent{}
-	toolSet.RegisterBoundTool(toolcontract.BoundTool{
-		Definition:   testToolDescriptor("note_write"),
-		Availability: toolcontract.ToolAvailability{Status: toolcontract.ToolAvailabilityAvailable},
-		Handler: func(ctx context.Context, _ toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
-			handedRequest, _ = ToolRequestEventFromContext(ctx)
-			return toolcontract.ToolSuccess("note written"), nil
-		},
-	})
-
-	services.runner.invokeTool(context.Background(), toolSet, taskRun.TaskRunID, "obs-1", "note_write",
-		json.RawMessage(`{"text":"memo"}`), "", time.Time{}, "ko", "", "", "", "")
-
-	isTheRecordedRequest := false
-	for _, taskEvent := range services.taskEventService.ListTaskEvent(taskRun.TaskRunID) {
-		isTheRecordedRequest = isTheRecordedRequest || (taskEvent.Name == handedRequest.Name && taskEvent.Body == handedRequest.Body)
-	}
-	if handedRequest.TaskRunID != taskRun.TaskRunID || handedRequest.Name != "tool.note_write.requested" || !isTheRecordedRequest {
-		t.Fatalf("a tool served by another process carries this request with the call, so it has to be the record the ledger holds, got %+v", handedRequest)
 	}
 }

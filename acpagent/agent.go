@@ -131,7 +131,7 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	}
 	openSession.adoptInstructionBundle(request.Meta)
 	turnRequest := runningAgent.turnRequestFor(openSession, request)
-	stopObserving := openSession.taskEvents.RegisterTurnObserver(ledgerObserver(ctx, runningAgent.sessionUpdates, request.SessionId, openSession.rememberTaskRun))
+	stopObserving := openSession.taskEvents.RegisterTurnObserver(ledgerObserver(ctx, runningAgent.sessionUpdates, request.SessionId, openSession.rememberTaskRun, openSession.catalog.ledger))
 	defer stopObserving()
 
 	planned, errorValue := runningAgent.planTurn(ctx, openSession, routedAsThePersonWroteIt(turnRequest, request.Meta))
