@@ -84,8 +84,11 @@ func TestABatchedCallThatRepeatsAnEarlierOutputHandsTheTurnBackToTheModel(t *tes
 	if languageModel.actionRequests != 2 {
 		t.Fatalf("expected the model to be asked again after the repeat, got %d action requests", languageModel.actionRequests)
 	}
-	if count := toolResultsSaying(languageModel.lastRequest, "Not run: "+batchStoppedByRepeat); count != 4 {
-		t.Fatalf("expected each of the 4 dropped calls to reach the model as not run, found %d", count)
+	note := notRunNote(languageModel.lastRequest, batchStoppedByRepeat)
+	for attempt := 2; attempt < 6; attempt++ {
+		if !strings.Contains(note, fmt.Sprintf(`probe {"attempt":%d}`, attempt)) {
+			t.Fatalf("expected dropped call %d to reach the model as not run, got %q", attempt, note)
+		}
 	}
 }
 
@@ -115,19 +118,60 @@ func TestEveryCallDroppedAfterAFailureReachesTheModelAsNotRun(t *testing.T) {
 	if probeCallCount != 1 {
 		t.Fatalf("expected the batch to stop at the failure, ran %d calls", probeCallCount)
 	}
-	if count := toolResultsSaying(languageModel.lastRequest, "Not run: "+batchStoppedByFailure); count != 2 {
-		t.Fatalf("expected both calls after the failure to reach the model as not run, found %d", count)
+	note := notRunNote(languageModel.lastRequest, batchStoppedByFailure)
+	if !strings.Contains(note, `probe {"attempt":1}`) || !strings.Contains(note, `probe {"attempt":2}`) {
+		t.Fatalf("expected both calls after the failure to reach the model as not run, got %q", note)
 	}
 }
 
-func toolResultsSaying(request model.ChatCompletionRequest, text string) int {
-	count := 0
+func TestAResponseRepeatingACallThousandsOfTimesLeavesOneBoundedNote(t *testing.T) {
+	calls := probeCalls(1)
+	for index := 0; index < 5000; index++ {
+		calls = append(calls, nativeAgentActionToolCall("probe", `{"attempt":"again"}`))
+	}
+	for index := 0; index < 5000; index++ {
+		calls = append(calls, nativeAgentActionToolCall("probe", fmt.Sprintf(`{"attempt":"invented-%d"}`, index)))
+	}
+	languageModel := &batchingLanguageModel{firstBatch: calls}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 20, TaskLevel: TaskLevelMedium})
+	toolSet := newTestToolSet([]string{"probe"})
+	registerTestTool(toolSet, testToolDescriptor("probe"), func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return toolcontract.ToolResult{}, errors.New("probe failed")
+	})
+	if _, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"},
+		ConversationID:    "conversation-1",
+		Prompt:            "check the file",
+		TaskLevel:         TaskLevelMedium,
+		ToolSet:           toolSet,
+		PinnedToolNames:   []string{"probe"},
+	}); errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+
+	note := notRunNote(languageModel.lastRequest, batchStoppedByFailure)
+	if !strings.Contains(note, "10000 calls") || !strings.Contains(note, `probe {"attempt":"again"} (repeated 5000 times)`) {
+		t.Fatalf("expected one note counting every dropped call, got %q", note[:min(len(note), 400)])
+	}
+	if len(note) > services.runner.toolResultLimit()+100 {
+		t.Fatalf("expected the note to stay within one tool result's share, got %d characters", len(note))
+	}
+	if !strings.Contains(note, "more distinct calls") {
+		t.Fatal("expected the distinct calls past the share to be counted, not listed")
+	}
+}
+
+func notRunNote(request model.ChatCompletionRequest, reason string) string {
+	notes := []string{}
 	for _, message := range request.Messages {
-		if message.Role == "tool" && strings.Contains(message.Content, text) {
-			count++
+		if strings.HasPrefix(message.Content, "Runtime observation (not_run): Not run: "+reason) {
+			notes = append(notes, message.Content)
 		}
 	}
-	return count
+	if len(notes) != 1 {
+		return fmt.Sprintf("%d notes", len(notes))
+	}
+	return notes[0]
 }
 
 func TestABatchStillRunsWhileEachCallReturnsSomethingNew(t *testing.T) {

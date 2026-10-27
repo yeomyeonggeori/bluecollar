@@ -331,7 +331,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 			if warning.Observation != nil {
 				state.Observations = append(state.Observations, *warning.Observation)
 			}
-			dropPendingBatchedActions(&state, batchStoppedByLimitPressure)
+			dropPendingBatchedActions(&state, batchStoppedByLimitPressure, agentTurnRunner.toolResultLimit())
 			agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentLimitPressure, marshalEventBody(warning.EventBody))
 			limitPressureWarnings[warning.Stage] = true
 		}
@@ -485,7 +485,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 				}
 				return outcome.Result, nil
 			}
-			rememberBatchedActions(&state, actionDocument, iterationRequest.ToolSet.ListToolNames(), iterationRequest.ToolExposure)
+			rememberBatchedActions(&state, actionDocument, iterationRequest.ToolSet.ListToolNames(), iterationRequest.ToolExposure, agentTurnRunner.toolResultLimit())
 			if outcome.WasHandled {
 				continue
 			}
