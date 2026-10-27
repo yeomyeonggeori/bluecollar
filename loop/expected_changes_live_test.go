@@ -6,13 +6,10 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 
-	"github.com/yeomyeonggeori/blueprotocol/evaltest"
 	"github.com/yeomyeonggeori/blueprotocol/model/openaicompatible"
-	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type expectedChangesLiveCase struct {
@@ -20,43 +17,38 @@ type expectedChangesLiveCase struct {
 	originalInstruction string
 	prompt              string
 	conversation        []string
-	wantedKinds         []string
+	wantedCount         int
 }
 
 var expectedChangesLiveCases = []expectedChangesLiveCase{
 	{name: "report of finished work", prompt: `김인턴 에이전트 완료 판정을 "요청이 요구한 변경 목록 ↔ 실제 기록 대조 + Jev 확인"으로 바꿔서 운영 배포까지 끝냈어`},
-	{name: "correction asking to record it", originalInstruction: `김인턴 에이전트 완료 판정을 "요청이 요구한 변경 목록 ↔ 실제 기록 대조 + Jev 확인"으로 바꿔서 운영 배포까지 끝냈어`, prompt: "아니 업무에 완료로 추가하라고", wantedKinds: []string{"task created"}},
-	{name: "task with deadline", prompt: "분기 결산 누락 확인 업무를 7월 24일 마감으로 추가해줘", wantedKinds: []string{"task created"}},
-	{name: "task status change", prompt: "특허명세서 초안 검토 진행 중으로 올려줘", wantedKinds: []string{"task updated"}},
-	{name: "bulk task update", prompt: "내 업무 중 사이즈 등록 안 된 것들 수정해서 사이즈 넣어줘", wantedKinds: []string{"task updated"}},
-	{name: "calendar entry", prompt: "7월 13일에 샨보장 미팅을 오전 10시부터 11시까지 등록해줘", wantedKinds: []string{"calendar created"}},
+	{name: "correction asking to record it", originalInstruction: `김인턴 에이전트 완료 판정을 "요청이 요구한 변경 목록 ↔ 실제 기록 대조 + Jev 확인"으로 바꿔서 운영 배포까지 끝냈어`, prompt: "아니 업무에 완료로 추가하라고", wantedCount: 1},
+	{name: "task with deadline", prompt: "분기 결산 누락 확인 업무를 7월 24일 마감으로 추가해줘", wantedCount: 1},
+	{name: "task status change", prompt: "특허명세서 초안 검토 진행 중으로 올려줘", wantedCount: 1},
+	{name: "bulk task update", prompt: "내 업무 중 사이즈 등록 안 된 것들 수정해서 사이즈 넣어줘", wantedCount: 1},
+	{name: "calendar entry", prompt: "7월 13일에 샨보장 미팅을 오전 10시부터 11시까지 등록해줘", wantedCount: 1},
 	{name: "question only", prompt: "오늘 내 일정 뭐 있어?"},
 	{name: "question whether done", prompt: "어제 말한 업무 등록됐어?"},
-	{name: "short follow-up", conversation: []string{"이샘플: 다음 주 화요일에 박예시랑 제안서 리뷰해야 해", "김인턴: 업무로 등록할까요, 일정으로 잡을까요?"}, prompt: "업무로 추가해줘 예정.", wantedKinds: []string{"task created"}},
+	{name: "short follow-up", conversation: []string{"이샘플: 다음 주 화요일에 박예시랑 제안서 리뷰해야 해", "김인턴: 업무로 등록할까요, 일정으로 잡을까요?"}, prompt: "업무로 추가해줘 예정.", wantedCount: 1},
 	{name: "report then nothing asked", prompt: "특허명세서 초안 검토 끝났어. 월요일에 보낼 거야"},
+	{name: "answer to what task to add", originalInstruction: "@김인턴 업무추가", conversation: []string{"이샘플: @김인턴 업무추가", "김인턴: 어떤 업무를 추가할까요? 구체적인 내용(업무 종류, 마감, 산출물)을 알려주세요."}, prompt: "샘플방송 컨소시엄 ZONE-2 사업 종료", wantedCount: 1},
 }
 
 func TestLiveExpectedChangesDefinition(t *testing.T) {
-	catalogPath := evaltest.RequireInput(t, "BLUECOLLAR_CAPABILITY_CATALOG", "point it at the generated capability-tools.json")
 	provider, errorValue := (openaicompatible.Endpoint{URL: os.Getenv("BLUECOLLAR_MODEL_ENDPOINT"), ModelName: os.Getenv("BLUECOLLAR_MODEL_NAME"), APIKey: os.Getenv("BLUECOLLAR_MODEL_API_KEY")}).Provider()
 	if errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	services := newTurnRunnerTestServices(provider, TurnOptions{})
-	toolSet := catalogToolSet(t, catalogPath)
 	failures := 0
 	for _, liveCase := range expectedChangesLiveCases {
 		for attempt := 0; attempt < 3; attempt++ {
-			changes, isDefined := services.runner.defineExpectedChanges(context.Background(), "live", liveCaseRequest(liveCase, toolSet))
-			kinds := []string{}
-			for _, change := range changes {
-				kinds = append(kinds, change.Change)
-			}
-			slices.Sort(kinds)
-			wanted := slices.Clone(liveCase.wantedKinds)
-			slices.Sort(wanted)
+			changes, isDefined := services.runner.defineExpectedChanges(context.Background(), "live", liveCaseRequest(liveCase))
 			verdict := "ok"
-			if !isDefined || !slices.Equal(slices.Compact(kinds), wanted) {
+			if !isDefined {
+				t.Fatalf("[%s] the definition failed: %+v", liveCase.name, services.taskEventService.ListTaskEvent("live"))
+			}
+			if len(changes) != liveCase.wantedCount {
 				verdict = "WRONG"
 				failures++
 			}
@@ -67,8 +59,8 @@ func TestLiveExpectedChangesDefinition(t *testing.T) {
 	t.Logf("wrong: %d of %d", failures, len(expectedChangesLiveCases)*3)
 }
 
-func liveCaseRequest(liveCase expectedChangesLiveCase, toolSet *toolcontract.ToolSet) AgentTurnRequest {
-	request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: toolSet}
+func liveCaseRequest(liveCase expectedChangesLiveCase) AgentTurnRequest {
+	request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: completedMeetingToolSet()}
 	if liveCase.originalInstruction != "" {
 		request.ActiveGoal = ActiveGoal{OriginalInstruction: liveCase.originalInstruction, CurrentObjective: liveCase.prompt}
 	}
@@ -77,33 +69,4 @@ func liveCaseRequest(liveCase expectedChangesLiveCase, toolSet *toolcontract.Too
 		request.VisibleContext.Messages = append(request.VisibleContext.Messages, VisibleContextMessage{Speaker: speaker, Text: text})
 	}
 	return request
-}
-
-func catalogToolSet(t *testing.T, catalogPath string) *toolcontract.ToolSet {
-	document, errorValue := os.ReadFile(catalogPath)
-	if errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	var catalog struct {
-		Tools []struct {
-			Name           string `json:"name"`
-			Description    string `json:"description"`
-			ResultContract *struct {
-				Effects []toolcontract.ResourceEffectContract
-			} `json:"resultContract"`
-		} `json:"tools"`
-	}
-	if errorValue := json.Unmarshal(document, &catalog); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	definitions := []toolcontract.ToolDefinition{}
-	for _, tool := range catalog.Tools {
-		definition := testToolDescriptor(tool.Name)
-		definition.Description = tool.Description
-		if tool.ResultContract != nil {
-			definition.ResultContract.Effects = tool.ResultContract.Effects
-		}
-		definitions = append(definitions, definition)
-	}
-	return newTestToolSetWithDefinitions(definitions)
 }

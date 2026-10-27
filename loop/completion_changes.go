@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -75,9 +76,8 @@ func (agentTurnRunner *AgentTurnRunner) requestedChangesAtStop(ctx context.Conte
 	requestedChanges := make([]agentcontract.RequestedChange, 0, len(check.ExpectedChanges))
 	for _, change := range check.ExpectedChanges {
 		requestedChanges = append(requestedChanges, agentcontract.RequestedChange{
-			Change:       change.Change,
-			Asked:        change.Asked,
-			IsCarriedOut: !containsExpectedChange(check.Unmet, change),
+			Change:       change,
+			IsCarriedOut: !slices.Contains(check.Unmet, change),
 		})
 	}
 	return requestedChanges
@@ -101,37 +101,24 @@ func (observed observedDecisionModel) Decide(ctx context.Context, request model.
 func unmetChangesMessage(check changeCheck) string {
 	lines := []string{}
 	for _, change := range check.Unmet {
-		reason := "the recorded changes do not carry it out"
-		if containsExpectedChange(check.Unrecorded, change) {
-			reason = "nothing recorded changed this kind of record"
-		}
+		reason := "what was done does not carry it out"
 		if fieldName := check.unwrittenFieldOf(change); fieldName != "" {
 			reason = "it is held in the field " + fieldName + ", and no recorded write set that field"
 		}
-		if containsExpectedChange(check.AwaitsRequester, change) {
+		if slices.Contains(check.AwaitsRequester, change) {
 			reason = "it needs information only the requester can give, which the final reply will ask them for"
 		}
-		lines = append(lines, "\""+change.Asked+"\" ("+change.Change+"): "+reason)
+		lines = append(lines, "\""+change+"\": "+reason)
 	}
 	return "Requested changes not done yet:\n" + strings.Join(lines, "\n")
 }
 
-func (check changeCheck) unwrittenFieldOf(wanted expectedChange) string {
-	for index, change := range check.ExpectedChanges {
-		if change == wanted {
-			return check.UnwrittenFields[changeQuestionKey(index)]
-		}
+func (check changeCheck) unwrittenFieldOf(wanted string) string {
+	index := slices.Index(check.ExpectedChanges, wanted)
+	if index < 0 {
+		return ""
 	}
-	return ""
-}
-
-func containsExpectedChange(changes []expectedChange, wanted expectedChange) bool {
-	for _, change := range changes {
-		if change == wanted {
-			return true
-		}
-	}
-	return false
+	return check.UnwrittenFields[changeQuestionKey(index)]
 }
 
 func outcomeContractHasSideEffectEvidence(toolSet *toolcontract.ToolSet, contract OutcomeContract) bool {

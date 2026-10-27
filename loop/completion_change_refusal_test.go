@@ -11,7 +11,7 @@ import (
 
 func TestTheChangeCheckDoesNotRefuseTheRecordedWorkbookAgainOverTheSameState(t *testing.T) {
 	delivery := w1DeliveredWorkbook(t)
-	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+	asked := strings.SplitN(delivery.Prompt, "\n", 2)[0]
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.22}}
 	services := servicesStoppingAfterDeletion(expectedChangesDocument(asked), decisionModel)
 	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
@@ -112,7 +112,7 @@ func TestAFinishRefusedOverTheSameStateCompletesWithAReplyStatingWhatIsUnmet(t *
 	if result.FinishMessage != unmetDeletionReply {
 		t.Fatalf("expected the reply rewritten to state what is unmet, got %q", result.FinishMessage)
 	}
-	if len(languageModel.unmetReplyPrompts) != 1 || !strings.Contains(languageModel.unmetReplyPrompts[0], deleteOldTask.Asked) || !strings.Contains(languageModel.unmetReplyPrompts[0], deletionReply) {
+	if len(languageModel.unmetReplyPrompts) != 1 || !strings.Contains(languageModel.unmetReplyPrompts[0], deleteOldTask) || !strings.Contains(languageModel.unmetReplyPrompts[0], deletionReply) {
 		t.Fatalf("expected the rewrite asked once with the unmet change and the model's reply, got %q", languageModel.unmetReplyPrompts)
 	}
 }

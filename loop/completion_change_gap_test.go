@@ -50,14 +50,14 @@ func TestAnUnmetChangeTheWorkCanStillDoGoesBackToTheWork(t *testing.T) {
 }
 
 func TestAChangeAwaitingTheRequesterDoesNotEndATurnThatStillHasWorkLeft(t *testing.T) {
-	second := expectedChange{Change: deleteOldTask.Change, Asked: "두 번째 오래된 작업도 삭제해줘"}
+	second := "두 번째 오래된 작업도 삭제해줘"
 	decisionModel := &scriptedDecisionModel{
 		noul:   map[string]float64{"expected0": 0.1, "expected1": 0.1},
 		choice: map[string]string{"gap0": changeGapRequesterInformation, "gap1": changeGapWorkLeft},
 	}
 	services := servicesStoppingAfterDeletion(expectedChangesDocument(deleteOldTask, second), decisionModel)
 	request := deleteRequest(taskDeleteToolSet())
-	request.Prompt = deleteOldTask.Asked + ". " + second.Asked
+	request.Prompt = deleteOldTask + ". " + second
 	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
 
 	result := services.runner.evaluateExpectedChanges(context.Background(), taskRun.TaskRunID, request, []turnObservation{deletedTaskObservation()})
@@ -74,7 +74,7 @@ func TestTheGapIsAskedOnlyWhenAChangeIsFoundUnmet(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9}}
 	request := deleteRequest(taskDeleteToolSet())
 
-	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()})
+	checkExpectedChanges(context.Background(), decisionModel, request, []string{deleteOldTask}, []turnObservation{deletedTaskObservation()})
 
 	if len(decisionModel.requests) != 1 {
 		t.Fatalf("expected one decision call when every change was carried out, got %d", len(decisionModel.requests))
@@ -85,7 +85,7 @@ func TestAGapCheckThatFailsLeavesTheChangeAsWorkLeft(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.1}, gapError: errors.New("decision endpoint returned 503")}
 	request := deleteRequest(taskDeleteToolSet())
 
-	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()})
+	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, []string{deleteOldTask}, []turnObservation{deletedTaskObservation()})
 
 	if errorValue != nil || check.awaitsOnlyTheRequester() || check.GapCheckError == "" {
 		t.Fatalf("expected the change left as work and the failure recorded, got %+v %v", check, errorValue)

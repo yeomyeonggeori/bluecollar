@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/toolexposure"
@@ -12,11 +13,11 @@ import (
 )
 
 type finishReplyRewrite struct {
-	unmet         []expectedChange
-	awaiting      []expectedChange
+	unmet         []string
+	awaiting      []string
 	deliveryNotes []string
 	carried       []toolcontract.FileAttachment
-	recorded      []changedRecord
+	sideEffects   []sideEffect
 }
 
 func (rewrite finishReplyRewrite) isNeeded() bool {
@@ -35,7 +36,7 @@ func (agentTurnRunner *AgentTurnRunner) replyForFinish(ctx context.Context, task
 	rewrite := finishReplyRewrite{deliveryNotes: latestDeliveryNotes(state.Observations, carried), carried: carried}
 	if completionGateResult.leavesChangesUnmet() {
 		rewrite.unmet, rewrite.awaiting = splitAwaitingRequester(*completionGateResult.ChangeCheck)
-		rewrite.recorded = changedRecords(state.Observations, companyLocation(request.Company.TimeZone), heldObjectTypes(state.Observations))
+		rewrite.sideEffects = sideEffects(request.ToolSet, state.Observations, companyLocation(request.Company.TimeZone))
 	}
 	if !rewrite.isNeeded() {
 		return reply, rewrite.carried
@@ -63,10 +64,10 @@ func (agentTurnRunner *AgentTurnRunner) rewriteFinishReply(ctx context.Context, 
 	return strings.TrimSpace(rewritten)
 }
 
-func splitAwaitingRequester(check changeCheck) ([]expectedChange, []expectedChange) {
-	var unmet []expectedChange
+func splitAwaitingRequester(check changeCheck) ([]string, []string) {
+	var unmet []string
 	for _, change := range check.Unmet {
-		if !containsExpectedChange(check.AwaitsRequester, change) {
+		if !slices.Contains(check.AwaitsRequester, change) {
 			unmet = append(unmet, change)
 		}
 	}
@@ -96,7 +97,7 @@ func latestDeliveryOf(observations []turnObservation, devicePath string) (turnOb
 func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
 	sections := []string{reply}
 	if len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 {
-		sections = append(sections, unmetChangesMessage(changeCheck{Unmet: append(append([]expectedChange(nil), rewrite.unmet...), rewrite.awaiting...), AwaitsRequester: rewrite.awaiting}))
+		sections = append(sections, unmetChangesMessage(changeCheck{Unmet: append(append([]string(nil), rewrite.unmet...), rewrite.awaiting...), AwaitsRequester: rewrite.awaiting}))
 	}
 	return strings.Join(append(sections, rewrite.deliveryNotes...), "\n\n")
 }
@@ -104,16 +105,16 @@ func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
 func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewrite finishReplyRewrite) string {
 	sections := []string{"You are " + request.AgentIdentity.DisplayName() + ", and the request is addressed to you: a mention of you names who is asked, never a person the work is for. Rewrite the final user-facing reply below."}
 	if len(rewrite.unmet) > 0 {
-		sections = append(sections, "It was written as though every asked change were done, but the work does not yet carry out these asked changes, and nothing has changed since that was first found:\n"+bulletList(askedWordsOf(rewrite.unmet))+"\nSay plainly what the work still lacks for each of them, without claiming it is done.")
+		sections = append(sections, "It was written as though every asked change were done, but the work does not yet carry out these asked changes, and nothing has changed since that was first found:\n"+bulletList(rewrite.unmet)+"\nSay plainly what the work still lacks for each of them, without claiming it is done.")
 	}
 	if len(rewrite.awaiting) > 0 {
-		sections = append(sections, "These asked changes need information the person has not given and nothing the work read supports, so the work left that information out instead of making it up:\n"+bulletList(askedWordsOf(rewrite.awaiting))+"\nFor each, name the information that is missing and offer to complete the work once the person gives it, without claiming it is done.")
+		sections = append(sections, "These asked changes need information the person has not given and nothing the work read supports, so the work left that information out instead of making it up:\n"+bulletList(rewrite.awaiting)+"\nFor each, name the information that is missing and offer to complete the work once the person gives it, without claiming it is done.")
 	}
 	if len(rewrite.deliveryNotes) > 0 {
 		sections = append(sections, "The latest delivery of each file it carries reports what that file now holds, which the reply must tell the person:\n"+bulletList(rewrite.deliveryNotes)+"\nSay each of these, and describe the files only as these reports and the reply agree. A value the delivery left blank is gone from the file: never quote it, describe it as present or offer it back; offer to fill it in once the person gives it.")
 	}
 	if len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 {
-		sections = append(sections, recordedChangesFact(rewrite.recorded))
+		sections = append(sections, sideEffectsFact(rewrite.sideEffects))
 	}
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
@@ -125,19 +126,11 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 	), "\n\n")
 }
 
-func recordedChangesFact(recorded []changedRecord) string {
-	if len(recorded) == 0 {
-		return "Records this work changed: none."
+func sideEffectsFact(calls []sideEffect) string {
+	if len(calls) == 0 {
+		return "Calls this work made that change things: none."
 	}
-	return "Records this work changed, as the record itself answered each change; each of them exists as shown here, so never say one was not made, not saved or not found, and describe it only as shown:\n" + marshalEventBody(recorded)
-}
-
-func askedWordsOf(changes []expectedChange) []string {
-	asked := make([]string, 0, len(changes))
-	for _, change := range changes {
-		asked = append(asked, change.Asked)
-	}
-	return asked
+	return "Calls this work made that change things, in order. A call that succeeded did what it shows, so never say a change it recorded was not made, not saved or not found, and describe it only as shown; a call that did not succeed changed nothing:\n" + marshalEventBody(calls)
 }
 
 func bulletList(items []string) string {

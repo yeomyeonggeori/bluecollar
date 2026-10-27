@@ -92,7 +92,7 @@ func TestTheUnmetChangesReplyIsToldWhichFilesItCarries(t *testing.T) {
 	recorder := &unmetReplyRecorder{}
 	services := newTurnRunnerTestServices(recorder, TurnOptions{MaxIterationCount: 8})
 	request := AgentTurnRequest{Prompt: quoteRequest, ResponseLanguage: "ko"}
-	check := changeCheck{Unmet: []expectedChange{{Change: "file created", Asked: "견적서를 pdf로 만들어 주세요."}}}
+	check := changeCheck{Unmet: []string{"견적서를 pdf로 만들어 주세요."}}
 	carried := []toolcontract.FileAttachment{{DevicePath: "/workspace/private/people/person-1/documents/견적서.pdf", Filename: "견적서.pdf", ContentType: "application/pdf", SizeBytes: 34549}}
 
 	services.runner.replyForFinish(context.Background(), "task-run-1", request, &agentTaskState{}, completionGateResult{IsSatisfied: true, Attachments: carried, ChangeCheck: &check}, quoteReply)
@@ -107,7 +107,7 @@ func TestTheUnmetChangesReplyIsToldWhichFilesItCarries(t *testing.T) {
 }
 
 func TestTheUnmetChangesReplyWithNoFileIsToldItCarriesNone(t *testing.T) {
-	prompt := buildFinishReplyRewritePrompt(AgentTurnRequest{Prompt: quoteRequest}, quoteReply, finishReplyRewrite{unmet: []expectedChange{{Change: "file created", Asked: "견적서를 pdf로 만들어 주세요."}}})
+	prompt := buildFinishReplyRewritePrompt(AgentTurnRequest{Prompt: quoteRequest}, quoteReply, finishReplyRewrite{unmet: []string{"견적서를 pdf로 만들어 주세요."}})
 
 	if !strings.Contains(prompt, "Files this reply carries: none.") {
 		t.Fatalf("expected the rewrite told the reply carries no file, got %q", prompt)
@@ -119,7 +119,7 @@ func TestAFinishWhoseCheckStaysUnmetRewritesTheReplyKnowingTheDeliveredFile(t *t
 	attachment := delivery.Observations[len(delivery.Observations)-1].Attachments[0]
 	recorder := &unmetReplyRecorder{}
 	services := newTurnRunnerTestServices(recorder, TurnOptions{MaxIterationCount: 8})
-	check := changeCheck{Unmet: []expectedChange{{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}}}
+	check := changeCheck{Unmet: []string{strings.SplitN(delivery.Prompt, "\n", 2)[0]}}
 	gate := completionGateResult{IsSatisfied: true, Attachments: []toolcontract.FileAttachment{attachment}, ChangeCheck: &check}
 	state := agentTaskState{}
 
@@ -200,7 +200,7 @@ func TestAFinishWithoutDeliveryNotesSendsItsReplyAsWritten(t *testing.T) {
 
 func TestAnUnmetRewriteSpeaksOfTheWorkAndNeverOfARecord(t *testing.T) {
 	attachment := toolcontract.FileAttachment{Filename: "memo.docx"}
-	prompt := buildFinishReplyRewritePrompt(AgentTurnRequest{Prompt: "메모를 docx로 써 주세요."}, "메모를 첨부했습니다.", finishReplyRewrite{unmet: []expectedChange{{Change: "file created", Asked: "메모를 docx로 써 주세요."}}, carried: []toolcontract.FileAttachment{attachment}})
+	prompt := buildFinishReplyRewritePrompt(AgentTurnRequest{Prompt: "메모를 docx로 써 주세요."}, "메모를 첨부했습니다.", finishReplyRewrite{unmet: []string{"메모를 docx로 써 주세요."}, carried: []toolcontract.FileAttachment{attachment}})
 
 	if strings.Contains(prompt, "the record does not show") {
 		t.Fatalf("expected the rewrite to describe the work, not a record, got %q", prompt)
@@ -340,7 +340,7 @@ func TestTheUnmetChangesReplyIsToldWhatTheRecordHolds(t *testing.T) {
 	added := successfulSideEffectObservation("obs-001", "task_add", `{"status":"completed","title":"주간 회의"}`, "added")
 	added.Output.Data = json.RawMessage(`{"taskID":"task-1","content":"주간 회의","status":"completed"}`)
 	added.Effects = []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "task-1"}}
-	check := changeCheck{Unmet: []expectedChange{{Change: "task created", Asked: request.Prompt}}}
+	check := changeCheck{Unmet: []string{request.Prompt}}
 
 	services.runner.replyForFinish(context.Background(), "task-run-1", request, &agentTaskState{Observations: []turnObservation{added}}, completionGateResult{IsSatisfied: true, ChangeCheck: &check}, "추가했어요.")
 
@@ -348,7 +348,7 @@ func TestTheUnmetChangesReplyIsToldWhatTheRecordHolds(t *testing.T) {
 		t.Fatalf("expected one rewrite, got %d", len(recorder.prompts))
 	}
 	prompt := recorder.prompts[0]
-	if !strings.Contains(prompt, `"record":"task-1"`) || !strings.Contains(prompt, `"status":"completed"`) || !strings.Contains(prompt, "never say one was not made") {
+	if !strings.Contains(prompt, `"record":"task-1"`) || !strings.Contains(prompt, `"status":"completed"`) || !strings.Contains(prompt, "never say a change it recorded was not made") {
 		t.Fatalf("expected the rewrite told that task-1 was created as the record answered, got %q", prompt)
 	}
 	if !strings.Contains(prompt, "You are 김인턴, and the request is addressed to you") {

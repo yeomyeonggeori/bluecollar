@@ -124,13 +124,13 @@ func expectedChangesSummary(body map[string]any) string {
 	if len(changes) == 0 {
 		return "no change asked for"
 	}
-	kinds := []string{}
+	sentences := []string{}
 	for _, change := range changes {
-		if document, isDocument := change.(map[string]any); isDocument {
-			kinds = append(kinds, stringField(document, "change"))
+		if sentence, isSentence := change.(string); isSentence {
+			sentences = append(sentences, sentence)
 		}
 	}
-	return clippedTo(strings.Join(kinds, ", "), 96)
+	return clippedTo(strings.Join(sentences, ", "), 96)
 }
 
 func changeCheckSummary(body map[string]any) string {
