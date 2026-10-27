@@ -107,7 +107,7 @@ func TestQueuedActionKeepsTheExposureOfItsOriginalModelRequest(t *testing.T) {
 	}
 	services.runner.applyPlanObservation(context.Background(), "task-step-batch", &state, planUpdateSuccessObservation("obs-plan-1",
 		`{"steps":[{"title":"move the deal","status":"in_progress"}]}`))
-	rememberBatchedActions(&state, turnActionDocument{BatchedActions: []turnActionDocument{{Action: "continue", ToolName: "deal_list"}}}, originalRequest.ToolSet.ListToolNames(), originalRequest.ToolExposure)
+	rememberBatchedActions(&state, turnActionDocument{BatchedActions: []turnActionDocument{{Action: "continue", ToolName: "deal_list"}}}, originalRequest.ToolSet.ListToolNames(), originalRequest.ToolExposure, maxSummaryTextLength)
 
 	queuedRequest := services.runner.requestForStep(context.Background(), request, &state)
 	if !queuedRequest.ToolSet.IsAllowed("deal_list") {

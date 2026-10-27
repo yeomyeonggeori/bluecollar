@@ -47,10 +47,10 @@ func takeBatchedAction(state *agentTaskState) (turnActionDocument, bool) {
 	return nextAction, true
 }
 
-func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocument, exposedToolNames []string, exposure ToolExposureEvent) {
+func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocument, exposedToolNames []string, exposure ToolExposureEvent, characterLimit int) {
 	if reason, mustStop := batchStopReason(state.Observations); mustStop {
 		state.PendingBatchedActions = append(state.PendingBatchedActions, actionDocument.BatchedActions...)
-		dropPendingBatchedActions(state, reason)
+		dropPendingBatchedActions(state, reason, characterLimit)
 		return
 	}
 	state.PendingBatchedActions = append(state.PendingBatchedActions, actionDocument.BatchedActions...)
