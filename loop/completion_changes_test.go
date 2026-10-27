@@ -125,7 +125,7 @@ func deletedTaskObservation() turnObservation {
 	return observation
 }
 
-func expectedChangesDocument(changes ...expectedChange) string {
+func expectedChangesDocument(changes ...string) string {
 	document, _ := json.Marshal(map[string]any{"expectedChanges": changes})
 	return string(document)
 }
@@ -138,51 +138,20 @@ func deleteRequest(toolSet *toolcontract.ToolSet) AgentTurnRequest {
 	}
 }
 
-var deleteOldTask = expectedChange{Change: "task deleted", Asked: "오래된 작업을 삭제해줘"}
+var deleteOldTask = "오래된 작업 삭제"
 
-func TestExpectedChangesAreNotAskedForWhenNoToolChangesAnything(t *testing.T) {
-	languageModel := &stubStructuredLanguageModel{}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-
-	changes, isDefined := services.runner.defineExpectedChanges(context.Background(), "task-run-1", deleteRequest(taskToolsTestToolSet()))
-
-	if !isDefined || len(changes) != 0 || len(languageModel.requests) != 0 {
-		t.Fatalf("expected no definition call without a changing tool, got changes=%+v defined=%v requests=%d", changes, isDefined, len(languageModel.requests))
-	}
-}
-
-func TestExpectedChangesOfferOnlyKindsTheToolsDeclare(t *testing.T) {
-	languageModel := &stubStructuredLanguageModel{contents: []string{expectedChangesDocument(deleteOldTask, expectedChange{Change: "task created", Asked: "오래된 작업을"})}}
-	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
-
-	changes, _ := services.runner.defineExpectedChanges(context.Background(), "task-run-1", deleteRequest(taskDeleteToolSet()))
-
-	schema := languageModel.requests[0].StructuredOutputSchema.Document
-	if !strings.Contains(schema, `"enum":["task deleted"]`) {
-		t.Fatalf("expected the kinds enum to hold only the declared effect, got %s", schema)
-	}
-	if !strings.Contains(languageModel.requests[0].Messages[0].Content, "task_delete: Delete a task.") {
-		t.Fatalf("expected each kind to name its tools, got %s", languageModel.requests[0].Messages[0].Content)
-	}
-	if len(changes) != 1 || changes[0] != deleteOldTask {
-		t.Fatalf("expected an undeclared kind to be dropped, got %+v", changes)
-	}
-}
-
-func TestExpectedChangesAreRequotedOnceAndStillMisquotedOnesDropped(t *testing.T) {
-	languageModel := &stubStructuredLanguageModel{contents: []string{
-		expectedChangesDocument(expectedChange{Change: "task deleted", Asked: "오래된 작업 삭제"}),
-		expectedChangesDocument(deleteOldTask, expectedChange{Change: "task deleted", Asked: "지난달 작업도 지워줘"}),
-	}}
+func TestExpectedChangesAreSentencesWithBlanksAndRepeatsDropped(t *testing.T) {
+	languageModel := &stubStructuredLanguageModel{contents: []string{expectedChangesDocument(deleteOldTask, " ", deleteOldTask)}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 
 	changes, isDefined := services.runner.defineExpectedChanges(context.Background(), "task-run-1", deleteRequest(taskDeleteToolSet()))
 
-	if len(languageModel.requests) != 2 || !strings.Contains(languageModel.requests[1].Messages[0].Content, "오래된 작업 삭제") {
-		t.Fatalf("expected one retry naming the misquote, got %d requests", len(languageModel.requests))
+	schema := languageModel.requests[0].StructuredOutputSchema.Document
+	if !strings.Contains(schema, `"items":{"type":"string"}`) {
+		t.Fatalf("expected each change to be a sentence, got %s", schema)
 	}
-	if !isDefined || len(changes) != 1 || changes[0] != deleteOldTask {
-		t.Fatalf("expected only the exactly quoted change to remain, got %+v", changes)
+	if !isDefined || !slices.Equal(changes, []string{deleteOldTask}) {
+		t.Fatalf("expected one change, got %+v", changes)
 	}
 }
 
@@ -203,46 +172,52 @@ func taskAndCalendarToolSet() *toolcontract.ToolSet {
 	})
 }
 
-func TestExpectedChangesQuoteTheLatestMessageAboutAnEarlierRequest(t *testing.T) {
-	correction := expectedChange{Change: "task deleted", Asked: "아니 지우라고"}
-	languageModel := &stubStructuredLanguageModel{contents: []string{expectedChangesDocument(correction)}}
+func TestExpectedChangesReadTheLatestMessageAboutAnEarlierRequest(t *testing.T) {
+	languageModel := &stubStructuredLanguageModel{contents: []string{expectedChangesDocument(deleteOldTask)}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	request := deleteRequest(taskDeleteToolSet())
 	request.ActiveGoal = ActiveGoal{OriginalInstruction: "오래된 작업 정리했어"}
 	request.Prompt = "아니 지우라고"
 
-	changes, _ := services.runner.defineExpectedChanges(context.Background(), "task-run-1", request)
+	services.runner.defineExpectedChanges(context.Background(), "task-run-1", request)
 
 	if !strings.Contains(languageModel.requests[0].Messages[1].Content, "Latest message about it:\n아니 지우라고") {
 		t.Fatalf("expected the latest message beside the request, got %s", languageModel.requests[0].Messages[1].Content)
 	}
-	if len(changes) != 1 || changes[0] != correction {
-		t.Fatalf("expected a quote from the latest message to stand, got %+v", changes)
-	}
 }
 
-func TestJevJudgesAChangeWithNoLookupAndNoRecordedChangeAndALowVerdictLeavesItUnmet(t *testing.T) {
+func TestJevJudgesAChangeNothingWasDoneForAndALowVerdictLeavesItUnmet(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.1}}
-	expected := []expectedChange{{Change: "calendar created", Asked: "회의도 잡아줘"}}
 
-	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
+	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), []string{"회의 잡기"}, []turnObservation{deletedTaskObservation()})
 
 	if decisionModel.carriedOutJudgements() != 1 {
-		t.Fatalf("expected Jev asked about a change nothing recorded or looked up, got %d calls", decisionModel.carriedOutJudgements())
+		t.Fatalf("expected Jev asked about a change nothing was done for, got %d calls", decisionModel.carriedOutJudgements())
 	}
-	if errorValue != nil || len(check.Unmet) != 1 || len(check.Unrecorded) != 1 {
-		t.Fatalf("expected the unrecorded change to be unmet, got %+v error=%v", check, errorValue)
+	if errorValue != nil || !slices.Equal(check.Unmet, []string{"회의 잡기"}) {
+		t.Fatalf("expected the change to be unmet, got %+v error=%v", check, errorValue)
 	}
 }
 
-func TestJevJudgesAChangeRecordedUnderAnotherKindOfTheSameRecordType(t *testing.T) {
+func completedTaskAddedObservation() turnObservation {
+	observation := successfulSideEffectObservation("obs-001", "task_add", `{"status":"completed","title":"ZONE-2 사업 종료"}`, "added")
+	observation.Output.Data = json.RawMessage(`{"taskID":"task-9","content":"ZONE-2 사업 종료","status":"completed"}`)
+	observation.Effects = []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "task-9"}}
+	return observation
+}
+
+func TestATaskAddedForAnAnsweredQuestionIsJudgedByWhatTheCallDid(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9}}
-	expected := []expectedChange{{Change: "task created", Asked: "오래된 작업을 삭제해줘"}}
+	request := AgentTurnRequest{Prompt: "ZONE-2 사업 종료", ActiveGoal: ActiveGoal{OriginalInstruction: "@김인턴 업무추가"}, ToolSet: taskAndCalendarToolSet()}
 
-	check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskAndCalendarToolSet()), expected, []turnObservation{deletedTaskObservation()})
+	check, _ := checkExpectedChanges(context.Background(), decisionModel, request, []string{"ZONE-2 사업 종료를 업무로 추가"}, []turnObservation{completedTaskAddedObservation()})
 
-	if len(decisionModel.requests) != 1 || len(check.Unmet) != 0 {
-		t.Fatalf("expected Jev to judge a task change the definition named as another kind, got %+v", check)
+	state, _ := json.Marshal(decisionModel.requests[0].State)
+	if !strings.Contains(string(state), `"changed":[{"record":"task-9","change":"task created"}]`) {
+		t.Fatalf("expected the added task among the side effects, got %s", state)
+	}
+	if len(check.Unmet) != 0 {
+		t.Fatalf("expected the change Jev found carried out to be met, got %+v", check)
 	}
 }
 
@@ -253,7 +228,7 @@ func TestRecordedExpectedChangeIsCarriedOutFromTheThresholdUp(t *testing.T) {
 	}{{changeCarriedOutThreshold, 0}, {changeCarriedOutThreshold - 0.01, 1}} {
 		decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": testCase.noul}}
 
-		check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()})
+		check, _ := checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []string{deleteOldTask}, []turnObservation{deletedTaskObservation()})
 
 		if len(check.Unmet) != testCase.unmetSize {
 			t.Fatalf("noul %v: expected %d unmet, got %+v", testCase.noul, testCase.unmetSize, check)
@@ -261,22 +236,34 @@ func TestRecordedExpectedChangeIsCarriedOutFromTheThresholdUp(t *testing.T) {
 	}
 }
 
-func TestJevSeesEachChangedRecordWithItsInputAndResult(t *testing.T) {
+func TestJevSeesEachSideEffectWithItsInputResultAndChangedRecords(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
 
-	checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []expectedChange{deleteOldTask}, []turnObservation{deletedTaskObservation()})
+	checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []string{deleteOldTask}, []turnObservation{deletedTaskObservation()})
 
 	state, _ := json.Marshal(decisionModel.requests[0].State)
-	if !strings.Contains(string(state), `"changedRecords":[{"record":"task-1","history":[{"change":"task deleted","input":{"taskID":"task-1"},"result":{"taskID":"task-1"}}]}]`) {
-		t.Fatalf("expected the deleted task in changedRecords, got %s", state)
+	if !strings.Contains(string(state), `"sideEffects":[{"tool":"task_delete","input":{"taskID":"task-1"},"succeeded":true,"result":{"taskID":"task-1"},"changed":[{"record":"task-1","change":"task deleted"}]}]`) {
+		t.Fatalf("expected the deletion among the side effects, got %s", state)
 	}
 }
 
-func TestUnmetChangesMessageNamesWhatWasAskedAndWhy(t *testing.T) {
-	created := expectedChange{Change: "task created", Asked: "새 작업도 만들어줘"}
-	message := unmetChangesMessage(changeCheck{Unrecorded: []expectedChange{created}, Unmet: []expectedChange{created, deleteOldTask}})
+func TestJevSeesAFailedCallAsOneThatDidNotSucceed(t *testing.T) {
+	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.1}}
+	failed := successfulSideEffectObservation("obs-001", "task_delete", `{"taskID":"task-1"}`, "")
+	failed.Failure = &toolcontract.ToolFailure{Code: "forbidden", UserSafeSummary: "Only the owner may delete this task."}
 
-	for _, want := range []string{`"새 작업도 만들어줘" (task created): nothing recorded changed this kind of record`, `"오래된 작업을 삭제해줘" (task deleted): the recorded changes do not carry it out`} {
+	checkExpectedChanges(context.Background(), decisionModel, deleteRequest(taskDeleteToolSet()), []string{deleteOldTask}, []turnObservation{failed})
+
+	state, _ := json.Marshal(decisionModel.requests[0].State)
+	if !strings.Contains(string(state), `"sideEffects":[{"tool":"task_delete","input":{"taskID":"task-1"},"succeeded":false,"error":"Only the owner may delete this task."}]`) {
+		t.Fatalf("expected the failed deletion among the side effects, got %s", state)
+	}
+}
+
+func TestUnmetChangesMessageNamesEachChangeAndWhy(t *testing.T) {
+	message := unmetChangesMessage(changeCheck{ExpectedChanges: []string{"새 작업 추가", deleteOldTask}, Unmet: []string{"새 작업 추가", deleteOldTask}, AwaitsRequester: []string{deleteOldTask}})
+
+	for _, want := range []string{`"새 작업 추가": what was done does not carry it out`, `"오래된 작업 삭제": it needs information only the requester can give`} {
 		if !strings.Contains(message, want) {
 			t.Fatalf("expected %q in %q", want, message)
 		}
@@ -295,18 +282,6 @@ func TestExpectedChangesPassWhenNoDecisionModelIsConfigured(t *testing.T) {
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "completion.check_degraded", "decision model is not configured") {
 		t.Fatal("expected the missing decision model to be recorded")
-	}
-}
-
-func TestExpectedChangesCanAskForAFileTheReplyDelivers(t *testing.T) {
-	fileDeliver := declaringToolDefinition(toolcontract.FileDeliverToolName, "file", "attached")
-	fileDeliver.Visibility = toolcontract.ToolVisibilityInternal
-	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{fileDeliver, declaringToolDefinition("write", "file", "created")})
-
-	vocabulary := changeVocabularyOf(toolSet)
-
-	if !slices.Contains(vocabulary.Kinds, "file attached") || !slices.Contains(vocabulary.Kinds, "file created") {
-		t.Fatalf("expected the reply's file delivery beside the model's own tools, got %v", vocabulary.Kinds)
 	}
 }
 
@@ -358,18 +333,18 @@ func fileMadeByCommandThenDelivered(command string, filename string, contentType
 
 const pdfCommand = `python3 make_pdf.py 'native install rig 7d9a1a5a' ~/documents/native-install-rig.pdf`
 
-var makeTheAskedPDF = expectedChange{Change: "file created", Asked: "Make a one-page PDF whose only line reads 'native install rig 7d9a1a5a'"}
+const askForThePDF = "Make a one-page PDF whose only line reads 'native install rig 7d9a1a5a'"
 
 func TestJevSeesTheCommandThatMadeAFileAndTheFileItDelivered(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
-	request := AgentTurnRequest{Prompt: makeTheAskedPDF.Asked + ", and send me the PDF file itself.", ToolSet: kernelFileToolSet()}
+	request := AgentTurnRequest{Prompt: askForThePDF + ", and send me the PDF file itself.", ToolSet: kernelFileToolSet()}
 
-	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{makeTheAskedPDF}, fileMadeByCommandThenDelivered(pdfCommand, "native-install-rig.pdf", "application/pdf"))
+	checkExpectedChanges(context.Background(), decisionModel, request, []string{askForThePDF}, fileMadeByCommandThenDelivered(pdfCommand, "native-install-rig.pdf", "application/pdf"))
 
 	state, _ := json.Marshal(decisionModel.requests[0].State)
 	commandInput, _ := json.Marshal(map[string]string{"command": pdfCommand})
 	for _, want := range []string{
-		`"unrecordedWork":[{"tool":"bash","input":` + string(commandInput),
+		`"sideEffects":[{"tool":"bash","input":` + string(commandInput),
 		`"file":{"filename":"native-install-rig.pdf","contentType":"application/pdf","sizeBytes":1342}`,
 	} {
 		if !strings.Contains(string(state), want) {
@@ -378,14 +353,14 @@ func TestJevSeesTheCommandThatMadeAFileAndTheFileItDelivered(t *testing.T) {
 	}
 }
 
-func TestUnrecordedWorkHoldsNeitherLookupsNorRecordedChanges(t *testing.T) {
+func TestALookupIsNotASideEffect(t *testing.T) {
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{taskDeleteToolDefinition(), testToolDescriptor("task_list")})
 	lookup := successfulSideEffectObservation("obs-002", "task_list", `{}`, "[]")
 
-	work := unrecordedWork(toolSet, []turnObservation{deletedTaskObservation(), lookup}, time.UTC)
+	calls := sideEffects(toolSet, []turnObservation{deletedTaskObservation(), lookup}, time.UTC)
 
-	if len(work) != 0 {
-		t.Fatalf("a lookup and a recorded change are not unrecorded work, got %+v", work)
+	if len(calls) != 1 || calls[0].Tool != "task_delete" {
+		t.Fatalf("expected only the deletion, got %+v", calls)
 	}
 }
 
@@ -424,9 +399,9 @@ func TestJevSeesWhatADeliveredWorkbookHoldsAsItsWriterRecordedIt(t *testing.T) {
 	delivered.Attachments[0].Holds = delivery.Holds
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
 	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
-	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+	asked := strings.SplitN(delivery.Prompt, "\n", 2)[0]
 
-	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{asked}, delivery.Observations)
+	checkExpectedChanges(context.Background(), decisionModel, request, []string{asked}, delivery.Observations)
 
 	state, _ := json.Marshal(decisionModel.requests[0].State)
 	if !strings.Contains(string(state), `"holds":`+string(compactJSON(t, delivery.Holds))) {
@@ -442,9 +417,9 @@ func TestTheQuestionSaysNothingOfHoldsWhenNoFileRecordsThem(t *testing.T) {
 	delivery := w1DeliveredWorkbook(t)
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
 	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
-	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+	asked := strings.SplitN(delivery.Prompt, "\n", 2)[0]
 
-	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{asked}, delivery.Observations)
+	checkExpectedChanges(context.Background(), decisionModel, request, []string{asked}, delivery.Observations)
 
 	if instructions := decisionModel.requests[0].Questions["expected0"].Instructions; strings.Contains(instructions, "holds") {
 		t.Fatalf("expected no word about holds when no file records them, got %s", instructions)
@@ -463,16 +438,13 @@ func TestOneCallThatChangedSeveralRecordsShowsItsInputAndResultOnce(t *testing.T
 	delivery := w1DeliveredWorkbook(t)
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
 	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
-	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+	asked := strings.SplitN(delivery.Prompt, "\n", 2)[0]
 
-	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{asked}, delivery.Observations)
+	checkExpectedChanges(context.Background(), decisionModel, request, []string{asked}, delivery.Observations)
 
 	state, _ := json.Marshal(decisionModel.requests[0].State)
 	if count := strings.Count(string(state), `office render documents/`); count != 1 {
 		t.Fatalf("expected the render command shown once for the seven previews it wrote, got %d times in %s", count, state)
-	}
-	if !strings.Contains(string(state), `{"record":"documents/지역별_분기_매출_집계.xlsx.source.json","history":[{"change":"file changed","sameCallAs":"documents/지역별_분기_매출_집계.xlsx"}]}`) {
-		t.Fatalf("expected the snapshot's step to point at the record showing the call, got %s", state)
 	}
 }
 
@@ -501,7 +473,7 @@ func deliveredOfficeFileCases(t *testing.T) []deliveredOfficeFileCase {
 	return cases
 }
 
-func deliveredOfficeFileTurn(liveCase deliveredOfficeFileCase) (AgentTurnRequest, []expectedChange, []turnObservation) {
+func deliveredOfficeFileTurn(liveCase deliveredOfficeFileCase) (AgentTurnRequest, []string, []turnObservation) {
 	devicePath := "/home/bc_person_sample/documents/" + liveCase.Filename
 	commandInput, _ := json.Marshal(map[string]string{"command": liveCase.Command})
 	commandData, _ := json.Marshal(map[string]any{"completed": true, "exitCode": 0, "output": liveCase.Output})
@@ -517,8 +489,7 @@ func deliveredOfficeFileTurn(liveCase deliveredOfficeFileCase) (AgentTurnRequest
 		},
 	}
 	request := AgentTurnRequest{Prompt: liveCase.Prompt, ToolSet: kernelFileToolSet(), EnvironmentNow: time.Date(2026, 10, 4, 15, 0, 0, 0, time.UTC)}
-	expected := []expectedChange{{Change: "file attached", Asked: strings.SplitN(liveCase.Prompt, "\n", 2)[0]}}
-	return request, expected, observations
+	return request, []string{strings.SplitN(liveCase.Prompt, "\n", 2)[0]}, observations
 }
 
 func TestJevSeesAHeldFileByANeutralReferenceAndItsHoldsAlone(t *testing.T) {
@@ -533,7 +504,7 @@ func TestJevSeesAHeldFileByANeutralReferenceAndItsHoldsAlone(t *testing.T) {
 		if strings.Contains(string(state), stem) || strings.Contains(string(state), "documents/") {
 			t.Fatalf("%s: expected nothing naming the held file in the change check state, got %s", liveCase.Name, state)
 		}
-		if !strings.Contains(string(state), `{"record":"file 1","history":[{"change":"file attached","file":{"contentType":"`+liveCase.ContentType+`","sizeBytes":`) || !strings.Contains(string(state), `"holds":`+string(compactJSON(t, liveCase.Holds))) {
+		if !strings.Contains(string(state), `"changed":[{"record":"file 1","change":"file attached","file":{"contentType":"`+liveCase.ContentType+`","sizeBytes":`) || !strings.Contains(string(state), `"holds":`+string(compactJSON(t, liveCase.Holds))) {
 			t.Fatalf("%s: expected the held file as file 1 with its holds, got %s", liveCase.Name, state)
 		}
 	}
@@ -545,34 +516,21 @@ func TestARecordedWorkbookWithHoldsShowsNoneOfTheRecordsThatMadeIt(t *testing.T)
 	delivered.Attachments[0].Holds = delivery.Holds
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 1}}
 	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet()}
-	asked := expectedChange{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}
+	asked := strings.SplitN(delivery.Prompt, "\n", 2)[0]
 
-	checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{asked}, delivery.Observations)
+	checkExpectedChanges(context.Background(), decisionModel, request, []string{asked}, delivery.Observations)
 
 	state, _ := decisionModel.requests[0].State.(map[string]any)
-	records, _ := json.Marshal(state["changedRecords"])
+	records, _ := json.Marshal(state["sideEffects"])
 	if strings.Contains(string(records), "지역별_분기_매출_집계") || strings.Count(string(records), `"record":`) != 1 {
 		t.Fatalf("expected only the delivered workbook, by a neutral reference, got %s", records)
-	}
-}
-
-func TestARecordRepeatingAnIdenticalStepShowsItOnce(t *testing.T) {
-	first := deletedTaskObservation()
-	second := deletedTaskObservation()
-	second.ObservationID = "obs-002"
-
-	records := changedRecords([]turnObservation{first, second}, time.UTC, map[string]bool{})
-
-	if len(records) != 1 || len(records[0].History) != 1 {
-		t.Fatalf("expected the repeated identical deletion shown once, got %+v", records)
 	}
 }
 
 func TestTheChangeCheckIsToldWhoTheRequestAddresses(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{changeQuestionKey(0): 0.95}}
 	request := AgentTurnRequest{Prompt: "@김인턴 완료 업무로 추가해줘", ToolSet: taskToolsTestToolSet(), AgentIdentity: AgentIdentity{Name: "김인턴", Handle: "kim-intern"}}
-	expected := []expectedChange{{Change: "task created", Asked: request.Prompt}}
-	if _, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, expected, nil); errorValue != nil {
+	if _, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, []string{"완료 업무 추가"}, nil); errorValue != nil {
 		t.Fatal(errorValue)
 	}
 	judged := decisionModel.requests[0]

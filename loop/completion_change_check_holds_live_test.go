@@ -129,7 +129,7 @@ func TestLiveChangeCheckAcceptsW1RecordedWorkbookByWhatItHolds(t *testing.T) {
 	endpoint := liveDecisionEndpoint(t)
 	delivery := w1DeliveredWorkbook(t)
 	request := AgentTurnRequest{Prompt: delivery.Prompt, ToolSet: commandFileToolSet(), EnvironmentNow: time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)}
-	expected := []expectedChange{{Change: "file changed", Asked: strings.SplitN(delivery.Prompt, "\n", 2)[0]}}
+	expected := []string{strings.SplitN(delivery.Prompt, "\n", 2)[0]}
 	held := append([]turnObservation(nil), delivery.Observations...)
 	held[len(held)-1].Attachments = []toolcontract.FileAttachment{held[len(held)-1].Attachments[0]}
 	held[len(held)-1].Attachments[0].Holds = delivery.Holds
@@ -163,7 +163,7 @@ func withoutHolds(observations []turnObservation) []turnObservation {
 	return stripped
 }
 
-func judgeChange(t *testing.T, endpoint decisions.Endpoint, request AgentTurnRequest, expected []expectedChange, observations []turnObservation) holdsVerdict {
+func judgeChange(t *testing.T, endpoint decisions.Endpoint, request AgentTurnRequest, expected []string, observations []turnObservation) holdsVerdict {
 	counting := &tokenCountingDecisionModel{inner: endpoint.DecisionModel()}
 	check, errorValue := checkExpectedChanges(context.Background(), counting, request, expected, observations)
 	if errorValue != nil {

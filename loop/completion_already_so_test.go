@@ -17,7 +17,7 @@ const (
 	tripEndCorrected = "한국 돌아오면 결국 17일이긴 하더라"
 )
 
-var extendTrip = expectedChange{Change: "calendar updated", Asked: tripEndCorrected}
+const extendTrip = "미국 출장 일정을 17일까지로 변경"
 
 func calendarToolSet() *toolcontract.ToolSet {
 	listing := testToolDescriptor("event_list")
@@ -49,7 +49,7 @@ func tripRequest() AgentTurnRequest {
 func TestAChangeNothingRecordedIsJudgedAgainstTheLookupsOfItsRecords(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9}}
 
-	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, tripRequest(), []expectedChange{extendTrip}, []turnObservation{tripListingObservation()})
+	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, tripRequest(), []string{extendTrip}, []turnObservation{tripListingObservation()})
 
 	if errorValue != nil || len(check.Unmet) != 0 {
 		t.Fatalf("expected a change the lookups show already so to be met, got %+v error=%v", check, errorValue)
@@ -66,10 +66,10 @@ func TestAChangeNothingRecordedIsJudgedAgainstTheLookupsOfItsRecords(t *testing.
 func TestAChangeNothingRecordedStaysUnmetWhenTheLookupsDoNotShowIt(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.1}}
 
-	check, _ := checkExpectedChanges(context.Background(), decisionModel, tripRequest(), []expectedChange{extendTrip}, []turnObservation{tripListingObservation()})
+	check, _ := checkExpectedChanges(context.Background(), decisionModel, tripRequest(), []string{extendTrip}, []turnObservation{tripListingObservation()})
 
-	if len(check.Unmet) != 1 || len(check.Unrecorded) != 1 {
-		t.Fatalf("expected the change unmet and named as unrecorded, got %+v", check)
+	if len(check.Unmet) != 1 {
+		t.Fatalf("expected the change unmet, got %+v", check)
 	}
 }
 

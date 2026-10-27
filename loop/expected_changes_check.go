@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/bluecollar/toolexposure"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -17,8 +19,8 @@ import (
 const (
 	changeCheckSchemaName     = "bluecollar_change_check"
 	changeCarriedOutThreshold = 0.6
-	changeLookupLimit         = 2
-	unrecordedWorkLimit       = 4
+	changeLookupLimit         = 4
+	unrecordedCallLimit       = 6
 	changeValueMaximumLength  = 1500
 
 	changeGapWorkLeft             = "work_left"
@@ -26,11 +28,10 @@ const (
 )
 
 type changeCheck struct {
-	ExpectedChanges  []expectedChange   `json:"expectedChanges"`
+	ExpectedChanges  []string           `json:"expectedChanges"`
 	CarriedOut       map[string]float64 `json:"carriedOut,omitempty"`
-	Unrecorded       []expectedChange   `json:"unrecorded,omitempty"`
-	Unmet            []expectedChange   `json:"unmet,omitempty"`
-	AwaitsRequester  []expectedChange   `json:"awaitsRequester,omitempty"`
+	Unmet            []string           `json:"unmet,omitempty"`
+	AwaitsRequester  []string           `json:"awaitsRequester,omitempty"`
 	RequesterOnly    map[string]float64 `json:"requesterOnly,omitempty"`
 	GapCheckError    string             `json:"gapCheckError,omitempty"`
 	StateDigest      string             `json:"stateDigest,omitempty"`
@@ -43,17 +44,19 @@ func (check changeCheck) awaitsOnlyTheRequester() bool {
 	return len(check.Unmet) > 0 && len(check.AwaitsRequester) == len(check.Unmet)
 }
 
-type changedRecord struct {
-	Record  string       `json:"record"`
-	History []changeStep `json:"history"`
+type sideEffect struct {
+	Tool      string         `json:"tool"`
+	Input     any            `json:"input,omitempty"`
+	Succeeded bool           `json:"succeeded"`
+	Result    any            `json:"result,omitempty"`
+	Error     string         `json:"error,omitempty"`
+	Changed   []recordChange `json:"changed,omitempty"`
 }
 
-type changeStep struct {
-	Change     string     `json:"change"`
-	Input      any        `json:"input,omitempty"`
-	Result     any        `json:"result,omitempty"`
-	SameCallAs string     `json:"sameCallAs,omitempty"`
-	File       *fileFacts `json:"file,omitempty"`
+type recordChange struct {
+	Record string     `json:"record"`
+	Change string     `json:"change"`
+	File   *fileFacts `json:"file,omitempty"`
 }
 
 type fileFacts struct {
@@ -63,10 +66,14 @@ type fileFacts struct {
 	Holds       json.RawMessage `json:"holds,omitempty"`
 }
 
-type unrecordedCall struct {
-	Tool   string `json:"tool"`
-	Input  any    `json:"input,omitempty"`
-	Result any    `json:"result,omitempty"`
+type heldFile struct {
+	reference         string
+	latestObservation int
+}
+
+type heldFiles struct {
+	files       map[string]heldFile
+	objectTypes map[string]bool
 }
 
 type changeLookup struct {
@@ -74,18 +81,16 @@ type changeLookup struct {
 	Result any    `json:"result"`
 }
 
-func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []expectedChange, observations []turnObservation) (changeCheck, error) {
-	check := changeCheck{ExpectedChanges: expected, Unrecorded: unrecordedChanges(request.ToolSet, expected, observations)}
-	location := companyLocation(request.Company.TimeZone)
-	heldObjectTypes := heldObjectTypes(observations)
-	state := changeCheckState(request, location, expected, heldObjectTypes, observations)
+func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel, request AgentTurnRequest, expected []string, observations []turnObservation) (changeCheck, error) {
+	check := changeCheck{ExpectedChanges: expected}
+	state := changeCheckState(request, expected, observations)
 	check.StateDigest = judgedStateDigest(state)
 	if refusal, isRefused := refusalOverState(observations, check.StateDigest); isRefused {
 		return refusal, nil
 	}
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{
 		State:     state,
-		Questions: changeCheckQuestions(len(expected), len(heldObjectTypes) > 0),
+		Questions: changeCheckQuestions(len(expected), len(heldFilesOf(observations).files) > 0),
 	})
 	if errorValue != nil {
 		return changeCheck{}, errorValue
@@ -94,7 +99,7 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 	for index := range expected {
 		check.CarriedOut[changeQuestionKey(index)] = response.Answers[changeQuestionKey(index)].Noul
 	}
-	check, errorValue = withUnwrittenFieldsChecked(ctx, decisionModel, request, state, expected, heldObjectTypes, observations, check)
+	check, errorValue = withUnwrittenFieldsChecked(ctx, decisionModel, request, state, expected, observations, check)
 	if errorValue != nil {
 		return changeCheck{}, errorValue
 	}
@@ -111,7 +116,7 @@ func checkExpectedChanges(ctx context.Context, decisionModel model.DecisionModel
 	return withWhatUnmetChangesLack(ctx, decisionModel, state, expected, unmetIndexes, check), nil
 }
 
-func withWhatUnmetChangesLack(ctx context.Context, decisionModel model.DecisionModel, state map[string]any, expected []expectedChange, unmetIndexes []int, check changeCheck) changeCheck {
+func withWhatUnmetChangesLack(ctx context.Context, decisionModel model.DecisionModel, state map[string]any, expected []string, unmetIndexes []int, check changeCheck) changeCheck {
 	response, errorValue := decisionModel.Decide(ctx, model.DecisionRequest{State: state, Questions: changeGapQuestions(unmetIndexes)})
 	if errorValue != nil {
 		check.GapCheckError = errorValue.Error()
@@ -126,18 +131,6 @@ func withWhatUnmetChangesLack(ctx context.Context, decisionModel model.DecisionM
 		}
 	}
 	return check
-}
-
-func unrecordedChanges(toolSet *toolcontract.ToolSet, expected []expectedChange, observations []turnObservation) []expectedChange {
-	changedObjectTypes := changedObjectTypes(observations)
-	objectTypeByKind := objectTypeByChangeKind(toolSet)
-	var unrecorded []expectedChange
-	for _, change := range expected {
-		if !changedObjectTypes[objectTypeByKind[change.Change]] {
-			unrecorded = append(unrecorded, change)
-		}
-	}
-	return unrecorded
 }
 
 func judgedStateDigest(state map[string]any) string {
@@ -169,42 +162,42 @@ func changeCheckQuestions(changeCount int, isAnyFileHeld bool) map[string]model.
 	questions := map[string]model.DecisionQuestion{}
 	for index := range changeCount {
 		instructions := []string{
-			fmt.Sprintf("Was expectedChanges[%d] carried out? asked is the user's own words asking for it; read them in request and conversationBefore, with relative words (now, tomorrow, by 6:30) read against now.", index),
-			"changedRecords lists every record a tool recorded changing, with its changes in order; judge a record by where its history ends. unrecordedWork lists calls that can change things but record no change of their own, such as commands: a record they made or changed shows in changedRecords only through a later recorded change, so read the two together.",
-			"It is carried out when the records asked about end up the way asked says, as changedRecords and unrecordedWork show together, or when lookups show they already were, or when asked covers every record meeting a condition and none met it.",
-			"It counts as already so only when lookups or changedRecords show it; with no such evidence it was not carried out.",
+			fmt.Sprintf("Was expectedChanges[%d] carried out? It is a change the request asks for, written down before the work started. request and its latest message are what the user actually said: read the change against them and conversationBefore, with relative words (now, tomorrow, by 6:30) read against now.", index),
+			"sideEffects lists, in order, every call the agent made that can change something. succeeded says whether the call went through; a call that did not succeed changed nothing. changed lists the records a call recorded changing; judge a record by the last call that changed it. A command can change things without recording them: read what it did from its input and result.",
+			"It is carried out when the side effects leave things the way the change says, or when lookups or sideEffects show it already was so, or when the change covers every record meeting a condition and none met it.",
+			"It counts as already so only when lookups or sideEffects show it; with no such evidence it was not carried out.",
 			addressedAgentInstruction,
 		}
 		if isAnyFileHeld {
 			instructions = append(instructions,
-				"A delivered file shows by a neutral reference such as file 1, never by its name. A file's holds is what its writer recorded the file holds, such as its tables, its views as they display, its charts, the values it was given and the blanks it leaves. Judge that file by its holds alone: each part asked names must be there, and each value asked states, such as a name, an amount, a quantity or a date, must be the one its holds shows.",
-				"A blank left for a value the user has not given, a part or value asked does not mention, and the file's layout are never failures.",
+				"A delivered file shows by a neutral reference such as file 1, never by its name. A file's holds is what its writer recorded the file holds, such as its tables, its views as they display, its charts, the values it was given and the blanks it leaves. Judge that file by its latest holds alone: each part the change names must be there, and each value it states, such as a name, an amount, a quantity or a date, must be the one its holds shows.",
+				"A blank left for a value the user has not given, a part or value the request does not mention, and the file's layout are never failures.",
 			)
 		}
 		instructions = append(instructions,
 			"A value counts as the same when it means the same in another format or spelling.",
-			"Do not require anything asked does not state; a value the task chose where the user said nothing is never a failure.",
+			"Do not require anything the request does not state: a detail the change adds that the request never gave, and a value the task chose where the user said nothing, are never failures.",
 		)
 		questions[changeQuestionKey(index)] = model.NoulQuestion{
 			Instructions:     strings.Join(instructions, "\n"),
 			TrueDescription:  "carried out, or already so",
-			FalseDescription: "not carried out, done to a different record, or something asked states differs",
+			FalseDescription: "not carried out, done to a different record, or something the request states differs",
 		}.Question()
 	}
 	return questions
 }
 
-const addressedAgentInstruction = "agent is who was asked to do the work. request, asked and conversationBefore may address it by its name or handle, as in a mention; that names who is asked, never whom the work is for, who takes part in it, or what it is called."
+const addressedAgentInstruction = "agent is who was asked to do the work. request and conversationBefore may address it by its name or handle, as in a mention; that names who is asked, never whom the work is for, who takes part in it, or what it is called."
 
 func changeGapQuestions(unmetIndexes []int) map[string]model.DecisionQuestion {
 	questions := map[string]model.DecisionQuestion{}
 	for _, index := range unmetIndexes {
 		questions[changeGapQuestionKey(index)] = model.ChoiceQuestion{
 			Instructions: strings.Join([]string{
-				fmt.Sprintf("expectedChanges[%d] was found not carried out. What does carrying it out still need? asked is the user's own words asking for it; read them in request and conversationBefore.", index),
+				fmt.Sprintf("expectedChanges[%d] was found not carried out. What does carrying it out still need? Read the change against request and conversationBefore, which are what the user actually said.", index),
 				addressedAgentInstruction,
 				"A blank a delivered file's holds mark as withdrawn is a value its writer took out because nothing the user gave or the work read supported it; the work cannot put it back without making it up.",
-				"It needs requester information when what is missing is a value or fact that request and conversationBefore never give, and that the records show the work could not support: its blanks are marked withdrawn, or a lookup came back without it. Asking for a value is not giving it.",
+				"It needs requester information when what is missing is a value or fact that request and conversationBefore never give, and that the records show the work could not support: its blanks are marked withdrawn, or a lookup or a failed call came back without it. Asking for a value is not giving it.",
 				"It is work left when the user gave the missing value or fact and the work left it out or got it wrong, when a part asked was never made, when a change went to a different record, or when the work never looked for something it could read. Do not count a value as given unless request or conversationBefore states it.",
 			}, "\n"),
 			OptionDescriptions: map[string]string{
@@ -224,24 +217,18 @@ func changeQuestionKey(index int) string {
 	return fmt.Sprintf("expected%d", index)
 }
 
-func changeCheckState(request AgentTurnRequest, location *time.Location, expected []expectedChange, heldObjectTypes map[string]bool, observations []turnObservation) map[string]any {
+func changeCheckState(request AgentTurnRequest, expected []string, observations []turnObservation) map[string]any {
+	location := companyLocation(request.Company.TimeZone)
 	state := askedState(request, expected)
 	state["now"] = environmentNow(request).In(location).Format("2006-01-02 (Mon) 15:04 MST")
-	state["changedRecords"] = append(changedRecords(observations, location, heldObjectTypes), heldFileRecords(observations, heldObjectTypes)...)
-	changesBeyondHolds := changesNotJudgedByHolds(request.ToolSet, expected, heldObjectTypes)
-	if lookups := changeLookups(request.ToolSet, changesBeyondHolds, observations, location); len(lookups) > 0 {
+	state["sideEffects"] = sideEffects(request.ToolSet, observations, location)
+	if lookups := changeLookups(request.ToolSet, observations, location); len(lookups) > 0 {
 		state["lookups"] = lookups
-	}
-	if len(changesBeyondHolds) == 0 {
-		return state
-	}
-	if work := unrecordedWork(request.ToolSet, observations, location); len(work) > 0 {
-		state["unrecordedWork"] = work
 	}
 	return state
 }
 
-func askedState(request AgentTurnRequest, expected []expectedChange) map[string]any {
+func askedState(request AgentTurnRequest, expected []string) map[string]any {
 	state := map[string]any{
 		"request":         strings.Join(requestWordings(request), "\n\nLatest message about it:\n"),
 		"expectedChanges": expected,
@@ -266,126 +253,132 @@ func addressedAgent(identity AgentIdentity) map[string]string {
 	return agent
 }
 
-func changesNotJudgedByHolds(toolSet *toolcontract.ToolSet, expected []expectedChange, heldObjectTypes map[string]bool) []expectedChange {
-	objectTypeByKind := objectTypeByChangeKind(toolSet)
-	changes := []expectedChange{}
-	for _, change := range expected {
-		if !heldObjectTypes[objectTypeByKind[change.Change]] {
-			changes = append(changes, change)
+func sideEffects(toolSet *toolcontract.ToolSet, observations []turnObservation, location *time.Location) []sideEffect {
+	held := heldFilesOf(observations)
+	calls := []sideEffect{}
+	for _, index := range latestDistinctSideEffectCalls(toolSet, observations) {
+		if call, isShown := sideEffectOf(observations[index], index, held, location); isShown {
+			calls = append(calls, call)
 		}
 	}
-	return changes
+	return withRecentUnrecordedCalls(calls)
 }
 
-func objectTypeByChangeKind(toolSet *toolcontract.ToolSet) map[string]string {
-	objectTypes := map[string]string{}
-	if toolSet == nil {
-		return objectTypes
-	}
-	for _, toolName := range toolNamesThatCanChange(toolSet) {
-		definition, isFound := toolSet.ToolDefinition(toolName)
-		if !isFound || definition.ResultContract == nil {
-			continue
-		}
-		for _, effect := range definition.ResultContract.Effects {
-			objectTypes[changeKind(effect.ObjectType, effect.Effect)] = strings.TrimSpace(effect.ObjectType)
-		}
-	}
-	return objectTypes
-}
-
-func changedObjectTypes(observations []turnObservation) map[string]bool {
-	objectTypes := map[string]bool{}
-	for _, observation := range successfulToolObservations(observations) {
-		for _, effect := range observation.Effects {
-			objectTypes[strings.TrimSpace(effect.ObjectType)] = true
-		}
-	}
-	return objectTypes
-}
-
-func changedRecords(observations []turnObservation, location *time.Location, heldObjectTypes map[string]bool) []changedRecord {
-	records := []changedRecord{}
-	recordIndexes := map[string]int{}
-	for _, observation := range successfulToolObservations(observations) {
-		callShownAt := ""
-		for _, effect := range observation.Effects {
-			if heldObjectTypes[strings.TrimSpace(effect.ObjectType)] {
-				continue
-			}
-			identity := firstNonEmptyString(effect.ID, effect.Path, effect.URL, effect.ObjectType)
-			key := effect.ObjectType + "\x00" + identity
-			index, isKnown := recordIndexes[key]
-			if !isKnown {
-				index = len(records)
-				recordIndexes[key] = index
-				records = append(records, changedRecord{Record: identity})
-			}
-			step := changeStep{Change: changeKind(effect.ObjectType, effect.Effect), File: attachedFileFacts(observation.Attachments, effect.Path)}
-			if callShownAt == "" {
-				step.Input = boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location))
-				step.Result = boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location))
-				callShownAt = identity
-			} else if callShownAt != identity {
-				step.SameCallAs = callShownAt
-			}
-			records[index].History = append(records[index].History, step)
-		}
-	}
-	for index := range records {
-		records[index].History = withoutRepeatedSteps(records[index].History)
-	}
-	return records
-}
-
-func withoutRepeatedSteps(history []changeStep) []changeStep {
+func latestDistinctSideEffectCalls(toolSet *toolcontract.ToolSet, observations []turnObservation) []int {
 	seen := map[string]bool{}
-	kept := []changeStep{}
-	for index := len(history) - 1; index >= 0; index-- {
-		document, _ := json.Marshal(history[index])
-		if seen[string(document)] {
+	indexes := []int{}
+	for index := len(observations) - 1; index >= 0; index-- {
+		observation := observations[index]
+		if !isSideEffectCall(toolSet, observation) {
 			continue
 		}
-		seen[string(document)] = true
-		kept = append(kept, history[index])
+		effects, _ := json.Marshal(observation.Effects)
+		key := observation.Tool + "\x00" + string(observation.ToolInput) + "\x00" + string(effects) + "\x00" + strconv.FormatBool(observation.Failed())
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		indexes = append(indexes, index)
 	}
-	slices.Reverse(kept)
+	slices.Reverse(indexes)
+	return indexes
+}
+
+func isSideEffectCall(toolSet *toolcontract.ToolSet, observation turnObservation) bool {
+	if observation.Action != "continue" || strings.TrimSpace(observation.Tool) == "" {
+		return false
+	}
+	if len(observation.Effects) > 0 || toolexposure.IsArtifactDeliveryTool(observation.Tool) {
+		return true
+	}
+	if toolSet == nil {
+		return false
+	}
+	definition, isFound := toolSet.ToolDefinition(observation.Tool)
+	return isFound && ToolDefinitionRequiresSideEffectEvidence(definition)
+}
+
+func sideEffectOf(observation turnObservation, observationIndex int, held heldFiles, location *time.Location) (sideEffect, bool) {
+	call := sideEffect{Tool: observation.Tool, Succeeded: !observation.Failed()}
+	if !call.Succeeded {
+		call.Input = boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location))
+		call.Error = firstNonEmptyString(observation.Failure.UserSafeSummary, observation.Failure.Code)
+		return call, true
+	}
+	if len(observation.Effects) == 0 && len(held.files) > 0 {
+		return call, false
+	}
+	isTouchingHeldType := false
+	for _, effect := range observation.Effects {
+		if !held.objectTypes[strings.TrimSpace(effect.ObjectType)] {
+			call.Changed = append(call.Changed, recordChange{Record: firstNonEmptyString(effect.ID, effect.Path, effect.URL, effect.ObjectType), Change: changeKind(effect.ObjectType, effect.Effect), File: attachedFileFacts(observation.Attachments, effect.Path)})
+			continue
+		}
+		isTouchingHeldType = true
+		if file, isHeld := held.files[strings.TrimSpace(effect.Path)]; isHeld {
+			call.Changed = append(call.Changed, heldFileChange(observation, observationIndex, effect, file))
+		}
+	}
+	if !isTouchingHeldType {
+		call.Input = boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location))
+		call.Result = boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location))
+	}
+	return call, len(call.Changed) > 0 || !isTouchingHeldType
+}
+
+func heldFileChange(observation turnObservation, observationIndex int, effect toolcontract.ResourceEffect, file heldFile) recordChange {
+	change := recordChange{Record: file.reference, Change: changeKind(effect.ObjectType, effect.Effect)}
+	if file.latestObservation == observationIndex {
+		change.File = heldFileFacts(observation.Attachments, effect.Path)
+	}
+	return change
+}
+
+func withRecentUnrecordedCalls(calls []sideEffect) []sideEffect {
+	unrecordedCount := 0
+	for _, call := range calls {
+		if len(call.Changed) == 0 {
+			unrecordedCount++
+		}
+	}
+	kept := []sideEffect{}
+	for _, call := range calls {
+		if len(call.Changed) == 0 && unrecordedCount > unrecordedCallLimit {
+			unrecordedCount--
+			continue
+		}
+		kept = append(kept, call)
+	}
 	return kept
 }
 
-func heldObjectTypes(observations []turnObservation) map[string]bool {
-	objectTypes := map[string]bool{}
-	for _, observation := range successfulToolObservations(observations) {
-		for _, effect := range observation.Effects {
-			if attachment, isAttached := attachmentAt(observation.Attachments, effect.Path); isAttached && len(attachment.Holds) > 0 {
-				objectTypes[strings.TrimSpace(effect.ObjectType)] = true
-			}
+func heldFilesOf(observations []turnObservation) heldFiles {
+	held := heldFiles{files: map[string]heldFile{}, objectTypes: map[string]bool{}}
+	for index, observation := range observations {
+		if !isSuccessfulCall(observation) {
+			continue
 		}
-	}
-	return objectTypes
-}
-
-func heldFileRecords(observations []turnObservation, heldObjectTypes map[string]bool) []changedRecord {
-	paths := []string{}
-	latestSteps := map[string]changeStep{}
-	for _, observation := range successfulToolObservations(observations) {
 		for _, effect := range observation.Effects {
 			attachment, isAttached := attachmentAt(observation.Attachments, effect.Path)
-			if !isAttached || !heldObjectTypes[strings.TrimSpace(effect.ObjectType)] {
+			if !isAttached || len(attachment.Holds) == 0 {
 				continue
 			}
 			path := strings.TrimSpace(effect.Path)
-			if _, isKnown := latestSteps[path]; !isKnown {
-				paths = append(paths, path)
+			file, isKnown := held.files[path]
+			if !isKnown {
+				file.reference = fmt.Sprintf("file %d", len(held.files)+1)
 			}
-			latestSteps[path] = changeStep{Change: changeKind(effect.ObjectType, effect.Effect), File: &fileFacts{ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes, Holds: attachment.Holds}}
+			file.latestObservation = index
+			held.files[path] = file
+			held.objectTypes[strings.TrimSpace(effect.ObjectType)] = true
 		}
 	}
-	records := make([]changedRecord, 0, len(paths))
-	for index, path := range paths {
-		records = append(records, changedRecord{Record: fmt.Sprintf("file %d", index+1), History: []changeStep{latestSteps[path]}})
-	}
-	return records
+	return held
+}
+
+func heldFileFacts(attachments []toolcontract.FileAttachment, path string) *fileFacts {
+	attachment, _ := attachmentAt(attachments, path)
+	return &fileFacts{ContentType: strings.TrimSpace(attachment.ContentType), SizeBytes: attachment.SizeBytes, Holds: attachment.Holds}
 }
 
 func attachedFileFacts(attachments []toolcontract.FileAttachment, path string) *fileFacts {
@@ -408,34 +401,14 @@ func attachmentAt(attachments []toolcontract.FileAttachment, path string) (toolc
 	return toolcontract.FileAttachment{}, false
 }
 
-func unrecordedWork(toolSet *toolcontract.ToolSet, observations []turnObservation, location *time.Location) []unrecordedCall {
+func changeLookups(toolSet *toolcontract.ToolSet, observations []turnObservation, location *time.Location) []changeLookup {
 	if toolSet == nil {
 		return nil
 	}
-	calls := []unrecordedCall{}
-	for _, observation := range successfulToolObservations(observations) {
-		definition, isFound := toolSet.ToolDefinition(observation.Tool)
-		if !isFound || len(observation.Effects) > 0 || !ToolDefinitionRequiresSideEffectEvidence(definition) {
-			continue
-		}
-		calls = append(calls, unrecordedCall{
-			Tool:   observation.Tool,
-			Input:  boundedValue(inLocalTime(decodedJSON(observation.ToolInput), location)),
-			Result: boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location)),
-		})
-	}
-	return calls[max(0, len(calls)-unrecordedWorkLimit):]
-}
-
-func changeLookups(toolSet *toolcontract.ToolSet, expected []expectedChange, observations []turnObservation, location *time.Location) []changeLookup {
-	if toolSet == nil {
-		return nil
-	}
-	namespaces := namespacesOfChanges(toolSet, expected)
 	lookups := []changeLookup{}
 	for _, observation := range successfulToolObservations(observations) {
 		definition, isFound := toolSet.ToolDefinition(observation.Tool)
-		if !isFound || definition.SideEffectClass != toolcontract.ToolSideEffectRead || !namespaces[definition.Namespace] {
+		if !isFound || definition.SideEffectClass != toolcontract.ToolSideEffectRead {
 			continue
 		}
 		lookups = append(lookups, changeLookup{Tool: observation.Tool, Result: boundedValue(inLocalTime(decodedJSON(observation.Output.Data), location))})
@@ -443,34 +416,18 @@ func changeLookups(toolSet *toolcontract.ToolSet, expected []expectedChange, obs
 	return lookups[max(0, len(lookups)-changeLookupLimit):]
 }
 
-func namespacesOfChanges(toolSet *toolcontract.ToolSet, expected []expectedChange) map[string]bool {
-	expectedKinds := map[string]bool{}
-	for _, change := range expected {
-		expectedKinds[change.Change] = true
-	}
-	namespaces := map[string]bool{}
-	for _, toolName := range toolNamesThatCanChange(toolSet) {
-		definition, isFound := toolSet.ToolDefinition(toolName)
-		if !isFound || definition.ResultContract == nil || strings.TrimSpace(definition.Namespace) == "" {
-			continue
-		}
-		for _, effect := range definition.ResultContract.Effects {
-			if expectedKinds[changeKind(effect.ObjectType, effect.Effect)] {
-				namespaces[definition.Namespace] = true
-			}
-		}
-	}
-	return namespaces
-}
-
 func successfulToolObservations(observations []turnObservation) []turnObservation {
 	successful := []turnObservation{}
 	for _, observation := range observations {
-		if observation.Action == "continue" && strings.TrimSpace(observation.Tool) != "" && !observation.Failed() {
+		if isSuccessfulCall(observation) {
 			successful = append(successful, observation)
 		}
 	}
 	return successful
+}
+
+func isSuccessfulCall(observation turnObservation) bool {
+	return observation.Action == "continue" && strings.TrimSpace(observation.Tool) != "" && !observation.Failed()
 }
 
 func decodedJSON(document json.RawMessage) any {

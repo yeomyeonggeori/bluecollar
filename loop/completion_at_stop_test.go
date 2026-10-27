@@ -58,7 +58,7 @@ func TestAStopDoesNotCompleteWhileAnAskedChangeIsUnmet(t *testing.T) {
 	if isCompleted {
 		t.Fatal("the model saying it was done does not outweigh a change the record says is not done")
 	}
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRunID), "completion.change_check", `"unmet":[{"change":"task deleted"`) {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRunID), "completion.change_check", `"unmet":["오래된 작업 삭제"]`) {
 		t.Fatal("expected a completion.change_check event naming the unmet change")
 	}
 }
@@ -105,7 +105,7 @@ func TestAStoppedTaskReportsWhichAskedChangesWereNotCarriedOut(t *testing.T) {
 
 	services.runner.completeOrStopForLimit(context.Background(), taskRun.TaskRunID, request, "max_iterations", &state, 3)
 
-	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "agent.failure_report", `"requestedChanges":[{"change":"task deleted"`) {
+	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "agent.failure_report", `"requestedChanges":[{"change":"오래된 작업 삭제"`) {
 		t.Fatal("expected the stop's failure report to carry the asked change")
 	}
 	if !taskEventsContain(services.taskEventService.ListTaskEvent(taskRun.TaskRunID), "agent.failure_report", `"carriedOut":false`) {

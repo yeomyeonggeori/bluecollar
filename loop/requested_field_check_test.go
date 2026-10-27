@@ -9,7 +9,7 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-var putTheTaskUnderABusiness = expectedChange{Change: "task updated", Asked: "그 업무 블루세이지 사업으로 넣어줘"}
+var putTheTaskUnderABusiness = "그 업무 블루세이지 사업으로 넣어줘"
 
 func labelledTaskToolSet() *toolcontract.ToolSet {
 	update := declaringPathToolDefinition("task_update", "Update one task.", "task", "updated")
@@ -30,9 +30,9 @@ func taskUpdatedWith(input string) []turnObservation {
 
 func TestChangeCheckRefusesAValueWrittenIntoAFieldThatDoesNotHoldWhatWasAsked(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.98, "already0": 0.1}, choice: map[string]string{"field0": "business"}}
-	request := AgentTurnRequest{Prompt: putTheTaskUnderABusiness.Asked, ToolSet: labelledTaskToolSet()}
+	request := AgentTurnRequest{Prompt: putTheTaskUnderABusiness, ToolSet: labelledTaskToolSet()}
 
-	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{putTheTaskUnderABusiness}, taskUpdatedWith(`{"taskHint":"task-1","type":"business: 블루세이지"}`))
+	check, errorValue := checkExpectedChanges(context.Background(), decisionModel, request, []string{putTheTaskUnderABusiness}, taskUpdatedWith(`{"taskHint":"task-1","type":"business: 블루세이지"}`))
 
 	if errorValue != nil {
 		t.Fatal(errorValue)
@@ -47,9 +47,9 @@ func TestChangeCheckRefusesAValueWrittenIntoAFieldThatDoesNotHoldWhatWasAsked(t 
 
 func TestChangeCheckAsksTheFieldWithoutShowingWhatWasWritten(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.98}, choice: map[string]string{"field0": "business"}}
-	request := AgentTurnRequest{Prompt: putTheTaskUnderABusiness.Asked, ToolSet: labelledTaskToolSet()}
+	request := AgentTurnRequest{Prompt: putTheTaskUnderABusiness, ToolSet: labelledTaskToolSet()}
 
-	check, _ := checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{putTheTaskUnderABusiness}, taskUpdatedWith(`{"taskHint":"task-1","business":"블루세이지"}`))
+	check, _ := checkExpectedChanges(context.Background(), decisionModel, request, []string{putTheTaskUnderABusiness}, taskUpdatedWith(`{"taskHint":"task-1","business":"블루세이지"}`))
 
 	if len(check.Unmet) != 0 || len(check.UnwrittenFields) != 0 {
 		t.Fatalf("expected a write that set the field to carry the change, got %+v", check)
@@ -68,9 +68,9 @@ func TestChangeCheckAsksTheFieldWithoutShowingWhatWasWritten(t *testing.T) {
 
 func TestChangeCheckAcceptsAFieldTheRecordAlreadyHeld(t *testing.T) {
 	decisionModel := &scriptedDecisionModel{noul: map[string]float64{"expected0": 0.9, "already0": 0.9}, choice: map[string]string{"field0": "business"}}
-	request := AgentTurnRequest{Prompt: putTheTaskUnderABusiness.Asked, ToolSet: labelledTaskToolSet()}
+	request := AgentTurnRequest{Prompt: putTheTaskUnderABusiness, ToolSet: labelledTaskToolSet()}
 
-	check, _ := checkExpectedChanges(context.Background(), decisionModel, request, []expectedChange{putTheTaskUnderABusiness}, taskUpdatedWith(`{"taskHint":"task-1","title":"분기 보고서 정리"}`))
+	check, _ := checkExpectedChanges(context.Background(), decisionModel, request, []string{putTheTaskUnderABusiness}, taskUpdatedWith(`{"taskHint":"task-1","title":"분기 보고서 정리"}`))
 
 	if len(check.Unmet) != 0 {
 		t.Fatalf("expected a field the record already held to count, got %+v", check)

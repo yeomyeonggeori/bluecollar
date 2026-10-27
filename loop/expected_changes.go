@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
-	"sort"
 	"strings"
 	"sync"
 
@@ -21,19 +19,9 @@ const (
 	conversationMessageMaximumLength = 600
 )
 
-type expectedChange struct {
-	Change string `json:"change"`
-	Asked  string `json:"asked"`
-}
-
-type changeVocabulary struct {
-	Kinds []string
-	Text  string
-}
-
 type pendingExpectedChanges struct {
 	done        chan struct{}
-	changes     []expectedChange
+	changes     []string
 	isDefined   bool
 	mutex       sync.Mutex
 	latestCheck *recordedChangeCheck
@@ -86,7 +74,7 @@ func (agentTurnRunner *AgentTurnRunner) forgetExpectedChanges(taskRunID string) 
 	agentTurnRunner.expectedChanges.Delete(taskRunID)
 }
 
-func (agentTurnRunner *AgentTurnRunner) expectedChangesFor(ctx context.Context, taskRunID string, request AgentTurnRequest) ([]expectedChange, bool) {
+func (agentTurnRunner *AgentTurnRunner) expectedChangesFor(ctx context.Context, taskRunID string, request AgentTurnRequest) ([]string, bool) {
 	pending, isPending := agentTurnRunner.pendingExpectedChangesOf(taskRunID)
 	if !isPending {
 		return agentTurnRunner.defineExpectedChanges(ctx, taskRunID, request)
@@ -99,64 +87,49 @@ func (agentTurnRunner *AgentTurnRunner) expectedChangesFor(ctx context.Context, 
 	}
 }
 
-func (agentTurnRunner *AgentTurnRunner) defineExpectedChanges(ctx context.Context, taskRunID string, request AgentTurnRequest) ([]expectedChange, bool) {
-	vocabulary := changeVocabularyOf(request.ToolSet)
-	if len(vocabulary.Kinds) == 0 {
+func (agentTurnRunner *AgentTurnRunner) defineExpectedChanges(ctx context.Context, taskRunID string, request AgentTurnRequest) ([]string, bool) {
+	if !canRecordAChange(request.ToolSet) {
 		return nil, true
 	}
-	changes, errorValue := agentTurnRunner.askForExpectedChanges(ctx, request, vocabulary, nil)
+	changes, errorValue := agentTurnRunner.askForExpectedChanges(ctx, request)
 	if errorValue != nil {
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "expected_changes", "error": errorValue.Error()}))
 		return nil, false
 	}
-	misquoted := misquotedChanges(changes, requestWordings(request))
-	if len(misquoted) > 0 {
-		if requoted, errorValue := agentTurnRunner.askForExpectedChanges(ctx, request, vocabulary, misquoted); errorValue == nil {
-			changes = requoted
-			misquoted = misquotedChanges(changes, requestWordings(request))
-		}
-	}
-	changes = withoutMisquotedChanges(changes, misquoted)
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionExpectedChanges, marshalEventBody(map[string]any{"expectedChanges": changes, "misquoted": misquoted}))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionExpectedChanges, marshalEventBody(map[string]any{"expectedChanges": changes}))
 	return changes, true
 }
 
-func (agentTurnRunner *AgentTurnRunner) askForExpectedChanges(ctx context.Context, request AgentTurnRequest, vocabulary changeVocabulary, misquoted []string) ([]expectedChange, error) {
-	instruction := expectedChangesInstruction(vocabulary)
-	if len(misquoted) > 0 {
-		instruction += "\n\nAn earlier answer wrote these as asked, but they are not words that appear in the request. Copy the words exactly:\n" + strings.Join(misquoted, "\n")
-	}
+func (agentTurnRunner *AgentTurnRunner) askForExpectedChanges(ctx context.Context, request AgentTurnRequest) ([]string, error) {
 	response, errorValue := agentTurnRunner.languageModel.GenerateStructuredResponse(ctx, model.StructuredResponseRequest{
 		Messages: []model.Message{
-			{Role: "system", Content: instruction},
+			{Role: "system", Content: expectedChangesInstruction},
 			{Role: "user", Content: expectedChangesRequestText(request)},
 		},
-		StructuredOutputSchema: model.StructuredOutputSchema{Name: expectedChangesSchemaName, Document: expectedChangesSchema(vocabulary), IsStrictlyEnforced: true},
+		StructuredOutputSchema: model.StructuredOutputSchema{Name: expectedChangesSchemaName, Document: expectedChangesSchema(), IsStrictlyEnforced: true},
 	})
 	if errorValue != nil {
 		return nil, errorValue
 	}
 	var document struct {
-		ExpectedChanges []expectedChange `json:"expectedChanges"`
+		ExpectedChanges []string `json:"expectedChanges"`
 	}
 	if errorValue := json.Unmarshal([]byte(response.Content), &document); errorValue != nil {
 		return nil, errors.New("expected changes answer is not the requested shape: " + truncateForLedger(response.Content, 200))
 	}
-	return knownChanges(document.ExpectedChanges, vocabulary), nil
+	return appendUniqueStrings(nil, nonEmptyStrings(document.ExpectedChanges)...), nil
 }
 
-func expectedChangesInstruction(vocabulary changeVocabulary) string {
-	return strings.Join([]string{
-		"Before any work starts, list the changes this request asks to be made. The finished task is checked against this list.",
-		"A request that asks only for words - an answer, an explanation, a summary, a briefing, or a question about whether something was done - asks for no change: return an empty list. Looking records up is not a change.",
-		"Write one entry per change the request asks for. change is one of the kinds below.",
-		"asked is the exact words of the request, or of the latest message about it, that ask for this change, copied character for character. Never paraphrase, translate, complete or add to them. A latest message may correct or narrow the request; what it says wins. The conversation before the request only helps you understand what the request refers to; what it asked for earlier is already handled and is not part of this request.",
-		"Do not add changes the request does not ask for.",
-		"Kinds of change:\n" + vocabulary.Text,
-	}, "\n")
-}
+var expectedChangesInstruction = strings.Join([]string{
+	"Before any work starts, list the changes this request asks to be made. The finished task is checked against this list.",
+	"A request that asks only for words - an answer, an explanation, a summary, a briefing, or a question about whether something was done - asks for no change: return an empty list. Looking records up is not a change.",
+	"List only changes the person asks the agent to make. Work the person reports having done, or says they will do, is not a change to list; when the request asks to record that work, the change is the record, such as adding it as a completed task.",
+	"Write one entry per thing the request changes, never one per step of doing it, as one short sentence in the language of the request: what it makes, changes, removes or sends, and what is true of it once done.",
+	"A latest message may answer a question about the request, correct it or narrow it; what it says wins. The conversation before the request only helps you understand what the request refers to; what it asked for earlier is already handled and is not part of this request.",
+	"Write only what the request and the latest message state. Do not add changes they do not ask for, and do not add values, names or details they do not give.",
+}, "\n")
 
-func expectedChangesSchema(vocabulary changeVocabulary) string {
+func expectedChangesSchema() string {
 	document := map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
@@ -165,15 +138,7 @@ func expectedChangesSchema(vocabulary changeVocabulary) string {
 			"expectedChanges": map[string]any{
 				"type":     "array",
 				"maxItems": expectedChangesMaximumCount,
-				"items": map[string]any{
-					"type":                 "object",
-					"additionalProperties": false,
-					"required":             []string{"change", "asked"},
-					"properties": map[string]any{
-						"change": map[string]any{"type": "string", "enum": vocabulary.Kinds},
-						"asked":  map[string]any{"type": "string"},
-					},
-				},
+				"items":    map[string]any{"type": "string"},
 			},
 		},
 	}
@@ -208,42 +173,16 @@ func conversationBeforeRequest(request AgentTurnRequest) []string {
 	return lines
 }
 
-func changeVocabularyOf(toolSet *toolcontract.ToolSet) changeVocabulary {
+func canRecordAChange(toolSet *toolcontract.ToolSet) bool {
 	if toolSet == nil {
-		return changeVocabulary{}
+		return false
 	}
-	toolsByKind := map[string][]string{}
-	for _, toolName := range toolNamesThatCanChange(toolSet) {
-		definition, isFound := toolSet.ToolDefinition(toolName)
-		if !isFound || definition.ResultContract == nil {
-			continue
-		}
-		for _, effect := range definition.ResultContract.Effects {
-			kind := changeKind(effect.ObjectType, effect.Effect)
-			toolsByKind[kind] = append(toolsByKind[kind], toolName+": "+firstSentence(definition.Description))
+	for _, definition := range toolSet.ListRegisteredToolDefinitions() {
+		if definition.ResultContract != nil && len(definition.ResultContract.Effects) > 0 {
+			return true
 		}
 	}
-	kinds := make([]string, 0, len(toolsByKind))
-	for kind := range toolsByKind {
-		kinds = append(kinds, kind)
-	}
-	sort.Strings(kinds)
-	lines := []string{}
-	for _, kind := range kinds {
-		lines = append(lines, kind)
-		for _, tool := range toolsByKind[kind] {
-			lines = append(lines, "  - "+tool)
-		}
-	}
-	return changeVocabulary{Kinds: kinds, Text: strings.Join(lines, "\n")}
-}
-
-func toolNamesThatCanChange(toolSet *toolcontract.ToolSet) []string {
-	toolNames := toolSet.ListToolNames()
-	if toolSet.IsRegistered(toolcontract.FileDeliverToolName) {
-		toolNames = appendUniqueStrings(toolNames, toolcontract.FileDeliverToolName)
-	}
-	return toolNames
+	return false
 }
 
 func changeKind(objectType string, effect string) string {
@@ -256,54 +195,4 @@ func firstSentence(text string) string {
 		return trimmedText[:end+1]
 	}
 	return trimmedText
-}
-
-func knownChanges(changes []expectedChange, vocabulary changeVocabulary) []expectedChange {
-	known := []expectedChange{}
-	for _, change := range changes {
-		for _, kind := range vocabulary.Kinds {
-			if strings.TrimSpace(change.Change) == kind {
-				known = append(known, expectedChange{Change: kind, Asked: strings.TrimSpace(change.Asked)})
-				break
-			}
-		}
-	}
-	return known
-}
-
-func misquotedChanges(changes []expectedChange, wordings []string) []string {
-	misquoted := []string{}
-	for _, change := range changes {
-		if !isQuotedFrom(change.Asked, wordings) {
-			misquoted = appendUniqueStrings(misquoted, change.Asked)
-		}
-	}
-	return misquoted
-}
-
-func isQuotedFrom(asked string, wordings []string) bool {
-	quote := collapsedWhitespace(asked)
-	if quote == "" {
-		return false
-	}
-	for _, wording := range wordings {
-		if strings.Contains(collapsedWhitespace(wording), quote) {
-			return true
-		}
-	}
-	return false
-}
-
-func withoutMisquotedChanges(changes []expectedChange, misquoted []string) []expectedChange {
-	kept := []expectedChange{}
-	for _, change := range changes {
-		if !slices.Contains(misquoted, change.Asked) {
-			kept = append(kept, change)
-		}
-	}
-	return kept
-}
-
-func collapsedWhitespace(text string) string {
-	return strings.Join(strings.Fields(text), " ")
 }
