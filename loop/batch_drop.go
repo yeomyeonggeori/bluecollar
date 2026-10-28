@@ -7,6 +7,7 @@ const (
 	batchStoppedByRuntimeNote   = "the runtime added a note to an earlier call from the same response"
 	batchStoppedByRepeat        = "an earlier call from the same response returned exactly what an earlier call had"
 	batchStoppedByLimitPressure = "the run's budget is running low"
+	batchSkippedRepeat          = "each repeats a call made earlier in the same response"
 )
 
 type droppedCall struct {
@@ -42,7 +43,7 @@ func notRunObservation(observationID string, dropped []turnActionDocument, reaso
 }
 
 func notRunMessage(dropped []turnActionDocument, reason string, characterLimit int) string {
-	message := fmt.Sprintf("Not run: %s, so the rest of that response, %d calls, was not made and changed nothing. Make again any that are still needed:", reason, len(dropped))
+	message := fmt.Sprintf("Not run: %s, so %d calls from that response were not made and changed nothing. Make again any that are still needed:", reason, len(dropped))
 	calls := distinctDroppedCalls(dropped)
 	for index, call := range calls {
 		line := "\n- " + call.text + repetitionSuffix(call.count)
@@ -54,17 +55,33 @@ func notRunMessage(dropped []turnActionDocument, reason string, characterLimit i
 	return message
 }
 
+func withoutRepeatedCalls(actionDocument turnActionDocument) ([]turnActionDocument, []turnActionDocument) {
+	seenKeys := map[string]bool{canonicalToolCallKey(actionDocument.ToolName, actionDocument.ToolInput): true}
+	batch := []turnActionDocument{}
+	repeats := []turnActionDocument{}
+	for _, action := range actionDocument.BatchedActions {
+		key := canonicalToolCallKey(action.ToolName, action.ToolInput)
+		if seenKeys[key] {
+			repeats = append(repeats, action)
+			continue
+		}
+		seenKeys[key] = true
+		batch = append(batch, action)
+	}
+	return batch, repeats
+}
+
 func distinctDroppedCalls(dropped []turnActionDocument) []droppedCall {
 	calls := []droppedCall{}
-	indexByText := map[string]int{}
+	indexByKey := map[string]int{}
 	for _, action := range dropped {
-		text := action.ToolName + " " + toolCallArguments(action.ToolInput)
-		if index, isSeen := indexByText[text]; isSeen {
+		key := canonicalToolCallKey(action.ToolName, action.ToolInput)
+		if index, isSeen := indexByKey[key]; isSeen {
 			calls[index].count++
 			continue
 		}
-		indexByText[text] = len(calls)
-		calls = append(calls, droppedCall{text: text, count: 1})
+		indexByKey[key] = len(calls)
+		calls = append(calls, droppedCall{text: action.ToolName + " " + toolCallArguments(action.ToolInput), count: 1})
 	}
 	return calls
 }

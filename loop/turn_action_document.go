@@ -53,8 +53,12 @@ func rememberBatchedActions(state *agentTaskState, actionDocument turnActionDocu
 		dropPendingBatchedActions(state, reason, characterLimit)
 		return
 	}
-	state.PendingBatchedActions = append(state.PendingBatchedActions, actionDocument.BatchedActions...)
-	if len(actionDocument.BatchedActions) > 0 {
+	batch, repeats := withoutRepeatedCalls(actionDocument)
+	if len(repeats) > 0 {
+		state.Observations = append(state.Observations, notRunObservation(nextObservationIDForObservations(state.Observations), repeats, batchSkippedRepeat, characterLimit))
+	}
+	state.PendingBatchedActions = append(state.PendingBatchedActions, batch...)
+	if len(batch) > 0 {
 		state.PendingBatchedToolNames = append([]string{}, exposedToolNames...)
 		state.PendingBatchedToolExposure = exposure
 	}
