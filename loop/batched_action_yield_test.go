@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -195,5 +196,43 @@ func TestLimitPressureHandsAPendingBatchBackToTheModelBeforeTheLimit(t *testing.
 	}
 	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
 		t.Fatalf("expected the model's reply to finish the turn, got %s", result.TaskRun.Status)
+	}
+}
+
+func TestACallRepeatedInOneResponseRunsOnce(t *testing.T) {
+	languageModel := &batchingLanguageModel{firstBatch: []model.ChatCompletionToolCall{
+		nativeAgentActionToolCall("probe", `{"message":"the pdf"}`),
+		nativeAgentActionToolCall("probe", `{"message":"the pdf"}`),
+		nativeAgentActionToolCall("probe", `{ "message" : "the pdf" }`),
+		nativeAgentActionToolCall("probe", `{"message":"a second note"}`),
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 20, TaskLevel: TaskLevelMedium})
+	toolSet := newTestToolSet([]string{"probe"})
+	callsByInput := map[string]int{}
+	registerTestTool(toolSet, testToolDescriptor("probe"), func(_ context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		var input struct {
+			Message string `json:"message"`
+		}
+		json.Unmarshal(invocation.Input, &input)
+		callsByInput[input.Message]++
+		return testToolSuccess("sent " + input.Message), nil
+	})
+	if _, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"},
+		ConversationID:    "conversation-1",
+		Prompt:            "send the pdf",
+		TaskLevel:         TaskLevelMedium,
+		ToolSet:           toolSet,
+		PinnedToolNames:   []string{"probe"},
+	}); errorValue != nil {
+		t.Fatalf("expected the turn to run: %v", errorValue)
+	}
+
+	if callsByInput["the pdf"] != 1 || callsByInput["a second note"] != 1 {
+		t.Fatalf("expected each distinct call to run once, got %v", callsByInput)
+	}
+	note := notRunNote(languageModel.lastRequest, batchSkippedRepeat)
+	if !strings.Contains(note, "2 calls") || !strings.Contains(note, "(repeated 2 times)") {
+		t.Fatalf("expected the model to be told its repeats did not run, got %q", note)
 	}
 }
