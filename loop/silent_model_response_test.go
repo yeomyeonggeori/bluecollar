@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -88,5 +89,62 @@ func TestATurnWhoseModelFallsSilentForAStepKeepsGoing(t *testing.T) {
 	}
 	if result.FinishMessage != deletionReply {
 		t.Fatalf("expected the reply the model gave once it answered, got %q", result.FinishMessage)
+	}
+}
+
+func TestAProviderThatEndsTheAnswerWithAnErrorFailedTheCallNotTheModel(t *testing.T) {
+	state := nativeAgentActionTestStateWithTools("write", toolcontract.BashToolName)
+	provider := nativeAgentActionLanguageModel{chatResponse: model.ChatCompletionResponse{
+		FinishReason: string(model.StructuredOutputDiagnosticFinishError),
+		Message:      model.ChatCompletionMessage{Role: "assistant"},
+	}}
+
+	_, errorValue := DecideAgentAction(context.Background(), &provider, state)
+
+	if errorValue == nil || isUnreadableModelActionError(errorValue) {
+		t.Fatalf("expected the provider's failure to end the call as a failure, got %T %v", errorValue, errorValue)
+	}
+	if len(provider.chatRequests) != 1 {
+		t.Fatalf("a provider failure is not corrected by asking the model again, got %d requests", len(provider.chatRequests))
+	}
+}
+
+type alwaysSilentLanguageModel struct{}
+
+func (alwaysSilentLanguageModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", nil
+}
+
+func (alwaysSilentLanguageModel) GenerateStructuredResponse(context.Context, model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	return model.StructuredResponse{}, nil
+}
+
+func (alwaysSilentLanguageModel) GenerateChatCompletion(context.Context, model.ChatCompletionRequest) (model.ChatCompletionResponse, error) {
+	return silentStopResponse(), nil
+}
+
+func TestATurnWhoseModelNeverAnswersReadablyFailsWithinABound(t *testing.T) {
+	services := newTurnRunnerTestServices(alwaysSilentLanguageModel{}, TurnOptions{MaxIterationCount: 40})
+
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"},
+		ConversationID:    "conversation-1",
+		Prompt:            "서울 날씨 알려줘",
+	})
+
+	if errorValue != nil || result.TaskRun.Status != agentcontract.TaskStatusFailed {
+		t.Fatalf("expected a model that never answers readably to fail the task, got %v %+v", errorValue, result.TaskRun)
+	}
+	unreadableCount := 0
+	for _, taskEvent := range services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID) {
+		if taskEvent.Name == agentcontract.TaskEventAgentUnreadableAction {
+			unreadableCount++
+		}
+	}
+	if unreadableCount != maximumConsecutiveUnreadableActionCount {
+		t.Fatalf("expected the turn to stop after %d unreadable steps in a row, got %d", maximumConsecutiveUnreadableActionCount, unreadableCount)
+	}
+	if !strings.Contains(result.TaskRun.FailureReason, "llm action failed") {
+		t.Fatalf("expected the failure to go through the model-action failure path, got %q", result.TaskRun.FailureReason)
 	}
 }

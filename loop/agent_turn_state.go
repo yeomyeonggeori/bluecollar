@@ -16,6 +16,8 @@ import (
 
 const maximumAgentActionCorrectionCount = 2
 
+const maximumConsecutiveUnreadableActionCount = 3
+
 const refusalsThatWithdrawFinish = 2
 
 const refusalsThatOfferTheExit = 3
@@ -657,6 +659,9 @@ func decideAgentActionWithChat(ctx context.Context, chatCompleter model.ChatComp
 	for correctionCount := 0; ; correctionCount++ {
 		response, errorValue := chatCompleter.GenerateChatCompletion(ctx, currentRequest)
 		if errorValue == nil {
+			errorValue = providerFailureOf(response)
+		}
+		if errorValue == nil {
 			action, parseError := parseNativeAgentActionResponse(response, currentRequest.Tools)
 			if parseError == nil {
 				return action, nil
@@ -1055,8 +1060,6 @@ func batchedNativeAgentActions(toolCalls []model.ChatCompletionToolCall, tools [
 	return actions
 }
 
-// The model producing something the runtime cannot read is the model's mistake, which every
-// other layer hands back for one more try. Only a transport failure ends the turn.
 type unreadableModelActionError struct {
 	reason             string
 	silentFinishReason model.StructuredOutputFinishReason
@@ -1070,6 +1073,25 @@ func silentModelActionError(finishReason string) unreadableModelActionError {
 	return unreadableModelActionError{
 		reason:             fmt.Sprintf("native agent action chat ended with finish reason %q and neither a tool call nor a reply", finishReason),
 		silentFinishReason: model.StructuredOutputFinishReason(finishReason),
+	}
+}
+
+type providerFailedAnswerError struct {
+	providerName string
+	modelName    string
+}
+
+func (failure providerFailedAnswerError) Error() string {
+	return fmt.Sprintf("provider %q ended the native agent action chat for model %q with finish reason %q", failure.providerName, failure.modelName, model.StructuredOutputDiagnosticFinishError)
+}
+
+func providerFailureOf(response model.ChatCompletionResponse) error {
+	if response.FinishReason != string(model.StructuredOutputDiagnosticFinishError) {
+		return nil
+	}
+	return providerFailedAnswerError{
+		providerName: firstNonEmptyString(response.UpstreamProvider, response.ProviderName),
+		modelName:    response.ModelName,
 	}
 }
 
