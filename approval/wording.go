@@ -10,7 +10,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 	"github.com/yeomyeonggeori/blueprotocol/model"
-	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type questionContext struct {
@@ -108,7 +107,7 @@ func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.Ques
 	structuredResponse, errorValue := worder.languageModel.GenerateStructuredResponse(ctx, model.StructuredResponseRequest{
 		Messages: []model.Message{
 			{Role: "system", Content: systemPromptFor(facts)},
-			{Role: "system", Content: responseLanguageInstruction(facts.ResponseLanguage)},
+			{Role: "system", Content: agentcontract.ResponseLanguageInstruction(facts.ResponseLanguage)},
 			{Role: "user", Content: string(encodedContext)},
 		},
 		StructuredOutputSchema: model.StructuredOutputSchema{Name: questionSchemaName, Document: questionSchemaDocument, IsStrictlyEnforced: true},
@@ -214,11 +213,4 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func responseLanguageInstruction(responseLanguage string) string {
-	if toolcontract.ResolveResponseLanguage(responseLanguage) == toolcontract.ResponseLanguageEnglish {
-		return "Write in English."
-	}
-	return "Write in Korean."
 }
