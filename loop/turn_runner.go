@@ -286,6 +286,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	}
 	iterationStartedAt := time.Now()
 	iterationSpentModelCall := false
+	consecutiveUnreadableActionCount := 0
 	for iteration := 1; ; iteration++ {
 		if iteration > 1 {
 			if iterationSpentModelCall {
@@ -357,7 +358,14 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		if actionError != nil && isUnreadableModelActionError(actionError) {
 			state.Observations = append(state.Observations, unreadableActionObservation(state.Observations, actionError))
 			agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentUnreadableAction, marshalEventBody(map[string]string{"reason": actionError.Error()}))
-			continue
+			consecutiveUnreadableActionCount++
+			if consecutiveUnreadableActionCount < maximumConsecutiveUnreadableActionCount {
+				continue
+			}
+			actionError = fmt.Errorf("the model answered without a readable action %d times in a row, last: %w", consecutiveUnreadableActionCount, actionError)
+		}
+		if actionError == nil {
+			consecutiveUnreadableActionCount = 0
 		}
 		if actionError != nil {
 			agentTurnRunner.saveStep(taskRun.TaskRunID, stepID, agentcontract.TaskStatusFailed, "agent turn iteration", actionError.Error())
