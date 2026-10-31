@@ -163,7 +163,7 @@ func (builder LLMContextBuilder) runtimeContext(input LLMContextInput) string {
 		"Runtime:",
 		"Response language: " + responseLanguageDescription(input.ResponseLanguage),
 	}
-	if temporalContext := buildTemporalContextDescription(input.EnvironmentNow, input.Company.TimeZone); temporalContext != "" {
+	if temporalContext := buildTemporalContextDescription(input.EnvironmentNow, input.Company.TimeZone, input.VisibleContext.RequesterTimeZone); temporalContext != "" {
 		lines = append(lines, temporalContext)
 	}
 	return strings.Join(lines, "\n")
