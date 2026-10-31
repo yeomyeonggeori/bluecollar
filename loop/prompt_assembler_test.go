@@ -31,6 +31,21 @@ func TestPromptAssemblerIncludesTemporalContext(t *testing.T) {
 	}
 }
 
+func TestPromptAssemblerTellsARequesterAbroadTheirOwnClock(t *testing.T) {
+	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
+		Prompt:         "재택 출근 아홉시",
+		TurnStartedAt:  time.Date(2026, 10, 30, 1, 0, 0, 0, time.UTC),
+		EnvironmentNow: time.Date(2026, 10, 30, 1, 0, 0, 0, time.UTC),
+		Company:        CompanyContext{TimeZone: "Asia/Seoul"},
+		VisibleContext: VisibleContext{RequesterTimeZone: "America/Los_Angeles"},
+	}, nil, "base", "")
+	body := joinMessageContent(messages)
+
+	if !strings.Contains(body, "writing from America/Los_Angeles, where it is 2026-10-29 (Thu) 18:00 -07:00") {
+		t.Fatalf("the turn's prompt carries the clock of the device the request came from: %s", body)
+	}
+}
+
 func TestBuildTurnMessagesKeepsStablePrefixClockInvariant(t *testing.T) {
 	baseRequest := AgentTurnRequest{
 		Prompt: "이번 주 회의 일정 알려줘",
@@ -114,7 +129,7 @@ func TestBuildTemporalContextDescriptionAnchorsWeeksAcrossCalendarBoundaries(t *
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			description := buildTemporalContextDescription(testCase.startedAt, "Asia/Seoul")
+			description := buildTemporalContextDescription(testCase.startedAt, "Asia/Seoul", "")
 			if !strings.Contains(description, testCase.expected) {
 				t.Fatalf("expected week anchors %q, got %s", testCase.expected, description)
 			}
