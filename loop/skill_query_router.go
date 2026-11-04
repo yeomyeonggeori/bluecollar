@@ -57,7 +57,7 @@ func (skillSearchQueryRouter SkillSearchQueryRouter) buildMessages(request Agent
 			Content: "Available tools: " + strings.Join(skillSearchAvailableToolNames(request), ", "),
 		},
 	}
-	if temporalContext := buildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone); temporalContext != "" {
+	if temporalContext := buildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone, request.VisibleContext.RequesterTimeZone); temporalContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: temporalContext})
 	}
 	if contextDescription := buildVisibleContextDescription(request.VisibleContext, request.Company.TimeZone); contextDescription != "" {

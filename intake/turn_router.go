@@ -346,7 +346,7 @@ func (turnRouter TurnRouter) buildWordsMessages(request agentcontract.AgentReque
 	if scheduledRunDescription := agentcontract.ScheduledRunDescriptionForPrompt(request.ScheduledRun); scheduledRunDescription != "" {
 		messages = append(messages, model.Message{Role: "system", Content: scheduledRunDescription})
 	}
-	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone); temporalContext != "" {
+	if temporalContext := agentcontract.BuildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone, request.VisibleContext.RequesterTimeZone); temporalContext != "" {
 		messages = append(messages, model.Message{Role: "system", Content: temporalContext})
 	}
 	return append(messages, turnWordsUserMessage(request))
