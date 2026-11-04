@@ -15,7 +15,7 @@ func buildIntakeFailureReport(turnBudget turnBudgetContext, request AgentRequest
 		carriedOutToolNames = append(carriedOutToolNames, carriedOutCall.ToolName)
 	}
 	return BuildIntakeFailureReport(IntakeFailureReportInput{
-		OriginalRequest:           request.Prompt,
+		OriginalRequest:           request.PromptAsBriefed(),
 		ResponseLanguage:          request.ResponseLanguage,
 		DiagnosticEventID:         taskRunID + ":intake_limit",
 		PlannedInterpretation:     intakeDecision.Reason,

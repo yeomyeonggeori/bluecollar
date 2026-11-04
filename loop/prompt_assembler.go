@@ -87,7 +87,7 @@ func (promptAssembler PromptAssembler) buildTurnMessages(request AgentTurnReques
 
 		ToolResultsCarriedNatively: toolResultsCarriedNatively,
 	})
-	messages = append(messages, userMessageFromPromptAndParts(request.Prompt, request.InputParts))
+	messages = append(messages, userMessageFromPromptAndParts(request.PromptAsBriefed(), request.InputParts))
 	return messages
 }
 

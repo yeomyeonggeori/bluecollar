@@ -880,3 +880,59 @@ func TestALimitStopDoesNotCarryAFileAReplyAlreadyDelivered(t *testing.T) {
 		t.Fatalf("expected the delivered file to be named as delivered, got %+v", files.Delivered)
 	}
 }
+
+func TestTheBriefingTheHostWroteReachesTheModelThatWorksAndTheOneThatExplainsAFailure(t *testing.T) {
+	languageModel := &sequenceLanguageModel{contents: []string{
+		`{"action":"fail","reason":"note storage unavailable"}`,
+		recoveryDecisionDocument("check the note storage", "say the notes were not written"),
+	}, textResponses: []string{"I could not write the meeting notes because note storage is unavailable."}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
+	briefedPrompt := "You are 김인턴 at 여명거리.\nThe person asking is 이샘플.\nAnswer them in en.\n\n회의록 정리해줘"
+
+	if _, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-1"},
+		ConversationID:    "conversation-1",
+		Prompt:            "회의록 정리해줘",
+		BriefedPrompt:     briefedPrompt,
+	}); errorValue != nil {
+		t.Fatalf("expected a failure result, got error: %v", errorValue)
+	}
+
+	actionRequest, isAsked := firstStructuredRequestNamed(languageModel.requests, "bluecollar_agent_turn_action")
+	if !isAsked || actionRequest.Messages[len(actionRequest.Messages)-1].Content != briefedPrompt {
+		t.Fatalf("the model doing the work has to read the message as the host briefed it, got %+v", actionRequest.Messages)
+	}
+	recoveryRequest, isAsked := firstStructuredRequestNamed(languageModel.requests, "bluecollar_recovery_decision")
+	if !isAsked || !strings.Contains(allMessageText(recoveryRequest), "Answer them in en.") {
+		t.Fatalf("the model deciding how to report the failure lost the briefing, got %+v", recoveryRequest.Messages)
+	}
+	if !containsText(languageModel.textPrompts, "Answer them in en.") {
+		t.Fatalf("the model writing the failure reply lost the briefing, got %q", languageModel.textPrompts)
+	}
+}
+
+func firstStructuredRequestNamed(requests []model.StructuredResponseRequest, schemaName string) (model.StructuredResponseRequest, bool) {
+	for _, request := range requests {
+		if request.StructuredOutputSchema.Name == schemaName {
+			return request, true
+		}
+	}
+	return model.StructuredResponseRequest{}, false
+}
+
+func allMessageText(request model.StructuredResponseRequest) string {
+	contents := []string{}
+	for _, message := range request.Messages {
+		contents = append(contents, message.Content)
+	}
+	return strings.Join(contents, "\n")
+}
+
+func containsText(values []string, wanted string) bool {
+	for _, value := range values {
+		if strings.Contains(value, wanted) {
+			return true
+		}
+	}
+	return false
+}

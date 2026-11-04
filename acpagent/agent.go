@@ -126,22 +126,23 @@ func (runningAgent *Agent) Prompt(ctx context.Context, request acp.PromptRequest
 
 func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, request acp.PromptRequest) (acp.PromptResponse, error) {
 	isResumedFromHostLedger := replayLedger(openSession, request.Meta)
-	if !isResumedFromHostLedger {
-		openSession.adoptNamedTaskRun(request.Meta, promptText(request.Prompt))
-	}
-	openSession.adoptInstructionBundle(request.Meta)
 	turnRequest := runningAgent.turnRequestFor(openSession, request)
+	if !isResumedFromHostLedger {
+		openSession.adoptNamedTaskRun(request.Meta, turnRequest.Prompt)
+	}
+	turnRequest.ExistingTaskRunID = openSession.currentTaskRunID()
+	openSession.adoptInstructionBundle(request.Meta)
 	stopObserving := openSession.taskEvents.RegisterTurnObserver(ledgerObserver(ctx, runningAgent.sessionUpdates, request.SessionId, openSession.rememberTaskRun, openSession.catalog.ledger))
 	defer stopObserving()
 
-	planned, errorValue := runningAgent.planTurn(ctx, openSession, routedAsThePersonWroteIt(turnRequest, request.Meta))
+	planned, errorValue := runningAgent.planTurn(ctx, openSession, turnRequest)
 	if errorValue != nil {
 		return acp.PromptResponse{}, errorValue
 	}
 	turnRequest.IsRuntimeRestartResume = turnRequest.IsRuntimeRestartResume || isResumedFromHostLedger
 	openSession.catalog.toolSet.UseToolCallGate(newHostCheckedGate(openSession.gate.TurnGate(approval.Turn{
 		ResponseLanguage: planned.decision.ResponseLanguage,
-		Prompt:           turnRequest.Prompt,
+		Prompt:           turnRequest.PromptAsBriefed(),
 	})))
 
 	turnResult, errorValue := openSession.kernel.RunPlannedTurn(ctx, turnRequest, turnclassification.Routing{Decision: &planned.decision})
@@ -152,20 +153,10 @@ func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, 
 	return promptResponseFor(ctx, turnResult), nil
 }
 
-func routedAsThePersonWroteIt(turnRequest agentcontract.AgentTurnRequest, promptMeta map[string]any) agentcontract.AgentTurnRequest {
-	handedOver, isPresent := turnRequestOfMeta(promptMeta)
-	if !isPresent || strings.TrimSpace(handedOver.Prompt) == "" {
-		return turnRequest
-	}
-	turnRequest.Prompt = handedOver.Prompt
-	return turnRequest
-}
-
 func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.PromptRequest) agentcontract.AgentTurnRequest {
 	turnRequest, _ := turnRequestOfMeta(request.Meta)
 	turnRequest.ConversationID = firstNonEmpty(turnRequest.ConversationID, string(request.SessionId))
-	turnRequest.ExistingTaskRunID = openSession.currentTaskRunID()
-	turnRequest.Prompt = promptText(request.Prompt)
+	turnRequest.Prompt, turnRequest.BriefedPrompt = writtenAndBriefedPrompts(turnRequest.Prompt, promptText(request.Prompt))
 	turnRequest.InputParts = append(partsWithoutImages(turnRequest.InputParts), imagePartsOf(request.Prompt)...)
 	turnRequest.AgentIdentity.Name = firstNonEmpty(turnRequest.AgentIdentity.Name, runningAgent.options.AgentName)
 	turnRequest.ToolSet = openSession.catalog.toolSet
@@ -173,6 +164,13 @@ func (runningAgent *Agent) turnRequestFor(openSession *session, request acp.Prom
 	turnRequest.CarriedOutCalls = carriedOutCallsOfMeta(request.Meta)
 	turnRequest.CheckpointSender = checkpointSender(runningAgent.sessionUpdates, request.SessionId)
 	return turnRequest
+}
+
+func writtenAndBriefedPrompts(handedOverPrompt string, briefedPrompt string) (string, string) {
+	if strings.TrimSpace(handedOverPrompt) == "" {
+		return briefedPrompt, ""
+	}
+	return handedOverPrompt, briefedPrompt
 }
 
 func failTurnOnPanic(openSession *session, promptResponse *acp.PromptResponse, errorValue *error) {

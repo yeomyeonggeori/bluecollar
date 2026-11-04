@@ -17,6 +17,7 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
+	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
 type recordedLLMCall struct {
@@ -541,5 +542,65 @@ func TestRoutingIsAskedAboutWhatThePersonWroteNotTheBriefingAroundIt(t *testing.
 	}
 	if !strings.Contains(string(encodedStates), "회의록 정리해줘") {
 		t.Fatalf("routing never saw what the person wrote: %s", encodedStates)
+	}
+}
+
+type expectedChangesProbeLanguageModel struct {
+	*scriptedLanguageModel
+	mutex                sync.Mutex
+	expectedChangesAsked []string
+}
+
+func (languageModel *expectedChangesProbeLanguageModel) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	if request.StructuredOutputSchema.Name != "bluecollar_expected_changes" {
+		return languageModel.scriptedLanguageModel.GenerateStructuredResponse(ctx, request)
+	}
+	languageModel.mutex.Lock()
+	languageModel.expectedChangesAsked = append(languageModel.expectedChangesAsked, allMessageContent(request))
+	languageModel.mutex.Unlock()
+	return model.StructuredResponse{Content: `{"expectedChanges":[]}`}, nil
+}
+
+func changeRecordingCatalogTransport(t *testing.T) mcp.Transport {
+	t.Helper()
+	descriptor := toolcontract.ToolDescriptor{Name: "note_write", ResultContract: &toolcontract.ToolResultContract{
+		Schema:  json.RawMessage(`{"type":"object"}`),
+		Effects: []toolcontract.ResourceEffectContract{{ObjectType: "note", Effect: "created", ResultField: "noteID", EffectIdentity: "id"}},
+	}}
+	server := mcp.NewServer(&mcp.Implementation{Name: "host", Version: "test"}, nil)
+	server.AddTool(&mcp.Tool{Name: "note_write", InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(context.Context, *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "note written"}}}, nil
+		})
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	go server.Run(t.Context(), serverTransport)
+	return clientTransport
+}
+
+func TestTheChangesARequestAsksForAreReadFromWhatThePersonWroteNotTheBriefingAroundIt(t *testing.T) {
+	scripted := noteWriteTurnScript()
+	languageModel := &expectedChangesProbeLanguageModel{scriptedLanguageModel: scripted}
+	options := testOptions(languageModel)
+	options.DecisionModel = scriptedDecisionModel(languageModel)
+	handedOver := agentcontract.AgentTurnRequest{Prompt: "회의록 정리해줘"}
+
+	host := openPipedHost(t, options, changeRecordingCatalogTransport(t), &hostClient{})
+	briefedPrompt := "Identity:\n- Your name is 김인턴.\n\n회의록 정리해줘"
+	if _, errorValue := host.prompt(t, map[string]any{TurnRequestMetaKey: handedOver}, acp.TextBlock(briefedPrompt)); errorValue != nil {
+		t.Fatalf("session/prompt: %v", errorValue)
+	}
+
+	if len(languageModel.expectedChangesAsked) == 0 {
+		t.Fatal("the turn never asked which changes the request wants")
+	}
+	asked := languageModel.expectedChangesAsked[0]
+	if !strings.HasSuffix(asked, "):\n회의록 정리해줘") {
+		t.Fatalf("the request the changes are listed from has to be what the person wrote, got:\n%s", asked)
+	}
+	if strings.Contains(asked, "Identity:") {
+		t.Fatalf("the briefing around the message was read as the request, so a change named anywhere else in the conversation can be taken for it:\n%s", asked)
+	}
+	if !containsSubstring(scripted.actionPrompts, "Your name is 김인턴") {
+		t.Fatal("the briefing still has to reach the model that does the work")
 	}
 }

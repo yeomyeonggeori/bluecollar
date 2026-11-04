@@ -61,7 +61,7 @@ func BuildElapsedLimitRawErrorFailureNotice(request agentcontract.AgentTurnReque
 		StopReason:       "max_elapsed",
 		RawError:         ElapsedLimitRawErrorSummary,
 		ResponseLanguage: request.ResponseLanguage,
-		OriginalRequest:  request.Prompt,
+		OriginalRequest:  request.PromptAsBriefed(),
 	}
 	return agentcontract.BuildRawErrorFailureNotice(report)
 }
