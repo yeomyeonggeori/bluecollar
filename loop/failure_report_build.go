@@ -18,7 +18,7 @@ func buildFailureReport(request AgentTurnRequest, taskRunID string, phase string
 		SafeFailureSummary:  latestSafeFailureSummary(observations, stopReason),
 		CompletedSummary:    buildLimitObservationSummary(observations),
 		NextAction:          strings.TrimSpace(decision.NextAction),
-		OriginalRequest:     strings.TrimSpace(request.Prompt),
+		OriginalRequest:     strings.TrimSpace(request.PromptAsBriefed()),
 		ResponseLanguage:    strings.TrimSpace(request.ResponseLanguage),
 		ArtifactRequired:    requestRequiresFileAttachment(request),
 		HasAttachments:      len(attachments) > 0,

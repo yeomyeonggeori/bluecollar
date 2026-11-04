@@ -12,8 +12,6 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
-const meetingRequestPreamble = "The person asking is 이샘플.\n\nNow: 2026-10-20 (Tue) 12:58 +09:00 KST\n\n"
-
 type completedMeetingCheckCase struct {
 	name             string
 	prompt           string
@@ -44,8 +42,8 @@ func TestLiveChangeCheckOnACompletedMeetingAddedFromItsThread(t *testing.T) {
 	wrongVerdicts := 0
 	attempts := 0
 	for _, liveCase := range completedMeetingCheckCases {
-		request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: toolSet, AgentIdentity: AgentIdentity{Name: "김인턴", Handle: "김인턴"}}
-		request.ActiveGoal = ActiveGoal{OriginalInstruction: meetingRequestPreamble + liveCase.prompt}
+		request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: toolSet, AgentIdentity: AgentIdentity{Name: "김인턴", Handle: "김인턴"}, OriginIsThread: true}
+		request.ActiveGoal = ActiveGoal{OriginalInstruction: liveCase.prompt}
 		request.VisibleContext.Messages = visibleMessages(liveCase.conversation)
 		expected := []string{liveCase.change}
 		for attempt := 0; attempt < 3; attempt++ {
@@ -110,8 +108,8 @@ func TestLiveChangeCheckOnATaskAddedFromTheAnswerToWhatToAdd(t *testing.T) {
 		t.Fatal("set OPENROUTER_API_KEY")
 	}
 	decisionModel := decisions.Endpoint{URL: decisions.DefaultEndpointURL, ModelName: firstNonEmptyString(os.Getenv("BLUECOLLAR_DECISION_MODEL"), "~typesafe/jev-latest"), APIKey: apiKey}.DecisionModel()
-	request := AgentTurnRequest{Prompt: "샘플방송 컨소시엄 ZONE-2 사업 종료", ToolSet: completedMeetingToolSet(), AgentIdentity: AgentIdentity{Name: "김인턴", Handle: "김인턴"}}
-	request.ActiveGoal = ActiveGoal{OriginalInstruction: meetingRequestPreamble + "@김인턴 업무추가"}
+	request := AgentTurnRequest{Prompt: "샘플방송 컨소시엄 ZONE-2 사업 종료", ToolSet: completedMeetingToolSet(), AgentIdentity: AgentIdentity{Name: "김인턴", Handle: "김인턴"}, OriginIsThread: true}
+	request.ActiveGoal = ActiveGoal{OriginalInstruction: "@김인턴 업무추가"}
 	request.VisibleContext.Messages = visibleMessages([]string{"이샘플: @김인턴 업무추가", "김인턴: 어떤 업무를 추가할까요? 구체적인 내용(업무 종류, 마감, 산출물)을 알려주세요."})
 	expected := []string{"샘플방송 컨소시엄 ZONE-2 사업 종료를 업무로 추가"}
 	added := zoneTwoTaskAdded()

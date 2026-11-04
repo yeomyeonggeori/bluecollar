@@ -164,6 +164,9 @@ func requestWordings(request AgentTurnRequest) []string {
 }
 
 func conversationBeforeRequest(request AgentTurnRequest) []string {
+	if !visibleMessagesAreTheRequestsOwnThread(request) {
+		return nil
+	}
 	messages := request.VisibleContext.Messages
 	lines := []string{}
 	for _, message := range messages[max(0, len(messages)-conversationBeforeRequestLimit):] {
@@ -172,6 +175,10 @@ func conversationBeforeRequest(request AgentTurnRequest) []string {
 		}
 	}
 	return lines
+}
+
+func visibleMessagesAreTheRequestsOwnThread(request AgentTurnRequest) bool {
+	return request.OriginIsThread
 }
 
 func contextTimestampPrefix(sentAt time.Time, timeZone string) string {

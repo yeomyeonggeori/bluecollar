@@ -239,6 +239,7 @@ func agentRequestFromTurnRequest(request AgentTurnRequest) AgentRequest {
 		ConversationID:    request.ConversationID,
 		ConversationType:  request.ConversationType,
 		Prompt:            request.Prompt,
+		BriefedPrompt:     request.BriefedPrompt,
 		ResponseLanguage:  request.ResponseLanguage,
 		VisibleContext:    request.VisibleContext,
 		MemoryFacts:       append([]MemoryFact{}, request.MemoryFacts...),

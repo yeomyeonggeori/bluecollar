@@ -31,7 +31,7 @@ func (agentTurnRunner *AgentTurnRunner) failTurnWithGeneratedNotice(ctx context.
 		StopReason:         reason,
 		SafeFailureSummary: reason,
 		RawError:           reason,
-		OriginalRequest:    request.Prompt,
+		OriginalRequest:    request.PromptAsBriefed(),
 		ResponseLanguage:   request.ResponseLanguage,
 		DiagnosticEventID:  diagnosticEventID(request, taskRun.TaskRunID, phase),
 	})

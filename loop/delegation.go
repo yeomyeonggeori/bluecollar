@@ -30,6 +30,7 @@ func delegationsRemaining(options TurnOptions, observations []turnObservation) i
 func childTurnRequest(request AgentTurnRequest, actionDocument turnActionDocument) AgentTurnRequest {
 	childRequest := request
 	childRequest.Prompt = childPrompt(actionDocument)
+	childRequest.BriefedPrompt = ""
 	childRequest.InputParts = nil
 	childRequest.CarriedOutCalls = nil
 	childRequest.IsRuntimeRestartResume = false
