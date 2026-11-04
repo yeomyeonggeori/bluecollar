@@ -186,3 +186,32 @@ func TestAHandoffIsWordedAsAHandOverAndShowsNoCallDetails(t *testing.T) {
 		t.Fatalf("a handoff message carries no approval details beneath it, got %q", wording.Text)
 	}
 }
+
+func TestTheWordingModelWritesInTheRequestersLanguage(t *testing.T) {
+	for _, testCase := range []struct {
+		name             string
+		responseLanguage string
+		expected         string
+	}{
+		{name: "english", responseLanguage: "en", expected: "in English."},
+		{name: "korean", responseLanguage: "ko", expected: "in Korean."},
+		{name: "japanese", responseLanguage: "ja", expected: "in Japanese."},
+		{name: "unknown", responseLanguage: "", expected: "in the language the requester wrote in."},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			languageModel := &wordingLanguageModel{question: "Send it?"}
+			facts := hostFactsFixture()
+			facts.ResponseLanguage = testCase.responseLanguage
+
+			NewWorder(languageModel).WordQuestion(context.Background(), facts)
+
+			prompt := languageModel.promptSeen()
+			if !strings.Contains(prompt, testCase.expected) {
+				t.Fatalf("expected the wording model to be told to write %q, got %s", testCase.expected, prompt)
+			}
+			if testCase.responseLanguage != "ko" && strings.Contains(prompt, "Korean") {
+				t.Fatalf("a requester who is not Korean must not be asked in Korean, got %s", prompt)
+			}
+		})
+	}
+}
