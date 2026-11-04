@@ -60,7 +60,7 @@ func TestLiveExpectedChangesDefinition(t *testing.T) {
 }
 
 func liveCaseRequest(liveCase expectedChangesLiveCase) AgentTurnRequest {
-	request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: completedMeetingToolSet()}
+	request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: completedMeetingToolSet(), OriginIsThread: len(liveCase.conversation) > 0}
 	if liveCase.originalInstruction != "" {
 		request.ActiveGoal = ActiveGoal{OriginalInstruction: liveCase.originalInstruction, CurrentObjective: liveCase.prompt}
 	}

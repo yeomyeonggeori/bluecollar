@@ -86,7 +86,7 @@ func TestLiveDeliveredFileSatisfiesTheChangeCheck(t *testing.T) {
 	wrongVerdicts := 0
 	attempts := 0
 	for _, liveCase := range deliveredFileLiveCases {
-		request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: toolSet}
+		request := AgentTurnRequest{Prompt: liveCase.prompt, ToolSet: toolSet, OriginIsThread: len(liveCase.conversation) > 0}
 		request.VisibleContext.Messages = visibleMessages(liveCase.conversation)
 		for attempt := 0; attempt < 3; attempt++ {
 			attempts++
