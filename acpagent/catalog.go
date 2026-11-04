@@ -11,6 +11,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/bluecollar/turnclock"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
@@ -65,7 +66,7 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 	toolSet := toolcontract.NewToolSet(toolNames)
 	toolSet.AllowTestReplacement()
 	for toolName, descriptor := range descriptors {
-		if errorValue := toolSet.RegisterTool(descriptor, callThroughCatalog(handlers[toolName], toolName, parking, ledger)); errorValue != nil {
+		if errorValue := toolSet.RegisterTool(descriptor, callThroughCatalog(handlers[toolName], descriptor, parking, ledger)); errorValue != nil {
 			return nil, errorValue
 		}
 	}
@@ -156,8 +157,12 @@ func encodedSchema(schema any) json.RawMessage {
 	return encoded
 }
 
-func callThroughCatalog(session *mcp.ClientSession, toolName string, parking *runParking, ledger *ledgerStream) toolcontract.ToolHandler {
+func callThroughCatalog(session *mcp.ClientSession, descriptor toolcontract.ToolDescriptor, parking *runParking, ledger *ledgerStream) toolcontract.ToolHandler {
+	toolName := descriptor.Name
 	return func(ctx context.Context, invocation toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		if descriptor.IsHostGated {
+			defer turnclock.Pause(ctx)()
+		}
 		arguments := map[string]any{}
 		if len(invocation.Input) > 0 {
 			json.Unmarshal(invocation.Input, &arguments)

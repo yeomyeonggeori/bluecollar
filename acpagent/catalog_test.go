@@ -12,6 +12,7 @@ import (
 
 	acp "github.com/coder/acp-go-sdk"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/bluecollar/turnclock"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -516,5 +517,38 @@ func TestACatalogCallCarriesEveryRecordNoEarlierCallCarried(t *testing.T) {
 	}
 	if !reflect.DeepEqual(positionsPerCall, [][]int{{1, 2, 3}, {4, 5, 6}}) {
 		t.Fatalf("the host acts on a call the moment it arrives, so the call has to bring every record written before it that no earlier call brought, got positions %v", positionsPerCall)
+	}
+}
+
+func TestTheTimeAHostHoldsACallForThePersonIsNotTheTurnsWork(t *testing.T) {
+	const turnWork = 50 * time.Millisecond
+	const personAnswersAfter = 4 * turnWork
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	descriptor := toolcontract.ToolDescriptor{Name: "dataroom_link_add", RequiresApproval: true, IsHostGated: true, ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}
+	server.AddTool(&mcp.Tool{Name: descriptor.Name, InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(ctx context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			select {
+			case <-time.After(personAnswersAfter):
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "link created"}}}, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+	turnContext, cancelTurn := turnclock.WithActiveBudget(turnclock.With(t.Context(), turnclock.New()), time.Now(), turnWork)
+	defer cancelTurn()
+
+	result, errorValue := opened.toolSet.Invoke(turnContext, toolcontract.ToolInvocation{ToolName: descriptor.Name, Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || result.Failed() || result.ContentText() != "link created" {
+		t.Fatalf("the person's answer came after the turn's work budget had run out on the wait, got %+v, %v", result, errorValue)
+	}
+	if turnContext.Err() != nil {
+		t.Fatalf("the turn ended while the host held its call: %v", turnContext.Err())
 	}
 }
