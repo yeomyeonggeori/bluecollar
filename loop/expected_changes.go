@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
@@ -148,9 +149,9 @@ func expectedChangesSchema() string {
 
 func expectedChangesRequestText(request AgentTurnRequest) string {
 	wordings := requestWordings(request)
-	text := "Request:\n" + wordings[0]
+	text := "Request" + sentAtLabel(request.TurnStartedAt, request.Company.TimeZone) + ":\n" + wordings[0]
 	if len(wordings) > 1 {
-		text += "\n\nLatest message about it:\n" + wordings[1]
+		text += "\n\nLatest message about it" + sentAtLabel(request.TurnStartedAt, request.Company.TimeZone) + ":\n" + wordings[1]
 	}
 	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
 		text = "Conversation before the request:\n" + strings.Join(conversation, "\n") + "\n\n" + text
@@ -167,10 +168,24 @@ func conversationBeforeRequest(request AgentTurnRequest) []string {
 	lines := []string{}
 	for _, message := range messages[max(0, len(messages)-conversationBeforeRequestLimit):] {
 		if text := strings.TrimSpace(message.Text); text != "" {
-			lines = append(lines, firstNonEmptyString(message.SpeakerCallingName, message.Speaker)+": "+truncateForLedger(text, conversationMessageMaximumLength))
+			lines = append(lines, contextTimestampPrefix(message.SentAt, request.Company.TimeZone)+firstNonEmptyString(message.SpeakerCallingName, message.Speaker)+": "+truncateForLedger(text, conversationMessageMaximumLength))
 		}
 	}
 	return lines
+}
+
+func contextTimestampPrefix(sentAt time.Time, timeZone string) string {
+	if stamp := agentcontract.FormatContextTimestamp(sentAt, timeZone); stamp != "" {
+		return "[" + stamp + "] "
+	}
+	return ""
+}
+
+func sentAtLabel(sentAt time.Time, timeZone string) string {
+	if stamp := agentcontract.FormatContextTimestamp(sentAt, timeZone); stamp != "" {
+		return " (sent " + stamp + ")"
+	}
+	return ""
 }
 
 func canRecordAChange(toolSet *toolcontract.ToolSet) bool {
