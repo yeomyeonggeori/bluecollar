@@ -92,7 +92,7 @@ func (agentKernel *AgentKernel) generateConfirmationUserMessage(responseContext 
 				{Role: "system", Content: "For confirmation, state what you understood, how it will run, the target, and that approval will proceed. Mention repeat, start, or end conditions only when they are present in the execution plan or original request. For clarification, ask only for the missing information needed before execution."},
 				{Role: "user", Content: strings.Join([]string{
 					"Message kind: " + messageKind,
-					"Original request: " + strings.TrimSpace(request.Prompt),
+					"Original request: " + strings.TrimSpace(request.PromptAsBriefed()),
 					"Execution plan: " + string(planDocument),
 					"Policy decision: " + string(decisionDocument),
 				}, "\n")},

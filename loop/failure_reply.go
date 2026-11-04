@@ -241,7 +241,7 @@ func buildRecoveryDecisionPrompt(request AgentTurnRequest, failureReason string,
 func failurePromptContext(request AgentTurnRequest, observations []turnObservation, attachments []toolcontract.FileAttachment, executionState ExecutionState) string {
 	return (LLMContextBuilder{}).Build(LLMContextInput{
 		ResponseLanguage:  request.ResponseLanguage,
-		UserPrompt:        request.Prompt,
+		UserPrompt:        request.PromptAsBriefed(),
 		TurnStartedAt:     request.TurnStartedAt,
 		EnvironmentNow:    request.EnvironmentNow,
 		InstructionPrompt: request.InstructionPrompt,

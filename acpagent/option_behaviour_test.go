@@ -594,7 +594,7 @@ func TestTheChangesARequestAsksForAreReadFromWhatThePersonWroteNotTheBriefingAro
 		t.Fatal("the turn never asked which changes the request wants")
 	}
 	asked := languageModel.expectedChangesAsked[0]
-	if !strings.Contains(asked, "Request:\n회의록 정리해줘") {
+	if !strings.HasSuffix(asked, "):\n회의록 정리해줘") {
 		t.Fatalf("the request the changes are listed from has to be what the person wrote, got:\n%s", asked)
 	}
 	if strings.Contains(asked, "Identity:") {
