@@ -88,9 +88,6 @@ func (runningAgent *Agent) NewSession(ctx context.Context, request acp.NewSessio
 	kernel.UseTaskTierLanguageModels(runningAgent.options.LanguageModels)
 	kernel.UseDecisionModel(runningAgent.options.DecisionModel)
 	kernel.UseTurnOptions(runningAgent.options.TurnOptions)
-	if runningAgent.options.CompanyProvider != nil {
-		kernel.UseCompanyProvider(runningAgent.options.CompanyProvider)
-	}
 	kernel.UseToolResultImageSource(openedCatalog)
 	if runningAgent.options.Skills.Retriever != nil {
 		kernel.UseSkillRetriever(runningAgent.options.Skills.Retriever)

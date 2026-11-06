@@ -34,7 +34,6 @@ type AgentKernel struct {
 	instructionLoader       func() InstructionBundle
 	skillRetriever          SkillRetriever
 	toolSelector            ToolSelector
-	companyProvider         func() CompanyContext
 	toolResultSpillStore    ToolResultSpillStore
 	toolResultImageSource   ToolResultImageSource
 	decisionModel           model.DecisionModel
@@ -116,17 +115,6 @@ func (agentKernel *AgentKernel) UseSkillRetriever(skillRetriever SkillRetriever)
 	agentKernel.skillRetriever = skillRetriever
 }
 
-func (agentKernel *AgentKernel) UseCompanyProvider(companyProvider func() CompanyContext) {
-	agentKernel.companyProvider = companyProvider
-}
-
-func (agentKernel *AgentKernel) companyContext() CompanyContext {
-	if agentKernel.companyProvider == nil {
-		return CompanyContext{}
-	}
-	return agentKernel.companyProvider()
-}
-
 func (agentKernel *AgentKernel) RefreshSkillIndex(ctx context.Context, instructionBundle InstructionBundle) {
 	if agentKernel.skillRetriever == nil {
 		return
@@ -142,6 +130,7 @@ func (agentKernel *AgentKernel) RunPlannedTurn(responseContext context.Context, 
 	return agentKernel.RunAgentRequest(responseContext, routing, AgentRequest{
 		RequesterIdentity:          request.RequesterIdentity.Clone(),
 		Platform:                   request.Platform,
+		Company:                    request.Company,
 		AgentIdentity:              request.AgentIdentity,
 		SourceReference:            request.SourceReference,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
@@ -372,7 +361,7 @@ func (agentKernel *AgentKernel) RunAgentRequest(responseContext context.Context,
 	turnRequest := AgentTurnRequest{
 		RequesterIdentity:          request.RequesterIdentity.Clone(),
 		Platform:                   request.Platform,
-		Company:                    agentKernel.companyContext(),
+		Company:                    request.Company,
 		AgentIdentity:              request.AgentIdentity,
 		SourceReference:            request.SourceReference,
 		IsRuntimeRestartResume:     request.IsRuntimeRestartResume,
@@ -465,6 +454,7 @@ func launchFailureRequest(request AgentRequest) AgentTurnRequest {
 	return AgentTurnRequest{
 		RequesterIdentity:   request.RequesterIdentity.Clone(),
 		Platform:            request.Platform,
+		Company:             request.Company,
 		AgentIdentity:       request.AgentIdentity,
 		SourceReference:     request.SourceReference,
 		ExistingTaskRunID:   request.ExistingTaskRunID,
