@@ -234,6 +234,7 @@ func agentRequestFromTurnRequest(request AgentTurnRequest) AgentRequest {
 	return AgentRequest{
 		RequesterIdentity: request.RequesterIdentity.Clone(),
 		Platform:          request.Platform,
+		Company:           request.Company,
 		ExistingTaskRunID: request.ExistingTaskRunID,
 		ProfileName:       request.ProfileName,
 		ConversationID:    request.ConversationID,

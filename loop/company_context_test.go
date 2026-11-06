@@ -1,8 +1,13 @@
 package loop
 
 import (
+	"context"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 )
 
 func TestCompanyContextRendersIdentityAndSelfUpdateRule(t *testing.T) {
@@ -47,16 +52,29 @@ func TestCompanyContextNamesNoToolThatDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestAgentKernelCompanyProviderFeedsTurnRequest(t *testing.T) {
-	agentKernel := &AgentKernel{}
-	agentKernel.UseCompanyProvider(func() CompanyContext {
-		return CompanyContext{Name: "주식회사 예시상사"}
-	})
-	if agentKernel.companyContext().Name != "주식회사 예시상사" {
-		t.Fatal("company provider not applied")
+func TestATurnReadsTheClockInTheZoneItsRequestCarries(t *testing.T) {
+	agentKernel, taskRunService := newKernelTestServices()
+	agentKernel.UseLanguageModelProvider(&recoveryChatNoticeProvider{chatReply: "지금은 처리하지 못했습니다."})
+	decision := TurnDecision{
+		Route: TurnRouteStartTask, Classification: IntakeClassificationBoundedTask,
+		TaskShape: TaskShapeMaintenanceTask, TaskLevel: TaskLevelLow, ResponseLanguage: "ko",
 	}
-	agentKernel = &AgentKernel{}
-	if !agentKernel.companyContext().IsEmpty() {
-		t.Fatal("missing provider should yield empty company")
+	request := AgentTurnRequest{
+		RequesterIdentity: RequesterIdentity{RequesterPersonID: "person-kernel-test"},
+		ConversationID:    "conversation-kernel-test",
+		Prompt:            "재택 출근 어제 21:30에 해서 지금 퇴근으로 찍어줘",
+		Company:           CompanyContext{Name: "주식회사 예시상사", TimeZone: "Asia/Seoul"},
+		TurnStartedAt:     time.Date(2026, 11, 5, 15, 32, 0, 0, time.UTC),
+		ToolSet:           taskDeleteToolSet(),
+	}
+
+	result, _ := agentKernel.RunPlannedTurn(context.Background(), request, turnclassification.Routing{Decision: &decision})
+
+	taskEvents := taskRunService.ListTaskEvent(result.TaskRun.TaskRunID)
+	if !taskEventsContain(taskEvents, string(agentcontract.TaskEventAgentIntake), "") {
+		t.Fatal("expected the turn to reach the task it starts")
+	}
+	if taskEventsContain(taskEvents, string(agentcontract.TaskEventAgentCompanyTimeZoneFallback), "") {
+		t.Fatal("the turn dropped the company its request carried and read the clock in a guessed zone")
 	}
 }
