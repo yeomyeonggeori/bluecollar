@@ -3,9 +3,11 @@ package acpagent
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/yeomyeonggeori/bluecollar/llmcalls"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 )
@@ -69,6 +71,43 @@ func TestStandaloneLedgerIdentityIsNotAnAuthenticatedRequester(t *testing.T) {
 	for _, prompt := range languageModel.actionPrompts {
 		if strings.Contains(prompt, "[personID bluecollar]") {
 			t.Fatal("the model was given an invented requester identity")
+		}
+	}
+}
+
+type everyCallRequesterLanguageModel struct {
+	*scriptedLanguageModel
+	mutex           sync.Mutex
+	requestContexts map[string][]model.RequestContext
+}
+
+func (languageModel *everyCallRequesterLanguageModel) GenerateStructuredResponse(ctx context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	languageModel.mutex.Lock()
+	languageModel.requestContexts[request.StructuredOutputSchema.Name] = append(languageModel.requestContexts[request.StructuredOutputSchema.Name], model.RequestContextFromContext(ctx))
+	languageModel.mutex.Unlock()
+	return languageModel.scriptedLanguageModel.GenerateStructuredResponse(ctx, request)
+}
+
+func TestEveryModelCallOfATurnNamesWhoAskedForIt(t *testing.T) {
+	hostCalls := []hostToolCall{}
+	clientTransport, serverTransport := mcp.NewInMemoryTransports()
+	go publishedCatalog(t, &hostCalls).Run(t.Context(), serverTransport)
+	languageModel := &everyCallRequesterLanguageModel{scriptedLanguageModel: &scriptedLanguageModel{}, requestContexts: map[string][]model.RequestContext{}}
+	metadata := map[string]any{TurnRequestMetaKey: agentcontract.AgentTurnRequest{
+		RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "sample-person-id", RequesterEmail: "sample@example.com"},
+		Platform:          "virtual",
+	}}
+	driveOneTurnWithOptions(t, clientTransport, testOptions(languageModel), metadata)
+	languageModel.mutex.Lock()
+	defer languageModel.mutex.Unlock()
+	if len(languageModel.requestContexts[llmcalls.TurnRouterSchemaName]) == 0 {
+		t.Fatalf("the turn was never routed, so the calls made before the turn went unseen: %v", languageModel.requestContexts)
+	}
+	for schemaName, requestContexts := range languageModel.requestContexts {
+		for _, requestContext := range requestContexts {
+			if requestContext.RequesterEmail != "sample@example.com" {
+				t.Errorf("a %s call did not name who asked for it: %+v", schemaName, requestContext)
+			}
 		}
 	}
 }

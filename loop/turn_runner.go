@@ -177,15 +177,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	}
 	request = requestReducedToCallableTools(request)
 
-	turnContext := ctx
-	turnContext = model.ContextWithRequestContext(turnContext, model.RequestContext{
-		RequesterPersonID:       request.RequesterPersonID,
-		RequesterEmail:          request.RequesterEmail,
-		RequesterName:           request.RequesterName,
-		RequesterPlatformUserID: request.RequesterPlatformUserID,
-		ConversationID:          request.ConversationID,
-		Platform:                request.Platform,
-	})
+	turnContext := ContextAskedByTheRequester(ctx, request)
 	if request.TurnStartedAt.IsZero() {
 		request.TurnStartedAt = time.Now().Add(-2 * time.Second)
 	}
