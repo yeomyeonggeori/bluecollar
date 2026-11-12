@@ -124,6 +124,7 @@ func (runningAgent *Agent) Prompt(ctx context.Context, request acp.PromptRequest
 func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, request acp.PromptRequest) (acp.PromptResponse, error) {
 	isResumedFromHostLedger := replayLedger(openSession, request.Meta)
 	turnRequest := runningAgent.turnRequestFor(openSession, request)
+	ctx = loop.ContextAskedByTheRequester(ctx, turnRequest)
 	if !isResumedFromHostLedger {
 		openSession.adoptNamedTaskRun(request.Meta, turnRequest.Prompt)
 	}
