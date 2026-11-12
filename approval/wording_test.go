@@ -9,6 +9,7 @@ import (
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
+	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -56,6 +57,18 @@ func TestTheWordingModelIsToldTheQuestionCoversThisOneAction(t *testing.T) {
 	prompt := languageModel.promptSeen()
 	if !strings.Contains(prompt, "The question covers this one action and nothing after it.") || strings.Contains(prompt, "approvalScope") {
 		t.Fatalf("an approval answers one call, so the question must not offer more, got %s", prompt)
+	}
+}
+
+func TestTheWordingModelIsToldOnlyGivenChoicesAreOffered(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "일정을 지울까요?"}
+	fixture := newFixtureWith(t, languageModel, &scriptedAsker{})
+
+	fixture.awaitOutcome(fixture.request())
+
+	prompt := languageModel.promptSeen()
+	if !strings.Contains(prompt, "A list in the model draft or the original request is not a choice; never carry it over.") {
+		t.Fatalf("a draft's list must not reach the requester as options the runtime never offered, got %s", prompt)
 	}
 }
 
@@ -214,4 +227,59 @@ func TestTheWordingModelWritesInTheRequestersLanguage(t *testing.T) {
 			}
 		})
 	}
+}
+
+type answeringLanguageModel struct {
+	questions []string
+	requests  []model.StructuredResponseRequest
+}
+
+func (languageModel *answeringLanguageModel) GenerateResponse(context.Context, string) (string, error) {
+	return "", errors.New("the approval gate only asks for structured output")
+}
+
+func (languageModel *answeringLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
+	question := languageModel.questions[len(languageModel.requests)]
+	languageModel.requests = append(languageModel.requests, request)
+	encoded, errorValue := json.Marshal(map[string]string{"question": question})
+	return model.StructuredResponse{Content: string(encoded)}, errorValue
+}
+
+func TestAQuestionWrittenOverSeveralLinesIsAskedForAgainAsOne(t *testing.T) {
+	languageModel := &answeringLanguageModel{questions: []string{"Delete Team sync?\n\n1. Delete now\n2. Cancel", "Delete Team sync?"}}
+
+	wording := NewWorder(languageModel).WordQuestion(context.Background(), factsWithoutChoices())
+
+	if wording.Failure != nil || !strings.HasPrefix(wording.Text, "Delete Team sync?\n\n") || strings.Contains(wording.Text, "Delete now") {
+		t.Fatalf("the requester reads the one asking sentence, never a list the model added, got %+v", wording)
+	}
+	if len(languageModel.requests) != 2 || languageModel.requests[1].Messages[len(languageModel.requests[1].Messages)-1].Content != oneLineAgain {
+		t.Fatalf("the model is told once why its question was refused, got %d requests", len(languageModel.requests))
+	}
+}
+
+func TestAQuestionStillOverSeveralLinesFallsBackToTheRawSummary(t *testing.T) {
+	languageModel := &answeringLanguageModel{questions: []string{"Delete Team sync?\n1. Now", "Delete Team sync?\n1. Now"}}
+
+	wording := NewWorder(languageModel).WordQuestion(context.Background(), factsWithoutChoices())
+
+	if !errors.Is(wording.Failure, errQuestionSpansLines) || !strings.HasPrefix(wording.Text, "calendar_event_delete Team sync\n\n") {
+		t.Fatalf("a question that will not fit one line is a wording failure, reported and never shown, got %+v", wording)
+	}
+}
+
+func TestAQuestionOfferingGivenChoicesMaySpanLines(t *testing.T) {
+	languageModel := &answeringLanguageModel{questions: []string{"Delete Team sync?\n1. Now\n2. Tomorrow 9:00\n3. Cancel"}}
+
+	wording := NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
+
+	if wording.Failure != nil || len(languageModel.requests) != 1 || !strings.Contains(wording.Text, "2. Tomorrow 9:00") {
+		t.Fatalf("a question offering the choices it was given lists them, got %+v after %d requests", wording, len(languageModel.requests))
+	}
+}
+
+func factsWithoutChoices() holdrecord.QuestionFacts {
+	facts := hostFactsFixture()
+	facts.Choices = nil
+	return facts
 }

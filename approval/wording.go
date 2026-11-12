@@ -32,6 +32,7 @@ Do not answer the question, report status, or explain the policy.
 The question covers this one action and nothing after it. The original request is there to name what the action touches, never to describe the work it is a step toward.
 Never promise a later step this action does not perform. Approving it must not read as approving anything that has to happen afterwards.
 State each consequence the action details list plainly; a requester approving it must know them.
+Unless choices are given, write no options, no numbered list and no instructions for how to answer: the conversation shows the requester how to approve or decline. A list in the model draft or the original request is not a choice; never carry it over.
 When choices are given, the question offers exactly those choices, in the order given, followed by cancelling, as a short numbered list the requester can answer by number. A choice with startsAt runs the action at that moment, written as a local date and time; a choice without startsAt runs it now. Offer no choice that is not given.`
 
 const handoffSystemPrompt = `Write exactly one short user-facing message that hands the requester the agent's browser so they can do one step in it themselves.
@@ -96,6 +97,10 @@ func (gate *Gate) recordWordingFailure(request approvalRequest, errorValue error
 	}))
 }
 
+var errQuestionSpansLines = errors.New("the approval question spans more than one line, where only the asking sentence belongs")
+
+const oneLineAgain = "Your question spans more than one line. Write it again as the one asking sentence alone: the runtime prints how to answer and the action's details beneath it."
+
 func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.QuestionFacts) (string, error) {
 	if worder.languageModel == nil {
 		return "", errors.New("approval wording needs a language model provider and none is configured")
@@ -104,18 +109,36 @@ func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.Ques
 	if errorValue != nil {
 		return "", errorValue
 	}
+	messages := []model.Message{
+		{Role: "system", Content: systemPromptFor(facts)},
+		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(facts.ResponseLanguage)},
+		{Role: "user", Content: string(encodedContext)},
+	}
+	question, answered, errorValue := worder.askForQuestion(ctx, facts, messages)
+	if !errors.Is(errorValue, errQuestionSpansLines) {
+		return question, errorValue
+	}
+	question, _, errorValue = worder.askForQuestion(ctx, facts, append(messages, model.Message{Role: "assistant", Content: answered}, model.Message{Role: "user", Content: oneLineAgain}))
+	return question, errorValue
+}
+
+func (worder Worder) askForQuestion(ctx context.Context, facts holdrecord.QuestionFacts, messages []model.Message) (string, string, error) {
 	structuredResponse, errorValue := worder.languageModel.GenerateStructuredResponse(ctx, model.StructuredResponseRequest{
-		Messages: []model.Message{
-			{Role: "system", Content: systemPromptFor(facts)},
-			{Role: "system", Content: agentcontract.ResponseLanguageInstruction(facts.ResponseLanguage)},
-			{Role: "user", Content: string(encodedContext)},
-		},
+		Messages:               messages,
 		StructuredOutputSchema: model.StructuredOutputSchema{Name: questionSchemaName, Document: questionSchemaDocument, IsStrictlyEnforced: true},
 	})
 	if errorValue != nil {
-		return "", errorValue
+		return "", "", errorValue
 	}
-	return readQuestion(structuredResponse.Content)
+	question, errorValue := readQuestion(structuredResponse.Content)
+	if errorValue == nil && mustFitOneLine(facts) && strings.Contains(question, "\n") {
+		return "", structuredResponse.Content, errQuestionSpansLines
+	}
+	return question, structuredResponse.Content, errorValue
+}
+
+func mustFitOneLine(facts holdrecord.QuestionFacts) bool {
+	return len(facts.Choices) == 0 && !isHandoff(facts)
 }
 
 func systemPromptFor(facts holdrecord.QuestionFacts) string {
