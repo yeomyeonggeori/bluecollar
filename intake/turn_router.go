@@ -28,11 +28,13 @@ const turnWordsSystemPrompt = "You write the words for one turn of a workplace a
 	"\n\nanswer_question and answer_meta: write the answer itself in userFacingReply, like a concise coworker. Answer jokes and casual addressed remarks in kind rather than ignoring them." +
 	"\n\ngive_up: say in userFacingReply that this cannot be done, and why, without blaming the requester." +
 	"\n\nreason is one short line for the log and is never shown to anybody. Leave every field a route does not need empty." +
+	"\n\n" + agentcontract.PeopleReadWhatTheyRecognize +
 	"\n\nWhat this agent said earlier is its own, not the requester's. A subject it named, a title it guessed at, or a thing it reported failing to find is never what the latest message is about unless the requester's own words say so."
 
 const clarificationWordsSystemPrompt = "You decide whether the requester still needs to provide essential information before this work can start. The prior route and classification are proposals to review, not facts." +
 	"\n\nRead the latest request together with all visible conversation context and the active goal. The latest request is authoritative. Do not invent requirements, and do not ask for information already supplied by the requester." +
 	"\n\nIf essential information only the requester can provide is still missing, set clarificationDisposition to ask and ask one concise question for that information. Offer 2-5 clarificationOptions only when the request itself implies a finite choice." +
+	"\n\n" + agentcontract.PeopleReadWhatTheyRecognize +
 	"\n\nIf the request and visible context provide enough information to start, set clarificationDisposition to start_work, leave clarificationQuestion empty and clarificationOptions empty, and write expectedResults for only the outcomes the requester asked to exist. Do not claim that work is complete or successful." +
 	"\n\nLeave userFacingReply empty. Put one short line for the log in reason."
 

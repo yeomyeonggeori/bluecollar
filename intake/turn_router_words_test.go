@@ -398,3 +398,15 @@ func TestTurnRouterStillFailsWhenTheWordsCallIsCancelled(t *testing.T) {
 		t.Fatal("an unreachable model is not a formatting error and must still surface")
 	}
 }
+
+func TestEveryWordsCallAPersonReadsIsToldToNameThingsTheWayThePersonKnowsThem(t *testing.T) {
+	writers := map[string]string{
+		"the words for an answer or a refusal": turnWordsSystemPrompt,
+		"the clarification question":           clarificationWordsSystemPrompt,
+	}
+	for writer, prompt := range writers {
+		if !strings.Contains(prompt, agentcontract.PeopleReadWhatTheyRecognize) {
+			t.Errorf("%s is not told to name things the way the person knows them", writer)
+		}
+	}
+}

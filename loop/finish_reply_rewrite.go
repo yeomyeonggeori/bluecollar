@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -47,7 +48,7 @@ func (agentTurnRunner *AgentTurnRunner) replyForFinish(ctx context.Context, task
 func (agentTurnRunner *AgentTurnRunner) rewriteFinishReply(ctx context.Context, taskRunID string, request AgentTurnRequest, reply string, rewrite finishReplyRewrite) string {
 	chatCompleter, isAvailable := model.ResolveTextChatCompleter(agentTurnRunner.languageModel)
 	if !isAvailable {
-		return rawRewrittenReply(reply, rewrite)
+		return agentTurnRunner.replyNotRewritten(taskRunID, reply, rewrite, errors.New("text chat completion unavailable"))
 	}
 	response, errorValue := chatCompleter.GenerateChatCompletion(ctx, model.ChatCompletionRequest{
 		SchemaName: rewrite.schemaName(),
@@ -58,10 +59,28 @@ func (agentTurnRunner *AgentTurnRunner) rewriteFinishReply(ctx context.Context, 
 		rewritten, errorValue = model.ChatCompletionText(response)
 	}
 	if errorValue != nil || strings.TrimSpace(rewritten) == "" {
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionReplyFailed, marshalEventBody(map[string]string{"stage": rewrite.schemaName(), "error": fmt.Sprint(errorValue)}))
-		return rawRewrittenReply(reply, rewrite)
+		return agentTurnRunner.replyNotRewritten(taskRunID, reply, rewrite, errorValue)
 	}
 	return strings.TrimSpace(rewritten)
+}
+
+func (agentTurnRunner *AgentTurnRunner) replyNotRewritten(taskRunID string, reply string, rewrite finishReplyRewrite, errorValue error) string {
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentCompletionReplyFailed, marshalEventBody(map[string]any{
+		"stage":         rewrite.schemaName(),
+		"error":         fmt.Sprint(errorValue),
+		"unmet":         rewrite.unmet,
+		"awaiting":      rewrite.awaiting,
+		"deliveryNotes": rewrite.deliveryNotes,
+	}))
+	return rawRewrittenReply(reply, rewrite)
+}
+
+func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
+	sections := []string{reply}
+	if len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 {
+		sections = append(sections, unmetChangesMessage(changeCheck{Unmet: append(append([]string(nil), rewrite.unmet...), rewrite.awaiting...), AwaitsRequester: rewrite.awaiting}))
+	}
+	return strings.Join(append(sections, rewrite.deliveryNotes...), "\n\n")
 }
 
 func splitAwaitingRequester(check changeCheck) ([]string, []string) {
@@ -94,14 +113,6 @@ func latestDeliveryOf(observations []turnObservation, devicePath string) (turnOb
 	return turnObservation{}, false
 }
 
-func rawRewrittenReply(reply string, rewrite finishReplyRewrite) string {
-	sections := []string{reply}
-	if len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0 {
-		sections = append(sections, unmetChangesMessage(changeCheck{Unmet: append(append([]string(nil), rewrite.unmet...), rewrite.awaiting...), AwaitsRequester: rewrite.awaiting}))
-	}
-	return strings.Join(append(sections, rewrite.deliveryNotes...), "\n\n")
-}
-
 func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewrite finishReplyRewrite) string {
 	sections := []string{"You are " + request.AgentIdentity.DisplayName() + ", and the request is addressed to you: a mention of you names who is asked, never a person the work is for. Rewrite the final user-facing reply below."}
 	if len(rewrite.unmet) > 0 {
@@ -118,7 +129,8 @@ func buildFinishReplyRewritePrompt(request AgentTurnRequest, reply string, rewri
 	}
 	return strings.Join(append(sections,
 		responseLanguageInstruction(request.ResponseLanguage),
-		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention tools, checks, records, evidence identifiers, prompts, or runtime details.",
+		"Keep the rest of what the reply reports about the work. Do not add anything neither the reply nor the lists above state, and do not mention the checks, the records or the lists above.",
+		agentcontract.PeopleReadWhatTheyRecognize,
 		agentcontract.NothingRunsAfterTheLastWord,
 		finishReplyFilesFact(rewrite.carried, len(rewrite.unmet) > 0 || len(rewrite.awaiting) > 0),
 		"Original request:\n"+completionReplyOriginalRequest(request),
