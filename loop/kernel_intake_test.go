@@ -485,7 +485,7 @@ func TestAgentKernelEasyWorkPromotesToolFailureToRecovery(t *testing.T) {
 	replyLanguageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"primary_lookup","toolInput":{"query":"hello"}}`,
 		`{"action":"continue","toolName":"backup_lookup","toolInput":{"query":"hello"}}`,
-		finishMessageCiting("backup answer", "obs-003"),
+		recoveredFinishMessageCiting("backup answer", "obs-003"),
 	}}
 	services := newKernelIntakeTestServices(replyLanguageModel, intakeLanguageModel)
 	toolRegistry := newTestCapabilityToolSet([]string{"primary_lookup", "backup_lookup"})

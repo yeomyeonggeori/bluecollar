@@ -316,7 +316,7 @@ func TestAgentTurnRunnerRejectsUnsatisfiedFinishMessage(t *testing.T) {
 func TestAgentTurnRunnerRejectsCompletionEvidenceFromErrorObservation(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"unstable","toolInput":{}}`,
-		finishMessageCiting("done", "obs-001"),
+		recoveredFinishMessageCiting("done", "obs-001"),
 		failDocument("tool failed"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{RecoveryBudget: exhaustedRecoveryBudgetForTest()})

@@ -132,7 +132,7 @@ func hasAttachmentDevicePath(attachments []toolcontract.FileAttachment, devicePa
 }
 
 func validateCompletionFacts(request AgentTurnRequest, observations []turnObservation, actionDocument turnActionDocument) completionGateResult {
-	if result := validateFinishClaim(actionDocument); !result.IsSatisfied {
+	if result := validateFinishClaim(actionDocument, observations); !result.IsSatisfied {
 		return result
 	}
 	attachments, errorValue := validateCompletionEvidence(request.ToolSet, observations, actionDocument.CompletionEvidence)
@@ -178,7 +178,7 @@ func undeliveredFailedDeliveryMessage(failedDelivery turnObservation) string {
 		") and no file has been delivered since, so the person has not received it. Deliver the file from a path that exists, or use fail to say why it cannot be delivered."
 }
 
-func validateFinishClaim(actionDocument turnActionDocument) completionGateResult {
+func validateFinishClaim(actionDocument turnActionDocument, observations []turnObservation) completionGateResult {
 	if actionDocument.GoalSatisfied == nil || !*actionDocument.GoalSatisfied {
 		return completionGateResult{Message: "a final reply requires goalSatisfied=true", PolicyCode: policyCodeGoalNotClaimedSatisfied}
 	}
@@ -187,6 +187,9 @@ func validateFinishClaim(actionDocument turnActionDocument) completionGateResult
 	}
 	if actionDocument.HasRemainingWork {
 		return completionGateResult{Message: "a final reply requires hasRemainingWork=false; recover the work or use fail"}
+	}
+	if _, hasFailureDebt := activeFailureDebt(observations); hasFailureDebt && !isRecoveredFailureDebtResolution(actionDocument.FailureResolution) {
+		return completionGateResult{Message: "a tool failure is still outstanding, so a final reply requires failureResolution to be recovered_with_success or no_tool_fallback; when the request could not be done, use fail"}
 	}
 	return completionGateResult{IsSatisfied: true}
 }
