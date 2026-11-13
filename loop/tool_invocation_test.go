@@ -43,7 +43,7 @@ func TestAgentTurnRunnerRecordsToolRequestedEvent(t *testing.T) {
 func TestAgentTurnRunnerTreatsToolFailureAsObservation(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"unstable","toolInput":{}}`,
-		finishMessageDocument("handled failure"),
+		noToolFallbackFinishMessageDocument("handled failure"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
 	toolRegistry := newTestCapabilityToolSet([]string{"unstable"})

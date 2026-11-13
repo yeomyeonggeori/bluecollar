@@ -1256,7 +1256,7 @@ func TestAgentTurnRunnerFinishesReadAfterCorrectedInputRecovery(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		`{"action":"continue","toolName":"task_list","toolInput":{"query":"invalid"}}`,
 		`{"action":"continue","toolName":"task_list","toolInput":{"weekFrom":0,"weekTo":0}}`,
-		finishMessageCiting("업무가 있습니다.", "obs-003"),
+		recoveredFinishMessageCiting("업무가 있습니다.", "obs-003"),
 	}}
 	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 4})
 	toolRegistry := newTestToolSet([]string{"task_list"})
@@ -1902,6 +1902,11 @@ func terminalNoToolRecoveryBudgetForTest() RecoveryBudget {
 func finishMessageCiting(reply string, observationIDs ...string) string {
 	citedIDs, _ := json.Marshal(observationIDs)
 	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":` + string(citedIDs) + `,"qualityReview":[]}`
+}
+
+func recoveredFinishMessageCiting(reply string, observationIDs ...string) string {
+	citedIDs, _ := json.Marshal(observationIDs)
+	return `{"action":"reply","final":true,"message":` + strconv.Quote(reply) + `,"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":` + string(citedIDs) + `,"qualityReview":[],"failureResolution":"recovered_with_success"}`
 }
 
 func TestApprovalObservationUserFacingMessageReadsConfirmQuestion(t *testing.T) {
