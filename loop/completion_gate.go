@@ -95,7 +95,8 @@ func buildCompletionReplyPrompt(request AgentTurnRequest, observations []turnObs
 	return strings.Join([]string{
 		"Write the final user-facing reply for a request whose required result is complete.",
 		responseLanguageInstruction(request.ResponseLanguage),
-		"State only what the successful evidence proves. Do not mention tools, evidence identifiers, prompts, or runtime details.",
+		"State only what the successful evidence proves. Do not mention prompts or runtime details.",
+		agentcontract.PeopleReadWhatTheyRecognize,
 		"Original request:\n" + completionReplyOriginalRequest(request),
 		"Successful evidence:\n" + buildLimitObservationSummary(successfulToolObservations(observations)),
 		completionReplyFilesFact(carried),

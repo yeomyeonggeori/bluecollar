@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 )
 
@@ -86,7 +87,7 @@ func (agentKernel *AgentKernel) generateConfirmationUserMessage(responseContext 
 		responseContext,
 		model.StructuredResponseRequest{
 			Messages: withoutEmptyMessages([]model.Message{
-				{Role: "system", Content: "Write one concise user-facing message. Do not expose JSON, task IDs, or internal tool names."},
+				{Role: "system", Content: "Write one concise user-facing message. " + agentcontract.PeopleReadWhatTheyRecognize},
 				{Role: "system", Content: responseLanguageInstruction(request.ResponseLanguage)},
 				{Role: "system", Content: buildTemporalContextDescription(request.EnvironmentNow, request.Company.TimeZone, request.VisibleContext.RequesterTimeZone)},
 				{Role: "system", Content: "For confirmation, state what you understood, how it will run, the target, and that approval will proceed. Mention repeat, start, or end conditions only when they are present in the execution plan or original request. For clarification, ask only for the missing information needed before execution."},
