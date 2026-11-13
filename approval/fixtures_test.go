@@ -124,6 +124,7 @@ func requestFixture(taskRunID string) approvalRequest {
 
 type wordingLanguageModel struct {
 	question    string
+	labels      map[string]string
 	failure     error
 	lastRequest model.StructuredResponseRequest
 }
@@ -137,7 +138,38 @@ func (languageModel *wordingLanguageModel) GenerateStructuredResponse(_ context.
 	if languageModel.failure != nil {
 		return model.StructuredResponse{}, languageModel.failure
 	}
-	return model.StructuredResponse{Content: `{"question":"` + languageModel.question + `"}`}, nil
+	content, errorValue := answerAsking(request, languageModel.question, languageModel.labels)
+	return model.StructuredResponse{Content: content}, errorValue
+}
+
+func answerAsking(request model.StructuredResponseRequest, question string, labels map[string]string) (string, error) {
+	answer := map[string]any{"question": question}
+	if askedFor := labelsAskedFor(request); len(askedFor) > 0 {
+		answered := map[string]string{}
+		for _, name := range askedFor {
+			answered[name] = "shown value"
+			if label, isGiven := labels[name]; isGiven {
+				answered[name] = label
+			}
+		}
+		answer["labels"] = answered
+	}
+	encoded, errorValue := json.Marshal(answer)
+	return string(encoded), errorValue
+}
+
+func labelsAskedFor(request model.StructuredResponseRequest) []string {
+	var schema struct {
+		Properties struct {
+			Labels struct {
+				Required []string `json:"required"`
+			} `json:"labels"`
+		} `json:"properties"`
+	}
+	if json.Unmarshal([]byte(request.StructuredOutputSchema.Document), &schema) != nil {
+		return nil
+	}
+	return schema.Properties.Labels.Required
 }
 
 func (languageModel *wordingLanguageModel) promptSeen() string {

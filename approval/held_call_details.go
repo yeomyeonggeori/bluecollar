@@ -8,18 +8,50 @@ import (
 	"github.com/yeomyeonggeori/blueprotocol/holdrecord"
 )
 
-var targetDetailNames = []string{"resolvedTarget", "resolvedTargetStartsAt", "targetPreview"}
+const (
+	resolvedTargetDetail         = "resolvedTarget"
+	resolvedTargetAddressDetail  = "resolvedTargetAddress"
+	resolvedTargetStartsAtDetail = "resolvedTargetStartsAt"
+	targetPreviewDetail          = "targetPreview"
+)
 
-func heldCallDetails(facts holdrecord.QuestionFacts) string {
+var targetDetailNames = []string{resolvedTargetDetail, resolvedTargetAddressDetail, resolvedTargetStartsAtDetail, targetPreviewDetail}
+
+func printedDetailNames(facts holdrecord.QuestionFacts, details map[string]json.RawMessage) []string {
+	names := []string{}
+	if isHandoff(facts) {
+		return names
+	}
+	for _, name := range append(slices.Clone(targetDetailNames), facts.Tool.ApprovalQuotedFields...) {
+		if value, isPresent := details[name]; isPresent && strings.TrimSpace(detailText(value)) != "" && !slices.Contains(names, name) {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func heldCallDetails(facts holdrecord.QuestionFacts, labels map[string]string) string {
 	details := actionDetails(facts)
 	lines := []string{}
-	for _, name := range detailNamesInShowingOrder(details) {
-		lines = append(lines, detailLines(name, details[name])...)
+	for _, name := range printedDetailNames(facts, details) {
+		lines = append(lines, detailLines(labels[name], printedText(facts, name, details[name]))...)
 	}
 	return strings.Join(lines, "\n")
 }
 
-func detailNamesInShowingOrder(details map[string]json.RawMessage) []string {
+func rawCallDetails(facts holdrecord.QuestionFacts) string {
+	if isHandoff(facts) {
+		return ""
+	}
+	details := actionDetails(facts)
+	lines := []string{}
+	for _, name := range rawDetailNamesInShowingOrder(details) {
+		lines = append(lines, detailLines(name, detailText(details[name]))...)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func rawDetailNamesInShowingOrder(details map[string]json.RawMessage) []string {
 	names := []string{}
 	for _, name := range targetDetailNames {
 		if _, isPresent := details[name]; isPresent {
@@ -36,12 +68,18 @@ func detailNamesInShowingOrder(details map[string]json.RawMessage) []string {
 	return append(names, inputNames...)
 }
 
-func detailLines(name string, value json.RawMessage) []string {
-	text := detailText(value)
-	if !strings.Contains(text, "\n") {
-		return []string{name + ": " + text}
+func printedText(facts holdrecord.QuestionFacts, name string, value json.RawMessage) string {
+	if name == resolvedTargetStartsAtDetail {
+		return momentForPerson(detailText(value), facts.ResponseLanguage, facts.RequesterTimeZone)
 	}
-	lines := []string{name + ":"}
+	return detailText(value)
+}
+
+func detailLines(label string, text string) []string {
+	if !strings.Contains(text, "\n") {
+		return []string{label + ": " + text}
+	}
+	lines := []string{label + ":"}
 	for _, line := range strings.Split(text, "\n") {
 		lines = append(lines, "> "+line)
 	}
