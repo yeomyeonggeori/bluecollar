@@ -95,14 +95,17 @@ func hostFactsFixture() holdrecord.QuestionFacts {
 	}
 }
 
-func TestAResolvedTargetReplacesTheSearchPhraseTheCallerTyped(t *testing.T) {
+func TestAResolvedTargetIsNamedAndItsPreviewQuotedBeneath(t *testing.T) {
 	languageModel := &wordingLanguageModel{question: "Delete Team sync?"}
 
-	NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
+	wording := NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
 
 	prompt := languageModel.promptSeen()
-	if strings.Contains(prompt, `"eventHint"`) || !strings.Contains(prompt, `"resolvedTarget":"Team sync"`) || !strings.Contains(prompt, `"targetPreview":"Tomorrow 10:00, 6 attendees"`) {
-		t.Fatalf("a host that resolved the target hands the sentence the event, not the phrase that found it, got %s", prompt)
+	if strings.Contains(prompt, `"eventHint"`) || !strings.Contains(prompt, `"resolvedTarget":"Team sync"`) || !strings.Contains(prompt, `"quotedBelow":"targetPreview"`) || strings.Contains(prompt, "6 attendees") {
+		t.Fatalf("the sentence names the resolved event, not the phrase that found it, and leaves its preview to the quotation, got %s", prompt)
+	}
+	if wording.Text != "Delete Team sync?\n\n> Tomorrow 10:00, 6 attendees" {
+		t.Fatalf("the requester reads the resolved target's preview exactly, beneath the question, got %q", wording.Text)
 	}
 }
 
@@ -282,7 +285,7 @@ func TestAQuestionWrittenOverSeveralLinesIsAskedForAgainAsOne(t *testing.T) {
 
 	wording := NewWorder(languageModel).WordQuestion(context.Background(), factsWithoutChoices())
 
-	if wording.Failure != nil || wording.Text != "Delete Team sync?" {
+	if wording.Failure != nil || !strings.HasPrefix(wording.Text, "Delete Team sync?\n\n> ") || strings.Contains(wording.Text, "Delete now") {
 		t.Fatalf("the requester reads the one asking sentence, never a list the model added, got %+v", wording)
 	}
 	if len(languageModel.requests) != 2 || languageModel.requests[1].Messages[len(languageModel.requests[1].Messages)-1].Content != oneLineAgain {
