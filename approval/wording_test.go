@@ -301,6 +301,28 @@ func TestTheWordingModelWritesInTheRequestersLanguage(t *testing.T) {
 	}
 }
 
+func TestTheWordingModelAsksInTheVoiceTheHostGives(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "Delete this event?"}
+	facts := hostFactsFixture()
+	facts.Voice = "- Your name is 김인턴.\n- Call them 박예시 님."
+
+	NewWorder(languageModel).WordQuestion(context.Background(), facts)
+
+	if prompt := languageModel.promptSeen(); !strings.Contains(prompt, voiceInstruction+facts.Voice) {
+		t.Fatalf("expected the wording model to be told the voice it asks in, got %s", prompt)
+	}
+}
+
+func TestWithoutAVoiceTheWordingModelIsToldNone(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "Delete this event?"}
+
+	NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
+
+	if prompt := languageModel.promptSeen(); strings.Contains(prompt, voiceInstruction) {
+		t.Fatalf("a host that gives no voice must add no voice instruction, got %s", prompt)
+	}
+}
+
 type answeringLanguageModel struct {
 	questions []string
 	labels    []map[string]string

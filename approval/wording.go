@@ -128,11 +128,7 @@ func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.Ques
 		return wordedQuestion{}, errorValue
 	}
 	asking := questionAsking{facts: facts, printedBelow: questionContext.PrintedBelow, schema: model.StructuredOutputSchema{Name: questionSchemaName, Document: schemaDocument, IsStrictlyEnforced: true}}
-	messages := []model.Message{
-		{Role: "system", Content: systemPromptFor(facts)},
-		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(facts.ResponseLanguage)},
-		{Role: "user", Content: string(encodedContext)},
-	}
+	messages := questionMessages(facts, encodedContext)
 	worded, answered, errorValue := worder.askForQuestion(ctx, asking, messages)
 	redo, isRedoable := errors.AsType[answerToRedo](errorValue)
 	if !isRedoable {
@@ -140,6 +136,19 @@ func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.Ques
 	}
 	worded, _, errorValue = worder.askForQuestion(ctx, asking, append(messages, model.Message{Role: "assistant", Content: answered}, model.Message{Role: "user", Content: redo.again}))
 	return worded, errorValue
+}
+
+const voiceInstruction = "You are the agent asking, so ask the way you speak to this requester everywhere else:\n"
+
+func questionMessages(facts holdrecord.QuestionFacts, encodedContext []byte) []model.Message {
+	messages := []model.Message{
+		{Role: "system", Content: systemPromptFor(facts)},
+		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(facts.ResponseLanguage)},
+	}
+	if voice := strings.TrimSpace(facts.Voice); voice != "" {
+		messages = append(messages, model.Message{Role: "system", Content: voiceInstruction + voice})
+	}
+	return append(messages, model.Message{Role: "user", Content: string(encodedContext)})
 }
 
 type questionAsking struct {
