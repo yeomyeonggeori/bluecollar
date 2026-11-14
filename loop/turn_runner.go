@@ -542,7 +542,7 @@ func (agentTurnRunner *AgentTurnRunner) handleToolCallAction(ctx context.Context
 		state.LastModelMessage = ""
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
-	observation := agentTurnRunner.invokeTool(invocationContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
+	observation := agentTurnRunner.invokeTool(invocationContext, request.ToolSet, taskRunID, observationID, actionDocument.ToolName, actionDocument.ToolInput, request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	if cancelledResult, isCancelled := agentTurnRunner.cancelledTaskResult(taskRunID, state.Attachments); isCancelled {
 		return toolCallActionOutcome{Result: cancelledResult, ShouldReturn: true, WasHandled: true}
 	}

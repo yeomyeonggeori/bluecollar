@@ -15,7 +15,7 @@ func (agentTurnRunner *AgentTurnRunner) deliverReplyAttachments(ctx context.Cont
 		return actionDocument, turnObservation{}, true
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
-	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.FileDeliverToolName), taskRunID, observationID, toolcontract.FileDeliverToolName, replyAttachmentToolInput(actionDocument.Attachments), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
+	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.FileDeliverToolName), taskRunID, observationID, toolcontract.FileDeliverToolName, replyAttachmentToolInput(actionDocument.Attachments), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, "")
 	if observation.Failed() {
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentReplyFailed, marshalEventBody(replyReceipt{Status: replyStatusNotDelivered, Reason: "attachment_failed", Detail: observation.FailureSummary(), AttachmentCount: len(actionDocument.Attachments)}))
@@ -67,7 +67,7 @@ func (agentTurnRunner *AgentTurnRunner) askForReplyAnswer(ctx context.Context, t
 		return agentTurnRunner.refuseReplyQuestion(taskRunID, stepID, state, actionDocument)
 	}
 	observationID := nextObservationIDForObservations(state.Observations)
-	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.AskInputToolName), taskRunID, observationID, toolcontract.AskInputToolName, replyQuestionToolInput(actionDocument), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.Message, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
+	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.AskInputToolName), taskRunID, observationID, toolcontract.AskInputToolName, replyQuestionToolInput(actionDocument), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	if isApprovalRequiredObservation(observation) {
 		if pausedResult, isPaused := agentTurnRunner.pausedTaskResult(taskRunID, observation, state.Attachments); isPaused {
 			agentTurnRunner.saveStep(taskRunID, stepID, pausedResult.TaskRun.Status, "reply", observation.ContentText())
