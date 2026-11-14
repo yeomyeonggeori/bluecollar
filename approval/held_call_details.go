@@ -17,15 +17,22 @@ const (
 
 var targetDetailNames = []string{resolvedTargetDetail, resolvedTargetAddressDetail, resolvedTargetStartsAtDetail, targetPreviewDetail}
 
-func quotedInputName(facts holdrecord.QuestionFacts) string {
-	name := strings.TrimSpace(facts.Tool.ApprovalQuotedField)
-	if name == "" || isHandoff(facts) || strings.TrimSpace(quotedText(facts, name)) == "" {
-		return ""
+func quotedDetail(facts holdrecord.QuestionFacts) (string, string) {
+	if isHandoff(facts) {
+		return "", ""
 	}
-	return name
+	if name := strings.TrimSpace(facts.Tool.ApprovalQuotedField); name != "" {
+		if text := strings.TrimSpace(inputText(facts, name)); text != "" {
+			return name, text
+		}
+	}
+	if preview := strings.TrimSpace(facts.Target.Preview); facts.Target.IsResolved() && preview != "" {
+		return targetPreviewDetail, preview
+	}
+	return "", ""
 }
 
-func quotedText(facts holdrecord.QuestionFacts, name string) string {
+func inputText(facts holdrecord.QuestionFacts, name string) string {
 	document := map[string]json.RawMessage{}
 	if json.Unmarshal(facts.Input, &document) != nil {
 		return ""
@@ -34,12 +41,12 @@ func quotedText(facts holdrecord.QuestionFacts, name string) string {
 }
 
 func quotation(facts holdrecord.QuestionFacts) string {
-	name := quotedInputName(facts)
-	if name == "" {
+	_, text := quotedDetail(facts)
+	if text == "" {
 		return ""
 	}
 	lines := []string{}
-	for _, line := range strings.Split(strings.TrimSpace(quotedText(facts, name)), "\n") {
+	for _, line := range strings.Split(text, "\n") {
 		lines = append(lines, "> "+line)
 	}
 	return strings.Join(lines, "\n")
@@ -47,7 +54,7 @@ func quotation(facts holdrecord.QuestionFacts) string {
 
 func detailsForTheQuestion(facts holdrecord.QuestionFacts) map[string]json.RawMessage {
 	details := actionDetails(facts)
-	delete(details, quotedInputName(facts))
+	delete(details, quotedNameOf(facts))
 	if startsAt, isPresent := details[resolvedTargetStartsAtDetail]; isPresent {
 		addDetail(details, resolvedTargetStartsAtDetail, momentForPerson(detailText(startsAt), facts.ResponseLanguage, facts.RequesterTimeZone))
 	}

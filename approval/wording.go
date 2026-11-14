@@ -179,7 +179,7 @@ func systemPromptFor(facts holdrecord.QuestionFacts) string {
 	if isHandoff(facts) {
 		return handoffSystemPrompt
 	}
-	if quotedInputName(facts) != "" {
+	if quotedNameOf(facts) != "" {
 		return questionSystemPrompt + quotationRule
 	}
 	return questionSystemPrompt
@@ -201,12 +201,17 @@ func readQuestion(content string) (wordedQuestion, error) {
 	return wordedQuestion{Question: question}, nil
 }
 
+func quotedNameOf(facts holdrecord.QuestionFacts) string {
+	name, _ := quotedDetail(facts)
+	return name
+}
+
 func newQuestionContext(facts holdrecord.QuestionFacts) questionContext {
 	return questionContext{
 		ResponseLanguage: strings.TrimSpace(facts.ResponseLanguage),
 		Operation:        strings.TrimSpace(facts.Tool.Name),
 		ActionDetails:    detailsForTheQuestion(facts),
-		QuotedBelow:      quotedInputName(facts),
+		QuotedBelow:      quotedNameOf(facts),
 		Choices:          facts.Choices,
 	}
 }
