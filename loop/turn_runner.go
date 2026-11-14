@@ -194,7 +194,7 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 	if request.TaskRunChosen != nil {
 		request.TaskRunChosen(taskRun.TaskRunID)
 	}
-	isPausedTaskResume := taskRun.Status == agentcontract.TaskStatusWaitingApproval || taskRun.Status == agentcontract.TaskStatusWaitingUserInput
+	isPausedTaskResume := taskRun.Status.IsAwaitingAnAnswer()
 	if request.TurnAnchorClamped {
 		agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentTurnAnchorClamped, marshalEventBody(map[string]any{
 			"phase":                       "execution",

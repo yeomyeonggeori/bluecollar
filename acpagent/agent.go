@@ -258,7 +258,7 @@ func (runningAgent *Agent) Cancel(_ context.Context, notification acp.CancelNoti
 	if !isFound {
 		return nil
 	}
-	if taskRun.Status == agentcontract.TaskStatusWaitingUserInput || taskRun.Status == agentcontract.TaskStatusWaitingApproval {
+	if taskRun.Status.IsAwaitingAnAnswer() {
 		return nil
 	}
 	openSession.taskRuns.CancelTaskRunWithReason(taskRunID, taskRun.RequesterPersonID, "the host cancelled this turn")

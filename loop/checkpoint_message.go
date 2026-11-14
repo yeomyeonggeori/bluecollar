@@ -112,10 +112,6 @@ func checkpointObservationMessage(observation turnObservation) string {
 	return observation.Summary
 }
 
-func isWaitingForUser(status agentcontract.TaskStatus) bool {
-	return status == agentcontract.TaskStatusWaitingApproval || status == agentcontract.TaskStatusWaitingUserInput
-}
-
 func toolObservationMessage(observation turnObservation) string {
 	var document struct {
 		Message string `json:"message"`
