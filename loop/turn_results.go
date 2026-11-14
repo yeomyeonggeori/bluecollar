@@ -47,7 +47,7 @@ func (agentTurnRunner *AgentTurnRunner) failTurnWithGeneratedNotice(ctx context.
 
 func (agentTurnRunner *AgentTurnRunner) pausedTaskResult(taskRunID string, observation turnObservation, attachments []toolcontract.FileAttachment) (AgentTurnResult, bool) {
 	taskRun, isFound := agentTurnRunner.taskRunService.FindTaskRun(taskRunID)
-	if !isFound || !isWaitingForUser(taskRun.Status) {
+	if !isFound || !taskRun.Status.IsAwaitingAnAnswer() {
 		return AgentTurnResult{}, false
 	}
 	if taskRun.Status == agentcontract.TaskStatusWaitingApproval {
