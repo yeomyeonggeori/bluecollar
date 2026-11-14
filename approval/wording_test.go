@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 
@@ -55,8 +54,8 @@ func TestAnInputNoToolQuotesIsLeftToTheSentence(t *testing.T) {
 		Input: json.RawMessage(`{"circleID":"investor","label":"Company materials","canDownload":true,"lifetimeHours":72}`),
 	}
 
-	if details := heldCallDetails(facts, nil); details != "" {
-		t.Fatalf("a setting is the sentence's to state in plain words, never printed by its name, got:\n%s", details)
+	if quoted := quotation(facts); quoted != "" {
+		t.Fatalf("a setting is the sentence's to state in plain words, never quoted, got:\n%s", quoted)
 	}
 }
 
@@ -72,19 +71,17 @@ func TestTheWordingModelIsToldTheQuestionCoversThisOneAction(t *testing.T) {
 	}
 }
 
-func TestTheWordingModelIsShownNoValueThePersonReadsBeneathTheQuestion(t *testing.T) {
-	languageModel := &wordingLanguageModel{question: "DM을 보낼까요?", labels: heldMessageLabels}
+func TestTheQuotedContentIsHiddenFromTheWordingModelWhichNamesTheRecipient(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "박예시님께 이렇게 보낼까요?"}
 
 	NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
 
 	prompt := languageModel.promptSeen()
-	for _, printedValue := range []string{"박예시", "내일 회의를 10시로"} {
-		if strings.Contains(prompt, printedValue) {
-			t.Fatalf("a value printed beneath the question must have one writer, the runtime, yet the wording model was shown %q in %s", printedValue, prompt)
-		}
+	if strings.Contains(prompt, "내일 회의를 10시로") {
+		t.Fatalf("the quoted content has one writer, the runtime, yet the wording model was shown it in %s", prompt)
 	}
-	if !strings.Contains(prompt, `"printedBelow":["resolvedTarget","message"]`) || !strings.Contains(prompt, `"actionDetails":{"targetType":"directMessage"}`) {
-		t.Fatalf("the wording model labels the printed values by name and words every other detail, got %s", prompt)
+	if !strings.Contains(prompt, "as a quotation") || !strings.Contains(prompt, `"quotedBelow":"message"`) || !strings.Contains(prompt, `"resolvedTarget":"박예시"`) {
+		t.Fatalf("the wording model points at the quotation and names whom it reaches, got %s", prompt)
 	}
 }
 
@@ -98,14 +95,14 @@ func hostFactsFixture() holdrecord.QuestionFacts {
 	}
 }
 
-func TestAResolvedTargetIsPrintedBeneathTheQuestionAndNeverWorded(t *testing.T) {
-	languageModel := &wordingLanguageModel{question: "Delete this event?"}
+func TestAResolvedTargetReplacesTheSearchPhraseTheCallerTyped(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "Delete Team sync?"}
 
 	NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
 
 	prompt := languageModel.promptSeen()
-	if strings.Contains(prompt, "sync") || strings.Contains(prompt, "Tomorrow 10:00") || !strings.Contains(prompt, `"printedBelow":["resolvedTarget","targetPreview"]`) {
-		t.Fatalf("the resolved event is printed beneath the question, so neither it nor the phrase that found it reaches the wording model, got %s", prompt)
+	if strings.Contains(prompt, `"eventHint"`) || !strings.Contains(prompt, `"resolvedTarget":"Team sync"`) || !strings.Contains(prompt, `"targetPreview":"Tomorrow 10:00, 6 attendees"`) {
+		t.Fatalf("a host that resolved the target hands the sentence the event, not the phrase that found it, got %s", prompt)
 	}
 }
 
@@ -135,24 +132,20 @@ func TestAWordingThatFailsReturnsTheRawSummaryAndTheFailure(t *testing.T) {
 func heldMessageFacts() holdrecord.QuestionFacts {
 	return holdrecord.QuestionFacts{
 		ResponseLanguage: "ko",
-		Tool:             toolcontract.ToolDefinition{Name: "message_send", ApprovalQuotedFields: []string{"message", "attachments"}},
+		Tool:             toolcontract.ToolDefinition{Name: "message_send", ApprovalQuotedField: "message"},
 		Input:            json.RawMessage(`{"targetType":"directMessage","personHint":"박예시","message":"내일 회의를 10시로 옮겨도 될까요?\n안 되면 알려주세요."}`),
 		Target:           agentcontract.ApprovalTarget{InputField: "personHint", ID: "person-2", Title: "박예시"},
 	}
 }
 
-var heldMessageLabels = map[string]string{"resolvedTarget": "받는 사람", "message": "보낼 내용"}
+func TestTheExactContentIsQuotedBeneathTheQuestion(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "박예시님께 이렇게 보낼까요?"}
 
-func TestTheQuestionShowsTheRecipientAndTheExactContentUnderTheModelsLabels(t *testing.T) {
-	for _, question := range []string{"보낼까요?", "최견본님께 회의 취소를 알릴까요?"} {
-		languageModel := &wordingLanguageModel{question: question, labels: heldMessageLabels}
+	wording := NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
 
-		wording := NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
-
-		expected := question + "\n\n받는 사람: 박예시\n보낼 내용:\n> 내일 회의를 10시로 옮겨도 될까요?\n> 안 되면 알려주세요."
-		if wording.Failure != nil || wording.Text != expected {
-			t.Fatalf("the recipient and the exact content are printed beneath any sentence, under the model's labels, got %+v", wording)
-		}
+	expected := "박예시님께 이렇게 보낼까요?\n\n> 내일 회의를 10시로 옮겨도 될까요?\n> 안 되면 알려주세요."
+	if wording.Failure != nil || wording.Text != expected {
+		t.Fatalf("the content is quoted once beneath the question, with nothing else printed, got %+v", wording)
 	}
 }
 
@@ -165,84 +158,29 @@ func TestAFailedWordingShowsTheWholeHeldCallUnderItsOwnNames(t *testing.T) {
 	}
 }
 
-func TestTheShownCallIsTheSameForTheSameHeldCall(t *testing.T) {
-	first := heldCallDetails(heldMessageFacts(), heldMessageLabels)
-	second := heldCallDetails(heldMessageFacts(), heldMessageLabels)
-
-	if first != second || first == "" {
-		t.Fatalf("one held call rendered two ways:\n%s\n---\n%s", first, second)
-	}
-	if !strings.HasPrefix(first, "받는 사람: ") {
-		t.Fatalf("the recipient is not the first thing shown:\n%s", first)
-	}
-}
-
-func TestTheSchemaAsksForALabelForExactlyThePrintedValues(t *testing.T) {
-	languageModel := &wordingLanguageModel{question: "박예시님께 보낼까요?", labels: heldMessageLabels}
-
-	NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
-
-	var schema struct {
-		Required             []string `json:"required"`
-		AdditionalProperties bool     `json:"additionalProperties"`
-		Properties           struct {
-			Labels struct {
-				Required             []string                   `json:"required"`
-				AdditionalProperties bool                       `json:"additionalProperties"`
-				Properties           map[string]json.RawMessage `json:"properties"`
-			} `json:"labels"`
-		} `json:"properties"`
-	}
-	if errorValue := json.Unmarshal([]byte(languageModel.lastRequest.StructuredOutputSchema.Document), &schema); errorValue != nil {
-		t.Fatal(errorValue)
-	}
-	labels := schema.Properties.Labels
-	if !slices.Equal(labels.Required, []string{"resolvedTarget", "message"}) || len(labels.Properties) != 2 || labels.AdditionalProperties || schema.AdditionalProperties || !slices.Equal(schema.Required, []string{"question", "labels"}) {
-		t.Fatalf("the schema must ask for one label per printed value and nothing else, got %s", languageModel.lastRequest.StructuredOutputSchema.Document)
-	}
-}
-
-func TestWithNothingPrintedTheSchemaAsksOnlyForTheQuestion(t *testing.T) {
+func TestWithNothingQuotedTheSentenceAloneIsTheQuestion(t *testing.T) {
 	languageModel := &wordingLanguageModel{question: "Create the link?"}
 	facts := holdrecord.QuestionFacts{Tool: toolcontract.ToolDefinition{Name: "dataroom_link_add"}, Input: json.RawMessage(`{"canDownload":true}`)}
 
 	wording := NewWorder(languageModel).WordQuestion(context.Background(), facts)
 
-	if document := languageModel.lastRequest.StructuredOutputSchema.Document; document != `{"additionalProperties":false,"properties":{"question":{"type":"string"}},"required":["question"],"type":"object"}` {
-		t.Fatalf("with nothing printed there is nothing to label, got %s", document)
-	}
-	if !strings.Contains(languageModel.promptSeen(), `"printedBelow":[]`) {
-		t.Fatalf("the model must read that nothing is printed beneath its sentence, or it points at a list that is not there, got %s", languageModel.promptSeen())
+	if languageModel.lastRequest.StructuredOutputSchema.Document != questionSchemaDocument || strings.Contains(languageModel.promptSeen(), "quotation") {
+		t.Fatalf("with nothing quoted the model is asked for the sentence alone, got %s", languageModel.promptSeen())
 	}
 	if wording.Failure != nil || wording.Text != "Create the link?" {
 		t.Fatalf("the sentence alone is the question, got %+v", wording)
 	}
 }
 
-func TestAMissingOrMultiLineLabelFailsTheWordingTogetherWithTheQuestion(t *testing.T) {
-	for name, labels := range map[string]map[string]string{
-		"empty":     {"resolvedTarget": " ", "message": "보낼 내용"},
-		"two lines": {"resolvedTarget": "받는\n사람", "message": "보낼 내용"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			wording := NewWorder(&wordingLanguageModel{question: "박예시님께 보낼까요?", labels: labels}).WordQuestion(context.Background(), heldMessageFacts())
-
-			if wording.Failure == nil || !strings.HasPrefix(wording.Text, "message_send 박예시\n\nresolvedTarget: 박예시\n") {
-				t.Fatalf("a value with no usable label is printed under its own name beneath the raw summary, got %+v", wording)
-			}
-		})
-	}
-}
-
-func TestASharedNamesAddressIsPrintedOnALineOfItsOwn(t *testing.T) {
+func TestASharedNamesAddressIsGivenToTheSentence(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "박예시님(sample2@example.com)께 이렇게 보낼까요?"}
 	facts := heldMessageFacts()
 	facts.Target.Address = "sample2@example.com"
-	labels := map[string]string{"resolvedTarget": "받는 사람", "resolvedTargetAddress": "주소", "message": "보낼 내용"}
 
-	details := heldCallDetails(facts, labels)
+	NewWorder(languageModel).WordQuestion(context.Background(), facts)
 
-	if !strings.HasPrefix(details, "받는 사람: 박예시\n주소: sample2@example.com\n") {
-		t.Fatalf("each printed person line must be a hint on its own, never a name and an address in one token, got:\n%s", details)
+	if !strings.Contains(languageModel.promptSeen(), `"resolvedTargetAddress":"sample2@example.com"`) {
+		t.Fatalf("a recipient who shares a name is told apart by address in the sentence, got %s", languageModel.promptSeen())
 	}
 }
 
@@ -325,7 +263,6 @@ func TestWithoutAVoiceTheWordingModelIsToldNone(t *testing.T) {
 
 type answeringLanguageModel struct {
 	questions []string
-	labels    []map[string]string
 	requests  []model.StructuredResponseRequest
 }
 
@@ -335,12 +272,8 @@ func (languageModel *answeringLanguageModel) GenerateResponse(context.Context, s
 
 func (languageModel *answeringLanguageModel) GenerateStructuredResponse(_ context.Context, request model.StructuredResponseRequest) (model.StructuredResponse, error) {
 	question := languageModel.questions[len(languageModel.requests)]
-	var labels map[string]string
-	if len(languageModel.labels) > len(languageModel.requests) {
-		labels = languageModel.labels[len(languageModel.requests)]
-	}
 	languageModel.requests = append(languageModel.requests, request)
-	content, errorValue := answerAsking(request, question, labels)
+	content, errorValue := answerAsking(question)
 	return model.StructuredResponse{Content: content}, errorValue
 }
 
@@ -349,7 +282,7 @@ func TestAQuestionWrittenOverSeveralLinesIsAskedForAgainAsOne(t *testing.T) {
 
 	wording := NewWorder(languageModel).WordQuestion(context.Background(), factsWithoutChoices())
 
-	if wording.Failure != nil || !strings.HasPrefix(wording.Text, "Delete Team sync?\n\n") || strings.Contains(wording.Text, "Delete now") {
+	if wording.Failure != nil || wording.Text != "Delete Team sync?" {
 		t.Fatalf("the requester reads the one asking sentence, never a list the model added, got %+v", wording)
 	}
 	if len(languageModel.requests) != 2 || languageModel.requests[1].Messages[len(languageModel.requests[1].Messages)-1].Content != oneLineAgain {
