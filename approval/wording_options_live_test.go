@@ -40,7 +40,7 @@ func TestLiveAnApprovalWithNoChoicesListsNoOptions(t *testing.T) {
 	worder := NewWorder(liveWordingProvider(t))
 	facts := holdrecord.QuestionFacts{
 		ResponseLanguage: "ko",
-		Tool:             toolcontract.ToolDefinition{Name: "message_send", ApprovalQuotedFields: []string{"message", "attachments"}},
+		Tool:             toolcontract.ToolDefinition{Name: "message_send", ApprovalQuotedField: "message"},
 		Input:            json.RawMessage(`{"targetType":"directMessage","personHint":"박예시","message":"테스트"}`),
 		Target:           agentcontract.ApprovalTarget{InputField: "personHint", ID: "person-2", Title: "박예시"},
 	}
@@ -49,28 +49,15 @@ func TestLiveAnApprovalWithNoChoicesListsNoOptions(t *testing.T) {
 		if errorValue != nil {
 			t.Fatalf("attempt %d: the wording model failed: %v", attempt, errorValue)
 		}
-		t.Logf("attempt %d: %q labels %q", attempt, worded.Question, worded.Labels)
+		t.Logf("attempt %d: %q", attempt, worded.Question)
 		if numberedLine.MatchString(worded.Question) {
 			t.Errorf("attempt %d: an approval with no choices was worded with a numbered list of options: %q", attempt, worded.Question)
 		}
-		if containsAny(worded.Question, "테스트", "박예시") {
-			t.Errorf("attempt %d: the question repeats a value printed beneath it: %q", attempt, worded.Question)
+		if strings.Contains(worded.Question, "테스트") {
+			t.Errorf("attempt %d: the question repeats the content quoted beneath it: %q", attempt, worded.Question)
 		}
-		assertLabelsArePlainWords(t, worded.Labels, []string{"resolvedTarget", "message"})
-	}
-}
-
-func assertLabelsArePlainWords(t *testing.T, labels map[string]string, printed []string) {
-	t.Helper()
-	for _, name := range printed {
-		label := labels[name]
-		if label == "" {
-			t.Errorf("the printed value %s has no label: %q", name, labels)
-		}
-		for _, rawName := range []string{"resolvedTarget", "message", "targetType", "directMessage"} {
-			if strings.Contains(label, rawName) {
-				t.Errorf("the label for %s reads as a field name: %q", name, label)
-			}
+		if !strings.Contains(worded.Question, "박예시") {
+			t.Errorf("attempt %d: the question does not say whom the message reaches: %q", attempt, worded.Question)
 		}
 	}
 }

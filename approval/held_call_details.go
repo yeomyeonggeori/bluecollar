@@ -17,26 +17,44 @@ const (
 
 var targetDetailNames = []string{resolvedTargetDetail, resolvedTargetAddressDetail, resolvedTargetStartsAtDetail, targetPreviewDetail}
 
-func printedDetailNames(facts holdrecord.QuestionFacts, details map[string]json.RawMessage) []string {
-	names := []string{}
-	if isHandoff(facts) {
-		return names
+func quotedInputName(facts holdrecord.QuestionFacts) string {
+	name := strings.TrimSpace(facts.Tool.ApprovalQuotedField)
+	if name == "" || isHandoff(facts) || strings.TrimSpace(quotedText(facts, name)) == "" {
+		return ""
 	}
-	for _, name := range append(slices.Clone(targetDetailNames), facts.Tool.ApprovalQuotedFields...) {
-		if value, isPresent := details[name]; isPresent && strings.TrimSpace(detailText(value)) != "" && !slices.Contains(names, name) {
-			names = append(names, name)
-		}
-	}
-	return names
+	return name
 }
 
-func heldCallDetails(facts holdrecord.QuestionFacts, labels map[string]string) string {
-	details := actionDetails(facts)
+func quotedText(facts holdrecord.QuestionFacts, name string) string {
+	document := map[string]json.RawMessage{}
+	if json.Unmarshal(facts.Input, &document) != nil {
+		return ""
+	}
+	return detailText(document[name])
+}
+
+func quotation(facts holdrecord.QuestionFacts) string {
+	name := quotedInputName(facts)
+	if name == "" {
+		return ""
+	}
 	lines := []string{}
-	for _, name := range printedDetailNames(facts, details) {
-		lines = append(lines, detailLines(labels[name], printedText(facts, name, details[name]))...)
+	for _, line := range strings.Split(strings.TrimSpace(quotedText(facts, name)), "\n") {
+		lines = append(lines, "> "+line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func detailsForTheQuestion(facts holdrecord.QuestionFacts) map[string]json.RawMessage {
+	details := actionDetails(facts)
+	delete(details, quotedInputName(facts))
+	if startsAt, isPresent := details[resolvedTargetStartsAtDetail]; isPresent {
+		addDetail(details, resolvedTargetStartsAtDetail, momentForPerson(detailText(startsAt), facts.ResponseLanguage, facts.RequesterTimeZone))
+	}
+	if len(details) == 0 {
+		return nil
+	}
+	return details
 }
 
 func rawCallDetails(facts holdrecord.QuestionFacts) string {
@@ -66,13 +84,6 @@ func rawDetailNamesInShowingOrder(details map[string]json.RawMessage) []string {
 	}
 	slices.Sort(inputNames)
 	return append(names, inputNames...)
-}
-
-func printedText(facts holdrecord.QuestionFacts, name string, value json.RawMessage) string {
-	if name == resolvedTargetStartsAtDetail {
-		return momentForPerson(detailText(value), facts.ResponseLanguage, facts.RequesterTimeZone)
-	}
-	return detailText(value)
 }
 
 func detailLines(label string, text string) []string {
