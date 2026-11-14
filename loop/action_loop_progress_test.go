@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -8,11 +9,10 @@ import (
 
 func repeatedTaskUpdateFailure(observationID string, taskInput string) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          "task_update",
-		Failure:       &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String(), Stage: "target_resolution"},
-		ToolInputKey:  "task_update\x00" + taskInput,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID, Failure: &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String(), Stage: "target_resolution"}},
+		Action:         "continue",
+		Tool:           "task_update",
+		ToolInputKey:   "task_update\x00" + taskInput,
 	}
 }
 
@@ -40,10 +40,9 @@ func TestProgressEventsCapsFailureProgressWithoutSuccess(t *testing.T) {
 	observations := []turnObservation{}
 	for _, fingerprint := range fingerprints {
 		observations = append(observations, turnObservation{
-			ObservationID:      fingerprint,
+			ToolCallResult:     agentcontract.ToolCallResult{ObservationID: fingerprint, Failure: &toolcontract.ToolFailure{}},
 			Action:             "continue",
 			Tool:               fingerprint,
-			Failure:            &toolcontract.ToolFailure{},
 			AttemptFingerprint: fingerprint,
 		})
 	}
@@ -52,7 +51,7 @@ func TestProgressEventsCapsFailureProgressWithoutSuccess(t *testing.T) {
 	}
 
 	withSuccess := append([]turnObservation{}, observations[:4]...)
-	withSuccess = append(withSuccess, turnObservation{ObservationID: "ok", Action: "continue", Tool: "write", Output: toolcontract.ToolOutput{Content: "wrote"}})
+	withSuccess = append(withSuccess, turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "ok"}, Action: "continue", Tool: "write", Output: toolcontract.ToolOutput{Content: "wrote"}})
 	withSuccess = append(withSuccess, observations[4:]...)
 	if got := countFailureProgress(progressEvents(withSuccess)); got != len(fingerprints) {
 		t.Fatalf("expected a success to reset the failure-progress cap, got %d", got)
@@ -90,16 +89,16 @@ func TestActionProgressTrackerResetsWhenProgressAppears(t *testing.T) {
 	tracker.evaluate(nil)
 
 	progress := tracker.evaluate([]turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "web_search",
-		Output:        toolcontract.ToolOutput{Content: "ok"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "web_search",
+		Output:         toolcontract.ToolOutput{Content: "ok"},
 	}})
 	afterProgress := tracker.evaluate([]turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "web_search",
-		Output:        toolcontract.ToolOutput{Content: "ok"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "web_search",
+		Output:         toolcontract.ToolOutput{Content: "ok"},
 	}})
 
 	if !progress.HasProgress {
@@ -112,18 +111,18 @@ func TestActionProgressTrackerResetsWhenProgressAppears(t *testing.T) {
 
 func TestARepeatedOutputDoesNotCountAsLoopProgress(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "task_list",
-		Output:        toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "task_list",
+		Output:         toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
 	}, {
-		ObservationID:        "obs-002",
+		ToolCallResult:       agentcontract.ToolCallResult{ObservationID: "obs-002"},
 		Action:               "continue",
 		Tool:                 "task_list",
 		Output:               toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
 		RepeatsObservationID: "obs-001",
 	}, {
-		ObservationID:        "obs-003",
+		ToolCallResult:       agentcontract.ToolCallResult{ObservationID: "obs-003"},
 		Action:               "continue",
 		Tool:                 "calendar_list",
 		Output:               toolcontract.ToolOutput{Content: `{"workspaceHealth":"missing_source"}`},
@@ -137,10 +136,10 @@ func TestARepeatedOutputDoesNotCountAsLoopProgress(t *testing.T) {
 
 func TestAFreshReadCountsAsLoopProgress(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "file_read",
-		Output:        toolcontract.ToolOutput{Content: "the report body"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "file_read",
+		Output:         toolcontract.ToolOutput{Content: "the report body"},
 	}}
 
 	if progressEventCount(observations) != 1 {

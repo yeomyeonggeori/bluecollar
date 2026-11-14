@@ -384,10 +384,9 @@ func promptVisibleObservations(observations []turnObservation, summary TaskConte
 func summaryObservation(summary TaskContextSummary) turnObservation {
 	content := summaryPromptContent(summary)
 	return turnObservation{
-		ObservationID: strings.TrimSpace(summary.ObservationID),
-		Action:        "context_summary",
-		Output:        toolcontract.ToolOutput{Content: content},
-		Summary:       "Compacted task context through " + strings.TrimSpace(summary.CompactedThroughObservationID) + ": " + content,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: strings.TrimSpace(summary.ObservationID), Summary: "Compacted task context through " + strings.TrimSpace(summary.CompactedThroughObservationID) + ": " + content},
+		Action:         "context_summary",
+		Output:         toolcontract.ToolOutput{Content: content},
 	}
 }
 

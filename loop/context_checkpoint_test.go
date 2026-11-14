@@ -14,10 +14,10 @@ func toolResultTaskEvent(taskEventID string, observationID string) agentcontract
 		TaskEventID: taskEventID,
 		Name:        "tool.note_write.result",
 		Body: marshalEventBody(turnObservation{
-			ObservationID: observationID,
-			Action:        "continue",
-			Tool:          "note_write",
-			Output:        toolcontract.ToolOutput{Content: "wrote " + observationID},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID},
+			Action:         "continue",
+			Tool:           "note_write",
+			Output:         toolcontract.ToolOutput{Content: "wrote " + observationID},
 		}),
 	}
 }
@@ -40,7 +40,7 @@ func retainedContextCheckpoint() TaskContextSummary {
 		CompactedThroughObservationID: "observation-3",
 		CompactedObservationIDs:       []string{"observation-1", "observation-2", "observation-3"},
 		AccountedTaskEventIDs:         []string{"event-1", "event-2", "event-3", "event-4"},
-		RetainedObservations:          []turnObservation{{ObservationID: "observation-4", Action: "continue", Tool: "note_write"}},
+		RetainedObservations:          []turnObservation{{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-4"}, Action: "continue", Tool: "note_write"}},
 		CompactedObservationCount:     3,
 		CompactedToolCallCount:        3,
 		TaskContextSummaryContent:     TaskContextSummaryContent{Goal: "ship"},
@@ -129,13 +129,13 @@ func TestASecondCheckpointInheritsWhatTheFirstAlreadyAccountedFor(t *testing.T) 
 		toolResultTaskEvent("event-5", "observation-5"),
 	}
 	secondPlan := taskContextCompactionPlan{
-		CompactableObservations:       []turnObservation{{ObservationID: "observation-4", Action: "continue", Tool: "note_write"}},
+		CompactableObservations:       []turnObservation{{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-4"}, Action: "continue", Tool: "note_write"}},
 		CompactedObservationIDs:       []string{"observation-4"},
 		CompactedThroughObservationID: "observation-4",
 	}
 	retainedByTheSecondCheckpoint := []turnObservation{
-		{ObservationID: "context-summary-observation-4", Action: "context_summary"},
-		{ObservationID: "observation-5", Action: "continue", Tool: "note_write"},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "context-summary-observation-4"}, Action: "context_summary"},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-5"}, Action: "continue", Tool: "note_write"},
 	}
 
 	secondCheckpoint := summaryAccountingForCompactedObservations(
@@ -168,10 +168,10 @@ func TestRecompactingTheSameObservationDoesNotCountItTwice(t *testing.T) {
 	}
 	planRepeatingTheWholeHistory := taskContextCompactionPlan{
 		CompactableObservations: []turnObservation{
-			{ObservationID: "observation-1", Action: "continue", Tool: "note_write"},
-			{ObservationID: "observation-2", Action: "continue", Tool: "note_write"},
-			{ObservationID: "observation-3", Action: "continue", Tool: "note_write"},
-			{ObservationID: "observation-4", Action: "continue", Tool: "note_write"},
+			{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-1"}, Action: "continue", Tool: "note_write"},
+			{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-2"}, Action: "continue", Tool: "note_write"},
+			{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-3"}, Action: "continue", Tool: "note_write"},
+			{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-4"}, Action: "continue", Tool: "note_write"},
 		},
 		CompactedObservationIDs:       []string{"observation-1", "observation-2", "observation-3", "observation-4"},
 		CompactedThroughObservationID: "observation-4",

@@ -59,13 +59,12 @@ func TestLLMContextBuilderFlattensConversationMemoryAndFailure(t *testing.T) {
 		},
 		MemoryContext: "사용자는 구체적인 실패 이유를 원한다.",
 		Observations: []turnObservation{{
-			ObservationID: "obs-1",
-			Tool:          "message_send",
-			Failure: &toolcontract.ToolFailure{
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-1", Failure: &toolcontract.ToolFailure{
 				Code:            "send_failed",
 				Stage:           "message_send",
 				UserSafeSummary: "Mattermost returned 503",
-			},
+			}},
+			Tool: "message_send",
 		}},
 		FailureFacts: failureReportFacts{Attempts: []failureReportAttempt{{
 			ToolName:     "message_send",
@@ -242,15 +241,12 @@ func assertContextOrder(t *testing.T, contextText string, fragments []string) {
 func TestRecordedEffectsContextListsSuccessfulSideEffects(t *testing.T) {
 	observations := []turnObservation{
 		{
-			ObservationID: "obs-001",
-			Tool:          "task_add",
-			Effects:       []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "af8271"}},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Effects: []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "created", ID: "af8271"}}},
+			Tool:           "task_add",
 		},
 		{
-			ObservationID: "obs-002",
-			Tool:          "task_delete",
-			Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailureUnknown},
-			Effects:       []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "deleted", ID: "dead01"}},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureUnknown}, Effects: []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "deleted", ID: "dead01"}}},
+			Tool:           "task_delete",
 		},
 	}
 
@@ -268,7 +264,7 @@ func TestRecordedEffectsContextListsSuccessfulSideEffects(t *testing.T) {
 }
 
 func TestRecordedEffectsContextEmptyWithoutEffects(t *testing.T) {
-	if context := recordedEffectsContext([]turnObservation{{ObservationID: "obs-001", Tool: "task_list"}}); context != "" {
+	if context := recordedEffectsContext([]turnObservation{{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Tool: "task_list"}}); context != "" {
 		t.Fatalf("expected empty context without effects, got %q", context)
 	}
 }

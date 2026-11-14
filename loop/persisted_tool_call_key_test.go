@@ -12,7 +12,7 @@ func TestRestoredFormerKernelToolCallKeyPreventsDuplicateSuccess(t *testing.T) {
 	toolInput := json.RawMessage(`{"command":"pwd"}`)
 	formerToolInputKey := "shell\x00" + agentcontract.CanonicalToolInput(toolInput)
 	formerObservation := turnObservation{
-		ObservationID:      "obs-legacy-shell",
+		ToolCallResult:     agentcontract.ToolCallResult{ObservationID: "obs-legacy-shell"},
 		Action:             "continue",
 		Tool:               "shell",
 		Output:             toolcontract.ToolOutput{Content: "command completed"},
@@ -71,10 +71,9 @@ func TestRestoredFormerKernelAttemptFingerprintPreservesFailureCode(t *testing.T
 	formerToolInputKey := "shell\x00" + agentcontract.CanonicalToolInput(toolInput)
 	errorCode := toolcontract.FailureCodes.OperationFailed.String()
 	formerObservation := turnObservation{
-		ObservationID:      "obs-legacy-shell-failure",
+		ToolCallResult:     agentcontract.ToolCallResult{ObservationID: "obs-legacy-shell-failure", Failure: &toolcontract.ToolFailure{Code: errorCode}},
 		Action:             "continue",
 		Tool:               "shell",
-		Failure:            &toolcontract.ToolFailure{Code: errorCode},
 		ToolInputKey:       formerToolInputKey,
 		AttemptFingerprint: attemptFingerprint(formerToolInputKey, errorCode),
 	}

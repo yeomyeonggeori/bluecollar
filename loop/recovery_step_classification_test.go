@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -22,7 +23,7 @@ func calendarRecoveryToolSet() *toolcontract.ToolSet {
 }
 
 func failureDebtForTool(toolName string) FailureDebt {
-	return FailureDebt{LatestFailure: turnObservation{ObservationID: "obs-001", Action: "continue", Tool: toolName}}
+	return FailureDebt{LatestFailure: turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Action: "continue", Tool: toolName}}
 }
 
 func TestLookingUpTheTargetOfAFailedMutationCountsAsInspection(t *testing.T) {
@@ -35,8 +36,8 @@ func TestLookingUpTheTargetOfAFailedMutationCountsAsInspection(t *testing.T) {
 func TestInspectionAfterAFailedMutationIsNotRationed(t *testing.T) {
 	budget := defaultRecoveryBudget()
 	observations := []turnObservation{
-		{ObservationID: "obs-002", RecoveryStep: recoveryStepInspection, RecoveryAttemptSpent: true},
-		{ObservationID: "obs-003", RecoveryStep: recoveryStepInspection, RecoveryAttemptSpent: true},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"}, RecoveryStep: recoveryStepInspection, RecoveryAttemptSpent: true},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-003"}, RecoveryStep: recoveryStepInspection, RecoveryAttemptSpent: true},
 	}
 	if !recoveryBudgetAllowsStep(observations, budget, recoveryStepInspection, "") {
 		t.Fatal("inspection must stay available so the agent can keep searching for the target it could not resolve")

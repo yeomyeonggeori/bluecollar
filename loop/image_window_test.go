@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -8,9 +9,9 @@ import (
 
 func observationCarryingAnImage(observationID string) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          toolcontract.ImageReadToolName,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID},
+		Action:         "continue",
+		Tool:           toolcontract.ImageReadToolName,
 		Attachments: []toolcontract.FileAttachment{{
 			Filename:      observationID + ".png",
 			ContentType:   "image/png",
@@ -22,7 +23,7 @@ func observationCarryingAnImage(observationID string) turnObservation {
 func TestAnImageStopsBeingResentOnceItLeavesTheWindow(t *testing.T) {
 	observations := []turnObservation{observationCarryingAnImage("obs-001")}
 	for range maxProgressObservations + 4 {
-		observations = append(observations, turnObservation{ObservationID: "obs-filler", Action: "continue", Tool: toolcontract.BashToolName})
+		observations = append(observations, turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-filler"}, Action: "continue", Tool: toolcontract.BashToolName})
 	}
 
 	message := toolResultImageContextMessage(observations)
@@ -34,7 +35,7 @@ func TestAnImageStopsBeingResentOnceItLeavesTheWindow(t *testing.T) {
 
 func TestAnImageStaysWhileTheWorkIsStillAboutIt(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: toolcontract.BashToolName},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Action: "continue", Tool: toolcontract.BashToolName},
 		observationCarryingAnImage("obs-002"),
 	}
 

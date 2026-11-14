@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -262,15 +263,14 @@ func TestTheRefusalNamesTheToolItRefused(t *testing.T) {
 func TestRecoveryGuidanceDoesNotCopyTheRequestBackIn(t *testing.T) {
 	instruction := "How many likes did all Venmo transactions, I sent this month, have in total?"
 	observation := turnObservation{
-		ObservationID: "obs-004",
-		Action:        "continue",
-		Tool:          "bash",
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-004", Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureUnknown,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
 			Stage:           "bash",
 			UserSafeSummary: "the command exited 1",
-		},
+		}},
+		Action: "continue",
+		Tool:   "bash",
 	}
 
 	guidance := recoveryGuidanceObservation(nil, 5, observation, instruction)

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -11,8 +12,8 @@ import (
 func TestObservedURLInReplyIgnoresUncontractedOutput(t *testing.T) {
 	toolSet := newTestToolSet([]string{"external.publish"})
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Tool:          "external.publish",
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Tool:           "external.publish",
 		Output: toolcontract.ToolOutput{
 			Content: `{"publicURL":"https://portfolio.example"}`,
 			Data:    json.RawMessage(`{}`),
@@ -42,7 +43,7 @@ func TestObservedURLInReplyIgnoresWhatALookupFound(t *testing.T) {
 	descriptor.SideEffectClass = toolcontract.ToolSideEffectRead
 	result := canonicalLinkToolResult("https://reference.example")
 	toolSet := newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{descriptor})
-	observation := turnObservation{ObservationID: "obs-001", Tool: "web_search", Output: result.Output, Effects: result.Effects}
+	observation := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Effects: result.Effects}, Tool: "web_search", Output: result.Output}
 
 	if message := missingObservedURLInReply(toolSet, []turnObservation{observation}, "Here is what I found."); message != "" {
 		t.Fatalf("a URL a lookup found is not one the reply must carry: %q", message)
@@ -68,10 +69,9 @@ func canonicalLinkObservation(toolName string, publicURL string) (*toolcontract.
 	descriptor := canonicalLinkToolDefinition(toolName)
 	result := canonicalLinkToolResult(publicURL)
 	return newTestToolSetWithDefinitions([]toolcontract.ToolDefinition{descriptor}), turnObservation{
-		ObservationID: "obs-001",
-		Tool:          toolName,
-		Output:        result.Output,
-		Effects:       result.Effects,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Effects: result.Effects},
+		Tool:           toolName,
+		Output:         result.Output,
 	}
 }
 

@@ -99,9 +99,9 @@ func TestCompletionGateRejectsEvidenceThatMissesDeclaredResultCondition(t *testi
 		},
 	}})
 	observation := turnObservation{
-		ObservationID: "obs-001",
-		Tool:          "artifact_review",
-		Output:        toolcontract.ToolOutput{Data: json.RawMessage(`{"passed":false}`)},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Tool:           "artifact_review",
+		Output:         toolcontract.ToolOutput{Data: json.RawMessage(`{"passed":false}`)},
 	}
 
 	result := validateCompletionFacts(AgentTurnRequest{ToolSet: toolSet}, []turnObservation{observation}, turnActionDocument{
@@ -167,9 +167,9 @@ func TestAgentTurnRunnerAcceptsHtmlRequestWithHtmlAttachment(t *testing.T) {
 func TestValidateCompletionEvidenceDoesNotDeliverImageReadAttachment(t *testing.T) {
 	attachmentIndex := 0
 	attachments, errorValue := validateCompletionEvidence(nil, []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "image_read",
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "image_read",
 		Attachments: []toolcontract.FileAttachment{{
 			DevicePath:    "/workspace/inbox/mascot.png",
 			Filename:      "mascot.png",
@@ -823,7 +823,7 @@ func TestCompletionGateObservationStatesZeroToolRealityForFirstTurnFinish(t *tes
 	if !strings.Contains(observation.ContentText(), "ZERO successful tool observations") {
 		t.Fatalf("expected recorded-reality statement, got: %s", observation.ContentText())
 	}
-	successfulObservation := turnObservation{ObservationID: "obs-001", Action: "tool", Tool: "task_add"}
+	successfulObservation := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Action: "tool", Tool: "task_add"}
 	observationAfterTool := completionGateObservation(2, result, nil, []turnObservation{successfulObservation})
 	if strings.Contains(observationAfterTool.ContentText(), "ZERO successful tool observations") {
 		t.Fatalf("did not expect recorded-reality statement after a successful tool observation")
@@ -835,7 +835,7 @@ func TestFinishHiddenAfterEvidenceMissingRejectionWithoutToolEvidence(t *testing
 	if !finishWasRejectedWithoutAnyToolEvidence([]turnObservation{rejection}) {
 		t.Fatalf("expected finish hidden after gate rejection with zero tool evidence")
 	}
-	successfulTool := turnObservation{ObservationID: "obs-002", Action: "continue", Tool: "task_add"}
+	successfulTool := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"}, Action: "continue", Tool: "task_add"}
 	if finishWasRejectedWithoutAnyToolEvidence([]turnObservation{successfulTool, rejection}) {
 		t.Fatalf("expected finish exposed once a successful tool observation exists")
 	}
@@ -848,7 +848,7 @@ func TestFinishHiddenAfterEvidenceMissingRejectionWithoutToolEvidence(t *testing
 }
 
 func TestASecondRefusalTheAgentDidNothingAboutWithdrawsFinish(t *testing.T) {
-	successfulSend := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "bash"}
+	successfulSend := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Action: "continue", Tool: "bash"}
 	refusal := func(index int) turnObservation {
 		return completionGateObservation(index, completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}, nil, []turnObservation{successfulSend})
 	}
@@ -865,7 +865,7 @@ func TestASecondRefusalTheAgentDidNothingAboutWithdrawsFinish(t *testing.T) {
 }
 
 func TestFinishHiddenAfterAttachmentRejectionDespiteToolEvidence(t *testing.T) {
-	successfulRead := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "file_read"}
+	successfulRead := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Action: "continue", Tool: "file_read"}
 	rejection := completionGateObservation(2, completionGateResult{Message: "attach the artifact", EvidenceKind: "attachment_missing"}, nil, []turnObservation{successfulRead})
 	if !finishWasRejectedWithoutAnyToolEvidence([]turnObservation{successfulRead, rejection}) {
 		t.Fatalf("expected finish hidden after attachment rejection even with prior tool evidence")
@@ -911,8 +911,8 @@ func TestEveryCopyOfTheContractIsReducedToWhatTheTaskCanCall(t *testing.T) {
 
 func TestARejectedCitationNamesTheOnesThatWouldHaveDone(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: "bash", Summary: "listed the workspace"},
-		{ObservationID: "obs-002", Action: "continue", Tool: "bash", Summary: "wrote avg_temp.txt"},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Summary: "listed the workspace"}, Action: "continue", Tool: "bash"},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", Summary: "wrote avg_temp.txt"}, Action: "continue", Tool: "bash"},
 	}
 
 	errorValue := validateCompletionEvidenceReferences(nil, observations, []completionEvidenceReference{{ObservationID: "obs-009"}})
@@ -949,7 +949,7 @@ func TestARefusalNamesWhatAlreadyChangedSomething(t *testing.T) {
 		InputSchema:     json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		SideEffectClass: toolcontract.ToolSideEffectExternalSend,
 	}})
-	sent := turnObservation{ObservationID: "obs-004", Action: "continue", Tool: "money_send"}
+	sent := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-004"}, Action: "continue", Tool: "money_send"}
 	result := completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}
 
 	refusal := completionGateObservation(5, result, toolSet, []turnObservation{sent})
@@ -969,7 +969,7 @@ func TestARefusalWithNothingChangedNamesNothing(t *testing.T) {
 		InputSchema:     json.RawMessage(`{"type":"object","additionalProperties":false}`),
 		SideEffectClass: toolcontract.ToolSideEffectRead,
 	}})
-	read := turnObservation{ObservationID: "obs-002", Action: "continue", Tool: toolcontract.BashToolName}
+	read := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"}, Action: "continue", Tool: toolcontract.BashToolName}
 	result := completionGateResult{Message: "the condition was never evaluated", EvidenceKind: evidenceKindExpectedResult}
 
 	refusal := completionGateObservation(5, result, toolSet, []turnObservation{read})

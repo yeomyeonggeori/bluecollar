@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"errors"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -24,9 +25,9 @@ func (source *imageSourceHolding) LoadImageContentBase64(_ context.Context, _ st
 
 func observationWhoseImageLostItsContent() turnObservation {
 	return turnObservation{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          toolcontract.ImageReadToolName,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           toolcontract.ImageReadToolName,
 		Attachments: []toolcontract.FileAttachment{{
 			DevicePath:  "/workspace/private/people/somebody/inbox/buzz/dm/image",
 			Filename:    "image",

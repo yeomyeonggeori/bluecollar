@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"os"
 	"path/filepath"
 	"slices"
@@ -84,12 +85,11 @@ func taskToolsTestToolSet() *toolcontract.ToolSet {
 
 func successfulSideEffectObservation(observationID string, toolName string, toolInput string, resultContent string) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          toolName,
-		ToolID:        "test:" + toolName,
-		ToolInput:     json.RawMessage(toolInput),
-		Output:        toolcontract.ToolOutput{Content: resultContent},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID, ToolInput: json.RawMessage(toolInput)},
+		Action:         "continue",
+		Tool:           toolName,
+		ToolID:         "test:" + toolName,
+		Output:         toolcontract.ToolOutput{Content: resultContent},
 	}
 }
 
@@ -313,20 +313,17 @@ func fileMadeByCommandThenDelivered(command string, filename string, contentType
 	deliverData, _ := json.Marshal(map[string]any{"deliveredPaths": []string{devicePath}, "attachmentCount": 1})
 	return []turnObservation{
 		{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          toolcontract.BashToolName,
-			ToolInput:     commandInput,
-			Output:        toolcontract.ToolOutput{Content: `{"completed":true,"exitCode":0}`, Data: json.RawMessage(`{"completed":true,"exitCode":0,"stdout":"","stderr":""}`)},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", ToolInput: commandInput},
+			Action:         "continue",
+			Tool:           toolcontract.BashToolName,
+			Output:         toolcontract.ToolOutput{Content: `{"completed":true,"exitCode":0}`, Data: json.RawMessage(`{"completed":true,"exitCode":0,"stdout":"","stderr":""}`)},
 		},
 		{
-			ObservationID: "obs-002",
-			Action:        "continue",
-			Tool:          toolcontract.FileDeliverToolName,
-			ToolInput:     deliverInput,
-			Output:        toolcontract.ToolOutput{Content: "files delivered", Data: deliverData},
-			Effects:       []toolcontract.ResourceEffect{{ObjectType: "file", Effect: "attached", Path: devicePath}},
-			Attachments:   []toolcontract.FileAttachment{{Filename: filename, ContentType: contentType, SizeBytes: 1342, DevicePath: devicePath}},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", ToolInput: deliverInput, Effects: []toolcontract.ResourceEffect{{ObjectType: "file", Effect: "attached", Path: devicePath}}},
+			Action:         "continue",
+			Tool:           toolcontract.FileDeliverToolName,
+			Output:         toolcontract.ToolOutput{Content: "files delivered", Data: deliverData},
+			Attachments:    []toolcontract.FileAttachment{{Filename: filename, ContentType: contentType, SizeBytes: 1342, DevicePath: devicePath}},
 		},
 	}
 }
@@ -480,11 +477,11 @@ func deliveredOfficeFileTurn(liveCase deliveredOfficeFileCase) (AgentTurnRequest
 	deliverInput, _ := json.Marshal(map[string]string{"path": "~/documents/" + liveCase.Filename})
 	deliverData, _ := json.Marshal(map[string]any{"deliveredPaths": []string{devicePath}, "attachmentCount": 1})
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: toolcontract.BashToolName, ToolInput: commandInput, Output: toolcontract.ToolOutput{Content: liveCase.Output, Data: commandData}},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", ToolInput: commandInput}, Action: "continue", Tool: toolcontract.BashToolName, Output: toolcontract.ToolOutput{Content: liveCase.Output, Data: commandData}},
 		{
-			ObservationID: "obs-002", Action: "continue", Tool: toolcontract.FileDeliverToolName, ToolInput: deliverInput,
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", ToolInput: deliverInput, Effects: []toolcontract.ResourceEffect{{ObjectType: "file", Effect: "attached", Path: devicePath}}},
+			Action:         "continue", Tool: toolcontract.FileDeliverToolName,
 			Output:      toolcontract.ToolOutput{Content: "files delivered", Data: deliverData},
-			Effects:     []toolcontract.ResourceEffect{{ObjectType: "file", Effect: "attached", Path: devicePath}},
 			Attachments: []toolcontract.FileAttachment{{DevicePath: devicePath, Filename: liveCase.Filename, ContentType: liveCase.ContentType, SizeBytes: liveCase.SizeBytes, Holds: liveCase.Holds}},
 		},
 	}

@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -19,12 +20,10 @@ func labelledTaskToolSet() *toolcontract.ToolSet {
 
 func taskUpdatedWith(input string) []turnObservation {
 	return []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "task_update",
-		ToolInput:     json.RawMessage(input),
-		Output:        toolcontract.ToolOutput{Data: json.RawMessage(`{"taskID":"task-1"}`)},
-		Effects:       []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "updated", ID: "task-1"}},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", ToolInput: json.RawMessage(input), Effects: []toolcontract.ResourceEffect{{ObjectType: "task", Effect: "updated", ID: "task-1"}}},
+		Action:         "continue",
+		Tool:           "task_update",
+		Output:         toolcontract.ToolOutput{Data: json.RawMessage(`{"taskID":"task-1"}`)},
 	}}
 }
 

@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -9,10 +10,10 @@ import (
 
 func longToolObservation(observationID string, characterCount int) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          toolcontract.BashToolName,
-		Output:        toolcontract.ToolOutput{Content: strings.Repeat("x", characterCount)},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID},
+		Action:         "continue",
+		Tool:           toolcontract.BashToolName,
+		Output:         toolcontract.ToolOutput{Content: strings.Repeat("x", characterCount)},
 	}
 }
 

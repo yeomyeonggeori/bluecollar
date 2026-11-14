@@ -41,12 +41,10 @@ func recoveryGuidanceObservation(toolSet *toolcontract.ToolSet, index int, obser
 	packet := buildRecoveryPacket(observation)
 	content := recoveryGuidanceContent(toolSet, observation, originalInstruction) + " " + recoveryPacketContent(packet)
 	return turnObservation{
-		ObservationID:        nextObservationID(index),
+		ToolCallResult:       agentcontract.ToolCallResult{ObservationID: nextObservationID(index), Summary: content, Failure: observation.Failure},
 		Action:               "recovery_guidance",
 		Tool:                 observation.Tool,
 		Output:               toolcontract.ToolOutput{Content: content},
-		Summary:              content,
-		Failure:              observation.Failure,
 		ToolInputKey:         observation.ToolInputKey,
 		RecoveryPacket:       &packet,
 		RecoveryAttemptKey:   observation.RecoveryAttemptKey,

@@ -864,10 +864,10 @@ func TestALimitStopDoesNotCarryAFileAReplyAlreadyDelivered(t *testing.T) {
 		Attachments:              []toolcontract.FileAttachment{staged},
 		DeliveredAttachmentPaths: []string{staged.DevicePath},
 		Observations: []turnObservation{{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          toolcontract.FileDeliverToolName,
-			Attachments:   []toolcontract.FileAttachment{staged},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+			Action:         "continue",
+			Tool:           toolcontract.FileDeliverToolName,
+			Attachments:    []toolcontract.FileAttachment{staged},
 		}},
 	}
 

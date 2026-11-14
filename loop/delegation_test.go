@@ -147,7 +147,7 @@ func TestAChildDoesNotDelegateAgainAndSpendsTheParentsBudget(t *testing.T) {
 
 func TestDelegationStopsAtTheLimitAndSaysWhy(t *testing.T) {
 	runner := NewAgentTurnRunner(nil, nil, nil, nil, TurnOptions{DelegationLimit: 1})
-	state := &agentTaskState{Observations: []turnObservation{{ObservationID: "obs-1", Action: "delegate"}}}
+	state := &agentTaskState{Observations: []turnObservation{{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-1"}, Action: "delegate"}}}
 
 	observation := runner.runDelegatedTurn(context.Background(), "task-1", state, turnActionDocument{Action: "delegate", Instruction: "do the other half"})
 

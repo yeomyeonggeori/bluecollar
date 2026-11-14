@@ -14,7 +14,7 @@ func TestStalledOnRedundantInspectionDetectsCacheHit(t *testing.T) {
 	if !stalledOnRedundantInspection([]turnObservation{cacheHit}) {
 		t.Fatal("expected a trailing file_read cache hit to signal a redundant inspection stall")
 	}
-	if stalledOnRedundantInspection([]turnObservation{{Summary: "wrote App.tsx"}}) {
+	if stalledOnRedundantInspection([]turnObservation{{ToolCallResult: agentcontract.ToolCallResult{Summary: "wrote App.tsx"}}}) {
 		t.Fatal("expected a non-cache-hit trailing observation to not signal a read stall")
 	}
 	if stalledOnRedundantInspection(nil) {
@@ -72,10 +72,10 @@ func TestStallRecoveryBudgetRefreshesAfterRealProgress(t *testing.T) {
 	tracker.stallRecoveryDirectiveCount = maxStallRecoveryDirectivesPerEpisode
 
 	progressObservations := []turnObservation{{
-		ObservationID: "obs-progress",
-		Action:        "continue",
-		Tool:          "write",
-		Output:        toolcontract.ToolOutput{Content: `{"path":"app.tsx"}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-progress"},
+		Action:         "continue",
+		Tool:           "write",
+		Output:         toolcontract.ToolOutput{Content: `{"path":"app.tsx"}`},
 	}}
 	evaluation := tracker.evaluate(progressObservations)
 
@@ -93,7 +93,7 @@ func TestContinueStalledRecoverySkipsFinishStall(t *testing.T) {
 	failedBuild.ToolInputKey = "bash:build"
 	state := &agentTaskState{Observations: []turnObservation{
 		failedBuild,
-		{ObservationID: "obs-002", Action: "evidence_missing", Summary: "finish is missing required expected result"},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", Summary: "finish is missing required expected result"}, Action: "evidence_missing"},
 	}}
 	tracker := newActionProgressTracker(state.Observations)
 

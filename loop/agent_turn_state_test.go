@@ -283,12 +283,11 @@ func TestDecideAgentActionNativeChatRetryRequiresSinglePendingContractTool(t *te
 		{
 			name: "next operation",
 			observations: []turnObservation{{
-				ObservationID: "observation-1",
-				Action:        "continue",
-				Tool:          "write",
-				ToolID:        "kernel:write",
-				ToolInput:     json.RawMessage(`{"path":"report.txt"}`),
-				Output:        toolcontract.ToolOutput{Content: "written"},
+				ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-1", ToolInput: json.RawMessage(`{"path":"report.txt"}`)},
+				Action:         "continue",
+				Tool:           "write",
+				ToolID:         "kernel:write",
+				Output:         toolcontract.ToolOutput{Content: "written"},
 			}},
 			expectedToolName: toolcontract.BashToolName,
 		},
@@ -352,11 +351,10 @@ func TestDecideAgentActionNativeChatRetryPreservesModelChoiceOutsidePendingContr
 			name: "failure debt",
 			updateState: func(state agentTaskState) agentTaskState {
 				state.Observations = []turnObservation{{
-					ObservationID: "observation-1",
-					Action:        "continue",
-					Tool:          "write",
-					ToolInputKey:  "write\x00{}",
-					Failure:       &toolcontract.ToolFailure{Code: "write_failed"},
+					ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-1", Failure: &toolcontract.ToolFailure{Code: "write_failed"}},
+					Action:         "continue",
+					Tool:           "write",
+					ToolInputKey:   "write\x00{}",
 				}}
 				return state
 			},
@@ -417,11 +415,10 @@ func TestFirstPendingActionToolNameUsesRequiredNextTools(t *testing.T) {
 		successfulContractObservation("observation-1", toolcontract.BashToolName, "kernel:bash", `{"command":"ls"}`),
 		successfulContractObservation("observation-2", "write", "kernel:write", `{"path":"report.txt"}`),
 		{
-			ObservationID: "observation-3",
-			Action:        "continue",
-			Tool:          toolcontract.BashToolName,
-			ToolInputKey:  toolcontract.BashToolName + "\x00{}",
-			Failure:       &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "observation-3", Failure: &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()}},
+			Action:         "continue",
+			Tool:           toolcontract.BashToolName,
+			ToolInputKey:   toolcontract.BashToolName + "\x00{}",
 		},
 	}
 	if toolName := firstPendingRequiredToolName(state.Request.ContractToolWorkingSet.RequiredNextTools, state.Observations); toolName != toolcontract.BashToolName {
@@ -717,12 +714,11 @@ func nativeAgentActionContractState() agentTaskState {
 
 func successfulContractObservation(observationID string, toolName string, toolID string, toolInput string) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          toolName,
-		ToolID:        toolID,
-		ToolInput:     json.RawMessage(toolInput),
-		Output:        toolcontract.ToolOutput{Content: "succeeded"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID, ToolInput: json.RawMessage(toolInput)},
+		Action:         "continue",
+		Tool:           toolName,
+		ToolID:         toolID,
+		Output:         toolcontract.ToolOutput{Content: "succeeded"},
 	}
 }
 
@@ -1360,13 +1356,12 @@ func TestDecodeLegacyObservationNormalizesMemorySearchFailureCode(t *testing.T) 
 
 func TestUserResumeClearsInheritedFailureDebt(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-001", Action: "continue", Tool: "task_update", Output: toolcontract.ToolOutput{Content: `{"taskID":"task-1"}`}},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Action: "continue", Tool: "task_update", Output: toolcontract.ToolOutput{Content: `{"taskID":"task-1"}`}},
 		{
-			ObservationID: "obs-002",
-			Action:        "continue",
-			Tool:          "task_update",
-			Failure:       &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()},
-			ToolInputKey:  "task_update\x00{\"taskID\":\"task-1\"}",
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", Failure: &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.OperationFailed.String()}},
+			Action:         "continue",
+			Tool:           "task_update",
+			ToolInputKey:   "task_update\x00{\"taskID\":\"task-1\"}",
 		},
 	}
 	if _, hasDebt := activeFailureDebt(observations); !hasDebt {
@@ -1467,11 +1462,9 @@ func TestTheExitIsNotOnTheMenuBeforeAnythingHasGoneWrong(t *testing.T) {
 func TestAToolResultArrivesOnTheCallThatProducedIt(t *testing.T) {
 	state := nativeAgentActionTestState()
 	state.Observations = []turnObservation{{
-		ObservationID: "obs-007",
-		Action:        "continue",
-		Tool:          "bash",
-		ToolInput:     json.RawMessage(`{"command":"cli venmo --help"}`),
-		Summary:       "usage: cli venmo [show_balance|send_money]",
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-007", ToolInput: json.RawMessage(`{"command":"cli venmo --help"}`), Summary: "usage: cli venmo [show_balance|send_money]"},
+		Action:         "continue",
+		Tool:           "bash",
 	}}
 
 	request := nativeAgentActionRequestFor(t, state)
@@ -1494,11 +1487,9 @@ func TestAToolResultArrivesOnTheCallThatProducedIt(t *testing.T) {
 func TestTheToolMessageCarriesWhatTheToolReturned(t *testing.T) {
 	state := nativeAgentActionTestState()
 	observation := turnObservation{
-		ObservationID: "obs-011",
-		Action:        "continue",
-		Tool:          "file_read",
-		ToolInput:     json.RawMessage(`{"path":"venmo-help.txt"}`),
-		Summary:       "path=venmo-help.txt; range=1-6; totalLines=6; sizeBytes=125",
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-011", ToolInput: json.RawMessage(`{"path":"venmo-help.txt"}`), Summary: "path=venmo-help.txt; range=1-6; totalLines=6; sizeBytes=125"},
+		Action:         "continue",
+		Tool:           "file_read",
 	}
 	observation.Output.Content = "Usage: cli venmo [OPTIONS] COMMAND\n\nCommands:\n  send_money    Send money\n"
 	state.Observations = []turnObservation{observation}
@@ -1517,11 +1508,9 @@ func TestTheToolMessageCarriesWhatTheToolReturned(t *testing.T) {
 func TestAResultCarriedNativelyIsNotAlsoRetoldInTheSystemSection(t *testing.T) {
 	state := nativeAgentActionTestState()
 	state.Observations = []turnObservation{{
-		ObservationID: "obs-007",
-		Action:        "continue",
-		Tool:          "bash",
-		ToolInput:     json.RawMessage(`{"command":"cli venmo --help"}`),
-		Summary:       "usage: cli venmo [show_balance|send_money]",
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-007", ToolInput: json.RawMessage(`{"command":"cli venmo --help"}`), Summary: "usage: cli venmo [show_balance|send_money]"},
+		Action:         "continue",
+		Tool:           "bash",
 	}}
 
 	request := nativeAgentActionRequestFor(t, state)
@@ -1555,7 +1544,7 @@ func lastToolCallPair(t *testing.T, messages []model.ChatCompletionMessage) (mod
 }
 
 func refusalObservation(observationID string) turnObservation {
-	return turnObservation{ObservationID: observationID, Action: "evidence_missing", Tool: "bash"}
+	return turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID}, Action: "evidence_missing", Tool: "bash"}
 }
 
 func TestAnAgentToldThreeTimesAlsoGetsFinishBack(t *testing.T) {
@@ -1609,7 +1598,7 @@ func TestAnAgentToldThreeTimesItHasNotDoneTheTaskCanSaySoItCannot(t *testing.T) 
 
 func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T) {
 	stored := strings.Repeat("endpoint: send_money\n", 1600)
-	observation := turnObservation{ObservationID: "obs-009", Tool: "bash"}
+	observation := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-009"}, Tool: "bash"}
 	observation.Output.Content = stored
 
 	carried := toolResultForTranscript(observation)
@@ -1621,10 +1610,10 @@ func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T)
 
 func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 	observation := turnObservation{
-		Action:        "continue",
-		ObservationID: "obs-004",
-		Tool:          toolcontract.BashToolName,
-		AssistantText: "The contacts list has no venmo field, so I have to cross-reference the venmo account list instead.",
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-004"},
+		Action:         "continue",
+		Tool:           toolcontract.BashToolName,
+		AssistantText:  "The contacts list has no venmo field, so I have to cross-reference the venmo account list instead.",
 	}
 	observation.Output.Content = "ok"
 
@@ -1636,7 +1625,7 @@ func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 }
 
 func TestATranscriptEntryWithNoReasoningCarriesNone(t *testing.T) {
-	observation := turnObservation{ObservationID: "obs-005", Action: "continue", Tool: toolcontract.BashToolName}
+	observation := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-005"}, Action: "continue", Tool: toolcontract.BashToolName}
 	observation.Output.Content = "ok"
 
 	transcript := toolCallTranscript([]turnObservation{observation})

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"reflect"
 	"strings"
 	"sync"
@@ -125,13 +126,12 @@ func nonToolObservations(observations []turnObservation) []turnObservation {
 
 func assistantOnlyObservation(observation turnObservation) turnObservation {
 	return turnObservation{
-		ObservationID:       observation.ObservationID,
+		ToolCallResult:      agentcontract.ToolCallResult{ObservationID: observation.ObservationID, Summary: observation.AssistantText},
 		Action:              "assistant_message",
 		AssistantText:       observation.AssistantText,
 		ModelReasoning:      observation.ModelReasoning,
 		ModelReasoningField: observation.ModelReasoningField,
 		Output:              toolcontract.ToolOutput{Content: observation.AssistantText},
-		Summary:             observation.AssistantText,
 	}
 }
 

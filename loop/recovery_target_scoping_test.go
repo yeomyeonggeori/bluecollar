@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -9,11 +10,10 @@ import (
 
 func failureDebtForFailedCall(toolName string, inputDocument string) FailureDebt {
 	return FailureDebt{LatestFailure: turnObservation{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          toolName,
-		ToolInputKey:  canonicalToolCallKey(toolName, json.RawMessage(inputDocument)),
-		Failure:       &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.NotFound.String()},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Failure: &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.NotFound.String()}},
+		Action:         "continue",
+		Tool:           toolName,
+		ToolInputKey:   canonicalToolCallKey(toolName, json.RawMessage(inputDocument)),
 	}}
 }
 
@@ -69,9 +69,9 @@ func TestRetryingTheSameToolOnADifferentTargetIsStillACorrectedRetry(t *testing.
 
 func TestIndependentWorkIsNeverRefused(t *testing.T) {
 	observations := []turnObservation{
-		{ObservationID: "obs-002", Action: "continue", Tool: "calendar_delete", Failure: &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.NotFound.String()}, ToolInputKey: "calendar_delete\x00{\"eventHint\":\"A\"}"},
-		{ObservationID: "obs-003", RecoveryStep: recoveryStepIndependentWork},
-		{ObservationID: "obs-004", RecoveryStep: recoveryStepIndependentWork},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", Failure: &toolcontract.ToolFailure{Code: toolcontract.FailureCodes.NotFound.String()}}, Action: "continue", Tool: "calendar_delete", ToolInputKey: "calendar_delete\x00{\"eventHint\":\"A\"}"},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-003"}, RecoveryStep: recoveryStepIndependentWork},
+		{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-004"}, RecoveryStep: recoveryStepIndependentWork},
 	}
 	if !recoveryBudgetAllowsStep(observations, exhaustedRecoveryBudgetForTest(), recoveryStepIndependentWork, "") {
 		t.Fatal("work on another object must stay available after the failed call's budget is gone")

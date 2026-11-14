@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -29,10 +30,10 @@ func TestQualityReviewRequiresPassingEvidence(t *testing.T) {
 		Evidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "bash"}},
 	}}
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "bash",
-		Output:        toolcontract.ToolOutput{Content: "ok"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "bash",
+		Output:         toolcontract.ToolOutput{Content: "ok"},
 	}}
 
 	if errorValue := validateQualityReview(criteria, review, observations); errorValue != nil {
@@ -48,10 +49,10 @@ func TestQualityReviewRejectsFailedCriterion(t *testing.T) {
 		Evidence: []completionEvidenceReference{{ObservationID: "obs-001", ToolName: "file_deliver"}},
 	}}
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "file_deliver",
-		Output:        toolcontract.ToolOutput{Content: "file attached"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "file_deliver",
+		Output:         toolcontract.ToolOutput{Content: "file attached"},
 	}}
 
 	if errorValue := validateQualityReview(criteria, review, observations); errorValue == nil {
@@ -85,10 +86,10 @@ func TestCompletionGateTreatsFailedDeclaredQualityCriterionAsReviewHint(t *testi
 		Message: "Done.",
 	}
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "task_update",
-		Output:        toolcontract.ToolOutput{Content: `{"taskID":"task-1"}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "task_update",
+		Output:         toolcontract.ToolOutput{Content: `{"taskID":"task-1"}`},
 	}}
 
 	result := validateCompletionFacts(AgentTurnRequest{}, observations, actionDocument)
@@ -113,10 +114,10 @@ func TestCompletionGateUsesTypedEvidenceInsteadOfParsingFinishMessage(t *testing
 		Message: "Created the HTML file: sandbox:/mnt/data/Hermes_Agent_Analysis.html",
 	}
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "file_deliver",
-		Output:        toolcontract.ToolOutput{Content: "file attached"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "file_deliver",
+		Output:         toolcontract.ToolOutput{Content: "file attached"},
 		Attachments: []toolcontract.FileAttachment{{
 			Filename:   "hermes-analysis.html",
 			DevicePath: "/workspace/hermes-analysis.html",
@@ -139,10 +140,10 @@ func TestCompletionGateDoesNotInferAttachmentsFromFinishMessage(t *testing.T) {
 		Message:            "Created the requested file and attached it: Hermes_Agent_Analysis.html",
 	}
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "file_deliver",
-		Output:        toolcontract.ToolOutput{Content: "file attached"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "file_deliver",
+		Output:         toolcontract.ToolOutput{Content: "file attached"},
 		Attachments: []toolcontract.FileAttachment{{
 			Filename:   "hermes-analysis.html",
 			DevicePath: "/workspace/hermes-analysis.html",
