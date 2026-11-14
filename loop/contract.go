@@ -157,14 +157,12 @@ var (
 	NormalizePlan                        = toolcontract.NormalizePlan
 	normalizePlanSteps                   = toolcontract.NormalizePlanSteps
 
-	ObservationIDFromContext     = toolcontract.ObservationIDFromContext
-	ResponseLanguageFromContext  = toolcontract.ResponseLanguageFromContext
-	TaskRunIDFromContext         = toolcontract.TaskRunIDFromContext
-	UserFacingMessageFromContext = toolcontract.UserFacingMessageFromContext
-	WithObservationID            = toolcontract.WithObservationID
-	WithResponseLanguage         = toolcontract.WithResponseLanguage
-	WithTaskRunID                = toolcontract.WithTaskRunID
-	WithUserFacingMessage        = toolcontract.WithUserFacingMessage
+	ObservationIDFromContext    = toolcontract.ObservationIDFromContext
+	ResponseLanguageFromContext = toolcontract.ResponseLanguageFromContext
+	TaskRunIDFromContext        = toolcontract.TaskRunIDFromContext
+	WithObservationID           = toolcontract.WithObservationID
+	WithResponseLanguage        = toolcontract.WithResponseLanguage
+	WithTaskRunID               = toolcontract.WithTaskRunID
 
 	appendUniqueStrings         = toolcontract.AppendUniqueStrings
 	taskLevelRank               = turnclassification.TaskLevelRank

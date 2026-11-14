@@ -138,7 +138,7 @@ func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.Ques
 	return worded, errorValue
 }
 
-const voiceInstruction = "You are the agent asking, so ask the way you speak to this requester everywhere else:\n"
+const voiceInstruction = "You are the agent the lines below describe, asking the requester they describe. Ask in that tone and address the requester as they say. Do not introduce yourself, and add nothing these lines do not ask for:\n"
 
 func questionMessages(facts holdrecord.QuestionFacts, encodedContext []byte) []model.Message {
 	messages := []model.Message{
