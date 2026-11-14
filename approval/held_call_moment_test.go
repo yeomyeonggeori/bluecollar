@@ -40,7 +40,7 @@ func TestAMomentWhoseReaderTimeZoneIsUnknownSaysWhichOffsetItIsIn(t *testing.T) 
 	}
 }
 
-func TestATargetsStartIsPrintedForAPersonAndHandedToTheModelAsTheInstant(t *testing.T) {
+func TestATargetsStartIsPrintedForAPersonAndLeftOutOfTheWording(t *testing.T) {
 	languageModel := &wordingLanguageModel{question: "회의를 지울까요?", labels: map[string]string{"resolvedTarget": "일정", "resolvedTargetStartsAt": "시작"}}
 	facts := holdrecord.QuestionFacts{
 		ResponseLanguage:  "ko",
@@ -55,7 +55,7 @@ func TestATargetsStartIsPrintedForAPersonAndHandedToTheModelAsTheInstant(t *test
 	if wording.Text != "회의를 지울까요?\n\n일정: 주간 회의\n시작: 2026년 8월 18일 (화) 오후 2:00" {
 		t.Fatalf("a person reads the start as a date and time, got %q", wording.Text)
 	}
-	if !strings.Contains(languageModel.promptSeen(), `"resolvedTargetStartsAt":"2026-08-18T14:00:00+09:00"`) {
-		t.Fatalf("the wording model reads the exact instant, got %s", languageModel.promptSeen())
+	if strings.Contains(languageModel.promptSeen(), "2026-08-18") {
+		t.Fatalf("the start is printed beneath the question, so the wording model is never shown it, got %s", languageModel.promptSeen())
 	}
 }

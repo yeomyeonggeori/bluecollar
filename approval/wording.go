@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
@@ -15,26 +16,20 @@ import (
 
 type questionContext struct {
 	ResponseLanguage string                     `json:"responseLanguage,omitempty"`
-	OriginalRequest  string                     `json:"originalRequest,omitempty"`
-	ModelDraft       string                     `json:"modelDraft,omitempty"`
 	Operation        string                     `json:"operation,omitempty"`
 	ActionDetails    map[string]json.RawMessage `json:"actionDetails,omitempty"`
 	PrintedBelow     []string                   `json:"printedBelow"`
 	Choices          []holdrecord.Choice        `json:"choices,omitempty"`
 }
 
-const questionSystemPrompt = `Write exactly one user-facing approval question.
-The question asks whether to perform the pending action.
-Beneath your question the runtime prints the values listed in printedBelow exactly as they will be carried out, each under the label you give it in labels. A label is a few plain words in the reply language for what that value is to the requester, such as who receives it or what is sent; never the detail's own name. Never quote, paraphrase, or repeat those values in the question, even where the original request or the model draft does. Every other action detail is shown nowhere else, so the question states each one in plain words: a setting by what it does, never by its field name, a bare true or false, or a code.
-Write one short asking sentence that names the action and whom or what it reaches in plain words, from the original request and the action details. When the action details name a resolved target, name it that way and never repeat a search phrase the caller typed.
-When the action changes or removes something that already exists, say what it affects, and never describe a whole-item replacement as if it only touched a part of it.
+const questionSystemPrompt = `Write exactly one user-facing approval question that asks whether to perform the operation.
+Beneath your question the runtime prints the values named in printedBelow exactly as they will be carried out, each under the label you give it in labels. You are not shown those values: the requester reads them there, so the question names the action and leaves them to the lines beneath it. A label is a few plain words in the reply language for what its value is to the requester, such as who receives it or what is sent; never the detail's own name.
+The values in actionDetails are shown nowhere else, so the question states each one in plain words: a setting by what it does, never by its field name, a bare true or false, or a code. A requester approving the action must know them.
+When the action changes or removes something that already exists, say what kind of thing it affects, and never describe a whole-item replacement as if it only touched a part of it.
 ` + agentcontract.PeopleReadWhatTheyRecognize + `
 Do not mention schemas, approval gates, the runtime, or implementation details.
-Do not answer the question, report status, or explain the policy.
-The question covers this one action and nothing after it. The original request is there to name what the action touches, never to describe the work it is a step toward.
-Never promise a later step this action does not perform. Approving it must not read as approving anything that has to happen afterwards.
-State each consequence the action details list plainly; a requester approving it must know them.
-Unless choices are given, write no options, no numbered list and no instructions for how to answer: the conversation shows the requester how to approve or decline. A list in the model draft or the original request is not a choice; never carry it over.
+Do not answer the question, report status, or explain the policy. The question covers this one action and nothing after it.
+Unless choices are given, write no options, no numbered list and no instructions for how to answer: the conversation shows the requester how to approve or decline.
 When choices are given, the question offers exactly those choices, in the order given, followed by cancelling, as a short numbered list the requester can answer by number. A choice with startsAt runs the action at that moment, written as a local date and time; a choice without startsAt runs it now. Offer no choice that is not given.`
 
 const handoffSystemPrompt = `Write exactly one short user-facing message that hands the requester the agent's browser so they can do one step in it themselves.
@@ -85,7 +80,6 @@ func (gate *Gate) wordQuestion(ctx context.Context, request approvalRequest) str
 func (request approvalRequest) questionFacts() holdrecord.QuestionFacts {
 	return holdrecord.QuestionFacts{
 		ResponseLanguage: request.turn.ResponseLanguage,
-		OriginalRequest:  request.turn.Prompt,
 		Tool:             request.toolDefinition,
 		Input:            request.toolInput,
 	}
@@ -118,11 +112,7 @@ func (redo answerToRedo) Unwrap() error {
 
 var errQuestionSpansLines = errors.New("the approval question spans more than one line, where only the asking sentence belongs")
 
-var errLabelRepeatsItsValue = errors.New("the model labelled a printed detail with the value it labels")
-
 const oneLineAgain = "Your question spans more than one line. Write it again as the one asking sentence alone: the conversation shows how to answer, and the runtime prints the values in printedBelow beneath it."
-
-const labelsAgain = "A label you gave is the very value it labels, so the line would read as that value twice. Write the labels again: each says what its value is to the requester, such as who receives it or what is sent."
 
 func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.QuestionFacts) (wordedQuestion, error) {
 	if worder.languageModel == nil {
@@ -137,7 +127,7 @@ func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.Ques
 	if errorValue != nil {
 		return wordedQuestion{}, errorValue
 	}
-	asking := questionAsking{facts: facts, details: questionContext.ActionDetails, printedBelow: questionContext.PrintedBelow, schema: model.StructuredOutputSchema{Name: questionSchemaName, Document: schemaDocument, IsStrictlyEnforced: true}}
+	asking := questionAsking{facts: facts, printedBelow: questionContext.PrintedBelow, schema: model.StructuredOutputSchema{Name: questionSchemaName, Document: schemaDocument, IsStrictlyEnforced: true}}
 	messages := []model.Message{
 		{Role: "system", Content: systemPromptFor(facts)},
 		{Role: "system", Content: agentcontract.ResponseLanguageInstruction(facts.ResponseLanguage)},
@@ -154,7 +144,6 @@ func (worder Worder) generateQuestion(ctx context.Context, facts holdrecord.Ques
 
 type questionAsking struct {
 	facts        holdrecord.QuestionFacts
-	details      map[string]json.RawMessage
 	printedBelow []string
 	schema       model.StructuredOutputSchema
 }
@@ -174,19 +163,7 @@ func (worder Worder) askForQuestion(ctx context.Context, asking questionAsking, 
 	if mustFitOneLine(asking.facts) && strings.Contains(worded.Question, "\n") {
 		return wordedQuestion{}, structuredResponse.Content, answerToRedo{failure: errQuestionSpansLines, again: oneLineAgain}
 	}
-	if labelRepeatsItsValue(worded.Labels, asking.details) {
-		return wordedQuestion{}, structuredResponse.Content, answerToRedo{failure: errLabelRepeatsItsValue, again: labelsAgain}
-	}
 	return worded, structuredResponse.Content, nil
-}
-
-func labelRepeatsItsValue(labels map[string]string, details map[string]json.RawMessage) bool {
-	for name, label := range labels {
-		if label == strings.TrimSpace(detailText(details[name])) {
-			return true
-		}
-	}
-	return false
 }
 
 func questionSchemaFor(printedBelow []string) (string, error) {
@@ -249,15 +226,27 @@ func readLabels(answered map[string]string, printedBelow []string) (map[string]s
 
 func newQuestionContext(facts holdrecord.QuestionFacts) questionContext {
 	details := actionDetails(facts)
+	printedBelow := printedDetailNames(facts, details)
 	return questionContext{
 		ResponseLanguage: strings.TrimSpace(facts.ResponseLanguage),
-		OriginalRequest:  strings.TrimSpace(facts.OriginalRequest),
-		ModelDraft:       strings.TrimSpace(facts.ModelDraft),
 		Operation:        strings.TrimSpace(facts.Tool.Name),
-		ActionDetails:    details,
-		PrintedBelow:     printedDetailNames(facts, details),
+		ActionDetails:    detailsLeftToTheQuestion(details, printedBelow),
+		PrintedBelow:     printedBelow,
 		Choices:          facts.Choices,
 	}
+}
+
+func detailsLeftToTheQuestion(details map[string]json.RawMessage, printedBelow []string) map[string]json.RawMessage {
+	left := map[string]json.RawMessage{}
+	for name, value := range details {
+		if !slices.Contains(printedBelow, name) {
+			left[name] = value
+		}
+	}
+	if len(left) == 0 {
+		return nil
+	}
+	return left
 }
 
 func actionDetails(facts holdrecord.QuestionFacts) map[string]json.RawMessage {

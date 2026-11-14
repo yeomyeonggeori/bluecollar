@@ -38,7 +38,6 @@ func assertEnglishApprovalQuestion(t *testing.T, provider model.LanguageModelPro
 	t.Helper()
 	facts := holdrecord.QuestionFacts{
 		ResponseLanguage: responseLanguage,
-		OriginalRequest:  "Example Ventures asked for our company materials. Send Sam Sample a data room link.",
 		Tool:             toolcontract.ToolDefinition{Name: "dataroom_link_add", ApprovalInputFields: []string{"circleID", "label", "canDownload", "lifetimeHours"}},
 		Input:            json.RawMessage(`{"circleID":"investor","label":"Company materials for Sam Sample (Example Ventures)","canDownload":true,"lifetimeHours":72}`),
 	}

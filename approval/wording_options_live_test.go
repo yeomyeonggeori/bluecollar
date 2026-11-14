@@ -38,32 +38,23 @@ func liveWordingProvider(t *testing.T) model.LanguageModelProvider {
 
 func TestLiveAnApprovalWithNoChoicesListsNoOptions(t *testing.T) {
 	worder := NewWorder(liveWordingProvider(t))
-	for _, modelDraft := range []string{"", "박예시님께 DM으로 '테스트'를 보낼까요?\n\n1. 지금 보내기\n2. 취소"} {
-		assertTheMessageIsAskedAboutInPlainWords(t, worder, modelDraft)
-	}
-}
-
-func assertTheMessageIsAskedAboutInPlainWords(t *testing.T, worder Worder, modelDraft string) {
-	t.Helper()
 	facts := holdrecord.QuestionFacts{
 		ResponseLanguage: "ko",
-		OriginalRequest:  "박예시한테 '테스트'라고 DM 보내봐",
-		ModelDraft:       modelDraft,
 		Tool:             toolcontract.ToolDefinition{Name: "message_send", ApprovalQuotedFields: []string{"message", "attachments"}},
 		Input:            json.RawMessage(`{"targetType":"directMessage","personHint":"박예시","message":"테스트"}`),
 		Target:           agentcontract.ApprovalTarget{InputField: "personHint", ID: "person-2", Title: "박예시"},
 	}
-	for attempt := 1; attempt <= 5; attempt++ {
+	for attempt := 1; attempt <= 10; attempt++ {
 		worded, errorValue := worder.generateQuestion(context.Background(), facts)
 		if errorValue != nil {
-			t.Fatalf("draft %q attempt %d: the wording model failed: %v", modelDraft, attempt, errorValue)
+			t.Fatalf("attempt %d: the wording model failed: %v", attempt, errorValue)
 		}
-		t.Logf("draft %q attempt %d: %q labels %q", modelDraft, attempt, worded.Question, worded.Labels)
+		t.Logf("attempt %d: %q labels %q", attempt, worded.Question, worded.Labels)
 		if numberedLine.MatchString(worded.Question) {
-			t.Errorf("draft %q attempt %d: an approval with no choices was worded with a numbered list of options: %q", modelDraft, attempt, worded.Question)
+			t.Errorf("attempt %d: an approval with no choices was worded with a numbered list of options: %q", attempt, worded.Question)
 		}
-		if strings.Contains(worded.Question, "테스트") {
-			t.Errorf("draft %q attempt %d: the question repeats the message printed beneath it: %q", modelDraft, attempt, worded.Question)
+		if containsAny(worded.Question, "테스트", "박예시") {
+			t.Errorf("attempt %d: the question repeats a value printed beneath it: %q", attempt, worded.Question)
 		}
 		assertLabelsArePlainWords(t, worded.Labels, []string{"resolvedTarget", "message"})
 	}
@@ -88,7 +79,6 @@ func TestLiveASettingNobodyQuotesIsStatedInPlainWords(t *testing.T) {
 	worder := NewWorder(liveWordingProvider(t))
 	facts := holdrecord.QuestionFacts{
 		ResponseLanguage: "ko",
-		OriginalRequest:  "예시벤처스가 회사 자료를 달래. 데이터룸 링크 하나 만들어줘",
 		Tool:             toolcontract.ToolDefinition{Name: "dataroom_link_add"},
 		Input:            json.RawMessage(`{"circleID":"investor","label":"예시벤처스 회사 자료","canDownload":true,"lifetimeHours":72}`),
 	}

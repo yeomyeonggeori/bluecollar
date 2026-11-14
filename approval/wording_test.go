@@ -72,22 +72,25 @@ func TestTheWordingModelIsToldTheQuestionCoversThisOneAction(t *testing.T) {
 	}
 }
 
-func TestTheWordingModelIsToldOnlyGivenChoicesAreOffered(t *testing.T) {
-	languageModel := &wordingLanguageModel{question: "일정을 지울까요?"}
-	fixture := newFixtureWith(t, languageModel, &scriptedAsker{})
+func TestTheWordingModelIsShownNoValueThePersonReadsBeneathTheQuestion(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "DM을 보낼까요?", labels: heldMessageLabels}
 
-	fixture.awaitOutcome(fixture.request())
+	NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
 
 	prompt := languageModel.promptSeen()
-	if !strings.Contains(prompt, "A list in the model draft or the original request is not a choice; never carry it over.") {
-		t.Fatalf("a draft's list must not reach the requester as options the runtime never offered, got %s", prompt)
+	for _, printedValue := range []string{"박예시", "내일 회의를 10시로"} {
+		if strings.Contains(prompt, printedValue) {
+			t.Fatalf("a value printed beneath the question must have one writer, the runtime, yet the wording model was shown %q in %s", printedValue, prompt)
+		}
+	}
+	if !strings.Contains(prompt, `"printedBelow":["resolvedTarget","message"]`) || !strings.Contains(prompt, `"actionDetails":{"targetType":"directMessage"}`) {
+		t.Fatalf("the wording model labels the printed values by name and words every other detail, got %s", prompt)
 	}
 }
 
 func hostFactsFixture() holdrecord.QuestionFacts {
 	return holdrecord.QuestionFacts{
 		ResponseLanguage: "en",
-		ModelDraft:       "Shall I delete tomorrow's sync?",
 		Tool:             toolcontract.ToolDefinition{Name: "calendar_event_delete"},
 		Input:            json.RawMessage(`{"eventHint":"sync","approvalRequired":true}`),
 		Target:           agentcontract.ApprovalTarget{InputField: "eventHint", ID: "event-7", Title: "Team sync", Preview: "Tomorrow 10:00, 6 attendees"},
@@ -95,24 +98,24 @@ func hostFactsFixture() holdrecord.QuestionFacts {
 	}
 }
 
-func TestAResolvedTargetReplacesTheSearchPhraseTheCallerTyped(t *testing.T) {
-	languageModel := &wordingLanguageModel{question: "Delete Team sync?"}
+func TestAResolvedTargetIsPrintedBeneathTheQuestionAndNeverWorded(t *testing.T) {
+	languageModel := &wordingLanguageModel{question: "Delete this event?"}
 
 	NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
 
 	prompt := languageModel.promptSeen()
-	if strings.Contains(prompt, `"eventHint"`) || !strings.Contains(prompt, `"resolvedTarget":"Team sync"`) || !strings.Contains(prompt, `"targetPreview":"Tomorrow 10:00, 6 attendees"`) {
-		t.Fatalf("a host that resolved the target hands the harness the event, not the phrase that found it, got %s", prompt)
+	if strings.Contains(prompt, "sync") || strings.Contains(prompt, "Tomorrow 10:00") || !strings.Contains(prompt, `"printedBelow":["resolvedTarget","targetPreview"]`) {
+		t.Fatalf("the resolved event is printed beneath the question, so neither it nor the phrase that found it reaches the wording model, got %s", prompt)
 	}
 }
 
-func TestTheChoicesAndTheModelDraftTravelWithTheFacts(t *testing.T) {
+func TestTheChoicesTravelWithTheFacts(t *testing.T) {
 	languageModel := &wordingLanguageModel{question: "Delete Team sync?"}
 
 	NewWorder(languageModel).WordQuestion(context.Background(), hostFactsFixture())
 
 	prompt := languageModel.promptSeen()
-	for _, expectedFragment := range []string{`"modelDraft":"Shall I delete tomorrow's sync?"`, `"choices":[{"key":"1","label":"Now"},{"key":"2","startsAt":"2026-10-07T09:00:00+09:00","label":"Tomorrow 9:00"}]`} {
+	for _, expectedFragment := range []string{`"choices":[{"key":"1","label":"Now"},{"key":"2","startsAt":"2026-10-07T09:00:00+09:00","label":"Tomorrow 9:00"}]`} {
 		if !strings.Contains(prompt, expectedFragment) {
 			t.Fatalf("expected %q in %s", expectedFragment, prompt)
 		}
@@ -132,7 +135,6 @@ func TestAWordingThatFailsReturnsTheRawSummaryAndTheFailure(t *testing.T) {
 func heldMessageFacts() holdrecord.QuestionFacts {
 	return holdrecord.QuestionFacts{
 		ResponseLanguage: "ko",
-		OriginalRequest:  "박예시한테 내일 회의 시간 물어봐줘",
 		Tool:             toolcontract.ToolDefinition{Name: "message_send", ApprovalQuotedFields: []string{"message", "attachments"}},
 		Input:            json.RawMessage(`{"targetType":"directMessage","personHint":"박예시","message":"내일 회의를 10시로 옮겨도 될까요?\n안 되면 알려주세요."}`),
 		Target:           agentcontract.ApprovalTarget{InputField: "personHint", ID: "person-2", Title: "박예시"},
@@ -172,17 +174,6 @@ func TestTheShownCallIsTheSameForTheSameHeldCall(t *testing.T) {
 	}
 	if !strings.HasPrefix(first, "받는 사람: ") {
 		t.Fatalf("the recipient is not the first thing shown:\n%s", first)
-	}
-}
-
-func TestTheWordingModelIsToldWhichValuesArePrintedBeneathItsSentence(t *testing.T) {
-	languageModel := &wordingLanguageModel{question: "박예시님께 보낼까요?", labels: heldMessageLabels}
-
-	NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
-
-	prompt := languageModel.promptSeen()
-	if !strings.Contains(prompt, "Never quote, paraphrase, or repeat those values") || !strings.Contains(prompt, `"printedBelow":["resolvedTarget","message"]`) {
-		t.Fatalf("the model is not told which values are shown beneath its sentence:\n%s", prompt)
 	}
 }
 
@@ -258,7 +249,6 @@ func TestASharedNamesAddressIsPrintedOnALineOfItsOwn(t *testing.T) {
 func handoffFacts() holdrecord.QuestionFacts {
 	return holdrecord.QuestionFacts{
 		ResponseLanguage: "ko",
-		OriginalRequest:  "거래처 포털에서 지난달 청구서 받아줘",
 		Tool:             toolcontract.ToolDefinition{Name: "browser_handoff"},
 		Input:            json.RawMessage(`{"step":"sign in to the vendor portal"}`),
 		Target:           agentcontract.ApprovalTarget{InputField: "handoff", ID: "handoff-1", Title: "https://portal.example.com", HandoffID: "handoff-1"},
@@ -342,19 +332,6 @@ func TestAQuestionWrittenOverSeveralLinesIsAskedForAgainAsOne(t *testing.T) {
 	}
 	if len(languageModel.requests) != 2 || languageModel.requests[1].Messages[len(languageModel.requests[1].Messages)-1].Content != oneLineAgain {
 		t.Fatalf("the model is told once why its question was refused, got %d requests", len(languageModel.requests))
-	}
-}
-
-func TestALabelThatIsItsOwnValueIsAskedForAgain(t *testing.T) {
-	languageModel := &answeringLanguageModel{questions: []string{"보낼까요?", "보낼까요?"}, labels: []map[string]string{{"resolvedTarget": "박예시", "message": "보낼 내용"}, heldMessageLabels}}
-
-	wording := NewWorder(languageModel).WordQuestion(context.Background(), heldMessageFacts())
-
-	if wording.Failure != nil || !strings.Contains(wording.Text, "\n받는 사람: 박예시\n") || strings.Contains(wording.Text, "박예시: 박예시") {
-		t.Fatalf("the requester reads what each value is, never the value twice, got %+v", wording)
-	}
-	if len(languageModel.requests) != 2 || languageModel.requests[1].Messages[len(languageModel.requests[1].Messages)-1].Content != labelsAgain {
-		t.Fatalf("the model is told once why its labels were refused, got %d requests", len(languageModel.requests))
 	}
 }
 
