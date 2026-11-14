@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
 )
 
@@ -270,10 +271,7 @@ func (builder LLMContextBuilder) activeTaskContext(activeTask ActiveTaskContext)
 }
 
 func (builder LLMContextBuilder) pendingInputContext(pendingInput PendingInputContext) string {
-	if strings.TrimSpace(pendingInput.TaskRunID) == "" && strings.TrimSpace(pendingInput.Question) == "" {
-		return ""
-	}
-	return "Pending user input:\n" + marshalEventBody(pendingInput)
+	return agentcontract.PendingInputDescription(pendingInput)
 }
 
 func (builder LLMContextBuilder) memoryContext(input LLMContextInput) string {
