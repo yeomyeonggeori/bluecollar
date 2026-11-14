@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -8,11 +9,10 @@ import (
 
 func outstandingFailure() turnObservation {
 	return turnObservation{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "desktop_act",
-		ToolInputKey:  "desktop_act\x00{}",
-		Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailureExternalService, Code: "operation_failed"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureExternalService, Code: "operation_failed"}},
+		Action:         "continue",
+		Tool:           "desktop_act",
+		ToolInputKey:   "desktop_act\x00{}",
 	}
 }
 

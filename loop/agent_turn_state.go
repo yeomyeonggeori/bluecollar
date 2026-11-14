@@ -1155,13 +1155,16 @@ func isNativeTerminalAction(action string) bool {
 func applyToolResult(state agentTaskState, invocation toolcontract.ToolInvocation, result toolcontract.ToolResult) agentTaskState {
 	result = normalizeToolFailureResult(invocation.ToolName, result)
 	toolInputKey := canonicalToolCallKey(invocation.ToolName, invocation.Input)
+	summarized := turnObservation{ToolCallResult: agentcontract.ToolCallResult{Failure: result.Failure}, Tool: invocation.ToolName, Output: result.Output, Attachments: result.Attachments}
 	observation := turnObservation{
-		ObservationID:   nextObservationIDForObservations(state.Observations),
+		ToolCallResult: agentcontract.ToolCallResult{
+			ObservationID: nextObservationIDForObservations(state.Observations),
+			Failure:       result.Failure,
+			Summary:       modelVisibleToolResultSummary(context.Background(), nil, invocation.ToolName, summarized),
+		},
 		Action:          "continue",
 		Tool:            strings.TrimSpace(invocation.ToolName),
 		Output:          result.Output,
-		Failure:         result.Failure,
-		Summary:         modelVisibleToolResultSummary(context.Background(), nil, invocation.ToolName, turnObservation{Tool: invocation.ToolName, Output: result.Output, Failure: result.Failure, Attachments: result.Attachments}),
 		ToolInputKey:    toolInputKey,
 		RecoveryActions: append([]toolcontract.RecoveryAction{}, result.RecoveryActions...),
 	}
@@ -1191,7 +1194,7 @@ func isToolResultTaskEvent(event agentcontract.TaskEvent) bool {
 
 func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservation {
 	observations := []turnObservation{}
-	unanswered := map[string]requestedToolCall{}
+	unanswered := map[string]agentcontract.ToolCallRequested{}
 	for _, event := range events {
 		if requestedCall, isRequest := requestedToolCallFromTaskEvent(event); isRequest {
 			unanswered[requestedCall.ObservationID] = requestedCall
@@ -1228,28 +1231,19 @@ func canonicalizePersistedToolCallKey(toolCallKey string) string {
 	return toolcontract.CanonicalToolName(toolName) + "\x00" + toolInput
 }
 
-type requestedToolCall struct {
-	ObservationID string          `json:"observationID"`
-	ToolName      string          `json:"toolName"`
-	Input         json.RawMessage `json:"input"`
-}
-
-func requestedToolCallFromTaskEvent(event agentcontract.TaskEvent) (requestedToolCall, bool) {
+func requestedToolCallFromTaskEvent(event agentcontract.TaskEvent) (agentcontract.ToolCallRequested, bool) {
 	if _, isToolRequest := agentcontract.ToolTaskEventToolName(event.Name, agentcontract.ToolTaskEventRequestedSuffix); !isToolRequest {
-		return requestedToolCall{}, false
+		return agentcontract.ToolCallRequested{}, false
 	}
-	requestedCall := requestedToolCall{}
-	if json.Unmarshal([]byte(event.Body), &requestedCall) != nil || strings.TrimSpace(requestedCall.ObservationID) == "" {
-		return requestedToolCall{}, false
-	}
-	return requestedCall, true
+	requestedCall := agentcontract.ToolCallRecordOf[agentcontract.ToolCallRequested](event.Body)
+	return requestedCall, strings.TrimSpace(requestedCall.ObservationID) != ""
 }
 
 // The intent is written before the call and the result after it, so a request with no
 // result is the record of a process that stopped mid-call. Reading only results turns
 // that into a call the turn believes never happened, and the obvious next move is to
 // do it again.
-func interruptedCallObservations(unanswered map[string]requestedToolCall) []turnObservation {
+func interruptedCallObservations(unanswered map[string]agentcontract.ToolCallRequested) []turnObservation {
 	observationIDs := make([]string, 0, len(unanswered))
 	for observationID := range unanswered {
 		observationIDs = append(observationIDs, observationID)
@@ -1330,11 +1324,10 @@ func decodeTurnObservation(document []byte) (turnObservation, error) {
 func (legacyObservation legacyTurnObservation) toTurnObservation() turnObservation {
 	action := legacyObservation.Action
 	observation := turnObservation{
-		ObservationID:        legacyObservation.ObservationID,
+		ToolCallResult:       agentcontract.ToolCallResult{ObservationID: legacyObservation.ObservationID, Summary: legacyObservation.Summary},
 		Action:               action,
 		Tool:                 legacyObservation.Tool,
 		Output:               toolcontract.ToolOutput{Content: legacyObservation.Content},
-		Summary:              legacyObservation.Summary,
 		ToolInputKey:         legacyObservation.ToolInputKey,
 		AttemptFingerprint:   legacyObservation.AttemptFingerprint,
 		RecoveryAttemptKey:   legacyObservation.RecoveryAttemptKey,

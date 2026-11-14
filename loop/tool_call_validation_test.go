@@ -575,11 +575,11 @@ func TestRepeatedSuccessfulCompletionCandidateUsesPersistedObservation(t *testin
 	toolInput := json.RawMessage(`{"title":"settlement check"}`)
 	toolInputKey := canonicalToolCallKey("task_add", toolInput)
 	state := &agentTaskState{Request: AgentTurnRequest{ToolSet: toolSet}, Observations: []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "task_add",
-		ToolInputKey:  toolInputKey,
-		Output:        toolcontract.ToolOutput{Content: `{"taskID":"a1"}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "task_add",
+		ToolInputKey:   toolInputKey,
+		Output:         toolcontract.ToolOutput{Content: `{"taskID":"a1"}`},
 	}}}
 
 	observation, isFound := repeatedSuccessfulCompletionCandidate(state, turnActionDocument{
@@ -600,11 +600,11 @@ func TestRepeatedSuccessfulReadIsNotACompletionCandidateWhenContractExpectsMutat
 		ToolSet:         toolSet,
 		OutcomeContract: OutcomeContract{RequiredEvidenceAnyOf: [][]string{{"task_add"}}},
 	}, Observations: []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "task_list",
-		ToolInputKey:  toolInputKey,
-		Output:        toolcontract.ToolOutput{Content: `{"tasks":[]}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "task_list",
+		ToolInputKey:   toolInputKey,
+		Output:         toolcontract.ToolOutput{Content: `{"tasks":[]}`},
 	}}}
 
 	_, isFound := repeatedSuccessfulCompletionCandidate(state, turnActionDocument{
@@ -659,10 +659,10 @@ func TestAgentTurnRunnerRejectsRepeatedSuccessfulToolCall(t *testing.T) {
 
 func TestRepeatedFileReadObservationReturnsCachedCoveredRange(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "file_read",
-		Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":162,"totalLines":162,"sizeBytes":1000}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "file_read",
+		Output:         toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":162,"totalLines":162,"sizeBytes":1000}`},
 	}}
 	actionDocument := turnActionDocument{
 		ToolName:  "file_read",
@@ -684,10 +684,10 @@ func TestRepeatedFileReadObservationReturnsCachedCoveredRange(t *testing.T) {
 
 func TestRepeatedFileReadObservationReturnsCachedOverlappingRange(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "file_read",
-		Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":120,"totalLines":180,"sizeBytes":1000}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "file_read",
+		Output:         toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const PROFILE = {}","startLine":1,"endLine":120,"totalLines":180,"sizeBytes":1000}`},
 	}}
 	actionDocument := turnActionDocument{
 		ToolName:  "file_read",
@@ -711,16 +711,16 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileWrite(t *testing.T) {
 	path := "home/reports/report-1/draft/src/prototype-data.ts"
 	observations := []turnObservation{
 		{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          toolcontract.FileReadToolName,
-			Output:        toolcontract.ToolOutput{Content: `{"path":"` + path + `","content":"old","startLine":1,"endLine":20,"totalLines":20,"sizeBytes":1000}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+			Action:         "continue",
+			Tool:           toolcontract.FileReadToolName,
+			Output:         toolcontract.ToolOutput{Content: `{"path":"` + path + `","content":"old","startLine":1,"endLine":20,"totalLines":20,"sizeBytes":1000}`},
 		},
 		{
-			ObservationID: "obs-002",
-			Action:        "continue",
-			Tool:          toolcontract.WriteToolName,
-			Output:        toolcontract.ToolOutput{Content: `{"path":"` + path + `","sizeBytes":1200}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"},
+			Action:         "continue",
+			Tool:           toolcontract.WriteToolName,
+			Output:         toolcontract.ToolOutput{Content: `{"path":"` + path + `","sizeBytes":1200}`},
 		},
 	}
 	actionDocument := turnActionDocument{
@@ -739,16 +739,16 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileEdit(t *testing.T) {
 	path := "~/reports/report-1/draft/DESIGN.md"
 	observations := []turnObservation{
 		{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          toolcontract.FileReadToolName,
-			Output:        toolcontract.ToolOutput{Content: `{"path":"` + path + `","content":"TODO(design)","startLine":1,"endLine":20,"totalLines":20,"sizeBytes":1000}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+			Action:         "continue",
+			Tool:           toolcontract.FileReadToolName,
+			Output:         toolcontract.ToolOutput{Content: `{"path":"` + path + `","content":"TODO(design)","startLine":1,"endLine":20,"totalLines":20,"sizeBytes":1000}`},
 		},
 		{
-			ObservationID: "obs-002",
-			Action:        "continue",
-			Tool:          toolcontract.EditToolName,
-			Output:        toolcontract.ToolOutput{Content: `{"editCount":1,"editedFiles":["` + path + `"]}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"},
+			Action:         "continue",
+			Tool:           toolcontract.EditToolName,
+			Output:         toolcontract.ToolOutput{Content: `{"editCount":1,"editedFiles":["` + path + `"]}`},
 		},
 	}
 	actionDocument := turnActionDocument{
@@ -766,16 +766,16 @@ func TestRepeatedFileReadObservationIgnoresCacheAfterFileEdit(t *testing.T) {
 func TestRepeatedFileReadObservationMatchesMutationPathAcrossTildeSpelling(t *testing.T) {
 	observations := []turnObservation{
 		{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          toolcontract.FileReadToolName,
-			Output:        toolcontract.ToolOutput{Content: `{"path":"~/documents/report.md","content":"old","startLine":1,"endLine":20,"totalLines":20,"sizeBytes":1000}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+			Action:         "continue",
+			Tool:           toolcontract.FileReadToolName,
+			Output:         toolcontract.ToolOutput{Content: `{"path":"~/documents/report.md","content":"old","startLine":1,"endLine":20,"totalLines":20,"sizeBytes":1000}`},
 		},
 		{
-			ObservationID: "obs-002",
-			Action:        "continue",
-			Tool:          toolcontract.WriteToolName,
-			Output:        toolcontract.ToolOutput{Content: `{"path":"documents/report.md","sizeBytes":1200}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"},
+			Action:         "continue",
+			Tool:           toolcontract.WriteToolName,
+			Output:         toolcontract.ToolOutput{Content: `{"path":"documents/report.md","sizeBytes":1200}`},
 		},
 	}
 	actionDocument := turnActionDocument{
@@ -834,14 +834,13 @@ func TestAgentTurnRunnerRejectsRepeatedScheduleCreateWithoutExecutingAgain(t *te
 
 func TestAToolThatCannotSucceedIsNotOfferedAgain(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Tool:          toolcontract.WriteToolName,
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureExternalService,
 			Stage:           "tool_result_contract",
 			UserSafeSummary: "tool result effects do not match its descriptor contract",
 			RetryPolicy:     toolcontract.RetryPolicyDoNotRetry,
-		},
+		}},
+		Tool: toolcontract.WriteToolName,
 	}}
 
 	refused, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.WriteToolName)
@@ -853,9 +852,8 @@ func TestAToolThatCannotSucceedIsNotOfferedAgain(t *testing.T) {
 
 func TestAnOrdinaryToolFailureStaysAvailable(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Tool:          toolcontract.WriteToolName,
-		Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound, UserSafeSummary: "no such directory"},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureNotFound, UserSafeSummary: "no such directory"}},
+		Tool:           toolcontract.WriteToolName,
 	}}
 
 	if _, wasRefused := previousNonRetryableToolFailure(observations, toolcontract.WriteToolName); wasRefused {
@@ -865,8 +863,8 @@ func TestAnOrdinaryToolFailureStaysAvailable(t *testing.T) {
 
 func TestASecondReadOfTheSameFileIsAnsweredFromWhatWasAlreadyRead(t *testing.T) {
 	firstRead := turnObservation{
-		ObservationID: "obs-001",
-		Tool:          toolcontract.FileReadToolName,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Tool:           toolcontract.FileReadToolName,
 		Output: toolcontract.ToolOutput{Content: `{"path":"phone_number.py","content":"import re\n","startLine":1,"endLine":1,` +
 			`"totalLines":1,"totalLinesKnown":true,"sizeBytes":10,"isTruncated":false}`},
 	}

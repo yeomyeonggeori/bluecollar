@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -11,10 +12,10 @@ import (
 
 func planUpdateSuccessObservation(observationID string, planDocument string) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          toolcontract.PlanToolName,
-		Output:        toolcontract.ToolOutput{Content: planDocument, Data: json.RawMessage(planDocument)},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID},
+		Action:         "continue",
+		Tool:           toolcontract.PlanToolName,
+		Output:         toolcontract.ToolOutput{Content: planDocument, Data: json.RawMessage(planDocument)},
 	}
 }
 

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -10,16 +11,15 @@ import (
 
 func TestRecoveryPacketDoesNotHardCodeToolAllowedList(t *testing.T) {
 	observation := turnObservation{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "task_update",
-		Output:        toolcontract.ToolOutput{Content: "task must carry a title before it is updated"},
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureExternalService,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
 			Stage:           "task_update",
 			UserSafeSummary: "task must carry a title before it is updated",
-		},
+		}},
+		Action: "continue",
+		Tool:   "task_update",
+		Output: toolcontract.ToolOutput{Content: "task must carry a title before it is updated"},
 	}
 
 	packet := buildRecoveryPacket(observation)
@@ -34,16 +34,15 @@ func TestRecoveryPacketDoesNotHardCodeToolAllowedList(t *testing.T) {
 
 func TestRecoveryPacketSchemaFailureRetriesSameToolWithFixedInput(t *testing.T) {
 	observation := turnObservation{
-		ObservationID: "obs-002",
-		Action:        "continue",
-		Tool:          "ask_confirm",
-		ToolInputKey:  "ask_confirm\x00{}",
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002", Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureInvalidInput,
 			Code:            toolcontract.FailureCodes.InvalidInput.String(),
 			Stage:           "ask_confirm",
 			UserSafeSummary: "ask_confirm requires userFacingMessage",
-		},
+		}},
+		Action:       "continue",
+		Tool:         "ask_confirm",
+		ToolInputKey: "ask_confirm\x00{}",
 	}
 
 	packet := buildRecoveryPacket(observation)
@@ -59,13 +58,12 @@ func TestRecoveryPacketSchemaFailureRetriesSameToolWithFixedInput(t *testing.T) 
 
 func TestRecoveryPacketKeepsTypedHintTools(t *testing.T) {
 	failedObservation := turnObservation{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "task_update",
-		ToolInputKey:  "task_update\x00{\"taskID\":\"task-1\"}",
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Failure: &toolcontract.ToolFailure{
 			RecoveryHints: []toolcontract.RecoveryHint{{ToolNames: []string{"edit"}}},
-		},
+		}},
+		Action:       "continue",
+		Tool:         "task_update",
+		ToolInputKey: "task_update\x00{\"taskID\":\"task-1\"}",
 	}
 
 	packet := buildRecoveryPacket(failedObservation)
@@ -76,15 +74,14 @@ func TestRecoveryPacketKeepsTypedHintTools(t *testing.T) {
 
 func TestRecoveryIsToldWhatTheCommandPrinted(t *testing.T) {
 	observation := turnObservation{
-		ObservationID: "obs-009",
-		Action:        "continue",
-		Tool:          "bash",
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-009", Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureUnknown,
 			Code:            toolcontract.FailureCodes.OperationFailed.String(),
 			Stage:           "bash",
 			UserSafeSummary: "the command exited 1",
-		},
+		}},
+		Action: "continue",
+		Tool:   "bash",
 	}
 	observation.Output.Content = "ModuleNotFoundError: No module named 'requests'"
 
@@ -100,15 +97,14 @@ func TestRecoveryIsToldWhatTheCommandPrinted(t *testing.T) {
 
 func TestASummaryThatIsAlreadyTheOutputIsNotRepeated(t *testing.T) {
 	observation := turnObservation{
-		ObservationID: "obs-010",
-		Action:        "continue",
-		Tool:          "task_add",
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-010", Failure: &toolcontract.ToolFailure{
 			Kind:            toolcontract.FailureInvalidInput,
 			Code:            toolcontract.FailureCodes.InvalidInput.String(),
 			Stage:           "task_add",
 			UserSafeSummary: "a title is required",
-		},
+		}},
+		Action: "continue",
+		Tool:   "task_add",
 	}
 	observation.Output.Content = "a title is required"
 
@@ -119,14 +115,12 @@ func TestASummaryThatIsAlreadyTheOutputIsNotRepeated(t *testing.T) {
 
 func TestRecoveryShowsTheInputItAsksToChange(t *testing.T) {
 	observation := turnObservation{
-		ObservationID: "obs-011",
-		Action:        "continue",
-		Tool:          "bash",
-		ToolInput:     json.RawMessage(`{"command":"python3 -c \"print(card['card_id'])\""}`),
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-011", ToolInput: json.RawMessage(`{"command":"python3 -c \"print(card['card_id'])\""}`), Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
 			Stage: "bash", UserSafeSummary: "the command exited 1",
-		},
+		}},
+		Action: "continue",
+		Tool:   "bash",
 	}
 	observation.Output.Content = "KeyError: 'card_id'"
 

@@ -2,6 +2,7 @@ package loop
 
 import (
 	"fmt"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -10,13 +11,12 @@ import (
 
 func TestTheReportTheUserSeesSaysWhatHappened(t *testing.T) {
 	observation := turnObservation{
-		ObservationID: "obs-006",
-		Action:        "continue",
-		Tool:          "bash",
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-006", Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureUnknown, Code: toolcontract.FailureCodes.OperationFailed.String(),
 			Stage: "bash", UserSafeSummary: "the command exited 1",
-		},
+		}},
+		Action: "continue",
+		Tool:   "bash",
 	}
 	observation.Output.Content = "Your Venmo balance does not have $91.00 to make this transaction"
 
@@ -29,13 +29,12 @@ func TestTheReportTheUserSeesSaysWhatHappened(t *testing.T) {
 
 func TestAReportWhoseSummaryIsAlreadyTheReasonSaysItOnce(t *testing.T) {
 	observation := turnObservation{
-		ObservationID: "obs-007",
-		Action:        "continue",
-		Tool:          "task_add",
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-007", Failure: &toolcontract.ToolFailure{
 			Kind: toolcontract.FailureInvalidInput, Code: toolcontract.FailureCodes.InvalidInput.String(),
 			Stage: "task_add", UserSafeSummary: "a title is required",
-		},
+		}},
+		Action: "continue",
+		Tool:   "task_add",
 	}
 	observation.Output.Content = "a title is required"
 

@@ -394,9 +394,9 @@ func (agentTurnRunner *AgentTurnRunner) RunTurn(ctx context.Context, request Age
 		case "set_quality_criteria":
 			state.QualityCriteria = normalizeQualityCriteria(actionDocument.QualityCriteria)
 			observation := turnObservation{
-				ObservationID: nextObservationIDForObservations(state.Observations),
-				Action:        "set_quality_criteria",
-				Output:        toolcontract.ToolOutput{Content: marshalEventBody(map[string]any{"criteria": state.QualityCriteria})},
+				ToolCallResult: agentcontract.ToolCallResult{ObservationID: nextObservationIDForObservations(state.Observations)},
+				Action:         "set_quality_criteria",
+				Output:         toolcontract.ToolOutput{Content: marshalEventBody(map[string]any{"criteria": state.QualityCriteria})},
 			}
 			state.Observations = append(state.Observations, observation)
 			agentTurnRunner.appendEvent(taskRun.TaskRunID, agentcontract.TaskEventAgentQualityCriteria, marshalEventBody(map[string]any{
@@ -795,11 +795,8 @@ func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Contex
 		}
 		didDriftFromItsHold := agentTurnRunner.noteDriftFromHold(taskRunID, holds, carriedOutCall)
 		observationID := agentTurnRunner.nextUnusedObservationID(taskRunID, state.Observations)
-		agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(toolName, agentcontract.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
-			"observationID": observationID,
-			"toolName":      toolName,
-			"input":         json.RawMessage(carriedOutCall.ToolInput),
-		}))
+		toolDefinition, _ := request.ToolSet.ToolDefinition(toolName)
+		agentTurnRunner.recordToolRequest(taskRunID, agentcontract.ToolCallRequested{ObservationID: observationID, ToolName: toolName, Input: carriedOutCall.ToolInput, SideEffectClass: toolcontract.ToolDefinitionSideEffectClass(toolDefinition)})
 		observation := agentTurnRunner.saveToolObservation(
 			ctx, taskRunID, observationID, "", "", "", toolName, "", carriedOutCall.ToolInput, toolName,
 			canonicalToolInput(carriedOutCall.ToolInput), carriedOutCall.Result,

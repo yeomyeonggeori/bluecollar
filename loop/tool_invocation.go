@@ -81,16 +81,12 @@ func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegi
 		observation.AttemptFingerprint = attemptFingerprint(toolInputKey, observation.FailureCode())
 		return observation
 	}
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(trimmedToolName, agentcontract.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
-		"observationID": observationID,
-		"toolName":      trimmedToolName,
-		"input":         json.RawMessage(toolInput),
-	}))
+	toolDefinition, _ := toolRegistry.ToolDefinition(trimmedToolName)
+	agentTurnRunner.recordToolRequest(taskRunID, agentcontract.ToolCallRequested{ObservationID: observationID, ToolName: trimmedToolName, Input: toolInput, SideEffectClass: toolcontract.ToolDefinitionSideEffectClass(toolDefinition)})
 	unregisterTool := agentTurnRunner.taskRunService.RegisterTaskRunTool(taskRunID, observationID, trimmedToolName)
 	defer unregisterTool()
 	toolContext := WithObservationID(WithResponseLanguage(WithTaskRunID(ctx, taskRunID), responseLanguage), observationID)
 	invocationStartedAt := time.Now()
-	toolDefinition, _ := toolRegistry.ToolDefinition(trimmedToolName)
 	toolResult, errorValue := toolRegistry.Invoke(toolContext, toolcontract.ToolInvocation{ToolName: trimmedToolName, Input: toolInput})
 	if errorValue != nil {
 		toolResult = toolcontract.ToolFailureResult(toolcontract.FailureUnknown, toolcontract.FailureCodes.OperationFailed, trimmedToolName, errorValue.Error())
@@ -102,6 +98,10 @@ func (agentTurnRunner *AgentTurnRunner) invokeTool(ctx context.Context, toolRegi
 
 func effectiveObservationToolName(toolName string, toolInput json.RawMessage) string {
 	return strings.TrimSpace(toolName)
+}
+
+func (agentTurnRunner *AgentTurnRunner) recordToolRequest(taskRunID string, requested agentcontract.ToolCallRequested) {
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(requested.ToolName, agentcontract.ToolTaskEventRequestedSuffix), marshalEventBody(requested))
 }
 
 func toolFailureObservation(observationID string, toolName string, message string) turnObservation {
@@ -135,14 +135,11 @@ func (agentTurnRunner *AgentTurnRunner) saveToolObservation(ctx context.Context,
 		}
 	}
 	observation := turnObservation{
-		ObservationID:   observationID,
+		ToolCallResult:  agentcontract.ToolCallResult{ObservationID: observationID, ToolInput: append(json.RawMessage{}, toolInput...), Effects: append([]toolcontract.ResourceEffect{}, toolResult.Effects...), Failure: toolResult.Failure},
 		Action:          "continue",
 		Tool:            firstNonEmptyString(observationToolName, toolName),
 		ToolID:          strings.TrimSpace(toolID),
-		ToolInput:       append(json.RawMessage{}, toolInput...),
 		Output:          toolResult.Output,
-		Effects:         append([]toolcontract.ResourceEffect{}, toolResult.Effects...),
-		Failure:         toolResult.Failure,
 		Attachments:     attachments,
 		RecoveryActions: append([]toolcontract.RecoveryAction{}, toolResult.RecoveryActions...),
 		ToolIsReadOnly:  toolIsReadOnly,

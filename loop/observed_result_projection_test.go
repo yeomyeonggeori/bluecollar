@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -252,11 +253,10 @@ func canonicalEffectObservation(toolName string, resultData string, effects []to
 		Effects: contracts,
 	}
 	return descriptor, turnObservation{
-		ObservationID: "obs-" + toolName,
-		Action:        "continue",
-		Tool:          toolName,
-		Output:        toolcontract.ToolOutput{Content: resultData, Data: json.RawMessage(resultData)},
-		Effects:       effects,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-" + toolName, Effects: effects},
+		Action:         "continue",
+		Tool:           toolName,
+		Output:         toolcontract.ToolOutput{Content: resultData, Data: json.RawMessage(resultData)},
 	}
 }
 

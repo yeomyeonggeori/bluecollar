@@ -145,7 +145,7 @@ func TestLiveStructuredCompactionSelection(t *testing.T) {
 func compactionLiveState(testCase compactionLiveCase) agentTaskState {
 	state := agentTaskState{Request: AgentTurnRequest{Prompt: testCase.prompt, VisibleContext: agentcontract.VisibleContext{Messages: []agentcontract.VisibleContextMessage{{Speaker: "user", Text: testCase.constraint}}}}}
 	for index, content := range testCase.records {
-		state.Observations = append(state.Observations, turnObservation{ObservationID: nextObservationID(index + 1), Action: "continue", Tool: "file_read", ToolInput: json.RawMessage(`{"path":"sample.txt"}`), Output: toolcontract.ToolOutput{Content: content}, ToolIsReadOnly: true})
+		state.Observations = append(state.Observations, turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: nextObservationID(index + 1), ToolInput: json.RawMessage(`{"path":"sample.txt"}`)}, Action: "continue", Tool: "file_read", Output: toolcontract.ToolOutput{Content: content}, ToolIsReadOnly: true})
 	}
 	return state
 }

@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -10,16 +11,16 @@ import (
 func TestBuildTurnProgressKeepsRecentFileContext(t *testing.T) {
 	observations := []turnObservation{
 		{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          "file_read",
-			Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+			Action:         "continue",
+			Tool:           "file_read",
+			Output:         toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
 		},
 		{
-			ObservationID: "obs-002",
-			Action:        "continue",
-			Tool:          "file_read",
-			Output:        toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"},
+			Action:         "continue",
+			Tool:           "file_read",
+			Output:         toolcontract.ToolOutput{Content: `{"path":"home/reports/report-1/draft/src/prototype-data.ts","content":"export const profile = { name: \"Kim Intern\" }\nexport const services = [{ title: \"Mail\" }, { title: \"Slides\" }]","startLine":1,"endLine":20,"totalLines":80,"sizeBytes":2048,"isTruncated":false}`},
 		},
 	}
 

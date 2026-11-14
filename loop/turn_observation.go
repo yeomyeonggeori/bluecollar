@@ -11,15 +11,11 @@ import (
 )
 
 type turnObservation struct {
-	ObservationID        string                        `json:"observationID"`
+	agentcontract.ToolCallResult
 	Action               string                        `json:"action"`
 	Tool                 string                        `json:"tool,omitempty"`
 	ToolID               string                        `json:"toolID,omitempty"`
-	ToolInput            json.RawMessage               `json:"toolInput,omitempty"`
 	Output               toolcontract.ToolOutput       `json:"output,omitempty"`
-	Effects              []toolcontract.ResourceEffect `json:"effects,omitempty"`
-	Failure              *toolcontract.ToolFailure     `json:"failure,omitempty"`
-	Summary              string                        `json:"summary,omitempty"`
 	ImageRefs            []ToolResultImageRef          `json:"imageRefs,omitempty"`
 	RepeatsObservationID string                        `json:"repeatsObservationID,omitempty"`
 	ToolInputKey         string                        `json:"toolInputKey,omitempty"`
@@ -106,10 +102,10 @@ func (observation turnObservation) SafeRetry() bool {
 
 func newContentObservation(observationID string, action string, tool string, content string) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        strings.TrimSpace(action),
-		Tool:          strings.TrimSpace(tool),
-		Output:        toolcontract.ToolOutput{Content: strings.TrimSpace(content)},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID},
+		Action:         strings.TrimSpace(action),
+		Tool:           strings.TrimSpace(tool),
+		Output:         toolcontract.ToolOutput{Content: strings.TrimSpace(content)},
 	}
 }
 

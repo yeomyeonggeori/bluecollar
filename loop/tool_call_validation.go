@@ -71,11 +71,10 @@ func (agentTurnRunner *AgentTurnRunner) rejectRepeatedToolCall(taskRunID string,
 	}
 	if sentObservation, wasSent := previousSuccessfulExternalSend(state.Request.ToolSet, state.Observations, actionDocument.ToolName, actionDocument.ToolInput); wasSent {
 		observation := turnObservation{
-			ObservationID: nextObservationIDForObservations(state.Observations),
-			Action:        "policy",
-			Tool:          strings.TrimSpace(actionDocument.ToolName),
-			Output:        toolcontract.ToolOutput{Content: "This task already sent to that recipient as " + sentObservation.ObservationID + ". Do not send to the same recipient again. Send to a different recipient or use that observation for completionEvidence and send a final reply."},
-			Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: "This task already sent to that recipient."},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: nextObservationIDForObservations(state.Observations), Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: "This task already sent to that recipient."}},
+			Action:         "policy",
+			Tool:           strings.TrimSpace(actionDocument.ToolName),
+			Output:         toolcontract.ToolOutput{Content: "This task already sent to that recipient as " + sentObservation.ObservationID + ". Do not send to the same recipient again. Send to a different recipient or use that observation for completionEvidence and send a final reply."},
 		}
 		state.Observations = append(state.Observations, observation)
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentExternalSendRepeatRejected, marshalEventBody(observation))
@@ -85,11 +84,10 @@ func (agentTurnRunner *AgentTurnRunner) rejectRepeatedToolCall(taskRunID string,
 	}
 	if duplicateObservation, isDuplicate := repeatedSuccessfulToolObservation(state, actionDocument, successfulToolCalls); isDuplicate {
 		observation := turnObservation{
-			ObservationID: nextObservationIDForObservations(state.Observations),
-			Action:        "policy",
-			Tool:          strings.TrimSpace(actionDocument.ToolName),
-			Output:        toolcontract.ToolOutput{Content: "This exact tool call already succeeded as " + duplicateObservation.ObservationID + ". Use that observation for completionEvidence instead of running it again."},
-			Failure:       &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: "This exact tool call already succeeded."},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: nextObservationIDForObservations(state.Observations), Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: "This exact tool call already succeeded."}},
+			Action:         "policy",
+			Tool:           strings.TrimSpace(actionDocument.ToolName),
+			Output:         toolcontract.ToolOutput{Content: "This exact tool call already succeeded as " + duplicateObservation.ObservationID + ". Use that observation for completionEvidence instead of running it again."},
 		}
 		state.Observations = append(state.Observations, observation)
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentDuplicateToolCallRejected, marshalEventBody(observation))
@@ -99,13 +97,12 @@ func (agentTurnRunner *AgentTurnRunner) rejectRepeatedToolCall(taskRunID string,
 	}
 	if refusedFailure, wasRefused := previousNonRetryableToolFailure(state.Observations, actionDocument.ToolName); wasRefused {
 		observation := turnObservation{
-			ObservationID: nextObservationIDForObservations(state.Observations),
-			Action:        "policy",
-			Tool:          strings.TrimSpace(actionDocument.ToolName),
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: nextObservationIDForObservations(state.Observations), Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: strings.TrimSpace(actionDocument.ToolName) + " already failed in a way no retry can change."}},
+			Action:         "policy",
+			Tool:           strings.TrimSpace(actionDocument.ToolName),
 			Output: toolcontract.ToolOutput{Content: strings.TrimSpace(actionDocument.ToolName) + " failed as " + refusedFailure.ObservationID +
 				" in a way no retry can change: " + refusedFailure.Failure.UserSafeSummary +
 				". Reach the goal another way, or stop and say this tool is unusable."},
-			Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailurePolicyBlocked, Code: toolcontract.FailureCodes.PolicyBlocked.String(), Stage: "policy", UserSafeSummary: strings.TrimSpace(actionDocument.ToolName) + " already failed in a way no retry can change."},
 		}
 		state.Observations = append(state.Observations, observation)
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventAgentNonRetryableToolRefused, marshalEventBody(observation))
@@ -522,11 +519,7 @@ func (agentTurnRunner *AgentTurnRunner) recordUnavailableToolRequest(taskRunID s
 	}
 	observationID := nextObservationID(index)
 	toolInputKey := canonicalToolCallKey(trimmedToolName, toolInput)
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.ToolTaskEventName(trimmedToolName, agentcontract.ToolTaskEventRequestedSuffix), marshalEventBody(map[string]any{
-		"observationID": observationID,
-		"toolName":      trimmedToolName,
-		"input":         json.RawMessage(toolInput),
-	}))
+	agentTurnRunner.recordToolRequest(taskRunID, agentcontract.ToolCallRequested{ObservationID: observationID, ToolName: trimmedToolName, Input: toolInput})
 	return agentTurnRunner.saveToolObservation(context.Background(), taskRunID, observationID, "", "", "", trimmedToolName, "", toolInput, effectiveObservationToolName(trimmedToolName, toolInput), toolInputKey, toolcontract.ToolFailureResult(toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "tool_availability", "tool is not allowed"), false, workspaceRootPath, minimumModifiedAt, 0)
 }
 

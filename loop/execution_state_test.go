@@ -2,6 +2,7 @@ package loop
 
 import (
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strconv"
 	"strings"
 	"testing"
@@ -151,11 +152,10 @@ func terminalFailureObservation(observationID string, workingDirectoryPath strin
 		"command":              command,
 	})
 	return turnObservation{
-		ObservationID:      observationID,
+		ToolCallResult:     agentcontract.ToolCallResult{ObservationID: observationID, Failure: &toolcontract.ToolFailure{Kind: toolcontract.FailureExternalService, Code: toolcontract.FailureCodes.OperationFailed.String(), Stage: "bash", UserSafeSummary: content}},
 		Action:             "continue",
 		Tool:               "bash",
 		Output:             toolcontract.ToolOutput{Content: "terminal command failed", Data: json.RawMessage(content)},
-		Failure:            &toolcontract.ToolFailure{Kind: toolcontract.FailureExternalService, Code: toolcontract.FailureCodes.OperationFailed.String(), Stage: "bash", UserSafeSummary: content},
 		ToolInputKey:       canonicalToolCallKey("bash", input),
 		AttemptFingerprint: attemptFingerprint(canonicalToolCallKey("bash", input), toolcontract.FailureCodes.OperationFailed.String()),
 	}
@@ -173,11 +173,11 @@ func terminalSuccessObservation(observationID string, workingDirectoryPath strin
 		"command":              command,
 	})
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          "bash",
-		Output:        toolcontract.ToolOutput{Content: "terminal command completed", Data: json.RawMessage(content)},
-		ToolInputKey:  canonicalToolCallKey("bash", input),
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID},
+		Action:         "continue",
+		Tool:           "bash",
+		Output:         toolcontract.ToolOutput{Content: "terminal command completed", Data: json.RawMessage(content)},
+		ToolInputKey:   canonicalToolCallKey("bash", input),
 	}
 }
 

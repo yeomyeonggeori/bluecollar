@@ -403,9 +403,9 @@ func TestAPlanStepRanksWhatEquipFoundEvenWhenTheTaskMissedIt(t *testing.T) {
 	}
 	state := buildInitialAgentTaskState(request, TurnOptions{}, "task-step-equip")
 	state.Observations = []turnObservation{{
-		ObservationID: "obs-equip",
-		Action:        "continue",
-		Tool:          toolcontract.EquipToolName,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-equip"},
+		Action:         "continue",
+		Tool:           toolcontract.EquipToolName,
 		Output: toolcontract.ToolOutput{
 			Content: "found",
 			Data:    json.RawMessage(`{"selectedTools":[{"name":"invoice_send","description":"send an invoice"}]}`),

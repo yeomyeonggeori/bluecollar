@@ -3,6 +3,7 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -90,7 +91,7 @@ func TestNativeContextPruningPreservesActiveFailureEvidence(t *testing.T) {
 func TestNativeContextBudgetIncludesToolCallArguments(t *testing.T) {
 	services := newTurnRunnerTestServices(&nativeAgentActionLanguageModel{}, TurnOptions{})
 	state := nativeAgentActionTestState()
-	state.Observations = []turnObservation{{ObservationID: "obs-001", Action: "continue", Tool: "write", ToolInput: json.RawMessage(`{"path":"output.txt","content":"` + strings.Repeat("x", 30000) + `"}`), Output: toolcontract.ToolOutput{Content: "saved"}}}
+	state.Observations = []turnObservation{{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", ToolInput: json.RawMessage(`{"path":"output.txt","content":"` + strings.Repeat("x", 30000) + `"}`)}, Action: "continue", Tool: "write", Output: toolcontract.ToolOutput{Content: "saved"}}}
 	if services.runner.estimateActionPromptTokenCount(state) < 7500 {
 		t.Fatal("the source text in a prior write call was omitted from its request budget")
 	}

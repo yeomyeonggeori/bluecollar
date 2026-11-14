@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 	"time"
@@ -231,10 +232,10 @@ func TestPromptAssemblerIncludesInputFileMarkdownPreview(t *testing.T) {
 
 func TestPromptAssemblerIncludesKnownFileContextSnippet(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "file_read",
-		Output:        toolcontract.ToolOutput{Content: `{"path":"tmp/source.ts","content":"export const title = \"Known\"","startLine":1,"endLine":1,"totalLines":1,"totalLinesKnown":true,"originalSizeBytes":28,"returnedBytes":28,"isTruncated":false}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "file_read",
+		Output:         toolcontract.ToolOutput{Content: `{"path":"tmp/source.ts","content":"export const title = \"Known\"","startLine":1,"endLine":1,"totalLines":1,"totalLinesKnown":true,"originalSizeBytes":28,"returnedBytes":28,"isTruncated":false}`},
 	}}
 
 	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
@@ -251,10 +252,10 @@ func TestPromptAssemblerIncludesKnownFileContextSnippet(t *testing.T) {
 
 func TestPromptAssemblerOmitsRawBrowserSnapshotOutput(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "browser_snapshot",
-		Output:        toolcontract.ToolOutput{Content: `{"url":"https://example.com","title":"Example","snapshotText":"VISIBLE START ` + strings.Repeat("raw-page-text ", 500) + ` SECRET_COOKIE_VALUE","interactiveRefs":["@e1","@e2"],"profilePath":"/Users/me/Profile","cdpURL":"ws://localhost:9222"}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+		Action:         "continue",
+		Tool:           "browser_snapshot",
+		Output:         toolcontract.ToolOutput{Content: `{"url":"https://example.com","title":"Example","snapshotText":"VISIBLE START ` + strings.Repeat("raw-page-text ", 500) + ` SECRET_COOKIE_VALUE","interactiveRefs":["@e1","@e2"],"profilePath":"/Users/me/Profile","cdpURL":"ws://localhost:9222"}`},
 	}}
 
 	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
@@ -273,11 +274,10 @@ func TestPromptAssemblerOmitsRawBrowserSnapshotOutput(t *testing.T) {
 func TestPromptAssemblerIncludesRawToolResultSummary(t *testing.T) {
 	fetchResult := `{"results":[{"url":"https://example.com","content":"Example Corp provides sample automation and sample analytics services."}]}`
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "web_fetch",
-		Output:        toolcontract.ToolOutput{Content: fetchResult},
-		Summary:       fetchResult,
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Summary: fetchResult},
+		Action:         "continue",
+		Tool:           "web_fetch",
+		Output:         toolcontract.ToolOutput{Content: fetchResult},
 	}}
 
 	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
@@ -335,11 +335,10 @@ func TestPromptAssemblerIncludesWritableWorkspaceContext(t *testing.T) {
 
 func TestPromptAssemblerDoesNotExposeAttachmentDevicePath(t *testing.T) {
 	observations := []turnObservation{{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "browser_screenshot",
-		Output:        toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-device-files/screen.png","filename":"screen.png","contentType":"image/png"}`},
-		Summary:       "Screenshot captured. Use the imageRefs for visual inspection.",
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Summary: "Screenshot captured. Use the imageRefs for visual inspection."},
+		Action:         "continue",
+		Tool:           "browser_screenshot",
+		Output:         toolcontract.ToolOutput{Content: `{"devicePath":"/tmp/internkim-device-files/screen.png","filename":"screen.png","contentType":"image/png"}`},
 		ImageRefs: []ToolResultImageRef{{
 			ObservationID:   "obs-001",
 			AttachmentIndex: 0,
@@ -378,17 +377,17 @@ func TestPromptAssemblerCompressesLongObservationHistory(t *testing.T) {
 	observations := []turnObservation{}
 	for index := 0; index < 20; index++ {
 		observations = append(observations, turnObservation{
-			ObservationID: "obs-" + strings.Repeat("0", 2) + string(rune('a'+index)),
-			Action:        "continue",
-			Tool:          "browser_snapshot",
-			Output:        toolcontract.ToolOutput{Content: `{"snapshotText":"` + strings.Repeat("very-long-page-output ", 200) + `","interactiveRefs":["@old"]}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-" + strings.Repeat("0", 2) + string(rune('a'+index))},
+			Action:         "continue",
+			Tool:           "browser_snapshot",
+			Output:         toolcontract.ToolOutput{Content: `{"snapshotText":"` + strings.Repeat("very-long-page-output ", 200) + `","interactiveRefs":["@old"]}`},
 		})
 	}
 	observations = append(observations, turnObservation{
-		ObservationID: "obs-latest",
-		Action:        "continue",
-		Tool:          "browser_snapshot",
-		Output:        toolcontract.ToolOutput{Content: `{"snapshotText":"latest form","interactiveRefs":["@latestSearch","@latestButton"]}`},
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-latest"},
+		Action:         "continue",
+		Tool:           "browser_snapshot",
+		Output:         toolcontract.ToolOutput{Content: `{"snapshotText":"latest form","interactiveRefs":["@latestSearch","@latestButton"]}`},
 	})
 
 	messages := (PromptAssembler{}).BuildTurnMessages(AgentTurnRequest{
@@ -469,7 +468,7 @@ func TestWorkspaceContextCarriesTheHostsOwnSandboxDescription(t *testing.T) {
 }
 
 func TestATurnWithNoImagesIsNotToldToInspectThem(t *testing.T) {
-	message := toolResultImageContextMessage([]turnObservation{{ObservationID: "obs-001", Action: "continue", Tool: "bash"}})
+	message := toolResultImageContextMessage([]turnObservation{{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"}, Action: "continue", Tool: "bash"}})
 
 	if strings.TrimSpace(message.Content) != "" || len(message.Parts) != 0 {
 		t.Fatalf("a turn that produced no images carries an instruction about image parts that are not there: %q", message.Content)
@@ -477,7 +476,7 @@ func TestATurnWithNoImagesIsNotToldToInspectThem(t *testing.T) {
 }
 
 func TestTheProgressLedgerDoesNotClaimResultsItNoLongerCarries(t *testing.T) {
-	observation := turnObservation{ObservationID: "obs-001", Action: "continue", Tool: "bash", Summary: "ran and printed a page of output"}
+	observation := turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", Summary: "ran and printed a page of output"}, Action: "continue", Tool: "bash"}
 
 	native := buildProgressContext(AgentTurnRequest{Prompt: "do it"}, []turnObservation{observation}, true)
 	flattened := buildProgressContext(AgentTurnRequest{Prompt: "do it"}, []turnObservation{observation}, false)
@@ -496,17 +495,17 @@ func TestTheProgressLedgerDoesNotClaimResultsItNoLongerCarries(t *testing.T) {
 func TestPromptAssemblerSummarizesPageAndImageResultsByShapeNotToolName(t *testing.T) {
 	observations := []turnObservation{
 		{
-			ObservationID: "obs-001",
-			Action:        "continue",
-			Tool:          "inspect_page",
-			Output:        toolcontract.ToolOutput{Content: `{"url":"https://example.com","snapshotText":"` + strings.Repeat("raw-page-text ", 500) + `","interactiveRefs":["@e7"],"profilePath":"/Users/me/Profile"}`},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001"},
+			Action:         "continue",
+			Tool:           "inspect_page",
+			Output:         toolcontract.ToolOutput{Content: `{"url":"https://example.com","snapshotText":"` + strings.Repeat("raw-page-text ", 500) + `","interactiveRefs":["@e7"],"profilePath":"/Users/me/Profile"}`},
 		},
 		{
-			ObservationID: "obs-002",
-			Action:        "continue",
-			Tool:          "capture_page",
-			Output:        toolcontract.ToolOutput{Content: `{"ok":true,"attachments":[{"contentBase64":"` + strings.Repeat("QUJD", 2000) + `"}]}`},
-			Attachments:   []toolcontract.FileAttachment{{DevicePath: "shot.png", Filename: "shot.png", ContentType: "image/png"}},
+			ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-002"},
+			Action:         "continue",
+			Tool:           "capture_page",
+			Output:         toolcontract.ToolOutput{Content: `{"ok":true,"attachments":[{"contentBase64":"` + strings.Repeat("QUJD", 2000) + `"}]}`},
+			Attachments:    []toolcontract.FileAttachment{{DevicePath: "shot.png", Filename: "shot.png", ContentType: "image/png"}},
 		},
 	}
 

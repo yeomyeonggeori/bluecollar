@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"testing"
 
 	"github.com/yeomyeonggeori/blueprotocol/toolcontract"
@@ -8,20 +9,19 @@ import (
 
 func failedShellObservation(observationID string, command string) turnObservation {
 	return turnObservation{
-		ObservationID: observationID,
-		Action:        "continue",
-		Tool:          "bash",
-		ToolInputKey:  "bash\x00" + command,
-		Failure: &toolcontract.ToolFailure{
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID, Failure: &toolcontract.ToolFailure{
 			Kind:  toolcontract.FailureUnknown,
 			Code:  toolcontract.FailureCodes.OperationFailed.String(),
 			Stage: "bash",
-		},
+		}},
+		Action:       "continue",
+		Tool:         "bash",
+		ToolInputKey: "bash\x00" + command,
 	}
 }
 
 func succeededShellObservation(observationID string) turnObservation {
-	return turnObservation{ObservationID: observationID, Action: "continue", Tool: "bash"}
+	return turnObservation{ToolCallResult: agentcontract.ToolCallResult{ObservationID: observationID}, Action: "continue", Tool: "bash"}
 }
 
 func TestARouteThatKeepsFailingTheSameWayStopsBeingRetried(t *testing.T) {

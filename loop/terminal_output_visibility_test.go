@@ -2,6 +2,7 @@ package loop
 
 import (
 	"context"
+	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"strings"
 	"testing"
 
@@ -10,10 +11,9 @@ import (
 
 func shellObservation(resultData string) turnObservation {
 	return turnObservation{
-		ObservationID: "obs-001",
-		Action:        "continue",
-		Tool:          "bash",
-		ToolInput:     []byte(`{"command":"cli phone --help"}`),
+		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-001", ToolInput: []byte(`{"command":"cli phone --help"}`)},
+		Action:         "continue",
+		Tool:           "bash",
 		Output: toolcontract.ToolOutput{
 			Content: "Commands: login search_contacts send_text_message",
 			Data:    []byte(resultData),
