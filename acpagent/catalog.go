@@ -66,7 +66,7 @@ func openCatalog(ctx context.Context, mcpServers []acp.McpServer, resolveTranspo
 	toolSet := toolcontract.NewToolSet(toolNames)
 	toolSet.AllowTestReplacement()
 	for toolName, descriptor := range descriptors {
-		if errorValue := toolSet.RegisterTool(descriptor, callThroughCatalog(handlers[toolName], descriptor, parking, ledger)); errorValue != nil {
+		if errorValue := toolSet.RegisterTool(boundedByTheHost(descriptor), callThroughCatalog(handlers[toolName], descriptor, parking, ledger)); errorValue != nil {
 			return nil, errorValue
 		}
 	}
@@ -155,6 +155,11 @@ func encodedSchema(schema any) json.RawMessage {
 		return json.RawMessage(`{"type":"object"}`)
 	}
 	return encoded
+}
+
+func boundedByTheHost(descriptor toolcontract.ToolDescriptor) toolcontract.ToolDescriptor {
+	descriptor.TimeoutMS = 0
+	return descriptor
 }
 
 func callThroughCatalog(session *mcp.ClientSession, descriptor toolcontract.ToolDescriptor, parking *runParking, ledger *ledgerStream) toolcontract.ToolHandler {
