@@ -786,6 +786,26 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
+func (agentTurnRunner *AgentTurnRunner) requestTheCallAnswers(taskRunID string, request AgentTurnRequest, state *agentTaskState, toolName string, toolInput json.RawMessage) string {
+	if observationID, isAwaitingIt := latestUnansweredRequestFor(agentTurnRunner.taskRunService.ListTaskEvent(taskRunID), toolName, toolInput); isAwaitingIt {
+		return observationID
+	}
+	observationID := agentTurnRunner.nextUnusedObservationID(taskRunID, state.Observations)
+	toolDefinition, _ := request.ToolSet.ToolDefinition(toolName)
+	agentTurnRunner.recordToolRequest(taskRunID, agentcontract.ToolCallRequested{ObservationID: observationID, ToolName: toolName, Input: toolInput, SideEffectClass: toolcontract.ToolDefinitionSideEffectClass(toolDefinition)})
+	return observationID
+}
+
+func withoutObservation(observations []turnObservation, observationID string) []turnObservation {
+	kept := make([]turnObservation, 0, len(observations))
+	for _, observation := range observations {
+		if observation.ObservationID != observationID {
+			kept = append(kept, observation)
+		}
+	}
+	return kept
+}
+
 func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Context, taskRunID string, request AgentTurnRequest, state *agentTaskState, successfulToolCalls map[string]turnObservation) {
 	holds := agentTurnRunner.unspentHolds(taskRunID)
 	for _, carriedOutCall := range request.CarriedOutCalls {
@@ -794,9 +814,8 @@ func (agentTurnRunner *AgentTurnRunner) recordCarriedOutCalls(ctx context.Contex
 			continue
 		}
 		didDriftFromItsHold := agentTurnRunner.noteDriftFromHold(taskRunID, holds, carriedOutCall)
-		observationID := agentTurnRunner.nextUnusedObservationID(taskRunID, state.Observations)
-		toolDefinition, _ := request.ToolSet.ToolDefinition(toolName)
-		agentTurnRunner.recordToolRequest(taskRunID, agentcontract.ToolCallRequested{ObservationID: observationID, ToolName: toolName, Input: carriedOutCall.ToolInput, SideEffectClass: toolcontract.ToolDefinitionSideEffectClass(toolDefinition)})
+		observationID := agentTurnRunner.requestTheCallAnswers(taskRunID, request, state, toolName, carriedOutCall.ToolInput)
+		state.Observations = withoutObservation(state.Observations, observationID)
 		observation := agentTurnRunner.saveToolObservation(
 			ctx, taskRunID, observationID, "", "", "", toolName, "", carriedOutCall.ToolInput, toolName,
 			canonicalToolInput(carriedOutCall.ToolInput), carriedOutCall.Result,
