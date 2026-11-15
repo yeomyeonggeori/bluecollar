@@ -161,3 +161,39 @@ func TestACrashedToolLeavesItsStackInTheLedgerAndNotInTheTurn(t *testing.T) {
 		t.Fatal("recovering the panic took away the goroutine dump the crash used to print; without it in the ledger, whoever has to fix that tool has one sentence")
 	}
 }
+
+func TestTheAnswerToAHeldCallIsTheResultOfTheRequestThatWasHeld(t *testing.T) {
+	services := newTurnRunnerTestServices(&sequenceLanguageModel{modelTier: "xlow", contents: []string{finishMessageDocument("올리지 않았습니다")}},
+		TurnOptions{TaskLevel: TaskLevelXLow, MaxIterationCount: 2, MaxToolCallCount: 5})
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", "QA 채널에 올려 줘")
+	heldInput := json.RawMessage(`{"targetType":"channel","channelName":"QA","message":"배포 확인"}`)
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.message_send.requested",
+		marshalEventBody(agentcontract.ToolCallRequested{ObservationID: "obs-001", ToolName: "message_send", Input: heldInput}))
+	services.taskRunService.AppendTaskEvent(taskRun.TaskRunID, "tool.message_send.cancelled",
+		marshalEventBody(agentcontract.ToolCallCancelled{ObservationID: "obs-001", ToolName: "message_send", Reason: "cancelled_by_attempt_end", TerminalStatus: "cancelled"}))
+	state := &agentTaskState{Observations: observationsFromTaskEvents(services.taskRunService.ListTaskEvent(taskRun.TaskRunID))}
+
+	services.runner.recordCarriedOutCalls(context.Background(), taskRun.TaskRunID, AgentTurnRequest{
+		CarriedOutCalls: []CarriedOutCall{{
+			ToolName:  "message_send",
+			ToolInput: heldInput,
+			Result:    toolcontract.ToolFailureResult(toolcontract.FailurePolicyBlocked, toolcontract.FailureCodes.PolicyBlocked, "approval", "The requester declined this call."),
+		}},
+	}, state, map[string]turnObservation{})
+
+	calls := []turnObservation{}
+	for _, observation := range state.Observations {
+		if isToolCallObservation(observation) {
+			calls = append(calls, observation)
+		}
+	}
+	if len(calls) != 1 || calls[0].ObservationID != "obs-001" {
+		t.Fatalf("the declined call is the one the run asked about, not a second call beside a call stopped mid-way: %+v", calls)
+	}
+	if strings.Contains(state.Observations[0].Summary, "whether it took effect is unknown") {
+		t.Fatal("a call held for an answer never ran, so the run must not be told to go and check whether it did")
+	}
+	if len(unansweredToolRequests(services.taskRunService.ListTaskEvent(taskRun.TaskRunID))) != 0 {
+		t.Fatal("the answer closes the held request in the ledger")
+	}
+}

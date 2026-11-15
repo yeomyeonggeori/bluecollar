@@ -1194,12 +1194,7 @@ func isToolResultTaskEvent(event agentcontract.TaskEvent) bool {
 
 func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservation {
 	observations := []turnObservation{}
-	unanswered := map[string]agentcontract.ToolCallRequested{}
 	for _, event := range events {
-		if requestedCall, isRequest := requestedToolCallFromTaskEvent(event); isRequest {
-			unanswered[requestedCall.ObservationID] = requestedCall
-			continue
-		}
 		if observation, isReplyReceipt := replyReceiptObservationFromTaskEvent(event); isReplyReceipt {
 			observations = append(observations, observation)
 			continue
@@ -1211,7 +1206,6 @@ func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservat
 		if errorValue != nil || strings.TrimSpace(observation.ObservationID) == "" {
 			continue
 		}
-		delete(unanswered, observation.ObservationID)
 		observation.Tool = toolcontract.CanonicalToolName(observation.Tool)
 		observation.ToolInputKey = canonicalizePersistedToolCallKey(observation.ToolInputKey)
 		observation.AttemptFingerprint = canonicalizePersistedToolCallKey(observation.AttemptFingerprint)
@@ -1220,7 +1214,36 @@ func observationsFromTaskEvents(events []agentcontract.TaskEvent) []turnObservat
 			observations = append(observations, observation)
 		}
 	}
-	return append(observations, interruptedCallObservations(unanswered)...)
+	return append(observations, interruptedCallObservations(unansweredToolRequests(events))...)
+}
+
+func unansweredToolRequests(events []agentcontract.TaskEvent) map[string]agentcontract.ToolCallRequested {
+	unanswered := map[string]agentcontract.ToolCallRequested{}
+	for _, event := range events {
+		if requestedCall, isRequest := requestedToolCallFromTaskEvent(event); isRequest {
+			unanswered[requestedCall.ObservationID] = requestedCall
+			continue
+		}
+		if !isToolResultTaskEvent(event) {
+			continue
+		}
+		delete(unanswered, agentcontract.ToolCallRecordOf[agentcontract.ToolCallResult](event.Body).ObservationID)
+	}
+	return unanswered
+}
+
+func latestUnansweredRequestFor(events []agentcontract.TaskEvent, toolName string, toolInput json.RawMessage) (string, bool) {
+	callKey := canonicalToolCallKey(toolName, toolInput)
+	latestObservationID, latestIndex := "", 0
+	for observationID, requestedCall := range unansweredToolRequests(events) {
+		if canonicalToolCallKey(requestedCall.ToolName, requestedCall.Input) != callKey {
+			continue
+		}
+		if index, isValid := observationIndexFromID(observationID); isValid && index > latestIndex {
+			latestObservationID, latestIndex = observationID, index
+		}
+	}
+	return latestObservationID, latestObservationID != ""
 }
 
 func canonicalizePersistedToolCallKey(toolCallKey string) string {
