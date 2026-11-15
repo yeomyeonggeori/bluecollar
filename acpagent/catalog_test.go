@@ -552,3 +552,31 @@ func TestTheTimeAHostHoldsACallForThePersonIsNotTheTurnsWork(t *testing.T) {
 		t.Fatalf("the turn ended while the host held its call: %v", turnContext.Err())
 	}
 }
+
+func TestTheHostBoundsTheCatalogCallsItExecutes(t *testing.T) {
+	const declaredBudget = 50 * time.Millisecond
+	const personAnswersAfter = 4 * declaredBudget
+	server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	descriptor := toolcontract.ToolDescriptor{Name: "message_send", RequiresApproval: true, IsHostGated: true, TimeoutMS: int(declaredBudget / time.Millisecond), ResultContract: &toolcontract.ToolResultContract{Schema: json.RawMessage(`{"type":"object"}`)}}
+	server.AddTool(&mcp.Tool{Name: descriptor.Name, InputSchema: map[string]any{"type": "object"}, Meta: toolcontract.DescriptorMeta(descriptor)},
+		func(ctx context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			select {
+			case <-time.After(personAnswersAfter):
+				return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "message sent"}}}, nil
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			}
+		})
+	transport, _ := connectCatalogServer(t, server)
+	opened, errorValue := openCatalog(t.Context(), []acp.McpServer{{}}, func(acp.McpServer) (mcp.Transport, error) { return transport, nil })
+	if errorValue != nil {
+		t.Fatal(errorValue)
+	}
+	defer opened.Close()
+
+	result, errorValue := opened.toolSet.Invoke(t.Context(), toolcontract.ToolInvocation{ToolName: descriptor.Name, Input: json.RawMessage(`{}`)})
+
+	if errorValue != nil || result.Failed() || result.ContentText() != "message sent" {
+		t.Fatalf("the host holds its own budget around the handler, after the person answers; the harness timing the whole call counts the person's wait, got %+v, %v", result, errorValue)
+	}
+}
