@@ -210,6 +210,15 @@ func driveOneTurnWithMeta(t *testing.T, catalogTransport mcp.Transport, language
 
 func driveOneTurnWithOptions(t *testing.T, catalogTransport mcp.Transport, options Options, promptMeta map[string]any) (*hostClient, acp.PromptResponse) {
 	t.Helper()
+	host, promptResponse, errorValue := promptOneTurn(t, catalogTransport, options, promptMeta)
+	if errorValue != nil {
+		t.Fatalf("session/prompt: %v", errorValue)
+	}
+	return host, promptResponse
+}
+
+func promptOneTurn(t *testing.T, catalogTransport mcp.Transport, options Options, promptMeta map[string]any) (*hostClient, acp.PromptResponse, error) {
+	t.Helper()
 	agentInputReader, agentInputWriter := io.Pipe()
 	agentOutputReader, agentOutputWriter := io.Pipe()
 	runningAgent := newAgentFromOptions(t, options)
@@ -234,10 +243,7 @@ func driveOneTurnWithOptions(t *testing.T, catalogTransport mcp.Transport, optio
 		Prompt:    []acp.ContentBlock{acp.TextBlock("회의록 정리해줘")},
 		Meta:      promptMeta,
 	})
-	if errorValue != nil {
-		t.Fatalf("session/prompt: %v", errorValue)
-	}
-	return host, promptResponse
+	return host, promptResponse, errorValue
 }
 
 func TestAHostDrivesTheLoopOverACPAndItsToolsComeFromTheCatalog(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 	"github.com/yeomyeonggeori/bluecollar/intake"
 	"github.com/yeomyeonggeori/bluecollar/loop"
 	"github.com/yeomyeonggeori/bluecollar/turnclassification"
+	"github.com/yeomyeonggeori/blueprotocol/acpfailure"
 	"github.com/yeomyeonggeori/blueprotocol/agentcontract"
 	"github.com/yeomyeonggeori/blueprotocol/model"
 	"github.com/yeomyeonggeori/blueprotocol/taskstate"
@@ -118,7 +119,8 @@ func (runningAgent *Agent) Prompt(ctx context.Context, request acp.PromptRequest
 		return acp.PromptResponse{}, errors.New("bluecollar has no session by that id; open one with session/new first")
 	}
 	defer failTurnOnPanic(openSession, &promptResponse, &errorValue)
-	return runningAgent.runPrompt(ctx, openSession, request)
+	promptResponse, errorValue = runningAgent.runPrompt(ctx, openSession, request)
+	return promptResponse, acpfailure.PromptError(errorValue)
 }
 
 func (runningAgent *Agent) runPrompt(ctx context.Context, openSession *session, request acp.PromptRequest) (acp.PromptResponse, error) {
