@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -33,13 +34,38 @@ type recordedChangeCheck struct {
 	check            changeCheck
 }
 
+type expectedChangesDefinition struct {
+	ExpectedChanges []string `json:"expectedChanges"`
+	Request         []string `json:"request,omitempty"`
+}
+
 func (agentTurnRunner *AgentTurnRunner) beginExpectedChanges(ctx context.Context, taskRunID string, request AgentTurnRequest) {
 	pending := &pendingExpectedChanges{done: make(chan struct{})}
 	agentTurnRunner.expectedChanges.Store(taskRunID, pending)
+	if changes, isRecorded := agentTurnRunner.recordedExpectedChanges(taskRunID, request); isRecorded {
+		pending.changes, pending.isDefined = changes, true
+		close(pending.done)
+		return
+	}
 	go func() {
 		defer close(pending.done)
 		pending.changes, pending.isDefined = agentTurnRunner.defineExpectedChanges(ctx, taskRunID, request)
 	}()
+}
+
+func (agentTurnRunner *AgentTurnRunner) recordedExpectedChanges(taskRunID string, request AgentTurnRequest) ([]string, bool) {
+	events := agentTurnRunner.taskRunService.ListTaskEvent(taskRunID)
+	for index := len(events) - 1; index >= 0; index-- {
+		if events[index].Name != agentcontract.TaskEventCompletionExpectedChanges {
+			continue
+		}
+		var definition expectedChangesDefinition
+		if json.Unmarshal([]byte(events[index].Body), &definition) != nil {
+			return nil, false
+		}
+		return definition.ExpectedChanges, slices.Equal(definition.Request, requestWordings(request))
+	}
+	return nil, false
 }
 
 func (agentTurnRunner *AgentTurnRunner) latestChangeCheck(taskRunID string, observationCount int) (changeCheck, bool) {
@@ -97,7 +123,7 @@ func (agentTurnRunner *AgentTurnRunner) defineExpectedChanges(ctx context.Contex
 		agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionCheckDegraded, marshalEventBody(map[string]string{"stage": "expected_changes", "error": errorValue.Error()}))
 		return nil, false
 	}
-	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionExpectedChanges, marshalEventBody(map[string]any{"expectedChanges": changes}))
+	agentTurnRunner.appendEvent(taskRunID, agentcontract.TaskEventCompletionExpectedChanges, marshalEventBody(expectedChangesDefinition{ExpectedChanges: changes, Request: requestWordings(request)}))
 	return changes, true
 }
 
@@ -149,9 +175,10 @@ func expectedChangesSchema() string {
 
 func expectedChangesRequestText(request AgentTurnRequest) string {
 	wordings := requestWordings(request)
-	text := "Request" + sentAtLabel(request.TurnStartedAt, request.Company.TimeZone) + ":\n" + wordings[0]
+	latestSentAt := sentAtLabel(request.TurnStartedAt, request.Company.TimeZone)
+	text := "Request" + latestSentAt + ":\n" + wordings[0]
 	if len(wordings) > 1 {
-		text += "\n\nLatest message about it" + sentAtLabel(request.TurnStartedAt, request.Company.TimeZone) + ":\n" + wordings[1]
+		text = "Request:\n" + wordings[0] + "\n\nLatest message about it" + latestSentAt + ":\n" + wordings[1]
 	}
 	if conversation := conversationBeforeRequest(request); len(conversation) > 0 {
 		text = "Conversation before the request:\n" + strings.Join(conversation, "\n") + "\n\n" + text
