@@ -1,6 +1,8 @@
 package loop
 
 import (
+	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -78,4 +80,64 @@ func TestARequestInsideAThreadIsJudgedWithThatThread(t *testing.T) {
 	if _, hasConversation := asked["conversationBefore"]; !hasConversation {
 		t.Fatal("the change check lost the thread the answer belongs to")
 	}
+}
+
+func clockOutCorrectionAnsweredAfterADay() AgentTurnRequest {
+	seoul, _ := time.LoadLocation("Asia/Seoul")
+	return AgentTurnRequest{
+		Company:       agentcontract.CompanyContext{TimeZone: "Asia/Seoul"},
+		ActiveGoal:    agentcontract.ActiveGoal{OriginalInstruction: "퇴근시간 지금으로 바꿔줘"},
+		Prompt:        "해",
+		ToolSet:       taskDeleteToolSet(),
+		TurnStartedAt: time.Date(2026, 11, 27, 8, 6, 0, 0, seoul),
+	}
+}
+
+func TestATurnResumedOnAnAnswerKeepsTheChangesItsRequestWasGiven(t *testing.T) {
+	asked := "요청 시점의 현재 시각으로 퇴근 기록 수정"
+	languageModel := &stubStructuredLanguageModel{contents: []string{expectedChangesDocument(asked), expectedChangesDocument("퇴근 기록을 현재 시각(08:07)으로 수정")}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := clockOutCorrectionAnsweredAfterADay()
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
+
+	firstTurn := expectedChangesOfOneTurn(services, taskRun.TaskRunID, request)
+	request.TurnStartedAt = request.TurnStartedAt.Add(time.Minute)
+	resumedTurn := expectedChangesOfOneTurn(services, taskRun.TaskRunID, request)
+
+	if len(languageModel.requests) != 1 {
+		t.Fatalf("expected the request's changes defined once across its pause, got %d definitions", len(languageModel.requests))
+	}
+	if !slices.Equal(firstTurn, []string{asked}) || !slices.Equal(resumedTurn, firstTurn) {
+		t.Fatalf("expected the resumed turn held to what the request asked, got %q then %q", firstTurn, resumedTurn)
+	}
+}
+
+func TestALaterMessageAboutTheRequestDefinesItsChangesAgain(t *testing.T) {
+	languageModel := &stubStructuredLanguageModel{contents: []string{expectedChangesDocument("04:30으로 퇴근 기록 수정"), expectedChangesDocument("08:00으로 퇴근 기록 수정")}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{})
+	request := clockOutCorrectionAnsweredAfterADay()
+	taskRun := services.taskRunService.CreateTaskRun("person-1", "conversation-1", request.Prompt)
+
+	expectedChangesOfOneTurn(services, taskRun.TaskRunID, request)
+	request.Prompt = "아니 8시로"
+	corrected := expectedChangesOfOneTurn(services, taskRun.TaskRunID, request)
+
+	if len(languageModel.requests) != 2 || !slices.Equal(corrected, []string{"08:00으로 퇴근 기록 수정"}) {
+		t.Fatalf("expected a correction to the request read again, got %d definitions and %q", len(languageModel.requests), corrected)
+	}
+}
+
+func TestAnInstructionCarriedFromEarlierIsNotDatedWithThisTurn(t *testing.T) {
+	text := expectedChangesRequestText(clockOutCorrectionAnsweredAfterADay())
+
+	if !strings.Contains(text, "Request:\n퇴근시간 지금으로 바꿔줘") || !strings.Contains(text, "Latest message about it (sent 2026-11-27 08:06):\n해") {
+		t.Fatalf("expected only the latest message dated with this turn:\n%s", text)
+	}
+}
+
+func expectedChangesOfOneTurn(services turnRunnerTestServices, taskRunID string, request AgentTurnRequest) []string {
+	services.runner.beginExpectedChanges(context.Background(), taskRunID, request)
+	defer services.runner.forgetExpectedChanges(taskRunID)
+	changes, _ := services.runner.expectedChangesFor(context.Background(), taskRunID, request)
+	return changes
 }
