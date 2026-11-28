@@ -14,6 +14,10 @@ func (agentTurnRunner *AgentTurnRunner) deliverReplyAttachments(ctx context.Cont
 	if len(actionDocument.Attachments) == 0 {
 		return actionDocument, turnObservation{}, true
 	}
+	if !isToolCallable(state.Request.ToolSet, toolcontract.FileDeliverToolName) {
+		actionDocument.Attachments = nil
+		return actionDocument, turnObservation{}, true
+	}
 	observationID := nextObservationIDForObservations(state.Observations)
 	observation := agentTurnRunner.invokeTool(ctx, state.Request.ToolSet.AllowingInternalTool(toolcontract.FileDeliverToolName), taskRunID, observationID, toolcontract.FileDeliverToolName, replyAttachmentToolInput(actionDocument.Attachments), request.WorkspaceRootPath, request.TurnStartedAt, request.ResponseLanguage, actionDocument.AssistantText, actionDocument.ModelReasoning, actionDocument.ModelReasoningField)
 	agentTurnRunner.recordToolObservation(taskRunID, state, actionDocument, successfulToolCalls, observation, "")

@@ -277,10 +277,6 @@ func BuildAgentActionRequest(state agentTaskState) model.StructuredResponseReque
 	return buildAgentActionRequest(state, true, false)
 }
 
-func buildAgentActionRequestCarryingToolResultsNatively(state agentTaskState) model.StructuredResponseRequest {
-	return buildAgentActionRequest(state, false, true)
-}
-
 func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, toolResultsCarriedNatively bool) model.StructuredResponseRequest {
 	allowQualityCriteria := len(state.QualityCriteria) == 0
 	modelToolSet := modelCallableToolSet(state.Request.ToolSet, state.Request.RestrictActionToTerminalOnly)
@@ -310,7 +306,7 @@ func buildAgentActionRequest(state agentTaskState, includeToolDescription bool, 
 		Messages: messages,
 		StructuredOutputSchema: model.StructuredOutputSchema{
 			Name:               "bluecollar_agent_turn_action",
-			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, hasFailureDebt, allowFail, allowFinish, delegationIsAllowed(state.Options)),
+			Document:           actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, hasFailureDebt, allowFail, allowFinish, delegationIsAllowed(state.Options), isToolCallable(state.Request.ToolSet, toolcontract.FileDeliverToolName)),
 			IsStrictlyEnforced: true,
 		},
 		GenerationOptions: state.Options.GenerationOptions,
@@ -794,17 +790,83 @@ func agentActionCorrectionMessage(correction model.StructuredOutputCorrection) s
 }
 
 func nativeAgentActionRequest(state agentTaskState) (model.ChatCompletionRequest, bool) {
-	return buildAgentActionChatCompletionRequest(buildAgentActionRequestCarryingToolResultsNatively(state), state.Observations)
+	allowQualityCriteria := len(state.QualityCriteria) == 0
+	modelToolSet := modelCallableToolSet(state.Request.ToolSet, state.Request.RestrictActionToTerminalOnly)
+	failureFacts := buildFailureReportFacts(state.Observations, state.Options.RecoveryBudget)
+	hasFailureDebt := len(failureFacts.Attempts) > 0
+	allowFail := shouldExposeFailAction(state)
+	allowFinish := shouldExposeFinishAction(state)
+	staticSystem, userMessage, changingText, imageMessage := (PromptAssembler{}).buildNativeTurnParts(
+		state.Request,
+		state.Observations,
+		state.systemInstructionText(),
+		state.ExecutionState,
+	)
+	transcript := toolCallTranscript(state.Observations)
+	messages := make([]model.ChatCompletionMessage, 0, 3+len(transcript))
+	if strings.TrimSpace(staticSystem.Content) != "" {
+		messages = append(messages, chatMessageFromModelMessage(staticSystem))
+	}
+	messages = append(messages, chatMessageFromModelMessage(userMessage))
+	messages = append(messages, transcript...)
+	if trailingMessage, hasTrailing := trailingNativeRuntimeMessage(changingText, failureFacts, hasFailureDebt, imageMessage, len(transcript) > 0); hasTrailing {
+		messages = append(messages, trailingMessage)
+	}
+	schemaDocument := actionSchemaForToolSet(modelToolSet, citableEvidenceIDs(state.Observations), allowQualityCriteria, hasFailureDebt, allowFail, allowFinish, delegationIsAllowed(state.Options), isToolCallable(state.Request.ToolSet, toolcontract.FileDeliverToolName))
+	tools, errorValue := nativeAgentActionTools(schemaDocument)
+	if errorValue != nil || len(tools) == 0 {
+		return model.ChatCompletionRequest{}, false
+	}
+	return model.ChatCompletionRequest{
+		SchemaName:        agentActionSchemaName,
+		Messages:          messages,
+		Tools:             tools,
+		ParallelToolCalls: true,
+		GenerationOptions: state.Options.GenerationOptions,
+	}, true
+}
+
+func chatMessageFromModelMessage(message model.Message) model.ChatCompletionMessage {
+	return model.ChatCompletionMessage{
+		Role:    message.Role,
+		Content: message.Content,
+		Parts:   append([]model.MessagePart{}, message.Parts...),
+	}
+}
+
+func trailingNativeRuntimeMessage(changingText string, failureFacts failureReportFacts, hasFailureDebt bool, imageMessage model.Message, hasTranscript bool) (model.ChatCompletionMessage, bool) {
+	hasImages := len(imageMessage.Parts) > 0
+	if !hasTranscript && !hasFailureDebt && !hasImages {
+		return model.ChatCompletionMessage{}, false
+	}
+	sections := []string{}
+	if trimmed := strings.TrimSpace(changingText); trimmed != "" {
+		sections = append(sections, trimmed)
+	}
+	if hasFailureDebt {
+		sections = append(sections, failureDebtActionContractMessage(failureFacts))
+	}
+	if hasImages && strings.TrimSpace(imageMessage.Content) != "" {
+		sections = append(sections, strings.TrimSpace(imageMessage.Content))
+	}
+	if len(sections) == 0 && !hasImages {
+		return model.ChatCompletionMessage{}, false
+	}
+	content := ""
+	if len(sections) > 0 {
+		content = "<runtime_state>\n" + strings.Join(sections, "\n\n") + "\n</runtime_state>"
+	}
+	return model.ChatCompletionMessage{
+		Role:    "user",
+		Content: content,
+		Parts:   append([]model.MessagePart{}, imageMessage.Parts...),
+	}, true
 }
 
 func buildAgentActionChatCompletionRequest(structuredRequest model.StructuredResponseRequest, observations []turnObservation) (model.ChatCompletionRequest, bool) {
 	messages := make([]model.ChatCompletionMessage, 0, len(structuredRequest.Messages)+2*len(observations))
 	for _, message := range structuredRequest.Messages {
-		messages = append(messages, model.ChatCompletionMessage{
-			Role:    message.Role,
-			Content: message.Content,
-			Parts:   append([]model.MessagePart{}, message.Parts...),
-		})
+		messages = append(messages, chatMessageFromModelMessage(message))
 	}
 	messages = append(messages, toolCallTranscript(observations)...)
 	tools, errorValue := nativeAgentActionTools(structuredRequest.StructuredOutputSchema.Document)
@@ -837,8 +899,10 @@ func toolCallTranscript(observations []turnObservation) []model.ChatCompletionMe
 		}
 		transcript = append(transcript,
 			model.ChatCompletionMessage{
-				Role:    "assistant",
-				Content: observation.AssistantText,
+				Role:           "assistant",
+				Content:        observation.AssistantText,
+				Reasoning:      observation.ModelReasoning,
+				ReasoningField: observation.ModelReasoningField,
 				ToolCalls: []model.ChatCompletionToolCall{{
 					ID:   observation.ObservationID,
 					Type: "function",
@@ -916,7 +980,7 @@ func nativeAgentActionTool(variant json.RawMessage) (model.ChatCompletionTool, e
 		toolName, errorValue = singleSchemaEnumValue(properties["toolName"])
 		parameters = properties["toolInput"]
 	case isNativeTerminalAction(actionName):
-		parameters, errorValue = nativeTerminalActionParameters(document)
+		parameters, errorValue = nativeTerminalActionParameters(actionName, document)
 	default:
 		return model.ChatCompletionTool{}, fmt.Errorf("native agent action %q is unsupported", actionName)
 	}
@@ -986,12 +1050,18 @@ func singleSchemaEnumValue(document json.RawMessage) (string, error) {
 	return schema.Enum[0], nil
 }
 
-func nativeTerminalActionParameters(document map[string]json.RawMessage) (json.RawMessage, error) {
+func nativeTerminalActionParameters(actionName string, document map[string]json.RawMessage) (json.RawMessage, error) {
 	var properties map[string]json.RawMessage
 	if errorValue := json.Unmarshal(document["properties"], &properties); errorValue != nil {
 		return nil, errorValue
 	}
-	delete(properties, "action")
+	omittedFields := map[string]bool{"action": true}
+	if actionName == "reply" {
+		omittedFields["completionEvidenceIDs"] = true
+	}
+	for fieldName := range omittedFields {
+		delete(properties, fieldName)
+	}
 	propertiesDocument, errorValue := json.Marshal(properties)
 	if errorValue != nil {
 		return nil, errorValue
@@ -1001,7 +1071,7 @@ func nativeTerminalActionParameters(document map[string]json.RawMessage) (json.R
 	_ = json.Unmarshal(document["required"], &requiredFields)
 	retainedFields := make([]string, 0, len(requiredFields))
 	for _, fieldName := range requiredFields {
-		if fieldName != "action" {
+		if !omittedFields[fieldName] {
 			retainedFields = append(retainedFields, fieldName)
 		}
 	}

@@ -59,16 +59,27 @@ func prettyLedgerLine(taskEvent agentcontract.TaskEvent) string {
 		return ledgerLine(inkFaint, "", "check", inkFaint+"unavailable, accepting the deterministic gate"+styleReset)
 	case agentcontract.TaskEventAgentBudgetExtendedOneLevel:
 		return ledgerLine(inkFaint, "", "budget", inkFaint+"extended one level → "+stringField(body, "grantedLevel")+styleReset)
+	case agentcontract.TaskEventAgentPlanUpdated:
+		return ledgerLine(inkFaint, "", "plan", inkFaint+planSummary(body)+styleReset)
+	case agentcontract.TaskEventAgentFailureDebtCreated:
+		return ledgerLine(inkFault, "", "debt", inkFaint+failureDebtSummary(body)+styleReset)
+	case agentcontract.TaskEventAgentRecoveryGuidance:
+		output, _ := body["output"].(map[string]any)
+		return ledgerLine(inkFaint, "", "guidance", inkFaint+clippedTo(collapsedWhitespace(stringField(output, "content")), 96)+styleReset)
+	case agentcontract.TaskEventAgentRecoveryAttempt:
+		return ledgerLine(inkGate, "↻", "recover", inkFaint+recoveryAttemptSummary(body)+styleReset)
+	case agentcontract.TaskEventAgentSteerReceived:
+		return ledgerLine(inkGate, "↳", "steer", clippedTo(collapsedWhitespace(stringField(body, "instruction")), 88))
 	case agentcontract.TaskEventTaskCompleted:
 		return ledgerLine(inkTool, "✓", "done", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
 	case agentcontract.TaskEventTaskFailed:
 		return ledgerLine(inkFault, "✗", "failed", clippedTo(collapsedWhitespace(taskEvent.Body), 96))
 	}
 	if toolName, isToolRequest := agentcontract.ToolTaskEventToolName(taskEvent.Name, agentcontract.ToolTaskEventRequestedSuffix); isToolRequest {
-		return ledgerLine(inkTool, "▸", toolName, toolRequestSummary(body))
+		return ledgerLine(inkTool, "▸", toolName, toolRequestSummary(toolName, body))
 	}
-	if _, isToolResult := agentcontract.ToolTaskEventToolName(taskEvent.Name, agentcontract.ToolTaskEventResultSuffix); isToolResult {
-		return ledgerLine(inkFaint, "", "", toolResultSummary(body))
+	if toolName, isToolResult := agentcontract.ToolTaskEventToolName(taskEvent.Name, agentcontract.ToolTaskEventResultSuffix); isToolResult {
+		return ledgerLine(inkFaint, "", "", toolResultSummary(toolName, body))
 	}
 	return ledgerLine(inkFaint, "", "", styledEventName(taskEvent.Name)+"  "+styledEventBody(clippedForTerminal(collapsedWhitespace(taskEvent.Body))))
 }
@@ -141,25 +152,136 @@ func changeCheckSummary(body map[string]any) string {
 	return inkFault + strconv.Itoa(len(unmet)) + " asked change(s) not done" + styleReset
 }
 
-func toolRequestSummary(body map[string]any) string {
+func toolRequestSummary(toolName string, body map[string]any) string {
 	input, isDocument := body["input"].(map[string]any)
 	if !isDocument {
 		return ""
 	}
 	if command := stringField(input, "command"); command != "" {
-		return "\x1b[1m$ " + clippedTo(command, 88) + styleReset
+		return "\x1b[1m$ " + clippedTo(singleLineShellCommand(command), 88) + styleReset
+	}
+	if toolName == "plan" {
+		if summary := planSummary(input); summary != "" {
+			return clippedTo(summary, 92)
+		}
+	}
+	if path := stringField(input, "path"); path != "" {
+		detail := ""
+		if toolName == "write" {
+			if content, hasContent := input["content"].(string); hasContent {
+				lineCount := strings.Count(content, "\n") + 1
+				if strings.HasSuffix(content, "\n") && lineCount > 1 {
+					lineCount--
+				}
+				detail = fmt.Sprintf("  %s(%d lines)%s", inkFaint, lineCount, styleReset)
+			}
+		} else if toolName == "file_read" {
+			startLine, hasStart := input["startLine"].(float64)
+			lineCount, hasCount := input["lineCount"].(float64)
+			if hasStart && startLine > 0 {
+				if hasCount && lineCount > 0 {
+					detail = fmt.Sprintf("  %s(L%.0f-%.0f)%s", inkFaint, startLine, startLine+lineCount-1, styleReset)
+				} else {
+					detail = fmt.Sprintf("  %s(L%.0f+)%s", inkFaint, startLine, styleReset)
+				}
+			}
+		}
+		return "\x1b[1m" + clippedTo(path, 76) + styleReset + detail
 	}
 	compact, _ := json.Marshal(input)
 	return inkFaint + clippedTo(string(compact), 88) + styleReset
 }
 
-func toolResultSummary(body map[string]any) string {
+func toolResultSummary(toolName string, body map[string]any) string {
 	output, _ := body["output"].(map[string]any)
-	content := clippedTo(strings.Join(strings.Fields(stringField(output, "content")), " "), 88)
+	rawContent := stringField(output, "content")
 	if failure, isFailure := body["failure"].(map[string]any); isFailure && len(failure) > 0 {
+		content := clippedTo(collapsedWhitespace(rawContent), 88)
 		return inkFault + "→ failed" + styleReset + "  " + inkFaint + content + styleReset
 	}
+	if toolName == "plan" {
+		decoded := decodedEventBody(rawContent)
+		if stepSummary := planStepsSummary(decoded); stepSummary != "" {
+			return inkFaint + "→ " + clippedTo(stepSummary, 88) + styleReset
+		}
+	}
+	content := clippedTo(collapsedWhitespace(rawContent), 88)
 	return inkFaint + "→ " + content + styleReset
+}
+
+func singleLineShellCommand(command string) string {
+	lines := strings.Split(strings.ReplaceAll(command, "\r\n", "\n"), "\n")
+	parts := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		parts = append(parts, trimmed)
+	}
+	if len(parts) == 0 {
+		return collapsedWhitespace(command)
+	}
+	return strings.Join(parts, "; ")
+}
+
+func planSummary(document map[string]any) string {
+	goal := stringField(document, "goal")
+	steps, _ := document["steps"].([]any)
+	if goal == "" && len(steps) == 0 {
+		return ""
+	}
+	if len(steps) > 0 {
+		if goal == "" {
+			return planStepsSummary(document)
+		}
+		return clippedTo(goal, 76) + "  " + inkFaint + fmt.Sprintf("(%d steps)", len(steps)) + styleReset
+	}
+	return clippedTo(goal, 88)
+}
+
+func planStepsSummary(document map[string]any) string {
+	steps, _ := document["steps"].([]any)
+	if len(steps) == 0 {
+		return ""
+	}
+	titles := make([]string, 0, len(steps))
+	for index, entry := range steps {
+		stepMap, isMap := entry.(map[string]any)
+		if !isMap {
+			continue
+		}
+		title := stringField(stepMap, "title")
+		if title == "" {
+			continue
+		}
+		titles = append(titles, fmt.Sprintf("%d. %s", index+1, title))
+	}
+	return strings.Join(titles, "  ·  ")
+}
+
+func failureDebtSummary(body map[string]any) string {
+	debt, _ := body["debt"].(map[string]any)
+	latest, _ := debt["latestFailure"].(map[string]any)
+	toolName := stringField(latest, "tool")
+	if toolName == "" {
+		toolName = "tool"
+	}
+	return "recorded failure debt for " + toolName
+}
+
+func recoveryAttemptSummary(body map[string]any) string {
+	debt, _ := body["debt"].(map[string]any)
+	latest, _ := debt["latestFailure"].(map[string]any)
+	toolName := stringField(latest, "tool")
+	nextTool := stringField(body, "tool")
+	if toolName != "" && nextTool != "" && nextTool != toolName {
+		return "recovering from " + toolName + " via " + nextTool
+	}
+	if toolName != "" {
+		return "retrying after " + toolName + " failed"
+	}
+	return "recovering from failed tool call"
 }
 
 func stringField(document map[string]any, key string) string {

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"os"
+	"io"
 	"strings"
 
 	"github.com/yeomyeonggeori/bluecollar/decisionconfig"
@@ -45,8 +45,8 @@ type equipInput struct {
 	Need string `json:"need"`
 }
 
-func configuredToolSelector() agentcontract.ToolSelector {
-	decisionModel := decisionconfig.ConfiguredDecisionModel(os.Stderr)
+func configuredToolSelector(diagnosticOutput io.Writer) agentcontract.ToolSelector {
+	decisionModel := decisionconfig.ConfiguredDecisionModel(diagnosticOutput)
 	if decisionModel == nil {
 		return nil
 	}

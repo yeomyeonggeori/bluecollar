@@ -286,6 +286,41 @@ func TestAFinalReplyWhoseAttachmentFailsNeverClosesTheTaskPromisingTheFile(t *te
 	}
 }
 
+func TestReplyWithoutFileDeliverToolOmitsAttachmentsAndCompletesCleanly(t *testing.T) {
+	toolRegistry := newTestToolSet([]string{toolcontract.WriteToolName})
+	registerTestTool(toolRegistry, toolcontract.ToolDefinition{Name: toolcontract.WriteToolName}, func(context.Context, toolcontract.ToolInvocation) (toolcontract.ToolResult, error) {
+		return testToolSuccess("wrote cweed-report.md"), nil
+	})
+
+	schemaDocument := actionSchemaForToolSet(toolRegistry, nil, false, false, true, true, false, isToolCallable(toolRegistry, toolcontract.FileDeliverToolName))
+	if strings.Contains(schemaDocument, `"attachments"`) {
+		t.Fatalf("expected reply schema without file_deliver to omit attachments, got %s", schemaDocument)
+	}
+
+	languageModel := &sequenceLanguageModel{contents: []string{
+		directToolAction("continue", "writing report", toolcontract.WriteToolName, `{"path":"cweed-report.md","content":"# Report"}`),
+		`{"action":"reply","final":true,"message":"cweed-report.md에 보고서를 작성했습니다.","attachments":[{"path":"cweed-report.md","filename":"cweed-report.md"}],"goalStatus":"satisfied","goalSatisfied":true,"completionEvidenceIDs":["obs-001"]}`,
+	}}
+	services := newTurnRunnerTestServices(languageModel, TurnOptions{MaxIterationCount: 6, MaxToolCallCount: 6})
+	result, errorValue := services.runner.RunTurn(context.Background(), AgentTurnRequest{
+		RequesterIdentity: agentcontract.RequesterIdentity{RequesterPersonID: "person-1"},
+		ConversationID:    "conversation-1",
+		Prompt:            "보고서를 작성해줘",
+		ToolSet:           toolRegistry,
+	})
+	if errorValue != nil {
+		t.Fatalf("RunTurn failed: %v", errorValue)
+	}
+	if result.TaskRun.Status != agentcontract.TaskStatusCompleted {
+		t.Fatalf("expected turn to complete without invoking unregistered file_deliver, got %s (%s)", result.TaskRun.Status, result.TaskRun.FailureReason)
+	}
+	for _, event := range services.taskEventService.ListTaskEvent(result.TaskRun.TaskRunID) {
+		if strings.Contains(event.Name, toolcontract.FileDeliverToolName) {
+			t.Fatalf("did not expect file_deliver event when host has no file_deliver tool, got %s: %s", event.Name, event.Body)
+		}
+	}
+}
+
 func TestACancelledTaskPostsNothingFurther(t *testing.T) {
 	languageModel := &sequenceLanguageModel{contents: []string{
 		directToolAction("continue", "", "notes_write", `{"path":"draft.md"}`),

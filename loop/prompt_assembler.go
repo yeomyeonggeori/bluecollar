@@ -39,6 +39,7 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 			RootPath:          input.RuntimeRequest.WorkspaceRootPath,
 			DefaultPath:       input.RuntimeRequest.WorkspaceDefaultPath,
 			RequesterPersonID: input.RuntimeRequest.RequesterPersonID,
+			Guidance:          input.RuntimeRequest.WorkspaceGuidance,
 		},
 		VisibleContext:             input.RuntimeRequest.VisibleContext,
 		MemoryContext:              input.MemoryContext,
@@ -67,6 +68,51 @@ func BuildInjectedContextMessages(input InjectedContextInput) []model.Message {
 
 func (promptAssembler PromptAssembler) BuildTurnMessages(request AgentTurnRequest, observations []turnObservation, baseInstruction string, toolDescription string, executionStates ...ExecutionState) []model.Message {
 	return promptAssembler.buildTurnMessages(request, observations, baseInstruction, toolDescription, false, executionStates...)
+}
+
+func (promptAssembler PromptAssembler) buildNativeTurnParts(request AgentTurnRequest, observations []turnObservation, baseInstruction string, executionState ExecutionState) (model.Message, model.Message, string, model.Message) {
+	contextInput := LLMContextInput{
+		ResponseLanguage:  request.ResponseLanguage,
+		RequesterIdentity: request.RequesterIdentity.Clone(),
+		Company:           request.Company,
+		UserPrompt:        request.Prompt,
+		InputParts:        append([]AgentPart{}, request.InputParts...),
+		TurnStartedAt:     request.TurnStartedAt,
+		EnvironmentNow:    request.EnvironmentNow,
+		InstructionPrompt: request.InstructionPrompt,
+		WorkspaceContext: WorkspaceContext{
+			RootPath:          request.WorkspaceRootPath,
+			DefaultPath:       request.WorkspaceDefaultPath,
+			RequesterPersonID: request.RequesterPersonID,
+			Guidance:          request.WorkspaceGuidance,
+		},
+		VisibleContext:             request.VisibleContext,
+		MemoryContext:              buildMemoryContext(request.MemoryFacts),
+		ActiveGoal:                 request.ActiveGoal,
+		PriorTask:                  request.PriorTask,
+		ScheduledRun:               request.ScheduledRun,
+		StepBudgetContext:          request.StepBudgetContext,
+		ArtifactManifest:           request.ArtifactManifest,
+		Observations:               observations,
+		ExecutionState:             executionState,
+		ToolResultsCarriedNatively: true,
+		FailureFacts:               buildFailureReportFacts(observations, defaultRecoveryBudget()),
+		Attachments:                attachmentsFromObservations(observations),
+		ToolSet:                    request.ToolSet,
+		RequiredEvidenceTools:      append([]string{}, request.RequiredEvidenceTools...),
+		OutcomeContract:            request.OutcomeContract,
+	}
+	contextBuilder := LLMContextBuilder{}
+	staticSystem := systemMessage(strings.Join(nonEmptyStrings([]string{
+		strings.TrimSpace(baseInstruction),
+		contextBuilder.BuildUnchangingContext(contextInput),
+		contextBuilder.runtimeContext(contextInput),
+		contextBuilder.artifactManifestContext(contextInput.ArtifactManifest),
+	}), "\n\n"))
+	userMessage := userMessageFromPromptAndParts(request.Prompt, request.InputParts)
+	changingText := contextBuilder.BuildNativeStepContext(contextInput)
+	imageMessage := toolResultImageContextMessage(observations)
+	return staticSystem, userMessage, changingText, imageMessage
 }
 
 func (promptAssembler PromptAssembler) buildTurnMessages(request AgentTurnRequest, observations []turnObservation, baseInstruction string, toolDescription string, toolResultsCarriedNatively bool, executionStates ...ExecutionState) []model.Message {
@@ -183,13 +229,10 @@ func buildWorkspaceContextDescription(request AgentTurnRequest) string {
 }
 
 func buildObservationContext(observations []turnObservation, toolResultsCarriedNatively bool) string {
-	if len(observations) == 0 {
+	if len(observations) == 0 || toolResultsCarriedNatively {
 		return ""
 	}
 	ledger := recentProgressObservations(observations)
-	if toolResultsCarriedNatively {
-		ledger = withoutSummaries(ledger)
-	}
 	body := marshalEventBody(ledger)
 	if len(body) > progressMessageLimit {
 		body = body[:progressMessageLimit] + "\n[trimmed]"
@@ -213,6 +256,17 @@ func withoutSummaries(observations []ProgressObservation) []ProgressObservation 
 	return stripped
 }
 
+func withoutDuplicateFileBodies(fileContexts []ProgressFileContext) []ProgressFileContext {
+	stripped := make([]ProgressFileContext, 0, len(fileContexts))
+	for _, fileContext := range fileContexts {
+		fileContext.Summary = ""
+		fileContext.Snippet = ""
+		fileContext.MarkdownPreview = ""
+		stripped = append(stripped, fileContext)
+	}
+	return stripped
+}
+
 func buildProgressContext(request AgentTurnRequest, observations []turnObservation, toolResultsCarriedNatively bool) string {
 	progress := buildTurnProgress(observations)
 	if len(observations) == 0 {
@@ -221,6 +275,7 @@ func buildProgressContext(request AgentTurnRequest, observations []turnObservati
 	if toolResultsCarriedNatively {
 		progress.CompletedSteps = withoutSummaries(progress.CompletedSteps)
 		progress.FailedOrBlockedSteps = withoutSummaries(progress.FailedOrBlockedSteps)
+		progress.RecentFiles = withoutDuplicateFileBodies(progress.RecentFiles)
 	}
 	body := marshalEventBody(progress)
 	if len(body) > progressMessageLimit {

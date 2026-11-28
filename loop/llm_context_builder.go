@@ -47,6 +47,7 @@ type WorkspaceContext struct {
 	DefaultPath         string
 	RequesterPersonID   string
 	TerminalInstruction string
+	Guidance            []string
 }
 
 func (builder LLMContextBuilder) Build(input LLMContextInput) string {
@@ -73,6 +74,12 @@ func (builder LLMContextBuilder) BuildChangingContext(input LLMContextInput) str
 	return strings.Join(nonEmptyStrings([]string{
 		builder.runtimeContext(input),
 		builder.artifactManifestContext(input.ArtifactManifest),
+		builder.BuildNativeStepContext(input),
+	}), "\n\n")
+}
+
+func (builder LLMContextBuilder) BuildNativeStepContext(input LLMContextInput) string {
+	return strings.Join(nonEmptyStrings([]string{
 		strings.TrimSpace(input.StepBudgetContext),
 		builder.progressContext(input),
 		recordedEffectsContext(input.Observations),
@@ -179,6 +186,7 @@ func (builder LLMContextBuilder) workspaceContext(workspaceContext WorkspaceCont
 		RequesterIdentity:     RequesterIdentity{RequesterPersonID: workspaceContext.RequesterPersonID},
 		WorkspaceRootPath:     workspaceContext.RootPath,
 		WorkspaceDefaultPath:  workspaceContext.DefaultPath,
+		WorkspaceGuidance:     workspaceContext.Guidance,
 		ToolSet:               nil,
 		RequiredEvidenceTools: nil,
 	}
@@ -314,6 +322,9 @@ func (builder LLMContextBuilder) progressContext(input LLMContextInput) string {
 }
 
 func (builder LLMContextBuilder) knownFileContext(input LLMContextInput) string {
+	if input.ToolResultsCarriedNatively {
+		return ""
+	}
 	fileContexts := recentFileContexts(input.Observations)
 	if len(fileContexts) == 0 {
 		return ""
@@ -328,6 +339,9 @@ func (builder LLMContextBuilder) knownFileContext(input LLMContextInput) string 
 func (builder LLMContextBuilder) observedResultProjectionContext(input LLMContextInput) string {
 	projection := buildObservedResultProjection(agentTurnRequestForContext(input), input.Observations, input.Attachments, turnActionDocument{})
 	if len(projection.ObservedFacts) == 0 && len(projection.RecoverableActions) == 0 {
+		return ""
+	}
+	if input.ToolResultsCarriedNatively && len(projection.RecoverableActions) == 0 {
 		return ""
 	}
 	body := marshalEventBody(projection)
