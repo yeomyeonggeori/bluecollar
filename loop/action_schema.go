@@ -20,18 +20,26 @@ func ActionSchemaForToolSet(toolSet *toolcontract.ToolSet, allowQualityCriteria 
 }
 
 func actionSchemaCitingEvidence(toolSet *toolcontract.ToolSet, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+	allowAttachments := isToolCallable(toolSet, toolcontract.FileDeliverToolName)
+	if len(terminalActionValues) > 3 {
+		allowAttachments = terminalActionValues[3]
+	}
 	if toolSet == nil {
-		return buildActionSchemaFromToolDefinitions(nil, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
+		return buildActionSchemaDeliveringThroughWithAttachments(toolcontract.ToolDefinition{}, nil, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, allowAttachments, terminalActionValues...)
 	}
 	fileDeliverDefinition, _ := toolSet.ToolDefinition(toolcontract.FileDeliverToolName)
-	return buildActionSchemaDeliveringThrough(fileDeliverDefinition, toolSet.ListToolDefinitions(), citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
+	return buildActionSchemaDeliveringThroughWithAttachments(fileDeliverDefinition, toolSet.ListToolDefinitions(), citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, allowAttachments, terminalActionValues...)
 }
 
 func buildActionSchemaFromToolDefinitions(toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
-	return buildActionSchemaDeliveringThrough(toolcontract.ToolDefinition{}, toolDefinitions, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, terminalActionValues...)
+	return buildActionSchemaDeliveringThroughWithAttachments(toolcontract.ToolDefinition{}, toolDefinitions, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, true, terminalActionValues...)
 }
 
 func buildActionSchemaDeliveringThrough(fileDeliverDefinition toolcontract.ToolDefinition, toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, terminalActionValues ...bool) string {
+	return buildActionSchemaDeliveringThroughWithAttachments(fileDeliverDefinition, toolDefinitions, citableEvidenceIDs, allowQualityCriteria, hasFailureDebt, true, terminalActionValues...)
+}
+
+func buildActionSchemaDeliveringThroughWithAttachments(fileDeliverDefinition toolcontract.ToolDefinition, toolDefinitions []toolcontract.ToolDefinition, citableEvidenceIDs []string, allowQualityCriteria bool, hasFailureDebt bool, allowAttachments bool, terminalActionValues ...bool) string {
 	allowFail := true
 	allowReply := true
 	if len(terminalActionValues) > 0 {
@@ -46,7 +54,7 @@ func buildActionSchemaDeliveringThrough(fileDeliverDefinition toolcontract.ToolD
 	}
 	var variants []any
 	if allowReply {
-		variants = append(variants, replyActionSchema(hasFailureDebt, citableEvidenceIDs, fileDeliverDefinition))
+		variants = append(variants, replyActionSchemaWithOptions(hasFailureDebt, citableEvidenceIDs, fileDeliverDefinition, allowAttachments))
 	}
 	if allowFail {
 		variants = append(variants, failActionSchema())
@@ -106,9 +114,15 @@ func replyVariantProperties(hasFailureDebt bool, citableEvidenceIDs []string) ma
 }
 
 func replyActionSchema(hasFailureDebt bool, citableEvidenceIDs []string, fileDeliverDefinition toolcontract.ToolDefinition) map[string]any {
+	return replyActionSchemaWithOptions(hasFailureDebt, citableEvidenceIDs, fileDeliverDefinition, true)
+}
+
+func replyActionSchemaWithOptions(hasFailureDebt bool, citableEvidenceIDs []string, fileDeliverDefinition toolcontract.ToolDefinition, allowAttachments bool) map[string]any {
 	properties := replyVariantProperties(hasFailureDebt, citableEvidenceIDs)
 	properties["action"] = enumStringSchema("reply")
-	properties["attachments"] = replyAttachmentArraySchema(fileDeliverDefinition)
+	if allowAttachments {
+		properties["attachments"] = replyAttachmentArraySchema(fileDeliverDefinition)
+	}
 	properties["expectsAnswer"] = booleanSchema()
 	properties["choices"] = replyChoiceArraySchema()
 	properties["goalStatus"] = enumValuesStringSchema([]string{"satisfied", "in_progress"})

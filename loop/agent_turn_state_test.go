@@ -1524,8 +1524,7 @@ func TestAResultCarriedNativelyIsNotAlsoRetoldInTheSystemSection(t *testing.T) {
 
 func nativeAgentActionRequestFor(t *testing.T, state agentTaskState) model.ChatCompletionRequest {
 	t.Helper()
-	requestSource := buildAgentActionRequestCarryingToolResultsNatively(state)
-	request, isRepresentable := buildAgentActionChatCompletionRequest(requestSource, state.Observations)
+	request, isRepresentable := nativeAgentActionRequest(state)
 	if !isRepresentable {
 		t.Fatal("expected native action request")
 	}
@@ -1610,10 +1609,12 @@ func TestTheTranscriptDoesNotCutWhatTheDerivedBudgetAlreadyBounded(t *testing.T)
 
 func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 	observation := turnObservation{
-		ToolCallResult: agentcontract.ToolCallResult{ObservationID: "obs-004"},
-		Action:         "continue",
-		Tool:           toolcontract.BashToolName,
-		AssistantText:  "The contacts list has no venmo field, so I have to cross-reference the venmo account list instead.",
+		ToolCallResult:      agentcontract.ToolCallResult{ObservationID: "obs-004"},
+		Action:              "continue",
+		Tool:                toolcontract.BashToolName,
+		AssistantText:       "The contacts list has no venmo field, so I have to cross-reference the venmo account list instead.",
+		ModelReasoning:      "Checking venmo directly avoids guessing from contact names.",
+		ModelReasoningField: "reasoning_content",
 	}
 	observation.Output.Content = "ok"
 
@@ -1621,6 +1622,98 @@ func TestTheTranscriptKeepsWhatTheModelReasoned(t *testing.T) {
 
 	if len(transcript) == 0 || transcript[0].Content != observation.AssistantText {
 		t.Fatalf("the model worked this out and the next step starts without it, so it works it out again: %+v", transcript)
+	}
+	if transcript[0].Reasoning != observation.ModelReasoning || transcript[0].ReasoningField != observation.ModelReasoningField {
+		t.Fatalf("expected reasoning and reasoning field to survive transcript replay, got %+v", transcript[0])
+	}
+}
+
+func TestNativeActionRequestOmitsDuplicateKnownFileContext(t *testing.T) {
+	state := nativeAgentActionTestState()
+	fileObservation := turnObservation{
+		ToolCallResult: agentcontract.ToolCallResult{
+			ObservationID: "obs-001",
+			ToolInput:     json.RawMessage(`{"path":"notes.txt"}`),
+		},
+		Action: "continue",
+		Tool:   toolcontract.FileReadToolName,
+		Output: toolcontract.ToolOutput{
+			Content: `{"path":"notes.txt","content":"unique-file-body-123","startLine":1,"endLine":1,"totalLines":1,"totalLinesKnown":true,"sizeBytes":20,"isTruncated":false}`,
+			Data:    json.RawMessage(`{"path":"notes.txt","content":"unique-file-body-123","startLine":1,"endLine":1,"totalLines":1,"totalLinesKnown":true,"sizeBytes":20,"isTruncated":false}`),
+		},
+	}
+	state.Observations = []turnObservation{fileObservation}
+
+	request, isRepresentable := nativeAgentActionRequest(state)
+	if !isRepresentable {
+		t.Fatal("expected native request to be representable")
+	}
+	for _, message := range request.Messages {
+		if strings.Contains(message.Content, "Known file context.") {
+			t.Fatalf("expected native request to omit duplicate known file context, got %q", message.Content)
+		}
+		if strings.Contains(message.Content, "Relevant observation ledger so far.") {
+			t.Fatalf("expected native request to omit duplicate observation ledger, got %q", message.Content)
+		}
+		if message.Role != "tool" && strings.Contains(message.Content, "unique-file-body-123") {
+			t.Fatalf("expected file body to appear only in the tool message, got role=%q content=%q", message.Role, message.Content)
+		}
+	}
+}
+
+func TestNativeActionRequestFollowsStandardAppendOnlyCacheablePrefix(t *testing.T) {
+	state := nativeAgentActionTestState()
+	stepZero, isRepresentable := nativeAgentActionRequest(state)
+	if !isRepresentable {
+		t.Fatal("expected step zero request to be representable")
+	}
+	if len(stepZero.Messages) != 2 || stepZero.Messages[0].Role != "system" || stepZero.Messages[1].Role != "user" {
+		t.Fatalf("expected step zero to have [system, user], got %+v", stepZero.Messages)
+	}
+
+	firstObservation := newContentObservation("obs-001", "continue", toolcontract.BashToolName, "hello")
+	firstObservation.ToolInput = json.RawMessage(`{"command":"echo hello"}`)
+	state.Observations = []turnObservation{firstObservation}
+	state.IterationCount = 1
+	state.ToolCallCount = 1
+	stepOne, isRepresentable := nativeAgentActionRequest(state)
+	if !isRepresentable {
+		t.Fatal("expected step one request to be representable")
+	}
+
+	secondObservation := newContentObservation("obs-002", "continue", toolcontract.BashToolName, "world")
+	secondObservation.ToolInput = json.RawMessage(`{"command":"echo world"}`)
+	state.Observations = append(state.Observations, secondObservation)
+	state.IterationCount = 2
+	state.ToolCallCount = 2
+	stepTwo, isRepresentable := nativeAgentActionRequest(state)
+	if !isRepresentable {
+		t.Fatal("expected step two request to be representable")
+	}
+
+	stepZeroTools, _ := json.Marshal(stepZero.Tools)
+	stepOneTools, _ := json.Marshal(stepOne.Tools)
+	stepTwoTools, _ := json.Marshal(stepTwo.Tools)
+	if string(stepZeroTools) != string(stepOneTools) || string(stepOneTools) != string(stepTwoTools) {
+		t.Fatalf("expected native tools array to remain byte-identical across normal steps for prompt caching.\nstep0=%s\nstep1=%s\nstep2=%s", stepZeroTools, stepOneTools, stepTwoTools)
+	}
+	stepZeroPrefix, _ := json.Marshal(stepZero.Messages)
+	stepOnePrefix, _ := json.Marshal(stepOne.Messages[:2])
+	if string(stepZeroPrefix) != string(stepOnePrefix) {
+		t.Fatalf("expected [system, user] prefix to stay byte-identical between step 0 and step 1.\nstep0=%s\nstep1=%s", stepZeroPrefix, stepOnePrefix)
+	}
+	stepOneAppendPrefix, _ := json.Marshal(stepOne.Messages[:len(stepOne.Messages)-1])
+	stepTwoAppendPrefix, _ := json.Marshal(stepTwo.Messages[:len(stepOne.Messages)-1])
+	if string(stepOneAppendPrefix) != string(stepTwoAppendPrefix) {
+		t.Fatalf("expected append-only prefix to stay byte-identical between step 1 and step 2.\nstep1=%s\nstep2=%s", stepOneAppendPrefix, stepTwoAppendPrefix)
+	}
+	lastStepOne := stepOne.Messages[len(stepOne.Messages)-1]
+	lastStepTwo := stepTwo.Messages[len(stepTwo.Messages)-1]
+	if lastStepOne.Role != "user" || lastStepTwo.Role != "user" {
+		t.Fatalf("expected trailing runtime state to use standard user role, got %q and %q", lastStepOne.Role, lastStepTwo.Role)
+	}
+	if !strings.Contains(lastStepTwo.Content, "<runtime_state>") || !strings.Contains(lastStepTwo.Content, "Progress ledger") {
+		t.Fatalf("expected trailing runtime state block, got %q", lastStepTwo.Content)
 	}
 }
 
