@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -90,6 +91,9 @@ func (runningShell shell) withInterpreterFound(ctx context.Context) shell {
 
 func (runningShell shell) resolvedWorkingDirectoryPath(ctx context.Context) string {
 	if len(runningShell.commandPrefix) == 0 {
+		if absolutePath, errorValue := filepath.Abs(runningShell.workingDirectoryPath); errorValue == nil && absolutePath != "" {
+			return absolutePath
+		}
 		return runningShell.workingDirectoryPath
 	}
 	capturedOutput := &bytes.Buffer{}
